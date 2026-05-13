@@ -119,9 +119,7 @@ def classify_vl_error(exc: Exception) -> Dict[str, Any]:
         if exc.response is not None:
             status_code = exc.response.status_code
             if retry_after_hint is None:
-                ra = exc.response.headers.get(
-                    "Retry-After"
-                ) or exc.response.headers.get("retry-after")
+                ra = exc.response.headers.get("Retry-After") or exc.response.headers.get("retry-after")
                 if ra:
                     try:
                         retry_after_hint = float(ra)
@@ -247,15 +245,11 @@ async def retry_async(func: Callable, config: RetryConfig, *args, **kwargs) -> A
 
     for attempt in range(config.max_attempts):
         try:
-            logger.debug(
-                f"🔄 Retry attempt {attempt + 1}/{config.max_attempts} for {func.__name__}"
-            )
+            logger.debug(f"🔄 Retry attempt {attempt + 1}/{config.max_attempts} for {func.__name__}")
             result = await func(*args, **kwargs)
 
             if attempt > 0:
-                logger.info(
-                    f"✅ Function {func.__name__} succeeded on attempt {attempt + 1}"
-                )
+                logger.info(f"✅ Function {func.__name__} succeeded on attempt {attempt + 1}")
 
             return result
 
@@ -267,9 +261,7 @@ async def retry_async(func: Callable, config: RetryConfig, *args, **kwargs) -> A
                 raise e
 
             if attempt == config.max_attempts - 1:
-                logger.error(
-                    f"❌ All {config.max_attempts} retry attempts failed for {func.__name__}"
-                )
+                logger.error(f"❌ All {config.max_attempts} retry attempts failed for {func.__name__}")
                 break
 
             # Base exponential backoff
@@ -287,10 +279,7 @@ async def retry_async(func: Callable, config: RetryConfig, *args, **kwargs) -> A
                         extra_note = f" (respecting Retry-After={bounded_ra:.2f}s)"
             except Exception:
                 pass
-            logger.warning(
-                f"⚠️ Attempt {attempt + 1} failed for {func.__name__}: {e}. "
-                f"Retrying in {delay:.2f}s...{extra_note}"
-            )
+            logger.warning(f"⚠️ Attempt {attempt + 1} failed for {func.__name__}: {e}. Retrying in {delay:.2f}s...{extra_note}")
 
             await asyncio.sleep(delay)
 

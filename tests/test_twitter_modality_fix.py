@@ -63,17 +63,10 @@ async def test_twitter_url_routing():
 
             # Check expectations
             is_expected_video = (
-                "youtube.com" in url
-                or "youtu.be" in url
-                or "tiktok.com" in url
-                or "/broadcasts/" in url  # Twitter Spaces/Live only
+                "youtube.com" in url or "youtu.be" in url or "tiktok.com" in url or "/broadcasts/" in url  # Twitter Spaces/Live only
             )
 
-            is_regular_tweet = (
-                ("twitter.com" in url or "x.com" in url)
-                and "/status/" in url
-                and "/broadcasts/" not in url
-            )
+            is_regular_tweet = ("twitter.com" in url or "x.com" in url) and "/status/" in url and "/broadcasts/" not in url
 
             if is_regular_tweet:
                 # Regular tweets should NOT be VIDEO_URL

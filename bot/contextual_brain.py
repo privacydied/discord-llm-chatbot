@@ -39,9 +39,7 @@ async def contextual_brain_infer(
     Returns:
         Dict containing response_text, used_history, and fallback status
     """
-    logger.debug(
-        f"🧠 Contextual brain inference starting [msg_id={message.id}, cross_user={include_cross_user}]"
-    )
+    logger.debug(f"🧠 Contextual brain inference starting [msg_id={message.id}, cross_user={include_cross_user}]")
 
     # Default response structure
     response_data = {"response_text": "", "used_history": [], "fallback": False}
@@ -49,31 +47,18 @@ async def contextual_brain_infer(
     try:
         # Get bot instance from message if not provided
         if not bot:
-            bot = (
-                message.guild.get_member(message.guild.me.id) if message.guild else None
-            )
+            bot = message.guild.get_member(message.guild.me.id) if message.guild else None
             if not hasattr(bot, "enhanced_context_manager"):
-                logger.warning(
-                    "Enhanced context manager not available, falling back to basic inference"
-                )
+                logger.warning("Enhanced context manager not available, falling back to basic inference")
                 response_data["fallback"] = True
-                response_data["response_text"] = await brain_infer(
-                    prompt, system_prompt=system_prompt
-                )
+                response_data["response_text"] = await brain_infer(prompt, system_prompt=system_prompt)
                 return response_data
 
         # Check if enhanced context manager is available
-        if (
-            not hasattr(bot, "enhanced_context_manager")
-            or not bot.enhanced_context_manager
-        ):
-            logger.warning(
-                "Enhanced context manager not available, falling back to basic inference"
-            )
+        if not hasattr(bot, "enhanced_context_manager") or not bot.enhanced_context_manager:
+            logger.warning("Enhanced context manager not available, falling back to basic inference")
             response_data["fallback"] = True
-            response_data["response_text"] = await brain_infer(
-                prompt, system_prompt=system_prompt
-            )
+            response_data["response_text"] = await brain_infer(prompt, system_prompt=system_prompt)
             return response_data
 
         # Derive include_cross_user when mention/reply context is injected (extra_context set) in non-thread replies
@@ -116,9 +101,7 @@ async def contextual_brain_infer(
             # Optionally compute how many entries would have been dropped for visibility
             dropped = 0
             try:
-                _entries = bot.enhanced_context_manager.get_context_for_user(
-                    message, include_cross_user=False
-                )
+                _entries = bot.enhanced_context_manager.get_context_for_user(message, include_cross_user=False)
                 dropped = len(_entries or [])
             except Exception:
                 dropped = 0
@@ -129,12 +112,8 @@ async def contextual_brain_infer(
                     extra={
                         "subsys": "mem.ctx",
                         "event": "scope_resolved",
-                        "guild_id": getattr(
-                            getattr(message, "guild", None), "id", None
-                        ),
-                        "user_id": getattr(
-                            getattr(message, "author", None), "id", None
-                        ),
+                        "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                        "user_id": getattr(getattr(message, "author", None), "id", None),
                         "msg_id": getattr(message, "id", None),
                         "detail": {"case": case, "scope": scope_id},
                     },
@@ -144,12 +123,8 @@ async def contextual_brain_infer(
                     extra={
                         "subsys": "mem.ctx",
                         "event": "local_block",
-                        "guild_id": getattr(
-                            getattr(message, "guild", None), "id", None
-                        ),
-                        "user_id": getattr(
-                            getattr(message, "author", None), "id", None
-                        ),
+                        "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                        "user_id": getattr(getattr(message, "author", None), "id", None),
                         "msg_id": getattr(message, "id", None),
                         "detail": {"msgs": 0, "order": "local_first"},
                     },
@@ -160,12 +135,8 @@ async def contextual_brain_infer(
                         extra={
                             "subsys": "mem.ctx",
                             "event": "drop_stale",
-                            "guild_id": getattr(
-                                getattr(message, "guild", None), "id", None
-                            ),
-                            "user_id": getattr(
-                                getattr(message, "author", None), "id", None
-                            ),
+                            "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                            "user_id": getattr(getattr(message, "author", None), "id", None),
                             "msg_id": getattr(message, "id", None),
                             "detail": {"reason": "scope_mismatch", "dropped": dropped},
                         },
@@ -175,40 +146,27 @@ async def contextual_brain_infer(
             context_entries = []
         else:
             # Get conversation context normally
-            context_entries = bot.enhanced_context_manager.get_context_for_user(
-                message, include_cross_user=include_cross_user_eff
-            )
+            context_entries = bot.enhanced_context_manager.get_context_for_user(message, include_cross_user=include_cross_user_eff)
 
         # Build contextual prompt with optional perception notes and extra context
         contextual_prompt = prompt
         history_block = None
         try:
             if context_entries:
-                context_str = bot.enhanced_context_manager.format_context_string(
-                    context_entries
-                )
+                context_str = bot.enhanced_context_manager.format_context_string(context_entries)
                 if context_str:
                     history_block = f"Conversation history:\n{context_str}"
-                    logger.debug(
-                        f"✔ Context added to prompt [entries={len(context_entries)}, tokens≈{len(context_str) // 4}]"
-                    )
+                    logger.debug(f"✔ Context added to prompt [entries={len(context_entries)}, tokens≈{len(context_str) // 4}]")
         except Exception as _e:
             logger.debug(f"Context history build failed: {_e}")
 
         perception_block = None
         if perception_notes:
-            perception_block = (
-                "Perception (from the image the user replied to):\n"
-                + perception_notes.strip()
-            )
+            perception_block = "Perception (from the image the user replied to):\n" + perception_notes.strip()
             # Breadcrumb: show that we are injecting, but do not log full notes
             try:
-                logger.info(
-                    f"🧩 Injecting perception into text prompt | chars={len(perception_notes)}"
-                )
-                logger.info(
-                    "Prompt preview includes: 'Perception (from the image...' section"
-                )
+                logger.info(f"🧩 Injecting perception into text prompt | chars={len(perception_notes)}")
+                logger.info("Prompt preview includes: 'Perception (from the image...' section")
             except Exception:
                 pass
 
@@ -230,11 +188,7 @@ async def contextual_brain_infer(
         # Get contextual response with metadata
         context_response = await bot.enhanced_context_manager.get_contextual_response(
             message=message,
-            response_text=(
-                ai_response.content
-                if hasattr(ai_response, "content")
-                else str(ai_response)
-            ),
+            response_text=(ai_response.content if hasattr(ai_response, "content") else str(ai_response)),
             include_cross_user=include_cross_user,
         )
 
@@ -245,9 +199,7 @@ async def contextual_brain_infer(
             "fallback": context_response.fallback,
         }
 
-        logger.debug(
-            f"✔ Contextual brain inference complete [fallback={context_response.fallback}]"
-        )
+        logger.debug(f"✔ Contextual brain inference complete [fallback={context_response.fallback}]")
 
     except Exception as e:
         logger.error(f"❌ Contextual brain inference failed: {e}", exc_info=True)
@@ -256,11 +208,7 @@ async def contextual_brain_infer(
         try:
             logger.info("🔄 Attempting fallback to basic brain inference")
             basic_response = await brain_infer(prompt, system_prompt=system_prompt)
-            response_text = (
-                basic_response.content
-                if hasattr(basic_response, "content")
-                else str(basic_response)
-            )
+            response_text = basic_response.content if hasattr(basic_response, "content") else str(basic_response)
 
             # Check if the basic response is already an error message from brain_infer
             if any(emoji in response_text for emoji in ["🤖", "🔐", "⏱️", "⏰"]):
@@ -285,7 +233,9 @@ async def contextual_brain_infer(
             # Provide user-friendly error message based on error type [REH]
             error_str = str(fallback_error).lower()
             if "no choices returned" in error_str:
-                error_message = "🤖 I'm experiencing an issue with the AI service. This might be due to content filtering, API limits, or a temporary service issue. Please try rephrasing your message or try again in a moment."
+                error_message = (
+                    "🤖 I'm experiencing an issue with the AI service. This might be due to content filtering, API limits, or a temporary service issue. Please try rephrasing your message or try again in a moment."
+                )
             elif "authentication" in error_str or "api key" in error_str:
                 error_message = "🔐 There's an authentication issue with the AI service. Please contact an administrator."
             elif "rate limit" in error_str or "quota" in error_str:
@@ -370,9 +320,7 @@ def create_context_command_handler(bot: "LLMBot"):
             )
         return "❌ Enhanced context manager not available."
 
-    async def handle_privacy_optout(
-        message: discord.Message, opt_out: bool = True
-    ) -> str:
+    async def handle_privacy_optout(message: discord.Message, opt_out: bool = True) -> str:
         """Handle privacy opt-out/opt-in."""
         if bot.enhanced_context_manager:
             bot.enhanced_context_manager.set_privacy_opt_out(message.author.id, opt_out)

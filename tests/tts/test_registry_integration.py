@@ -27,9 +27,7 @@ class TestRegistryIntegration:
         monkeypatch.setenv("TTS_TOKENISER", "misaki")
 
         # Mock available tokenizers to include both misaki and phonemizer
-        with patch(
-            "bot.tokenizer_registry.TokenizerRegistry.get_instance"
-        ) as mock_registry:
+        with patch("bot.tokenizer_registry.TokenizerRegistry.get_instance") as mock_registry:
             registry = MagicMock()
             registry._initialized = True
             registry._available_tokenizers = {"misaki", "phonemizer", "grapheme"}
@@ -82,9 +80,7 @@ class TestRegistryIntegration:
 
             # Mock registry to return grapheme decision
             with patch("bot.tokenizer_registry.select_for_language") as mock_select:
-                mock_select.return_value = Decision(
-                    "grapheme", "hello world", "GRAPHEME"
-                )
+                mock_select.return_value = Decision("grapheme", "hello world", "GRAPHEME")
 
                 # This simulates what happens in KokoroONNXEngine
                 from bot.tts.kokoro_direct import KokoroDirect
@@ -114,9 +110,7 @@ class TestRegistryIntegration:
 
     def test_registry_phoneme_tokenization(self):
         """Test that registry properly tokenizes text to phonemes."""
-        with patch(
-            "bot.tokenizer_registry.TokenizerRegistry.get_instance"
-        ) as mock_registry:
+        with patch("bot.tokenizer_registry.TokenizerRegistry.get_instance") as mock_registry:
             registry = MagicMock()
             registry._initialized = True
             registry._available_tokenizers = {"phonemizer", "grapheme"}
@@ -133,17 +127,13 @@ class TestRegistryIntegration:
 
     def test_registry_grapheme_fallback(self):
         """Test that registry falls back to grapheme when tokenization fails."""
-        with patch(
-            "bot.tokenizer_registry.TokenizerRegistry.get_instance"
-        ) as mock_registry:
+        with patch("bot.tokenizer_registry.TokenizerRegistry.get_instance") as mock_registry:
             registry = MagicMock()
             registry._initialized = True
             registry._available_tokenizers = {"grapheme"}
             registry._canonicalize_language.return_value = "en"
             registry.apply_lexicon.return_value = ("hello world", False)
-            registry._tokenize_to_phonemes.side_effect = Exception(
-                "No phonemizer available"
-            )
+            registry._tokenize_to_phonemes.side_effect = Exception("No phonemizer available")
             mock_registry.return_value = registry
 
             decision = select_for_language("en", "hello world")
@@ -154,9 +144,7 @@ class TestRegistryIntegration:
 
     def test_registry_lexicon_application(self):
         """Test that lexicon overrides are applied before tokenization."""
-        with patch(
-            "bot.tokenizer_registry.TokenizerRegistry.get_instance"
-        ) as mock_registry:
+        with patch("bot.tokenizer_registry.TokenizerRegistry.get_instance") as mock_registry:
             registry = MagicMock()
             registry._initialized = True
             registry._available_tokenizers = {"phonemizer", "grapheme"}

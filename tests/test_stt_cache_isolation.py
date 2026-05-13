@@ -223,31 +223,23 @@ class TestVideoIdentityCanonicalization:
     def test_youtube_identity_from_metadata(self):
         """Should use extractor:id from yt-dlp metadata."""
         metadata = {"extractor_key": "Youtube", "id": "dQw4w9WgXcQ"}
-        identity = _canonicalize_video_identity(
-            "https://www.youtube.com/watch?v=dQw4w9WgXcQ", metadata
-        )
+        identity = _canonicalize_video_identity("https://www.youtube.com/watch?v=dQw4w9WgXcQ", metadata)
         assert identity == "youtube:dQw4w9WgXcQ"
 
     def test_tiktok_identity_from_metadata(self):
         """Should use extractor:id from yt-dlp metadata."""
         metadata = {"extractor_key": "TikTok", "id": "7123456789012345678"}
-        identity = _canonicalize_video_identity(
-            "https://www.tiktok.com/@user/video/7123456789012345678", metadata
-        )
+        identity = _canonicalize_video_identity("https://www.tiktok.com/@user/video/7123456789012345678", metadata)
         assert identity == "tiktok:7123456789012345678"
 
     def test_youtube_identity_fallback_to_url(self):
         """Should fall back to URL normalization without metadata."""
-        identity = _canonicalize_video_identity(
-            "https://www.youtube.com/shorts/dQw4w9WgXcQ"
-        )
+        identity = _canonicalize_video_identity("https://www.youtube.com/shorts/dQw4w9WgXcQ")
         assert identity == "youtube:video/dQw4w9WgXcQ"
 
     def test_tiktok_identity_fallback_to_url(self):
         """Should fall back to URL normalization without metadata."""
-        identity = _canonicalize_video_identity(
-            "https://www.tiktok.com/@user/video/7123456789"
-        )
+        identity = _canonicalize_video_identity("https://www.tiktok.com/@user/video/7123456789")
         assert identity == "tiktok:video/7123456789"
 
     def test_generic_identity_for_unknown_domain(self):
@@ -258,12 +250,8 @@ class TestVideoIdentityCanonicalization:
 
     def test_cross_provider_different_identities(self):
         """Same numeric ID on different providers must have different identities."""
-        youtube_identity = _canonicalize_video_identity(
-            "https://www.youtube.com/watch?v=123456789012"
-        )
-        tiktok_identity = _canonicalize_video_identity(
-            "https://www.tiktok.com/@user/video/123456789012"
-        )
+        youtube_identity = _canonicalize_video_identity("https://www.youtube.com/watch?v=123456789012")
+        tiktok_identity = _canonicalize_video_identity("https://www.tiktok.com/@user/video/123456789012")
         assert youtube_identity != tiktok_identity
 
 
@@ -295,9 +283,7 @@ class TestCacheKeyIsolation:
             video_identity="youtube:video2def",
         )
 
-        assert key1 != key2, (
-            "Different YouTube videos must produce different cache keys"
-        )
+        assert key1 != key2, "Different YouTube videos must produce different cache keys"
 
     def test_same_youtube_video_same_key(self):
         """Same YouTube video should produce same cache key."""
@@ -350,12 +336,8 @@ class TestCacheKeyIsolation:
         same_resolved = "https://cdn.example.com/video.mp4"
         numeric_id = "1234567890123"
 
-        youtube_key = _compute_download_key(
-            same_resolved, "251", 1000000, video_identity=f"youtube:{numeric_id}"
-        )
-        tiktok_key = _compute_download_key(
-            same_resolved, "251", 1000000, video_identity=f"tiktok:{numeric_id}"
-        )
+        youtube_key = _compute_download_key(same_resolved, "251", 1000000, video_identity=f"youtube:{numeric_id}")
+        tiktok_key = _compute_download_key(same_resolved, "251", 1000000, video_identity=f"tiktok:{numeric_id}")
 
         assert youtube_key != tiktok_key, "Cross-provider keys must differ"
 
@@ -403,12 +385,8 @@ class TestTikTokCacheIsolation:
         """Different TikTok URLs should produce different cache keys."""
         same_resolved = "https://cdn.tiktok.com/video/abc123.mp4"
 
-        key1 = _compute_download_key(
-            same_resolved, "ba", 1000000, video_identity="tiktok:7111111111111111111"
-        )
-        key2 = _compute_download_key(
-            same_resolved, "ba", 1000000, video_identity="tiktok:7222222222222222222"
-        )
+        key1 = _compute_download_key(same_resolved, "ba", 1000000, video_identity="tiktok:7111111111111111111")
+        key2 = _compute_download_key(same_resolved, "ba", 1000000, video_identity="tiktok:7222222222222222222")
 
         assert key1 != key2
 

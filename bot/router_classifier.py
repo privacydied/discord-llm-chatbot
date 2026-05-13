@@ -42,9 +42,7 @@ def _compile_patterns() -> None:
             r"https?://(?:www\.)?(twitter\.com|x\.com)/[^/]+/status/(\d+)(?:\?.*)?$",
             re.IGNORECASE,
         ),
-        "twitter_short": re.compile(
-            r"https?://(?:www\.)?(t\.co)/(\w+)$", re.IGNORECASE
-        ),
+        "twitter_short": re.compile(r"https?://(?:www\.)?(t\.co)/(\w+)$", re.IGNORECASE),
         # Video URL patterns
         "youtube": re.compile(
             r"https?://(?:www\.)?(youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]+)",
@@ -64,21 +62,15 @@ def _compile_patterns() -> None:
             re.IGNORECASE,
         ),
         # Direct PDF URL patterns
-        "direct_pdf": re.compile(
-            r'https?://[^\s<>"\'[\]{}|\\^`]+\.pdf(?:\?[^\s]*)?$', re.IGNORECASE
-        ),
+        "direct_pdf": re.compile(r'https?://[^\s<>"\'[\]{}|\\^`]+\.pdf(?:\?[^\s]*)?$', re.IGNORECASE),
         # Audio/Video file patterns
-        "audio_video_file": re.compile(
-            r"\.(mp3|wav|flac|aac|ogg|m4a|mp4|avi|mkv|mov|wmv|flv|webm)$", re.IGNORECASE
-        ),
+        "audio_video_file": re.compile(r"\.(mp3|wav|flac|aac|ogg|m4a|mp4|avi|mkv|mov|wmv|flv|webm)$", re.IGNORECASE),
         # General URL pattern
         "general_url": re.compile(r'https?://[^\s<>"\'[\]{}|\\^`]+', re.IGNORECASE),
         # Command patterns
         "command_prefix": re.compile(r"^!(\w+)", re.IGNORECASE),
         # Inline search directives: capture parenthesized content, allow whitespace, multiline
-        "inline_search": re.compile(
-            r"\[search\s*\((.*?)\)\]", re.IGNORECASE | re.DOTALL
-        ),
+        "inline_search": re.compile(r"\[search\s*\((.*?)\)\]", re.IGNORECASE | re.DOTALL),
         # Bot mention pattern (will be dynamically compiled)
         "bot_mention": None,  # Set dynamically in Router.__init__
     }
@@ -148,9 +140,7 @@ class FastClassifier:
 
         # Compile bot mention pattern if bot user ID provided
         if bot_user_id:
-            _COMPILED_PATTERNS["bot_mention"] = re.compile(
-                rf"<@!?{bot_user_id}>", re.IGNORECASE
-            )
+            _COMPILED_PATTERNS["bot_mention"] = re.compile(rf"<@!?{bot_user_id}>", re.IGNORECASE)
 
     def classify_url(self, url: str) -> ClassificationResult:
         """Classify a single URL without any I/O. [PA][IV]"""
@@ -246,15 +236,11 @@ class FastClassifier:
                 )
 
             # Default to general URL
-            return ClassificationResult(
-                modality=InputModality.GENERAL_URL, host=host, confidence=0.5
-            )
+            return ClassificationResult(modality=InputModality.GENERAL_URL, host=host, confidence=0.5)
 
         except Exception as e:
             logger.warning(f"URL classification failed for {url}: {e}")
-            return ClassificationResult(
-                modality=InputModality.GENERAL_URL, confidence=0.1
-            )
+            return ClassificationResult(modality=InputModality.GENERAL_URL, confidence=0.1)
 
     def classify_attachment(self, attachment) -> ClassificationResult:
         """Classify a Discord attachment without I/O. [PA][IV]"""
@@ -263,15 +249,11 @@ class FastClassifier:
 
             # Check for audio/video files
             if _COMPILED_PATTERNS["audio_video_file"].search(filename):
-                return ClassificationResult(
-                    modality=InputModality.AUDIO_VIDEO_FILE, confidence=1.0
-                )
+                return ClassificationResult(modality=InputModality.AUDIO_VIDEO_FILE, confidence=1.0)
 
             # Check for PDF files
             if filename.endswith(".pdf"):
-                return ClassificationResult(
-                    modality=InputModality.PDF_DOCUMENT, confidence=1.0
-                )
+                return ClassificationResult(modality=InputModality.PDF_DOCUMENT, confidence=1.0)
 
             # Check for Word documents
             if filename.endswith((".doc", ".docx")):
@@ -282,20 +264,14 @@ class FastClassifier:
 
             # Check for images (most common case)
             if filename.endswith((".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp")):
-                return ClassificationResult(
-                    modality=InputModality.SINGLE_IMAGE, confidence=1.0
-                )
+                return ClassificationResult(modality=InputModality.SINGLE_IMAGE, confidence=1.0)
 
             # Default to single image for unknown attachments
-            return ClassificationResult(
-                modality=InputModality.SINGLE_IMAGE, confidence=0.3
-            )
+            return ClassificationResult(modality=InputModality.SINGLE_IMAGE, confidence=0.3)
 
         except Exception as e:
             logger.warning(f"Attachment classification failed: {e}")
-            return ClassificationResult(
-                modality=InputModality.SINGLE_IMAGE, confidence=0.1
-            )
+            return ClassificationResult(modality=InputModality.SINGLE_IMAGE, confidence=0.1)
 
     def extract_inline_searches(self, text: str) -> List[str]:
         """Extract inline search directives from text. [PA][IV]"""
@@ -336,9 +312,7 @@ class FastClassifier:
                     classification = self.classify_attachment(item.payload)
                 else:
                     # Embed or other
-                    classification = ClassificationResult(
-                        modality=InputModality.GENERAL_URL, confidence=0.5
-                    )
+                    classification = ClassificationResult(modality=InputModality.GENERAL_URL, confidence=0.5)
 
                 classified_items.append((item, classification))
 
@@ -386,9 +360,7 @@ class FastClassifier:
             elif len(classified_items) > 1:
                 streaming_eligible = True
                 streaming_reason = "MULTI_ITEM"
-            elif any(
-                c.modality == InputModality.SINGLE_IMAGE for _, c in classified_items
-            ):
+            elif any(c.modality == InputModality.SINGLE_IMAGE for _, c in classified_items):
                 # Images can stream for vision processing
                 streaming_eligible = True
                 streaming_reason = "VISION_PROCESSING"
@@ -417,10 +389,7 @@ class FastClassifier:
 
             # Return safe fallback plan
             return PlanResult(
-                items=[
-                    (item, ClassificationResult(InputModality.GENERAL_URL))
-                    for item in items
-                ],
+                items=[(item, ClassificationResult(InputModality.GENERAL_URL)) for item in items],
                 streaming_eligible=False,
                 streaming_reason="PLANNING_ERROR",
                 text_content=message.content or "",

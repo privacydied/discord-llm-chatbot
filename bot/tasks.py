@@ -392,9 +392,7 @@ def get_task_status() -> Dict[str, Any]:
         task_status[name] = {
             "running": not task.is_being_cancelled(),
             "failed": task.failed(),
-            "next_iteration": task.next_iteration.isoformat()
-            if task.next_iteration
-            else None,
+            "next_iteration": task.next_iteration.isoformat() if task.next_iteration else None,
         }
 
     return {

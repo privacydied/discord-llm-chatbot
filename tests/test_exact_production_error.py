@@ -40,22 +40,14 @@ async def test_exact_production_error_handling():
     print("\n🔍 Testing exact production error chain:")
 
     # The exact InferenceError message from the production traceback
-    exact_production_error = InferenceError(
-        "Video transcription failed: Failed to download video: yt-dlp metadata extraction failed: ERROR: [twitter] 1953657907964477640: No video could be found in this tweet"
-    )
+    exact_production_error = InferenceError("Video transcription failed: Failed to download video: yt-dlp metadata extraction failed: ERROR: [twitter] 1953657907964477640: No video could be found in this tweet")
 
     print(f"   Production error: {str(exact_production_error)}")
 
     # Test error pattern detection with exact production error
     error_str = str(exact_production_error).lower()
-    is_twitter_url = (
-        "twitter.com" in problem_url.lower() or "x.com" in problem_url.lower()
-    ) and "/status/" in problem_url.lower()
-    no_video_found = (
-        "no video could be found" in error_str
-        or "no video" in error_str
-        or "video extraction failed" in error_str
-    )
+    is_twitter_url = ("twitter.com" in problem_url.lower() or "x.com" in problem_url.lower()) and "/status/" in problem_url.lower()
+    no_video_found = "no video could be found" in error_str or "no video" in error_str or "video extraction failed" in error_str
 
     print(f"   is_twitter_url: {is_twitter_url}")
     print(f"   no_video_found: {no_video_found}")
@@ -75,9 +67,7 @@ async def test_exact_production_error_handling():
         mock_hear.side_effect = exact_production_error
 
         # Mock _handle_image to simulate successful screenshot processing
-        with patch.object(
-            router, "_handle_image", new_callable=AsyncMock
-        ) as mock_handle_image:
+        with patch.object(router, "_handle_image", new_callable=AsyncMock) as mock_handle_image:
             mock_handle_image.return_value = "Screenshot analysis: This tweet contains text and images but no video content."
 
             try:
@@ -87,9 +77,7 @@ async def test_exact_production_error_handling():
 
                 # Verify that _handle_image was called (fallback happened)
                 mock_handle_image.assert_called_once_with(item)
-                print(
-                    "   ✅ PASS: _handle_image was called - fallback executed correctly"
-                )
+                print("   ✅ PASS: _handle_image was called - fallback executed correctly")
 
                 return True
 
@@ -128,14 +116,8 @@ async def test_other_twitter_errors_no_fallback():
         print(f"\n   Testing error: '{error_msg[:50]}...'")
 
         error_str = error_msg.lower()
-        is_twitter_url = (
-            "twitter.com" in problem_url.lower() or "x.com" in problem_url.lower()
-        ) and "/status/" in problem_url.lower()
-        no_video_found = (
-            "no video could be found" in error_str
-            or "no video" in error_str
-            or "video extraction failed" in error_str
-        )
+        is_twitter_url = ("twitter.com" in problem_url.lower() or "x.com" in problem_url.lower()) and "/status/" in problem_url.lower()
+        no_video_found = "no video could be found" in error_str or "no video" in error_str or "video extraction failed" in error_str
 
         should_fallback = is_twitter_url and no_video_found
         print(f"   should_fallback: {should_fallback}")
@@ -170,8 +152,6 @@ if __name__ == "__main__":
             print("\n🚀 Ready for production deployment!")
         else:
             print("\n❌ EXACT PRODUCTION ERROR TESTS FAILED!")
-            print(
-                "   The fallback logic needs adjustment to handle your production errors."
-            )
+            print("   The fallback logic needs adjustment to handle your production errors.")
 
     asyncio.run(main())

@@ -66,9 +66,7 @@ class TestMediaIngestionManager:
         bot = MagicMock()
         bot.config = MagicMock()
         bot.context_manager = AsyncMock()
-        bot.context_manager.get_context_string.return_value = (
-            "Previous conversation context"
-        )
+        bot.context_manager.get_context_string.return_value = "Previous conversation context"
         bot.system_prompts = {"VL_PROMPT_FILE": "Describe this image"}
         bot.enhanced_context_manager = None
         bot.metrics = None
@@ -142,9 +140,7 @@ class TestMediaIngestionManager:
         sanitized = manager._sanitize_metadata(raw_metadata)
 
         assert sanitized["title"] == "TestVideoTitle"  # Control chars removed
-        assert (
-            sanitized["uploader"] == "Channel\nName\tWith\rWhitespace"
-        )  # Whitespace preserved
+        assert sanitized["uploader"] == "Channel\nName\tWith\rWhitespace"  # Whitespace preserved
 
     def test_sanitize_metadata_empty_or_none(self, manager):
         """Test handling of empty or None metadata."""
@@ -173,9 +169,7 @@ class TestMediaIngestionManager:
         """Test media extraction timeout."""
         url = "https://youtube.com/watch?v=test123"
 
-        with patch(
-            "bot.media_ingestion.hear_infer_from_url", side_effect=asyncio.TimeoutError
-        ):
+        with patch("bot.media_ingestion.hear_infer_from_url", side_effect=asyncio.TimeoutError):
             with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError):
                 success, result, error = await manager._extract_media_with_retry(url)
 
@@ -286,9 +280,7 @@ class TestMediaIngestionManager:
         assert result.processing_time_ms is not None
 
     @pytest.mark.asyncio
-    async def test_process_fallback_path_success_with_screenshot(
-        self, manager, mock_message
-    ):
+    async def test_process_fallback_path_success_with_screenshot(self, manager, mock_message):
         """Test successful fallback processing with screenshot content."""
         url = "https://example.com/page"
         fallback_reason = "domain not whitelisted"
@@ -300,9 +292,7 @@ class TestMediaIngestionManager:
         }
 
         with patch("bot.web.process_url", return_value=mock_web_result):
-            result = await manager._process_fallback_path(
-                url, mock_message, fallback_reason
-            )
+            result = await manager._process_fallback_path(url, mock_message, fallback_reason)
 
         assert result.success is True
         assert "Screenshot available at:" in result.content
@@ -323,9 +313,7 @@ class TestMediaIngestionManager:
         }
 
         with patch("bot.web.process_url", return_value=mock_web_result):
-            result = await manager._process_fallback_path(
-                url, mock_message, fallback_reason
-            )
+            result = await manager._process_fallback_path(url, mock_message, fallback_reason)
 
         assert result.success is True
         assert result.content == "Article content here"
@@ -345,18 +333,14 @@ class TestMediaIngestionManager:
             "error": "Failed to fetch URL",
         }
 
-        tiered_fail = ExtractionResult(
-            success=False, tier_used="A", error="no text extracted"
-        )
+        tiered_fail = ExtractionResult(success=False, tier_used="A", error="no text extracted")
 
         with patch("bot.web.process_url", return_value=mock_web_result):
             with patch(
                 "bot.web_extraction_service.web_extractor.extract",
                 return_value=tiered_fail,
             ):
-                result = await manager._process_fallback_path(
-                    url, mock_message, fallback_reason
-                )
+                result = await manager._process_fallback_path(url, mock_message, fallback_reason)
 
         assert result.success is False
         assert result.error_message == "Failed to fetch URL"
@@ -364,9 +348,7 @@ class TestMediaIngestionManager:
         assert result.source_type == "scrape"
 
     @pytest.mark.asyncio
-    async def test_process_fallback_path_tiered_success_on_empty(
-        self, manager, mock_message
-    ):
+    async def test_process_fallback_path_tiered_success_on_empty(self, manager, mock_message):
         url = "https://example.com/js"
         fallback_reason = "domain not whitelisted"
 
@@ -392,9 +374,7 @@ class TestMediaIngestionManager:
                 "bot.web_extraction_service.web_extractor.extract",
                 return_value=tiered_ok,
             ):
-                result = await manager._process_fallback_path(
-                    url, mock_message, fallback_reason
-                )
+                result = await manager._process_fallback_path(url, mock_message, fallback_reason)
 
         assert result.success is True
         assert result.fallback_triggered is True
@@ -427,9 +407,7 @@ class TestMediaIngestionManager:
             "bot.media_ingestion.media_detector.is_media_capable",
             return_value=mock_probe_result,
         ):
-            with patch.object(
-                manager, "_process_media_path", return_value=mock_media_result
-            ):
+            with patch.object(manager, "_process_media_path", return_value=mock_media_result):
                 with patch.object(
                     manager,
                     "_create_bot_action_from_media",
@@ -440,9 +418,7 @@ class TestMediaIngestionManager:
         assert result == mock_bot_action
 
     @pytest.mark.asyncio
-    async def test_process_url_smart_media_capable_fallback(
-        self, manager, mock_message
-    ):
+    async def test_process_url_smart_media_capable_fallback(self, manager, mock_message):
         """Test smart URL processing with media failure and successful fallback."""
         url = "https://youtube.com/watch?v=test123"
 
@@ -453,9 +429,7 @@ class TestMediaIngestionManager:
             probe_duration_ms=100.0,
         )
 
-        mock_media_result = MediaIngestionResult(
-            success=False, error_message="Download failed", source_type="media"
-        )
+        mock_media_result = MediaIngestionResult(success=False, error_message="Download failed", source_type="media")
 
         mock_fallback_result = MediaIngestionResult(
             success=True,
@@ -470,12 +444,8 @@ class TestMediaIngestionManager:
             "bot.media_ingestion.media_detector.is_media_capable",
             return_value=mock_probe_result,
         ):
-            with patch.object(
-                manager, "_process_media_path", return_value=mock_media_result
-            ):
-                with patch.object(
-                    manager, "_process_fallback_path", return_value=mock_fallback_result
-                ):
+            with patch.object(manager, "_process_media_path", return_value=mock_media_result):
+                with patch.object(manager, "_process_fallback_path", return_value=mock_fallback_result):
                     with patch.object(
                         manager,
                         "_create_bot_action_from_fallback",
@@ -510,9 +480,7 @@ class TestMediaIngestionManager:
             "bot.media_ingestion.media_detector.is_media_capable",
             return_value=mock_probe_result,
         ):
-            with patch.object(
-                manager, "_process_fallback_path", return_value=mock_fallback_result
-            ):
+            with patch.object(manager, "_process_fallback_path", return_value=mock_fallback_result):
                 with patch.object(
                     manager,
                     "_create_bot_action_from_fallback",
@@ -527,28 +495,18 @@ class TestMediaIngestionManager:
         """Test smart URL processing when both media and fallback paths fail."""
         url = "https://youtube.com/watch?v=broken"
 
-        mock_probe_result = ProbeResult(
-            is_media_capable=True, reason="media available", cached=False
-        )
+        mock_probe_result = ProbeResult(is_media_capable=True, reason="media available", cached=False)
 
-        mock_media_result = MediaIngestionResult(
-            success=False, error_message="Media extraction failed"
-        )
+        mock_media_result = MediaIngestionResult(success=False, error_message="Media extraction failed")
 
-        mock_fallback_result = MediaIngestionResult(
-            success=False, error_message="Web scraping failed", fallback_triggered=True
-        )
+        mock_fallback_result = MediaIngestionResult(success=False, error_message="Web scraping failed", fallback_triggered=True)
 
         with patch(
             "bot.media_ingestion.media_detector.is_media_capable",
             return_value=mock_probe_result,
         ):
-            with patch.object(
-                manager, "_process_media_path", return_value=mock_media_result
-            ):
-                with patch.object(
-                    manager, "_process_fallback_path", return_value=mock_fallback_result
-                ):
+            with patch.object(manager, "_process_media_path", return_value=mock_media_result):
+                with patch.object(manager, "_process_fallback_path", return_value=mock_fallback_result):
                     result = await manager.process_url_smart(url, mock_message)
 
         assert isinstance(result, BotAction)
@@ -556,9 +514,7 @@ class TestMediaIngestionManager:
         assert "Could not extract content from URL" in result.content
 
     @pytest.mark.asyncio
-    async def test_create_bot_action_from_media_basic_brain(
-        self, manager, mock_message
-    ):
+    async def test_create_bot_action_from_media_basic_brain(self, manager, mock_message):
         """Test creating bot action from media result using basic brain inference."""
         media_result = MediaIngestionResult(
             success=True,
@@ -569,16 +525,12 @@ class TestMediaIngestionManager:
         mock_brain_result = BotAction(content="AI response to media")
 
         with patch("bot.media_ingestion.brain_infer", return_value=mock_brain_result):
-            result = await manager._create_bot_action_from_media(
-                media_result, mock_message
-            )
+            result = await manager._create_bot_action_from_media(media_result, mock_message)
 
         assert result == mock_brain_result
 
     @pytest.mark.asyncio
-    async def test_create_bot_action_from_media_contextual_brain(
-        self, manager, mock_message
-    ):
+    async def test_create_bot_action_from_media_contextual_brain(self, manager, mock_message):
         """Test creating bot action from media result using contextual brain."""
         # Enable contextual brain
         manager.bot.enhanced_context_manager = MagicMock()
@@ -596,17 +548,13 @@ class TestMediaIngestionManager:
                 "bot.media_ingestion.contextual_brain_infer_simple",
                 return_value=mock_contextual_response,
             ):
-                result = await manager._create_bot_action_from_media(
-                    media_result, mock_message
-                )
+                result = await manager._create_bot_action_from_media(media_result, mock_message)
 
         assert isinstance(result, BotAction)
         assert result.content == mock_contextual_response
 
     @pytest.mark.asyncio
-    async def test_create_bot_action_from_fallback_screenshot(
-        self, manager, mock_message
-    ):
+    async def test_create_bot_action_from_fallback_screenshot(self, manager, mock_message):
         """Test creating bot action from fallback result with screenshot."""
         fallback_result = MediaIngestionResult(
             success=True,
@@ -622,12 +570,8 @@ class TestMediaIngestionManager:
         mock_brain_result = BotAction(content="Final response")
 
         with patch("bot.media_ingestion.see_infer", return_value=mock_vision_response):
-            with patch(
-                "bot.media_ingestion.brain_infer", return_value=mock_brain_result
-            ):
-                result = await manager._create_bot_action_from_fallback(
-                    fallback_result, mock_message
-                )
+            with patch("bot.media_ingestion.brain_infer", return_value=mock_brain_result):
+                result = await manager._create_bot_action_from_fallback(fallback_result, mock_message)
 
         assert result == mock_brain_result
 
@@ -643,14 +587,10 @@ class TestMediaIngestionManager:
 
         # Mock router with text flow
         mock_router = MagicMock()
-        mock_router._invoke_text_flow = AsyncMock(
-            return_value=BotAction(content="Text flow response")
-        )
+        mock_router._invoke_text_flow = AsyncMock(return_value=BotAction(content="Text flow response"))
         manager.bot.router = mock_router
 
-        result = await manager._create_bot_action_from_fallback(
-            fallback_result, mock_message
-        )
+        result = await manager._create_bot_action_from_fallback(fallback_result, mock_message)
 
         assert isinstance(result, BotAction)
         assert result.content == "Text flow response"
@@ -694,9 +634,7 @@ class TestMediaIngestionIntegration:
         return message
 
     @pytest.mark.asyncio
-    async def test_end_to_end_youtube_url_mock(
-        self, integration_bot, integration_message
-    ):
+    async def test_end_to_end_youtube_url_mock(self, integration_bot, integration_message):
         """Test end-to-end processing of YouTube URL with mocked components."""
         manager = MediaIngestionManager(integration_bot)
         url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
@@ -732,9 +670,7 @@ class TestMediaIngestionIntegration:
                 "_extract_media_with_retry",
                 return_value=(True, mock_extraction_result, None),
             ):
-                with patch(
-                    "bot.media_ingestion.brain_infer", return_value=mock_brain_result
-                ):
+                with patch("bot.media_ingestion.brain_infer", return_value=mock_brain_result):
                     result = await manager.process_url_smart(url, integration_message)
 
         assert isinstance(result, BotAction)
@@ -742,9 +678,7 @@ class TestMediaIngestionIntegration:
         assert result.error is not True
 
     @pytest.mark.asyncio
-    async def test_end_to_end_fallback_to_scraping(
-        self, integration_bot, integration_message
-    ):
+    async def test_end_to_end_fallback_to_scraping(self, integration_bot, integration_message):
         """Test end-to-end fallback to web scraping for non-media URL."""
         manager = MediaIngestionManager(integration_bot)
         url = "https://example.com/article"
@@ -772,9 +706,7 @@ class TestMediaIngestionIntegration:
             return_value=mock_probe_result,
         ):
             with patch("bot.web.process_url", return_value=mock_web_result):
-                with patch(
-                    "bot.media_ingestion.brain_infer", return_value=mock_brain_result
-                ):
+                with patch("bot.media_ingestion.brain_infer", return_value=mock_brain_result):
                     result = await manager.process_url_smart(url, integration_message)
 
         assert isinstance(result, BotAction)

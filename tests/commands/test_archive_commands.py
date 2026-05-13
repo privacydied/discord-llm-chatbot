@@ -35,9 +35,7 @@ class DummyContext:
 
     async def reply(self, content=None, *, mention_author=False, **kwargs):
         self.sent.append(content)
-        self.replies.append(
-            {"content": content, "mention_author": mention_author, "kwargs": kwargs}
-        )
+        self.replies.append({"content": content, "mention_author": mention_author, "kwargs": kwargs})
         return content
 
 
@@ -59,9 +57,7 @@ def archive_config(tmp_path):
     }
 
 
-async def make_cog(
-    monkeypatch: pytest.MonkeyPatch, config: dict[str, object]
-) -> tuple[ArchiveCommands, ServerArchiveService]:
+async def make_cog(monkeypatch: pytest.MonkeyPatch, config: dict[str, object]) -> tuple[ArchiveCommands, ServerArchiveService]:
     import bot.server_archive.service as service_module
 
     monkeypatch.setattr(service_module, "load_config", lambda: config)
@@ -93,9 +89,7 @@ async def test_archive_status_output_is_short(monkeypatch, archive_config):
             [
                 ctx.replies[0]["kwargs"]["embed"].title or "",
                 ctx.replies[0]["kwargs"]["embed"].description or "",
-                ctx.replies[0]["kwargs"]["embed"].footer.text
-                if ctx.replies[0]["kwargs"]["embed"].footer
-                else "",
+                ctx.replies[0]["kwargs"]["embed"].footer.text if ctx.replies[0]["kwargs"]["embed"].footer else "",
             ]
         )
         assert len(embed_text) < 2000

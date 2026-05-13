@@ -54,22 +54,16 @@ class PipelineTracker:
     def start_phase(self, phase: str, **metadata) -> PhaseMetrics:
         """Start tracking a new phase."""
         if phase in self.phases:
-            logger.warning(
-                f"⚠️ Phase {phase} already started for corr_id {self.corr_id}"
-            )
+            logger.warning(f"⚠️ Phase {phase} already started for corr_id {self.corr_id}")
 
-        phase_metric = PhaseMetrics(
-            phase=phase, start_ts=time.time(), metadata=metadata
-        )
+        phase_metric = PhaseMetrics(phase=phase, start_ts=time.time(), metadata=metadata)
         self.phases[phase] = phase_metric
 
         # Log phase start with Rich formatting [CA]
         self._log_phase_event("start", phase, phase_metric, **metadata)
         return phase_metric
 
-    def complete_phase(
-        self, phase: str, success: bool = True, error: Optional[str] = None, **metadata
-    ):
+    def complete_phase(self, phase: str, success: bool = True, error: Optional[str] = None, **metadata):
         """Complete a phase and log results."""
         if phase not in self.phases:
             logger.error(f"❌ Phase {phase} not found for corr_id {self.corr_id}")
@@ -89,9 +83,7 @@ class PipelineTracker:
         # Generate final pipeline summary [PA]
         self._log_pipeline_summary()
 
-    def _log_phase_event(
-        self, event: str, phase: str, phase_metric: PhaseMetrics, **metadata
-    ):
+    def _log_phase_event(self, event: str, phase: str, phase_metric: PhaseMetrics, **metadata):
         """Log phase event with Rich formatting and JSONL structure."""
         # Determine icon based on event and success [CA]
         if event == "start":
@@ -139,11 +131,7 @@ class PipelineTracker:
         slo_targets = PC.get_slo_targets()
         target_ms = slo_targets.get(phase)
 
-        if (
-            target_ms
-            and phase_metric.duration_ms
-            and phase_metric.duration_ms > target_ms
-        ):
+        if target_ms and phase_metric.duration_ms and phase_metric.duration_ms > target_ms:
             breach_pct = int((phase_metric.duration_ms / target_ms - 1) * 100)
             logger.warning(
                 f"⚠️ SLO BREACH: {phase} took {phase_metric.duration_ms}ms (target: {target_ms}ms, +{breach_pct}%)",
@@ -209,9 +197,7 @@ class PipelineTracker:
             if phase_name in self.phases:
                 metric = self.phases[phase_name]
                 status_icon = "✅" if metric.success else "❌"
-                duration_str = (
-                    f"{metric.duration_ms}ms" if metric.duration_ms else "N/A"
-                )
+                duration_str = f"{metric.duration_ms}ms" if metric.duration_ms else "N/A"
                 tree.add(f"{status_icon} {phase_name}: {duration_str}")
 
         panel = Panel(tree, title=f"Pipeline Timing ({self.total_duration_ms}ms total)")
@@ -228,9 +214,7 @@ class PhaseTimingManager:
         self.completed_trackers: List[PipelineTracker] = []
         self.max_history = 100  # Keep last 100 for analysis
 
-    def create_pipeline_tracker(
-        self, msg_id: str, user_id: str, guild_id: Optional[str] = None
-    ) -> PipelineTracker:
+    def create_pipeline_tracker(self, msg_id: str, user_id: str, guild_id: Optional[str] = None) -> PipelineTracker:
         """Create new pipeline tracker with correlation ID."""
         corr_id = str(uuid.uuid4())[:8]  # Short correlation ID
         is_dm = guild_id is None
@@ -272,9 +256,7 @@ class PhaseTimingManager:
             self.completed_trackers.pop(0)
 
     @asynccontextmanager
-    async def track_phase(
-        self, tracker: PipelineTracker, phase: str, **metadata
-    ) -> AsyncGenerator[PhaseMetrics, None]:
+    async def track_phase(self, tracker: PipelineTracker, phase: str, **metadata) -> AsyncGenerator[PhaseMetrics, None]:
         """Async context manager for phase timing."""
         phase_metric = tracker.start_phase(phase, **metadata)
 

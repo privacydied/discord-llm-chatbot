@@ -105,19 +105,13 @@ async def wav_bytes_to_voice_memo_async(
             waveform_b64 = compute_waveform_b64(wav_path)
 
             # Step 1: Request upload URL
-            attachments_url = (
-                f"https://discord.com/api/v10/channels/{channel_id}/attachments"
-            )
+            attachments_url = f"https://discord.com/api/v10/channels/{channel_id}/attachments"
             headers_json = {
                 "Authorization": f"Bot {bot_token}",
                 "Content-Type": "application/json",
                 "User-Agent": "DiscordVoiceMemoAsync/1.0",
             }
-            attachment_payload = {
-                "files": [
-                    {"filename": "voice-message.ogg", "file_size": file_size, "id": "0"}
-                ]
-            }
+            attachment_payload = {"files": [{"filename": "voice-message.ogg", "file_size": file_size, "id": "0"}]}
 
             async with aiohttp.ClientSession(raise_for_status=False) as session:
                 async with session.post(
@@ -128,16 +122,12 @@ async def wav_bytes_to_voice_memo_async(
                 ) as resp:
                     if resp.status >= 400:
                         text = await resp.text()
-                        raise VoiceMemoError(
-                            f"Failed to request upload URL: HTTP {resp.status} {text[:200]}"
-                        )
+                        raise VoiceMemoError(f"Failed to request upload URL: HTTP {resp.status} {text[:200]}")
                     upload_data = await resp.json()
                 try:
                     upload_info = upload_data["attachments"][0]
                     upload_url = upload_info["upload_url"]
-                    uploaded_filename = upload_info.get(
-                        "upload_filename"
-                    ) or upload_info.get("uploaded_filename")
+                    uploaded_filename = upload_info.get("upload_filename") or upload_info.get("uploaded_filename")
                 except Exception as e:
                     raise VoiceMemoError(f"Invalid upload response format: {e}")
 
@@ -152,14 +142,10 @@ async def wav_bytes_to_voice_memo_async(
                 ) as resp:
                     if resp.status >= 400:
                         text = await resp.text()
-                        raise VoiceMemoError(
-                            f"Failed to upload file: HTTP {resp.status} {text[:200]}"
-                        )
+                        raise VoiceMemoError(f"Failed to upload file: HTTP {resp.status} {text[:200]}")
 
                 # Step 3: Send message with voice memo flags
-                message_url = (
-                    f"https://discord.com/api/v10/channels/{channel_id}/messages"
-                )
+                message_url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
                 message_payload = {
                     "flags": 8192,  # Voice message flag
                     "attachments": [
@@ -180,9 +166,7 @@ async def wav_bytes_to_voice_memo_async(
                 ) as resp:
                     if resp.status >= 400:
                         text = await resp.text()
-                        raise VoiceMemoError(
-                            f"Failed to send message: HTTP {resp.status} {text[:200]}"
-                        )
+                        raise VoiceMemoError(f"Failed to send message: HTTP {resp.status} {text[:200]}")
                     result = await resp.json()
 
             logger.info(
@@ -212,9 +196,7 @@ def wav_bytes_to_voice_memo(
     try:
         loop = asyncio.get_running_loop()
         if loop.is_running():
-            raise VoiceMemoError(
-                "wav_bytes_to_voice_memo must not be called in an async context; use wav_bytes_to_voice_memo_async"
-            )
+            raise VoiceMemoError("wav_bytes_to_voice_memo must not be called in an async context; use wav_bytes_to_voice_memo_async")
     except RuntimeError:
         # No running loop, safe to proceed
         pass
@@ -231,40 +213,30 @@ def wav_bytes_to_voice_memo(
     )
 
 
-async def send_tts_voice_memo_async(
-    channel_id: int, wav_bytes: bytes, bot_token: Optional[str] = None
-) -> Dict[str, Any]:
+async def send_tts_voice_memo_async(channel_id: int, wav_bytes: bytes, bot_token: Optional[str] = None) -> Dict[str, Any]:
     """
     Async convenience to send TTS output as a Discord voice memo.
     """
     if bot_token is None:
         bot_token = os.getenv("DISCORD_TOKEN")
         if not bot_token:
-            raise VoiceMemoError(
-                "Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable."
-            )
+            raise VoiceMemoError("Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable.")
     return await wav_bytes_to_voice_memo_async(channel_id, wav_bytes, bot_token)
 
 
-def send_tts_voice_memo(
-    channel_id: int, wav_bytes: bytes, bot_token: str | None = None
-) -> Dict[str, Any]:
+def send_tts_voice_memo(channel_id: int, wav_bytes: bytes, bot_token: str | None = None) -> Dict[str, Any]:
     """
     Synchronous convenience kept for compatibility. Avoid in async contexts.
     """
     if bot_token is None:
         bot_token = os.getenv("DISCORD_TOKEN")
         if not bot_token:
-            raise VoiceMemoError(
-                "Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable."
-            )
+            raise VoiceMemoError("Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable.")
     # Guard against blocking the event loop
     try:
         loop = asyncio.get_running_loop()
         if loop.is_running():
-            raise VoiceMemoError(
-                "send_tts_voice_memo must not be called in an async context; use send_tts_voice_memo_async"
-            )
+            raise VoiceMemoError("send_tts_voice_memo must not be called in an async context; use send_tts_voice_memo_async")
     except RuntimeError:
         pass
     return asyncio.run(wav_bytes_to_voice_memo_async(channel_id, wav_bytes, bot_token))

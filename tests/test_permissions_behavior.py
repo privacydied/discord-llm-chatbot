@@ -222,9 +222,7 @@ async def test_check_admin_async_denial_on_interaction_ephemeral():
     interaction.response = MagicMock()
     interaction.response.send_message = AsyncMock()
 
-    result = await check_admin_async(
-        interaction.user, bot, reply_channel=interaction, ephemeral=True
-    )
+    result = await check_admin_async(interaction.user, bot, reply_channel=interaction, ephemeral=True)
     assert result is False
     interaction.response.send_message.assert_called_once()
     _, kwargs = interaction.response.send_message.call_args

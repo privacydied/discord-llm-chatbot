@@ -119,9 +119,7 @@ class STTFailureClassifier:
         return cls._create_classification("whisper_runtime", error, error_str)
 
     @classmethod
-    def _classify_file_failure(
-        cls, audio_path: Path
-    ) -> Optional[FailureClassification]:
+    def _classify_file_failure(cls, audio_path: Path) -> Optional[FailureClassification]:
         """Classify failures based on file inspection."""
         try:
             # Check file size
@@ -186,9 +184,7 @@ class STTFailureClassifier:
         return None
 
     @classmethod
-    def _create_classification(
-        cls, category: str, error: Exception, error_str: str
-    ) -> FailureClassification:
+    def _create_classification(cls, category: str, error: Exception, error_str: str) -> FailureClassification:
         """Create a failure classification with appropriate severity and recoverability."""
 
         # Determine severity and recoverability based on category
@@ -197,9 +193,7 @@ class STTFailureClassifier:
             recoverable = True
         elif category in ["decode", "corrupted"]:
             severity = "soft" if "corrupted" in category else "hard"
-            recoverable = (
-                category == "corrupted"
-            )  # Corrupted might be recoverable with multimodal
+            recoverable = category == "corrupted"  # Corrupted might be recoverable with multimodal
         else:  # whisper_runtime, zero_length
             severity = "soft"
             recoverable = True
@@ -226,12 +220,7 @@ class STTFailureClassifier:
         }.get(category, 0.5)
 
         # Boost confidence if we see multiple matching patterns
-        pattern_matches = sum(
-            1
-            for patterns in cls.ERROR_PATTERNS.values()
-            for pattern in patterns
-            if re.search(pattern, error_str, re.IGNORECASE)
-        )
+        pattern_matches = sum(1 for patterns in cls.ERROR_PATTERNS.values() for pattern in patterns if re.search(pattern, error_str, re.IGNORECASE))
 
         if pattern_matches > 1:
             base_confidence = min(1.0, base_confidence + 0.2)
@@ -257,10 +246,7 @@ class STTFailureClassifier:
             True if fallback should be attempted, False otherwise
         """
         # Never attempt fallback for these categories
-        if (
-            classification.category in ["extraction"]
-            and classification.severity == "hard"
-        ):
+        if classification.category in ["extraction"] and classification.severity == "hard":
             return False
 
         # Never attempt fallback if no audio data available

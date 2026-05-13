@@ -107,9 +107,7 @@ async def test_speak_command_with_no_text_and_history(router, mock_bot):
     await tts_cog.say(ctx, text=None)
 
     # Verify TTS was generated with the previous message content
-    mock_bot.tts_manager.generate_tts.assert_called_once_with(
-        "This is a previous message", "default"
-    )
+    mock_bot.tts_manager.generate_tts.assert_called_once_with("This is a previous message", "default")
 
     # Verify the response was sent with the audio file
     ctx.send.assert_called_once()
@@ -143,9 +141,7 @@ async def test_speak_command_with_no_text_and_no_history(router, mock_bot):
     await tts_cog.say(ctx, text=None)
 
     # Verify an error message was sent
-    ctx.send.assert_called_once_with(
-        "❌ Please provide text to speak or send a message before using !say"
-    )
+    ctx.send.assert_called_once_with("❌ Please provide text to speak or send a message before using !say")
 
     # Verify TTS was not generated
     mock_bot.tts_manager.generate_tts.assert_not_called()

@@ -30,9 +30,7 @@ class AdminAlertCommands(commands.Cog):
 
     @commands.command(name="alert")
     @commands.cooldown(2, 300, type=commands.BucketType.user)
-    async def alert_command(
-        self, ctx: commands.Context, *, message: str = None
-    ) -> None:
+    async def alert_command(self, ctx: commands.Context, *, message: str = None) -> None:
         """
         Admin broadcast command.
 
@@ -44,12 +42,8 @@ class AdminAlertCommands(commands.Cog):
 
         # CRITICAL: Admin check BEFORE any routing or side effects [REH][SFT]
         if not self.alert_manager.is_admin_user(ctx.author.id):
-            self.logger.warning(
-                f"alert:unauthorized user_id={ctx.author.id} channel_type={'DM' if self.alert_manager.is_dm_channel(ctx.channel) else 'guild'}"
-            )
-            await ctx.send(
-                "Access denied. You are not authorized to use the alert system."
-            )
+            self.logger.warning(f"alert:unauthorized user_id={ctx.author.id} channel_type={'DM' if self.alert_manager.is_dm_channel(ctx.channel) else 'guild'}")
+            await ctx.send("Access denied. You are not authorized to use the alert system.")
             return
 
         if not self.alert_manager.enabled:
@@ -67,17 +61,13 @@ class AdminAlertCommands(commands.Cog):
 
         # COMPOSER MODE: !alert (no message) - DM-only interactive workflow
         if not self.alert_manager.is_dm_channel(ctx.channel):
-            await ctx.send(
-                "Interactive alert composer can only be used in DMs. Use `!alert <message>` for direct broadcast."
-            )
+            await ctx.send("Interactive alert composer can only be used in DMs. Use `!alert <message>` for direct broadcast.")
             return
 
         # Prevent concurrent alert sessions per user [REH][CA]
         existing = self.alert_manager.get_session(ctx.author.id)
         if existing is not None:
-            await ctx.send(
-                "An alert session is already active. Use the composer or react with X to cancel."
-            )
+            await ctx.send("An alert session is already active. Use the composer or react with X to cancel.")
             return
 
         try:
@@ -90,9 +80,7 @@ class AdminAlertCommands(commands.Cog):
             # Add reaction controls with queuing
             reactions = ["📋", "✏️", "👁️", "📤", "❌"]
             for emoji in reactions:
-                await self.alert_manager._queue_reaction_operation(
-                    composer_msg, emoji, "add", ctx.author
-                )
+                await self.alert_manager._queue_reaction_operation(composer_msg, emoji, "add", ctx.author)
 
             # Mark composer as ready after all setup is complete
             session.composer_ready = True
@@ -110,9 +98,7 @@ class AdminAlertCommands(commands.Cog):
         [REH] Non-fatal per-guild errors; continues to other guilds.
         [CA] Reuses existing permission checking logic.
         """
-        self.logger.info(
-            f"alert:direct_broadcast:start user_id={ctx.author.id} content_len={len(content)}"
-        )
+        self.logger.info(f"alert:direct_broadcast:start user_id={ctx.author.id} content_len={len(content)}")
 
         # Sanitize broadcast content before sending [REH]
         content = sanitize_public_text(content)
@@ -130,13 +116,8 @@ class AdminAlertCommands(commands.Cog):
             truncated_guilds.append(guild)
 
         if len(truncated_guilds) > MAX_RECIPIENTS:
-            self.logger.warning(
-                f"alert:direct_broadcast:recipient_cap guilds={len(truncated_guilds)} cap={MAX_RECIPIENTS}"
-            )
-            await ctx.send(
-                f"Alert recipient cap reached ({MAX_RECIPIENTS}). "
-                f"Broadcast truncated from {len(truncated_guilds)} to {MAX_RECIPIENTS} recipients."
-            )
+            self.logger.warning(f"alert:direct_broadcast:recipient_cap guilds={len(truncated_guilds)} cap={MAX_RECIPIENTS}")
+            await ctx.send(f"Alert recipient cap reached ({MAX_RECIPIENTS}). Broadcast truncated from {len(truncated_guilds)} to {MAX_RECIPIENTS} recipients.")
             truncated_guilds = truncated_guilds[:MAX_RECIPIENTS]
 
         for guild in truncated_guilds:
@@ -146,9 +127,7 @@ class AdminAlertCommands(commands.Cog):
             bot_member = guild.get_member(self.bot.user.id)
             if not bot_member:
                 guilds_skipped += 1
-                self.logger.debug(
-                    f"alert:skip guild_id={guild.id} reason=bot_not_member"
-                )
+                self.logger.debug(f"alert:skip guild_id={guild.id} reason=bot_not_member")
                 continue
 
             # Find target channel: system channel > first writable text channel
@@ -170,47 +149,29 @@ class AdminAlertCommands(commands.Cog):
 
             if not target_channel:
                 guilds_skipped += 1
-                self.logger.debug(
-                    f"alert:skip guild_id={guild.id} reason=no_writable_channel"
-                )
+                self.logger.debug(f"alert:skip guild_id={guild.id} reason=no_writable_channel")
                 continue
 
             # Send alert to this guild [REH]
             try:
                 await target_channel.send(content)
                 guilds_success += 1
-                self.logger.debug(
-                    f"alert:sent guild_id={guild.id} channel_id={target_channel.id}"
-                )
+                self.logger.debug(f"alert:sent guild_id={guild.id} channel_id={target_channel.id}")
             except Exception as e:
                 guilds_failed += 1
-                self.logger.warning(
-                    f"alert:failed guild_id={guild.id} channel_id={target_channel.id} error={e}"
-                )
+                self.logger.warning(f"alert:failed guild_id={guild.id} channel_id={target_channel.id} error={e}")
 
         # Log summary [REH]
-        self.logger.info(
-            f"alert:direct_broadcast:complete user_id={ctx.author.id} "
-            f"targeted={guilds_targeted} success={guilds_success} "
-            f"skipped={guilds_skipped} failed={guilds_failed}"
-        )
+        self.logger.info(f"alert:direct_broadcast:complete user_id={ctx.author.id} targeted={guilds_targeted} success={guilds_success} skipped={guilds_skipped} failed={guilds_failed}")
 
         # Report to invoking user
         if guilds_success > 0:
-            await ctx.send(
-                f"Alert sent to {guilds_success} server(s). "
-                f"(Skipped: {guilds_skipped}, Failed: {guilds_failed})"
-            )
+            await ctx.send(f"Alert sent to {guilds_success} server(s). (Skipped: {guilds_skipped}, Failed: {guilds_failed})")
         else:
-            await ctx.send(
-                f"Alert could not be delivered to any servers. "
-                f"(Skipped: {guilds_skipped}, Failed: {guilds_failed})"
-            )
+            await ctx.send(f"Alert could not be delivered to any servers. (Skipped: {guilds_skipped}, Failed: {guilds_failed})")
 
     @commands.Cog.listener()
-    async def on_reaction_add(
-        self, reaction: discord.Reaction, user: discord.User
-    ) -> None:
+    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User) -> None:
         """Handle emoji reactions on composer cards."""
         if user.bot:
             return
@@ -229,10 +190,7 @@ class AdminAlertCommands(commands.Cog):
             return
 
         # Ready gate: ignore reactions until composer is fully initialized
-        if (
-            session.composer_message_id == reaction.message.id
-            and not session.composer_ready
-        ):
+        if session.composer_message_id == reaction.message.id and not session.composer_ready:
             try:
                 await reaction.remove(user)
             except Exception:
@@ -270,24 +228,18 @@ class AdminAlertCommands(commands.Cog):
 
                 sorted_guilds = sorted(
                     guild_map.keys(),
-                    key=lambda g: next(
-                        (c.guild.name.lower() for c in channels if c.guild.id == g), ""
-                    ),
+                    key=lambda g: next((c.guild.name.lower() for c in channels if c.guild.id == g), ""),
                 )
                 session.guilds_list = sorted_guilds
 
                 if emoji == "⬆️" and session.guild_page > 0:
                     session.guild_page -= 1
-                    await self._show_guild_selection(
-                        user, session, guild_map, sorted_guilds
-                    )
+                    await self._show_guild_selection(user, session, guild_map, sorted_guilds)
                 elif emoji == "⬇️":
                     total_pages = (len(sorted_guilds) + 7) // 8
                     if session.guild_page < total_pages - 1:
                         session.guild_page += 1
-                        await self._show_guild_selection(
-                            user, session, guild_map, sorted_guilds
-                        )
+                        await self._show_guild_selection(user, session, guild_map, sorted_guilds)
                 try:
                     await reaction.remove(user)
                 except discord.HTTPException:
@@ -307,17 +259,13 @@ class AdminAlertCommands(commands.Cog):
 
                 if emoji == "⬅️" and session.channel_page > 0:
                     session.channel_page -= 1
-                    await self._show_channel_selection_for_guild(
-                        user, session, session.selected_guild_id, guild_map
-                    )
+                    await self._show_channel_selection_for_guild(user, session, session.selected_guild_id, guild_map)
                 elif emoji == "➡️":
                     guild_channels = guild_map.get(session.selected_guild_id, [])
                     total_pages = (len(guild_channels) + 9) // 10
                     if session.channel_page < total_pages - 1:
                         session.channel_page += 1
-                        await self._show_channel_selection_for_guild(
-                            user, session, session.selected_guild_id, guild_map
-                        )
+                        await self._show_channel_selection_for_guild(user, session, session.selected_guild_id, guild_map)
                 elif emoji == "🏠":
                     session.selected_guild_id = None
                     session.channel_page = 0
@@ -328,9 +276,7 @@ class AdminAlertCommands(commands.Cog):
                     except Exception:
                         pass
                     sorted_guilds = session.guilds_list if session.guilds_list else []
-                    await self._show_guild_selection(
-                        user, session, guild_map, sorted_guilds
-                    )
+                    await self._show_guild_selection(user, session, guild_map, sorted_guilds)
                 elif emoji == "❌":
                     await self._handle_cancel(reaction, user, session)
                 try:
@@ -339,9 +285,7 @@ class AdminAlertCommands(commands.Cog):
                     pass
 
         except discord.HTTPException as e:
-            self.logger.error(
-                f"Discord API error handling reaction {emoji}: status={e.status}, code={e.code}"
-            )
+            self.logger.error(f"Discord API error handling reaction {emoji}: status={e.status}, code={e.code}")
             await user.send("An error occurred. Please try again.")
         except Exception as e:
             self.logger.error(f"Error handling reaction {emoji}: {e}")
@@ -374,15 +318,10 @@ class AdminAlertCommands(commands.Cog):
                 if content.lower() == "done":
                     if session.destinations:
                         session.current_step = "compose_content"
-                        await message.channel.send(
-                            f"Using {len(session.destinations)} selected channel(s).\n\n"
-                            f"React to compose content, or send your alert content now."
-                        )
+                        await message.channel.send(f"Using {len(session.destinations)} selected channel(s).\n\nReact to compose content, or send your alert content now.")
                         await self._update_composer_embed(message, session)
                     else:
-                        await message.channel.send(
-                            "No channels selected yet. Reply with a guild number first."
-                        )
+                        await message.channel.send("No channels selected yet. Reply with a guild number first.")
                     return
 
                 if content.lower() == "back":
@@ -401,16 +340,12 @@ class AdminAlertCommands(commands.Cog):
                     for gid in guild_map:
                         guild_map[gid].sort(key=lambda c: (c.position, c.name.lower()))
                     sorted_guilds = session.guilds_list if session.guilds_list else []
-                    await self._show_guild_selection(
-                        message.author, session, guild_map, sorted_guilds
-                    )
+                    await self._show_guild_selection(message.author, session, guild_map, sorted_guilds)
                     return
 
                 indices = self._extract_indices(content)
                 if not indices:
-                    await message.channel.send(
-                        "Please send numbers like `1,3,5` corresponding to the list, or type `back` to return."
-                    )
+                    await message.channel.send("Please send numbers like `1,3,5` corresponding to the list, or type `back` to return.")
                     return
 
                 channels = await self.alert_manager.get_accessible_channels()
@@ -443,30 +378,22 @@ class AdminAlertCommands(commands.Cog):
                 # Case 1: No guild selected
                 if session.selected_guild_id is None:
                     if len(indices) != 1:
-                        await message.channel.send(
-                            f"Please send **one** guild number (1-{len(sorted_guilds)})."
-                        )
+                        await message.channel.send(f"Please send **one** guild number (1-{len(sorted_guilds)}).")
                         return
 
                     guild_idx = indices[0] - 1
                     if guild_idx < 0 or guild_idx >= len(sorted_guilds):
-                        await message.channel.send(
-                            f"Invalid guild number. Please choose 1-{len(sorted_guilds)}."
-                        )
+                        await message.channel.send(f"Invalid guild number. Please choose 1-{len(sorted_guilds)}.")
                         return
 
                     selected_guild_id = sorted_guilds[guild_idx]
-                    await self._show_channel_selection_for_guild(
-                        message.author, session, selected_guild_id, guild_map
-                    )
+                    await self._show_channel_selection_for_guild(message.author, session, selected_guild_id, guild_map)
                     return
 
                 # Case 2: Guild selected - channel selection
                 guild_channels = guild_map.get(session.selected_guild_id, [])
                 if not guild_channels:
-                    await message.channel.send(
-                        "Could not find channels for that guild."
-                    )
+                    await message.channel.send("Could not find channels for that guild.")
                     return
 
                 selected: List[AlertDestination] = []
@@ -487,29 +414,19 @@ class AdminAlertCommands(commands.Cog):
                         invalid.append(idx)
 
                 if not selected:
-                    await message.channel.send(
-                        f"No valid selections. Please choose 1-{len(guild_channels)}."
-                    )
+                    await message.channel.send(f"No valid selections. Please choose 1-{len(guild_channels)}.")
                     return
 
                 session.destinations.extend(selected)
                 session.selected_guild_id = None
 
-                self.logger.info(
-                    f"User {message.author.id} selected {len(selected)} channel(s); total={len(session.destinations)}"
-                )
+                self.logger.info(f"User {message.author.id} selected {len(selected)} channel(s); total={len(session.destinations)}")
 
                 if invalid:
-                    await message.channel.send(
-                        f"Ignored out-of-range: {', '.join(map(str, invalid))}"
-                    )
+                    await message.channel.send(f"Ignored out-of-range: {', '.join(map(str, invalid))}")
 
                 names = ", ".join([f"#{d.channel_name}" for d in selected])
-                await message.channel.send(
-                    f"Added {len(selected)}: {names}\n\n"
-                    f"Total selected: {len(session.destinations)} channel(s)\n"
-                    f"Reply `back` for more guilds, `done` to finish selection."
-                )
+                await message.channel.send(f"Added {len(selected)}: {names}\n\nTotal selected: {len(session.destinations)} channel(s)\nReply `back` for more guilds, `done` to finish selection.")
                 await self._update_composer_embed(message, session)
                 return
 
@@ -532,18 +449,14 @@ class AdminAlertCommands(commands.Cog):
                     parts.append("content")
                 changed = ", ".join(parts) if parts else "(no changes)"
 
-                await message.channel.send(
-                    f"Updated {changed}. React with preview to preview or send to send."
-                )
+                await message.channel.send(f"Updated {changed}. React with preview to preview or send to send.")
                 await self._update_composer_embed(message, session)
                 return
 
         except Exception as e:
             self.logger.error(f"Error handling DM message: {e}")
             try:
-                await message.channel.send(
-                    "Error processing your input. Please try again."
-                )
+                await message.channel.send("Error processing your input. Please try again.")
             except Exception:
                 pass
 
@@ -564,9 +477,7 @@ class AdminAlertCommands(commands.Cog):
                         continue
         return indices
 
-    def _parse_content_fields(
-        self, text: str
-    ) -> tuple[Optional[str], Optional[str], str]:
+    def _parse_content_fields(self, text: str) -> tuple[Optional[str], Optional[str], str]:
         """Extract TITLE: and DESC: lines; return (title|None, desc|None, body_text)."""
         title: Optional[str] = None
         desc: Optional[str] = None
@@ -581,36 +492,27 @@ class AdminAlertCommands(commands.Cog):
                 body_lines.append(line)
         return title, desc, "\n".join(body_lines).strip()
 
-    async def _update_composer_embed(
-        self, source_message: discord.Message, session
-    ) -> None:
+    async def _update_composer_embed(self, source_message: discord.Message, session) -> None:
         """Refresh the composer embed message based on current session state."""
         try:
             if not session.composer_message_id:
                 return
             composer_embed = await self.alert_manager.build_composer_embed(session)
             composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
-            dm_msg = await source_message.channel.fetch_message(
-                session.composer_message_id
-            )
+            dm_msg = await source_message.channel.fetch_message(session.composer_message_id)
             await dm_msg.edit(embed=composer_embed)
         except discord.HTTPException as e:
             self.logger.error(f"Embed edit failed: status={e.status}, code={e.code}")
         except Exception as e:
             self.logger.error(f"Failed to update composer embed: {e}")
 
-    async def _handle_channel_selection(
-        self, reaction: discord.Reaction, user: discord.User, session
-    ) -> None:
+    async def _handle_channel_selection(self, reaction: discord.Reaction, user: discord.User, session) -> None:
         """Present guild-based channel selection with scrollable guild list."""
         session.current_step = "select_channels"
 
         channels = await self.alert_manager.get_accessible_channels()
         if not channels:
-            await user.send(
-                "I couldn't find any text channels I can send messages to. "
-                "Check the bot permissions and try again."
-            )
+            await user.send("I couldn't find any text channels I can send messages to. Check the bot permissions and try again.")
             return
 
         guild_map: Dict[int, List[discord.TextChannel]] = {}
@@ -625,9 +527,7 @@ class AdminAlertCommands(commands.Cog):
 
         sorted_guilds = sorted(
             guild_map.keys(),
-            key=lambda g: next(
-                (c.guild.name.lower() for c in channels if c.guild.id == g), ""
-            ),
+            key=lambda g: next((c.guild.name.lower() for c in channels if c.guild.id == g), ""),
         )
         session.guilds_list = sorted_guilds
 
@@ -649,9 +549,7 @@ class AdminAlertCommands(commands.Cog):
         GUILDS_PER_PAGE = 8
 
         page = getattr(session, "guild_page", 0)
-        total_pages = max(
-            1, (len(sorted_guilds) + GUILDS_PER_PAGE - 1) // GUILDS_PER_PAGE
-        )
+        total_pages = max(1, (len(sorted_guilds) + GUILDS_PER_PAGE - 1) // GUILDS_PER_PAGE)
         page = max(0, min(page, total_pages - 1))
         session.guild_page = page
 
@@ -679,9 +577,7 @@ class AdminAlertCommands(commands.Cog):
 
         nav_text = "Previous | Next | Cancel"
         embed.add_field(name="Navigation", value=nav_text, inline=False)
-        embed.set_footer(
-            text=f"Total: {len(sorted_guilds)} guilds | Reply with a number (1-{len(sorted_guilds)})"
-        )
+        embed.set_footer(text=f"Total: {len(sorted_guilds)} guilds | Reply with a number (1-{len(sorted_guilds)})")
 
         existing_msg_id = getattr(session, "selection_message_id", None)
         if existing_msg_id:
@@ -719,9 +615,7 @@ class AdminAlertCommands(commands.Cog):
         guild_name = channels[0].guild.name if channels[0].guild else "Unknown Guild"
 
         page = getattr(session, "channel_page", 0)
-        total_pages = max(
-            1, (len(channels) + CHANNELS_PER_PAGE - 1) // CHANNELS_PER_PAGE
-        )
+        total_pages = max(1, (len(channels) + CHANNELS_PER_PAGE - 1) // CHANNELS_PER_PAGE)
         page = max(0, min(page, total_pages - 1))
         session.channel_page = page
         session.selected_guild_id = guild_id
@@ -761,9 +655,7 @@ class AdminAlertCommands(commands.Cog):
         await msg.add_reaction("🏠")
         await msg.add_reaction("❌")
 
-    async def _handle_content_composition(
-        self, reaction: discord.Reaction, user: discord.User, session
-    ) -> None:
+    async def _handle_content_composition(self, reaction: discord.Reaction, user: discord.User, session) -> None:
         session.current_step = "compose_content"
 
         await user.send(
@@ -783,19 +675,13 @@ class AdminAlertCommands(commands.Cog):
         try:
             composer_embed = await self.alert_manager.build_composer_embed(session)
             composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
-            full_message = await reaction.message.channel.fetch_message(
-                reaction.message.id
-            )
+            full_message = await reaction.message.channel.fetch_message(reaction.message.id)
             await full_message.edit(embed=composer_embed)
         except discord.HTTPException as e:
-            self.logger.error(
-                f"Failed to update composer embed in content composition: status={e.status}, code={e.code}"
-            )
+            self.logger.error(f"Failed to update composer embed in content composition: status={e.status}, code={e.code}")
             raise
 
-    async def _handle_preview(
-        self, reaction: discord.Reaction, user: discord.User, session
-    ) -> None:
+    async def _handle_preview(self, reaction: discord.Reaction, user: discord.User, session) -> None:
         if not session.destinations:
             await user.send("Please select destinations first.")
             return
@@ -812,10 +698,7 @@ class AdminAlertCommands(commands.Cog):
             color=0x5865F2,
         )
 
-        dest_list = [
-            f"#{dest.channel_name or 'unknown-channel'}"
-            for dest in session.destinations[:10]
-        ]
+        dest_list = [f"#{dest.channel_name or 'unknown-channel'}" for dest in session.destinations[:10]]
         if len(session.destinations) > 10:
             dest_list.append(f"... and {len(session.destinations) - 10} more")
 
@@ -833,9 +716,7 @@ class AdminAlertCommands(commands.Cog):
                 description=session.embed_description,
                 color=0x1F8B4C,
             )
-            await user.send(
-                content=f"**PREVIEW:** {session.content}", embed=alert_embed
-            )
+            await user.send(content=f"**PREVIEW:** {session.content}", embed=alert_embed)
         else:
             await user.send(f"**PREVIEW:** {session.content}")
 
@@ -843,19 +724,13 @@ class AdminAlertCommands(commands.Cog):
         try:
             composer_embed = await self.alert_manager.build_composer_embed(session)
             composer_embed = self.alert_manager._validate_embed_limits(composer_embed)
-            full_message = await reaction.message.channel.fetch_message(
-                reaction.message.id
-            )
+            full_message = await reaction.message.channel.fetch_message(reaction.message.id)
             await full_message.edit(embed=composer_embed)
         except discord.HTTPException as e:
-            self.logger.error(
-                f"Failed to update composer embed in preview: status={e.status}, code={e.code}"
-            )
+            self.logger.error(f"Failed to update composer embed in preview: status={e.status}, code={e.code}")
             raise
 
-    async def _handle_send_confirmation(
-        self, reaction: discord.Reaction, user: discord.User, session
-    ) -> None:
+    async def _handle_send_confirmation(self, reaction: discord.Reaction, user: discord.User, session) -> None:
         if session.current_step != "confirm_send":
             await user.send("Please complete all steps before sending.")
             return
@@ -871,16 +746,10 @@ class AdminAlertCommands(commands.Cog):
         await confirm_message.add_reaction("❌")
 
         def check(reaction_check, user_check):
-            return (
-                user_check == user
-                and reaction_check.message.id == confirm_message.id
-                and str(reaction_check.emoji) in ["✅", "❌"]
-            )
+            return user_check == user and reaction_check.message.id == confirm_message.id and str(reaction_check.emoji) in ["✅", "❌"]
 
         try:
-            reaction_result, _ = await self.bot.wait_for(
-                "reaction_add", timeout=60.0, check=check
-            )
+            reaction_result, _ = await self.bot.wait_for("reaction_add", timeout=60.0, check=check)
 
             if str(reaction_result.emoji) == "✅":
                 await user.send("Sending alert...")
@@ -906,9 +775,7 @@ class AdminAlertCommands(commands.Cog):
         except asyncio.TimeoutError:
             await user.send("Confirmation timeout. Alert cancelled.")
 
-    async def _handle_cancel(
-        self, reaction: discord.Reaction, user: discord.User, session
-    ) -> None:
+    async def _handle_cancel(self, reaction: discord.Reaction, user: discord.User, session) -> None:
         session.status = AlertSessionStatus.CANCELLED
         del self.alert_manager.sessions[user.id]
         await user.send("Alert session cancelled.")

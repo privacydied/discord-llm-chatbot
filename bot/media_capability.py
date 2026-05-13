@@ -19,12 +19,8 @@ from .utils.logging import get_logger
 logger = get_logger(__name__)
 
 # Configuration
-PROBE_CACHE_TTL_SECONDS = int(
-    os.getenv("MEDIA_PROBE_CACHE_TTL", "300")
-)  # 5 minutes default
-PROBE_TIMEOUT_SECONDS = int(
-    os.getenv("MEDIA_PROBE_TIMEOUT", "10")
-)  # 10 seconds default
+PROBE_CACHE_TTL_SECONDS = int(os.getenv("MEDIA_PROBE_CACHE_TTL", "300"))  # 5 minutes default
+PROBE_TIMEOUT_SECONDS = int(os.getenv("MEDIA_PROBE_TIMEOUT", "10"))  # 10 seconds default
 CACHE_DIR = Path("cache/media_probes")
 
 # Domains that should be probed for media content
@@ -78,9 +74,7 @@ class MediaCapabilityDetector:
         self.cache_file = self.cache_dir / "probe_cache.json"
         self._cache: Dict[str, Dict] = {}
         self._load_cache()
-        logger.info(
-            f"✔ MediaCapabilityDetector initialized with cache: {self.cache_dir}"
-        )
+        logger.info(f"✔ MediaCapabilityDetector initialized with cache: {self.cache_dir}")
 
     def _load_cache(self):
         """Load probe cache from disk."""
@@ -163,9 +157,7 @@ class MediaCapabilityDetector:
             ]
 
             proc = await asyncio.wait_for(
-                asyncio.create_subprocess_exec(
-                    *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-                ),
+                asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE),
                 timeout=PROBE_TIMEOUT_SECONDS,
             )
 
@@ -295,9 +287,7 @@ class MediaCapabilityDetector:
             if self._cache and len(self._cache) % 10 == 0:
                 self._save_cache()
 
-            logger.debug(
-                f"🔍 Probe result for {url}: {is_capable} ({reason}) in {probe_duration_ms:.1f}ms"
-            )
+            logger.debug(f"🔍 Probe result for {url}: {is_capable} ({reason}) in {probe_duration_ms:.1f}ms")
 
             return ProbeResult(
                 is_media_capable=is_capable,
@@ -338,9 +328,7 @@ class MediaCapabilityDetector:
 
         # For Twitter, if general probe fails, we can try a secondary metadata check
         # This is a placeholder for potential future enhancement
-        logger.debug(
-            f"Twitter URL {url} did not pass general media probe: {general_result.reason}"
-        )
+        logger.debug(f"Twitter URL {url} did not pass general media probe: {general_result.reason}")
 
         return ProbeResult(
             is_media_capable=False,
@@ -374,10 +362,7 @@ class MediaCapabilityDetector:
         current_time = time.time()
 
         for entry in self._cache.values():
-            if (
-                "timestamp" in entry
-                and current_time - entry["timestamp"] < PROBE_CACHE_TTL_SECONDS
-            ):
+            if "timestamp" in entry and current_time - entry["timestamp"] < PROBE_CACHE_TTL_SECONDS:
                 valid_entries += 1
             else:
                 expired_entries += 1

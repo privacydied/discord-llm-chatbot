@@ -20,8 +20,7 @@ TIER_A_TIMEOUT_S = float(os.getenv("WEBEX_TIER_A_TIMEOUT_S", "6.0"))
 TIER_B_TIMEOUT_S = float(os.getenv("WEBEX_TIER_B_TIMEOUT_S", "12.0"))
 USER_AGENT = os.getenv(
     "WEBEX_UA_DESKTOP",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
 )
 ENABLE_TIER_B = os.getenv("WEBEX_ENABLE_TIER_B", "1").strip() not in {
     "0",
@@ -72,10 +71,7 @@ class WebExtractionService:
             self._client = httpx.AsyncClient(
                 headers={
                     "User-Agent": USER_AGENT,
-                    "Accept": (
-                        "text/html,application/xhtml+xml,application/xml;q=0.9,"
-                        "application/pdf;q=0.9,*/*;q=0.8"
-                    ),
+                    "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.9,*/*;q=0.8"),
                     "Accept-Language": ACCEPT_LANGUAGE,
                     "Accept-Encoding": "gzip, deflate, br",
                     "DNT": "1",
@@ -126,9 +122,7 @@ class WebExtractionService:
             await validate_url_with_dns(url)
         except UrlSafetyError as exc:
             logger.warning("URL safety blocked extraction: %s", exc)
-            return ExtractionResult(
-                success=False, tier_used="none", error=f"URL blocked: {exc}"
-            )
+            return ExtractionResult(success=False, tier_used="none", error=f"URL blocked: {exc}")
 
         last_error: Optional[str] = None
         last_tier = "none"
@@ -172,9 +166,7 @@ class WebExtractionService:
                 logger.info(f"Tier B exception for {url}: {str(e)[:200]}")
                 if self._is_playwright_fatal_error(str(e)):
                     self._tier_b_available = False
-                    logger.warning(
-                        "🛑 Disabling Tier B (Playwright) due to runtime/launch failure."
-                    )
+                    logger.warning("🛑 Disabling Tier B (Playwright) due to runtime/launch failure.")
 
         return ExtractionResult(
             success=False,
@@ -222,9 +214,7 @@ class WebExtractionService:
                     return None
                 context = None
                 try:
-                    context = await browser.new_context(
-                        user_agent=USER_AGENT, java_script_enabled=True
-                    )
+                    context = await browser.new_context(user_agent=USER_AGENT, java_script_enabled=True)
                     page = await context.new_page()
                     page.set_default_timeout(timeout_ms)
 
@@ -246,9 +236,7 @@ class WebExtractionService:
                                 pass
 
                     await page.route("**/*", _route_handler)
-                    await page.goto(
-                        url, wait_until="domcontentloaded", timeout=timeout_ms
-                    )
+                    await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                     html_doc = await page.content()
                     final_url = await page.evaluate("() => document.location.href")
                     parsed = self._parse_html_for_text(html_doc, final_url)
@@ -261,9 +249,7 @@ class WebExtractionService:
                             author=parsed.get("author"),
                             raw_json_present=parsed.get("raw_json_present", False),
                         )
-                    return ExtractionResult(
-                        success=False, tier_used="B", error="no text extracted"
-                    )
+                    return ExtractionResult(success=False, tier_used="B", error="no text extracted")
                 finally:
                     if context is not None:
                         try:
@@ -302,9 +288,7 @@ class WebExtractionService:
             tw_desc = soup.find("meta", attrs={"name": "twitter:description"})
             for m in (og_desc, tw_desc):
                 if m and m.get("content"):
-                    norm = WebExtractionService._normalize_tweet_text(
-                        m["content"]
-                    )  # often contains tweet text
+                    norm = WebExtractionService._normalize_tweet_text(m["content"])  # often contains tweet text
                     if norm:
                         text_candidates.append(norm)
 
@@ -338,12 +322,7 @@ class WebExtractionService:
                 if not t:
                     continue
                 is_ld = script.get("type") == "application/ld+json"
-                if (
-                    is_ld
-                    or "__NEXT_DATA__" in t
-                    or "__INITIAL_STATE__" in t
-                    or "hydrate" in t
-                ):
+                if is_ld or "__NEXT_DATA__" in t or "__INITIAL_STATE__" in t or "hydrate" in t:
                     try:
                         raw_json_present = True
                         # Attempt to parse a JSON object within the script content

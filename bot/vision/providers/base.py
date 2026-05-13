@@ -125,12 +125,8 @@ class BaseVisionProvider(ABC):
                     "model": model,
                     "user_id": request.user_id,
                     "guild_id": request.guild_id,
-                    "dimensions": f"{request.width}x{request.height}"
-                    if request.task.name.endswith("IMAGE")
-                    else None,
-                    "duration": f"{request.duration_seconds}s"
-                    if "VIDEO" in request.task.name
-                    else None,
+                    "dimensions": f"{request.width}x{request.height}" if request.task.name.endswith("IMAGE") else None,
+                    "duration": f"{request.duration_seconds}s" if "VIDEO" in request.task.name else None,
                     "batch_size": request.batch_size,
                     "estimated_cost": request.estimated_cost,
                 },
@@ -155,9 +151,7 @@ class BaseVisionProvider(ABC):
                     "processing_time_seconds": processing_time,
                     "actual_cost": response.actual_cost,
                     "artifacts_count": len(response.artifacts),
-                    "file_size_mb": round(response.file_size_bytes / (1024 * 1024), 2)
-                    if response.file_size_bytes
-                    else 0,
+                    "file_size_mb": round(response.file_size_bytes / (1024 * 1024), 2) if response.file_size_bytes else 0,
                 },
             },
         )
@@ -204,9 +198,7 @@ class BaseVisionProvider(ABC):
 
     def _validate_image_format(self, file_path: Path) -> None:
         """Validate image file format [IV]"""
-        allowed_formats = self.policy["artifact_management"]["supported_formats"][
-            "image"
-        ]
+        allowed_formats = self.policy["artifact_management"]["supported_formats"]["image"]
         file_extension = file_path.suffix.lower().lstrip(".")
 
         if file_extension not in allowed_formats:
@@ -216,9 +208,7 @@ class BaseVisionProvider(ABC):
                 user_message=f"Unsupported image format. Allowed: {', '.join(allowed_formats)}",
             )
 
-    def _create_error_response(
-        self, job_id: str, error: VisionError, processing_time: float = 0.0
-    ) -> VisionResponse:
+    def _create_error_response(self, job_id: str, error: VisionError, processing_time: float = 0.0) -> VisionResponse:
         """Create standardized error response [CA]"""
         return VisionResponse(
             success=False,
@@ -229,9 +219,7 @@ class BaseVisionProvider(ABC):
             error=error,
         )
 
-    def _extract_dimensions_from_path(
-        self, file_path: Path
-    ) -> Optional[tuple[int, int]]:
+    def _extract_dimensions_from_path(self, file_path: Path) -> Optional[tuple[int, int]]:
         """Extract image/video dimensions using PIL/ffprobe if available"""
         try:
             if file_path.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:

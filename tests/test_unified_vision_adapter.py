@@ -8,9 +8,7 @@ error handling, fallback logic, and integration with gateway.
 import pytest
 
 # Skip all tests — require live vision provider APIs
-pytestmark = pytest.mark.skip(
-    reason="Requires live vision provider APIs (together, novita, openrouter)"
-)
+pytestmark = pytest.mark.skip(reason="Requires live vision provider APIs (together, novita, openrouter)")
 
 import asyncio
 import pytest
@@ -84,10 +82,7 @@ class TestUnifiedVisionAdapter:
     def test_adapter_initialization(self, unified_adapter):
         """Test adapter initializes with provider plugins [CA]"""
         assert len(unified_adapter.providers) > 0
-        assert (
-            "together" in unified_adapter.providers
-            or "novita" in unified_adapter.providers
-        )
+        assert "together" in unified_adapter.providers or "novita" in unified_adapter.providers
         assert unified_adapter.provider_config is not None
 
     def test_request_normalization(self, unified_adapter, vision_request):
@@ -105,9 +100,7 @@ class TestUnifiedVisionAdapter:
     def test_provider_selection(self, unified_adapter, vision_request):
         """Test automatic provider selection logic [CA]"""
         # Override budget to allow providers to be selected
-        unified_adapter.provider_config["vision"]["default_policy"][
-            "budget_per_job_usd"
-        ] = 100.0
+        unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
         normalized = unified_adapter.normalize_request(vision_request)
         provider = unified_adapter.select_provider(normalized)
 
@@ -206,13 +199,9 @@ class TestErrorHandling:
     async def test_authentication_error_handling(self, unified_adapter, vision_request):
         """Test authentication error is properly handled"""
         # Override budget so providers are selectable
-        unified_adapter.provider_config["vision"]["default_policy"][
-            "budget_per_job_usd"
-        ] = 100.0
+        unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
         # Select together as the primary provider to patch
-        unified_adapter.provider_config["vision"]["default_policy"][
-            "provider_order"
-        ] = ["together"]
+        unified_adapter.provider_config["vision"]["default_policy"]["provider_order"] = ["together"]
         together = unified_adapter.providers.get("together")
         if together is None:
             pytest.skip("Together provider not available for auth test")
@@ -233,9 +222,7 @@ class TestErrorHandling:
     async def test_fallback_on_provider_failure(self, unified_adapter, vision_request):
         """Test automatic fallback when primary provider fails"""
         # Override budget so providers are selectable
-        unified_adapter.provider_config["vision"]["default_policy"][
-            "budget_per_job_usd"
-        ] = 100.0
+        unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
         # Ensure we have multiple providers for fallback testing
         if len(unified_adapter.providers) < 2:
             pytest.skip("Need multiple providers for fallback test")
@@ -256,9 +243,7 @@ class TestErrorHandling:
 
                 job_id, provider_name = await unified_adapter.submit(vision_request)
 
-                assert job_id.startswith(
-                    provider_names[1]
-                )  # Should use fallback provider
+                assert job_id.startswith(provider_names[1])  # Should use fallback provider
                 assert provider_name == provider_names[1]
 
 
@@ -315,9 +300,7 @@ class TestGatewayIntegration:
             mock_poll.assert_called_once_with(job_id)
 
     @pytest.mark.asyncio
-    async def test_result_fetching_through_gateway(
-        self, vision_gateway, vision_request
-    ):
+    async def test_result_fetching_through_gateway(self, vision_gateway, vision_request):
         """Test result fetching flows through unified adapter"""
         job_id = "together:job_123"
 
@@ -325,9 +308,7 @@ class TestGatewayIntegration:
         with patch.object(vision_gateway.adapter, "poll") as mock_poll:
             with patch.object(vision_gateway.adapter, "fetch_result") as mock_fetch:
                 # Mock completed status
-                mock_poll.return_value = UnifiedJobStatus(
-                    status=UnifiedStatus.COMPLETED, progress_percentage=100
-                )
+                mock_poll.return_value = UnifiedJobStatus(status=UnifiedStatus.COMPLETED, progress_percentage=100)
 
                 # Mock result
                 mock_fetch.return_value = UnifiedResult(
@@ -346,10 +327,7 @@ class TestGatewayIntegration:
 
                 assert response is not None
                 urls = [str(p) for p in response.artifacts]
-                normalized_urls = [
-                    u.replace("https:/", "https://").replace("http:/", "http://")
-                    for u in urls
-                ]
+                normalized_urls = [u.replace("https:/", "https://").replace("http:/", "http://") for u in urls]
                 assert normalized_urls == ["https://example.com/image.png"]
                 assert response.actual_cost == 0.05
                 assert job_id not in vision_gateway.active_jobs  # Should be cleaned up
@@ -364,9 +342,7 @@ class TestVisionModelOverride:
         config_with_override["VISION_MODEL"] = "novita:qwen-image"
 
         adapter = UnifiedVisionAdapter(config_with_override)
-        request = VisionRequest(
-            user_id="user", task=VisionTask.TEXT_TO_IMAGE, prompt="test qwen image"
-        )
+        request = VisionRequest(user_id="user", task=VisionTask.TEXT_TO_IMAGE, prompt="test qwen image")
 
         normalized = adapter.normalize_request(request)
         selection = adapter.resolve_model_selection(normalized)
@@ -393,9 +369,7 @@ class TestVisionModelOverride:
 
             adapter = UnifiedVisionAdapter(config_with_alias)
 
-            request = VisionRequest(
-                user_id="user", task=VisionTask.TEXT_TO_IMAGE, prompt="test"
-            )
+            request = VisionRequest(user_id="user", task=VisionTask.TEXT_TO_IMAGE, prompt="test")
 
             normalized = adapter.normalize_request(request)
             selection = adapter.resolve_model_selection(normalized)
@@ -430,9 +404,7 @@ class TestQwenEndpointParameterNormalization:
             safety_mode="strict",
         )
 
-        payload, warnings = novita_plugin.build_payload_for_endpoint(
-            "qwen-image-txt2img", request
-        )
+        payload, warnings = novita_plugin.build_payload_for_endpoint("qwen-image-txt2img", request)
 
         # Check payload format
         assert "size" in payload
@@ -551,8 +523,6 @@ if __name__ == "__main__":
         await gateway.shutdown()
         print("✅ Gateway shutdown complete")
 
-        print(
-            "\n🎉 All smoke tests passed! Unified Vision Adapter is working correctly."
-        )
+        print("\n🎉 All smoke tests passed! Unified Vision Adapter is working correctly.")
 
     asyncio.run(smoke_test())

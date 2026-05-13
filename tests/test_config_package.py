@@ -19,6 +19,7 @@ import pytest
 # Helper: reload bot.config to get a clean state for each test group
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _clear_config_cache():
     """Invalidate the in-process config cache before/after each test."""
@@ -32,6 +33,7 @@ def _clear_config_cache():
 # ===================================================================
 # 1.  from bot.config import load_config works
 # ===================================================================
+
 
 class TestLoadConfigImportable:
     def test_load_config_is_callable(self):
@@ -49,6 +51,7 @@ class TestLoadConfigImportable:
 # ===================================================================
 # 2.  from bot.config import get_config works (if it exists)
 # ===================================================================
+
 
 class TestGetConfigImportable:
     """get_config may or may not exist depending on package decomposition state."""
@@ -70,6 +73,7 @@ class TestGetConfigImportable:
 # 3.  from bot.config import load_system_prompts works
 # ===================================================================
 
+
 class TestLoadSystemPrompts:
     def test_load_system_prompts_is_callable(self):
         from bot.config import load_system_prompts
@@ -86,14 +90,13 @@ class TestLoadSystemPrompts:
         from bot.config import load_system_prompts
 
         result = load_system_prompts()
-        assert "text_prompt" in result or "vl_prompt" in result, (
-            "load_system_prompts should return at least one prompt key"
-        )
+        assert "text_prompt" in result or "vl_prompt" in result, "load_system_prompts should return at least one prompt key"
 
 
 # ===================================================================
 # 4.  from bot.config import check_venv_activation works
 # ===================================================================
+
 
 class TestCheckVenvActivation:
     def test_check_venv_activation_is_callable(self):
@@ -113,6 +116,7 @@ class TestCheckVenvActivation:
 # ===================================================================
 # 5.  from bot.config import validate_required_env works
 # ===================================================================
+
 
 class TestValidateRequiredEnv:
     def test_validate_required_env_is_callable(self):
@@ -149,6 +153,7 @@ class TestValidateRequiredEnv:
 #     (actually defined in bot.exceptions, but re-exported from bot.config)
 # ===================================================================
 
+
 class TestConfigurationErrorImportable:
     def test_importable_from_bot_config(self):
         from bot.config import ConfigurationError
@@ -171,15 +176,13 @@ class TestConfigurationErrorImportable:
         from bot.config import ConfigurationError
         from bot.exceptions import ConfigurationError as ExcConfigurationError
 
-        assert ConfigurationError is ExcConfigurationError, (
-            "ConfigurationError from bot.config should be the same object "
-            "as the one from bot.exceptions (re-export, not copy)"
-        )
+        assert ConfigurationError is ExcConfigurationError, "ConfigurationError from bot.config should be the same object as the one from bot.exceptions (re-export, not copy)"
 
 
 # ===================================================================
 # 7.  from bot.config import get_vl_model_ladder works
 # ===================================================================
+
 
 class TestGetVlModelLadder:
     def test_get_vl_model_ladder_is_callable(self):
@@ -221,6 +224,7 @@ class TestGetVlModelLadder:
 # ===================================================================
 # 8.  from bot.config import invalidate_config_cache works
 # ===================================================================
+
 
 class TestInvalidateConfigCache:
     def test_invalidate_config_cache_is_callable(self):
@@ -340,6 +344,7 @@ class TestLoadConfigKeys:
 # ===================================================================
 # 10. Re-import smoke test: all names importable from bot.config
 # ===================================================================
+
 
 class TestBackwardCompatibilityImports:
     """Comprehensive import test — every public name must be accessible."""

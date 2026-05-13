@@ -30,18 +30,14 @@ except Exception as exc:  # pragma: no cover - dependency missing in some tests
     EXPECTED_VOCAB_SIZE = None
     logger.debug("kokoro_onnx unavailable; IPA vocabulary disabled", exc_info=True)
 else:
-    logger.debug(
-        "Loaded official Kokoro IPA vocabulary with %d entries", len(PHONEME_TO_ID)
-    )
+    logger.debug("Loaded official Kokoro IPA vocabulary with %d entries", len(PHONEME_TO_ID))
 
 
 if PHONEME_TO_ID:
     _id_counts: Dict[int, str] = {}
     for phoneme, id_val in PHONEME_TO_ID.items():
         if id_val in _id_counts:
-            raise ValueError(
-                f"Duplicate ID {id_val} for phonemes '{_id_counts[id_val]}' and '{phoneme}'"
-            )
+            raise ValueError(f"Duplicate ID {id_val} for phonemes '{_id_counts[id_val]}' and '{phoneme}'")
         _id_counts[id_val] = phoneme
 
     ID_TO_PHONEME: Dict[int, str] = {v: k for k, v in PHONEME_TO_ID.items()}

@@ -42,9 +42,7 @@ class ArchiveIngestionQueue:
         self.batch_size = max(1, int(batch_size))
         self.enabled = bool(enabled)
         self.stats = ArchiveQueueStats()
-        self._queue: asyncio.Queue[ArchiveMessageBundle] = asyncio.Queue(
-            maxsize=self.max_size
-        )
+        self._queue: asyncio.Queue[ArchiveMessageBundle] = asyncio.Queue(maxsize=self.max_size)
         self._worker_tasks: list[asyncio.Task[None]] = []
         self._shutdown = asyncio.Event()
         self._start_lock = asyncio.Lock()
@@ -61,9 +59,7 @@ class ArchiveIngestionQueue:
                 return
             self._shutdown.clear()
             for index in range(self.workers):
-                task = asyncio.create_task(
-                    self._worker_loop(index), name=f"server-archive-worker-{index}"
-                )
+                task = asyncio.create_task(self._worker_loop(index), name=f"server-archive-worker-{index}")
                 self._worker_tasks.append(task)
             logger.info(
                 "Server archive queue started",
@@ -164,6 +160,4 @@ class ArchiveIngestionQueue:
                     for _ in batch:
                         self._queue.task_done()
         finally:
-            logger.debug(
-                "Server archive worker stopped", extra={"worker_id": worker_id}
-            )
+            logger.debug("Server archive worker stopped", extra={"worker_id": worker_id})

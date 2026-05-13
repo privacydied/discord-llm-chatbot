@@ -69,9 +69,7 @@ def bot():
 
     # Mock router and other components
     mock_bot.router = MagicMock()
-    mock_bot.router.dispatch_message = AsyncMock(
-        return_value=ResponseMessage(content="Test response")
-    )
+    mock_bot.router.dispatch_message = AsyncMock(return_value=ResponseMessage(content="Test response"))
     mock_bot.router.is_duplicate = AsyncMock(return_value=False)
     mock_bot.logger = logging.getLogger("test_logger")
     mock_bot.logger.setLevel(logging.DEBUG)
@@ -103,22 +101,15 @@ def bot():
                     await message.channel.send(embed=embed)
             else:
                 # Check if response has any content
-                has_content = (
-                    response.content is not None and response.content.strip() != ""
-                )
+                has_content = response.content is not None and response.content.strip() != ""
                 has_embeds = response.embeds is not None and len(response.embeds) > 0
                 has_files = response.files is not None and len(response.files) > 0
-                has_audio = (
-                    response.audio_path is not None
-                    and response.audio_path.strip() != ""
-                )
+                has_audio = response.audio_path is not None and response.audio_path.strip() != ""
                 if response and (has_content or has_embeds or has_files or has_audio):
                     mock_bot.logger.debug(f"Response generated: {response.content}")
                     if message.guild:
                         # In guild channels, use reply
-                        await message.reply(
-                            content=response.content, mention_author=True
-                        )
+                        await message.reply(content=response.content, mention_author=True)
                     else:
                         # In DMs, use channel.send
                         await message.channel.send(content=response.content)
@@ -166,9 +157,7 @@ async def test_message_handler_1_in_1_out(bot, mock_message):
     bot.router.dispatch_message.assert_called_once_with(mock_message)
 
     # Verify response was sent
-    mock_message.reply.assert_called_once_with(
-        content="Test response", mention_author=True
-    )
+    mock_message.reply.assert_called_once_with(content="Test response", mention_author=True)
 
 
 @pytest.mark.asyncio
@@ -230,9 +219,7 @@ async def test_duplicate_suppression(bot, mock_message):
 async def test_tts_unavailable(bot, mock_message):
     """Verify when TTS is unavailable, a single embed is sent."""
     bot.tts_available = False
-    bot.router.dispatch_message.return_value = ResponseMessage(
-        content="TTS is currently unavailable. Please try again later."
-    )
+    bot.router.dispatch_message.return_value = ResponseMessage(content="TTS is currently unavailable. Please try again later.")
 
     await bot.on_message(mock_message)
 
@@ -251,9 +238,7 @@ async def test_normalization_layer(bot, mock_message):
     await bot.on_message(mock_message)
 
     # Verify response was sent
-    mock_message.reply.assert_called_once_with(
-        content="Raw response", mention_author=True
-    )
+    mock_message.reply.assert_called_once_with(content="Raw response", mention_author=True)
 
 
 @pytest.mark.asyncio
@@ -307,9 +292,7 @@ async def test_dm_error_handling(bot, mock_dm_message):
 @pytest.mark.asyncio
 async def test_dm_metrics_tracking(bot, mock_dm_message):
     """Verify DM messages increment metrics counters."""
-    bot.router.dispatch_message.return_value = ResponseMessage(
-        content="DM metrics test"
-    )
+    bot.router.dispatch_message.return_value = ResponseMessage(content="DM metrics test")
 
     await bot.on_message(mock_dm_message)
 

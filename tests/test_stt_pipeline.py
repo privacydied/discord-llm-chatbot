@@ -27,10 +27,7 @@ class TestTranscriptCacheKey:
         """Changing pipeline version changes the cache key."""
         # This test documents the expected behavior
         assert STT_PIPELINE_VERSION.startswith("stt-")
-        assert (
-            "lang-aware" in STT_PIPELINE_VERSION.lower()
-            or "stitch" in STT_PIPELINE_VERSION.lower()
-        )
+        assert "lang-aware" in STT_PIPELINE_VERSION.lower() or "stitch" in STT_PIPELINE_VERSION.lower()
 
     def test_cache_key_includes_task_and_language(self):
         """Cache key should include task and language parameters."""

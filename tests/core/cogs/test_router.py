@@ -27,30 +27,22 @@ class TestRouterCog(commands.Cog):
 
         # Guild message without mention
         if not _is_dm(message) and not _is_mention(message):
-            assert False, (
-                "Guild message without mention should be filtered by pre-command gate"
-            )
+            assert False, "Guild message without mention should be filtered by pre-command gate"
 
         # Guild message with mention but no !prefix
         if _is_mention(message) and not message.content.startswith("!"):
             # This should trigger TEXT→TEXT flow
             response = ResponseMessage(text="test_response")
-            assert response.text == "test_response", (
-                "TEXT→TEXT flow should return a valid response"
-            )
+            assert response.text == "test_response", "TEXT→TEXT flow should return a valid response"
 
         # DM without !prefix
         if _is_dm(message) and not message.content.startswith("!"):
             # This should trigger TEXT→TEXT flow
             response = ResponseMessage(text="dm_test_response")
-            assert response.text == "dm_test_response", (
-                "TEXT→TEXT flow in DM should return a valid response"
-            )
+            assert response.text == "dm_test_response", "TEXT→TEXT flow in DM should return a valid response"
 
     # Minimal helper to fabricate a message-like object for tests
-    def _create_mock_message(
-        self, content: str, is_dm: bool = False, mention: bool = False
-    ):
+    def _create_mock_message(self, content: str, is_dm: bool = False, mention: bool = False):
         user_id = getattr(self.bot.user, "id", 1234567890)
         text = content
         if mention:
@@ -112,9 +104,7 @@ async def test_guild_mention_command(bot):
     bot.add_cog(cog)
     ctx = await bot.get_context(cog._create_mock_message("!ping"))
     await cog.ping(ctx)
-    assert ctx.responses[-1] == "pong", (
-        "Command handler should respond to !ping in guild with mention"
-    )
+    assert ctx.responses[-1] == "pong", "Command handler should respond to !ping in guild with mention"
 
 
 @pytest.mark.asyncio

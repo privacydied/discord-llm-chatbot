@@ -114,25 +114,13 @@ class SLOMonitor:
         # SLO targets from phase constants [CMV]
         slo_targets = PC.get_slo_targets()
         self.targets = {
-            PC.PHASE_ROUTER_DISPATCH: SLOTarget(
-                "Router Dispatch", slo_targets[PC.PHASE_ROUTER_DISPATCH]
-            ),
-            PC.PHASE_CONTEXT_GATHER: SLOTarget(
-                "Context Gather", slo_targets[PC.PHASE_CONTEXT_GATHER]
-            ),
+            PC.PHASE_ROUTER_DISPATCH: SLOTarget("Router Dispatch", slo_targets[PC.PHASE_ROUTER_DISPATCH]),
+            PC.PHASE_CONTEXT_GATHER: SLOTarget("Context Gather", slo_targets[PC.PHASE_CONTEXT_GATHER]),
             PC.PHASE_RAG_QUERY: SLOTarget("RAG Query", slo_targets[PC.PHASE_RAG_QUERY]),
-            PC.PHASE_PREP_GEN: SLOTarget(
-                "Prompt Preparation", slo_targets[PC.PHASE_PREP_GEN]
-            ),
-            PC.PHASE_LLM_CALL: SLOTarget(
-                "LLM API Call", slo_targets[PC.PHASE_LLM_CALL]
-            ),
-            PC.PHASE_DISCORD_DISPATCH: SLOTarget(
-                "Discord Send", slo_targets[PC.PHASE_DISCORD_DISPATCH]
-            ),
-            "pipeline_total": SLOTarget(
-                "Total Pipeline", slo_targets["pipeline_total"]
-            ),
+            PC.PHASE_PREP_GEN: SLOTarget("Prompt Preparation", slo_targets[PC.PHASE_PREP_GEN]),
+            PC.PHASE_LLM_CALL: SLOTarget("LLM API Call", slo_targets[PC.PHASE_LLM_CALL]),
+            PC.PHASE_DISCORD_DISPATCH: SLOTarget("Discord Send", slo_targets[PC.PHASE_DISCORD_DISPATCH]),
+            "pipeline_total": SLOTarget("Total Pipeline", slo_targets["pipeline_total"]),
         }
 
         # Metric windows for each target
@@ -161,9 +149,7 @@ class SLOMonitor:
 
         logger.info("📊 SLOMonitor initialized with Rich dashboard support")
 
-    def record_phase_metric(
-        self, phase: str, duration_ms: int, tracker: Optional[PipelineTracker] = None
-    ):
+    def record_phase_metric(self, phase: str, duration_ms: int, tracker: Optional[PipelineTracker] = None):
         """Record phase performance metric [PA]."""
         if phase not in self.metric_windows:
             logger.debug(f"Unknown phase for SLO monitoring: {phase}")
@@ -189,13 +175,9 @@ class SLOMonitor:
 
         # Record total pipeline time
         if tracker.total_duration_ms:
-            self.record_phase_metric(
-                "pipeline_total", tracker.total_duration_ms, tracker
-            )
+            self.record_phase_metric("pipeline_total", tracker.total_duration_ms, tracker)
 
-    def _check_slo_breach(
-        self, phase: str, duration_ms: int, tracker: Optional[PipelineTracker] = None
-    ):
+    def _check_slo_breach(self, phase: str, duration_ms: int, tracker: Optional[PipelineTracker] = None):
         """Check if measurement breaches SLO target [REH]."""
         target = self.targets[phase]
         is_breach = duration_ms > target.target_ms
@@ -284,12 +266,14 @@ class SLOMonitor:
             try:
                 _task = asyncio.create_task(callback(alert))
                 _task.add_done_callback(
-                    lambda t, cb=callback: logger.error(
-                        f"Alert callback {cb.__name__} failed: {t.exception()}",
-                        exc_info=t.exception(),
+                    lambda t, cb=callback: (
+                        logger.error(
+                            f"Alert callback {cb.__name__} failed: {t.exception()}",
+                            exc_info=t.exception(),
+                        )
+                        if t.done() and not t.cancelled() and t.exception()
+                        else None
                     )
-                    if t.done() and not t.cancelled() and t.exception()
-                    else None
                 )
             except Exception as e:
                 logger.error(f"❌ Alert callback scheduling error: {e}")
@@ -302,9 +286,7 @@ class SLOMonitor:
     def _maybe_refresh_dashboard(self):
         """Refresh dashboard if interval elapsed [PA]."""
         current_time = time.time()
-        if (
-            current_time - self.last_dashboard_update
-        ) >= self.dashboard_refresh_interval:
+        if (current_time - self.last_dashboard_update) >= self.dashboard_refresh_interval:
             self._render_debug_dashboard()
             self.last_dashboard_update = current_time
 
@@ -361,21 +343,15 @@ class SLOMonitor:
         else:
             for alert in reversed(recent_alerts):
                 alert_time = time.strftime("%H:%M:%S", time.localtime(alert.timestamp))
-                alert_icon = {"info": "ℹ️", "warning": "⚠️", "critical": "🚨"}[
-                    alert.alert_level.value
-                ]
+                alert_icon = {"info": "ℹ️", "warning": "⚠️", "critical": "🚨"}[alert.alert_level.value]
                 alerts_node.add(f"{alert_icon} {alert_time}: {alert.message}")
 
         # Add performance statistics
         stats_node = tree.add("📈 Monitoring Statistics")
-        stats_node.add(
-            f"Total Measurements: {self.monitoring_stats['total_measurements']:,}"
-        )
+        stats_node.add(f"Total Measurements: {self.monitoring_stats['total_measurements']:,}")
         stats_node.add(f"SLO Breaches: {self.monitoring_stats['slo_breaches']:,}")
         stats_node.add(f"Alerts Fired: {self.monitoring_stats['alerts_fired']:,}")
-        stats_node.add(
-            f"Dashboard Renders: {self.monitoring_stats['dashboard_renders']:,}"
-        )
+        stats_node.add(f"Dashboard Renders: {self.monitoring_stats['dashboard_renders']:,}")
 
         # Create panel with title
         current_time = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -403,9 +379,7 @@ class SLOMonitor:
                 "within_slo": p95 <= target.target_ms if p95 is not None else None,
                 "sample_count": stats["count"],
                 "consecutive_breaches": self.consecutive_breaches[phase],
-                "breach_percentage": int((p95 / target.target_ms - 1) * 100)
-                if p95 and p95 > target.target_ms
-                else 0,
+                "breach_percentage": int((p95 / target.target_ms - 1) * 100) if p95 and p95 > target.target_ms else 0,
             }
 
         return status
@@ -430,28 +404,18 @@ class SLOMonitor:
                 p95 = stats.get("p95", 0)
                 if p95:
                     status_icon = "✅" if p95 <= target.target_ms else "❌"
-                    report.append(
-                        f"   Status: {status_icon} p95={p95:.0f}ms ({stats['count']} samples)"
-                    )
-                    report.append(
-                        f"   Range: {stats['min']:.0f}ms - {stats['max']:.0f}ms"
-                    )
-                    report.append(
-                        f"   Mean: {stats['mean']:.0f}ms, Median: {stats['median']:.0f}ms"
-                    )
+                    report.append(f"   Status: {status_icon} p95={p95:.0f}ms ({stats['count']} samples)")
+                    report.append(f"   Range: {stats['min']:.0f}ms - {stats['max']:.0f}ms")
+                    report.append(f"   Mean: {stats['mean']:.0f}ms, Median: {stats['median']:.0f}ms")
                 else:
                     report.append("   Status: Insufficient data for p95")
 
             report.append("")
 
         # Add alert summary
-        recent_alerts = len(
-            [a for a in self.alert_history if time.time() - a.timestamp < 3600]
-        )  # Last hour
+        recent_alerts = len([a for a in self.alert_history if time.time() - a.timestamp < 3600])  # Last hour
         report.append(f"🚨 Alerts in last hour: {recent_alerts}")
-        report.append(
-            f"📊 Total measurements: {self.monitoring_stats['total_measurements']:,}"
-        )
+        report.append(f"📊 Total measurements: {self.monitoring_stats['total_measurements']:,}")
 
         return "\n".join(report)
 

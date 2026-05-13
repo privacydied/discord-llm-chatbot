@@ -44,15 +44,11 @@ class TestSyndicationIntegration:
         }
 
     @pytest.mark.asyncio
-    async def test_multiple_images_vl_flow(
-        self, mock_vl_handler, sample_syndication_data
-    ):
+    async def test_multiple_images_vl_flow(self, mock_vl_handler, sample_syndication_data):
         """Test processing multiple images through VL with full-res URLs."""
         url = "https://twitter.com/testuser/status/123456789"
 
-        result = await handle_twitter_syndication_to_vl(
-            sample_syndication_data, url, mock_vl_handler
-        )
+        result = await handle_twitter_syndication_to_vl(sample_syndication_data, url, mock_vl_handler)
 
         # Verify result contains tweet text
         assert "Check out these amazing photos from my trip!" in result
@@ -66,14 +62,8 @@ class TestSyndicationIntegration:
         assert "📷 Photo 3/3" in result
 
         # Verify successful analyses contain content (with upgraded URLs)
-        assert (
-            "Analysis of https://pbs.twimg.com/media/SUCCESS1?format=jpg&name=orig"
-            in result
-        )
-        assert (
-            "Analysis of https://pbs.twimg.com/media/SUCCESS2?format=png&name=orig"
-            in result
-        )
+        assert "Analysis of https://pbs.twimg.com/media/SUCCESS1?format=jpg&name=orig" in result
+        assert "Analysis of https://pbs.twimg.com/media/SUCCESS2?format=png&name=orig" in result
 
         # Verify failed analysis shows unavailable message
         assert "analysis unavailable" in result
@@ -83,24 +73,17 @@ class TestSyndicationIntegration:
         """Test processing single image tweet."""
         syndication_data = {
             "text": "Single photo tweet",
-            "photos": [
-                {"url": "https://pbs.twimg.com/media/SUCCESS1?format=jpg&name=small"}
-            ],
+            "photos": [{"url": "https://pbs.twimg.com/media/SUCCESS1?format=jpg&name=small"}],
         }
 
         url = "https://twitter.com/user/status/123"
 
-        result = await handle_twitter_syndication_to_vl(
-            syndication_data, url, mock_vl_handler
-        )
+        result = await handle_twitter_syndication_to_vl(syndication_data, url, mock_vl_handler)
 
         assert "Single photo tweet" in result
         assert "Photos analyzed: 1/1" in result
         assert "📷 Photo 1/1" in result
-        assert (
-            "Analysis of https://pbs.twimg.com/media/SUCCESS1?format=jpg&name=orig"
-            in result
-        )
+        assert "Analysis of https://pbs.twimg.com/media/SUCCESS1?format=jpg&name=orig" in result
 
     @pytest.mark.asyncio
     async def test_no_images_fallback(self, mock_vl_handler):
@@ -109,9 +92,7 @@ class TestSyndicationIntegration:
 
         url = "https://twitter.com/user/status/123"
 
-        result = await handle_twitter_syndication_to_vl(
-            syndication_data, url, mock_vl_handler
-        )
+        result = await handle_twitter_syndication_to_vl(syndication_data, url, mock_vl_handler)
 
         # Should return text-only content
         assert result == "Text-only tweet with no photos"
@@ -121,24 +102,17 @@ class TestSyndicationIntegration:
         """Test tweets with images but no text content."""
         syndication_data = {
             "text": "",  # Empty text
-            "photos": [
-                {"url": "https://pbs.twimg.com/media/SUCCESS1?format=jpg&name=small"}
-            ],
+            "photos": [{"url": "https://pbs.twimg.com/media/SUCCESS1?format=jpg&name=small"}],
         }
 
         url = "https://twitter.com/user/status/123"
 
-        result = await handle_twitter_syndication_to_vl(
-            syndication_data, url, mock_vl_handler
-        )
+        result = await handle_twitter_syndication_to_vl(syndication_data, url, mock_vl_handler)
 
         # Should use URL as fallback text
         assert "Tweet from https://twitter.com/user/status/123" in result
         assert "Photos analyzed: 1/1" in result
-        assert (
-            "Analysis of https://pbs.twimg.com/media/SUCCESS1?format=jpg&name=orig"
-            in result
-        )
+        assert "Analysis of https://pbs.twimg.com/media/SUCCESS1?format=jpg&name=orig" in result
 
     @pytest.mark.asyncio
     async def test_vl_handler_exceptions(self, sample_syndication_data):
@@ -154,9 +128,7 @@ class TestSyndicationIntegration:
 
         url = "https://twitter.com/testuser/status/123456789"
 
-        result = await handle_twitter_syndication_to_vl(
-            sample_syndication_data, url, failing_vl_handler
-        )
+        result = await handle_twitter_syndication_to_vl(sample_syndication_data, url, failing_vl_handler)
 
         # Should handle exception gracefully
         assert "Check out these amazing photos from my trip!" in result
@@ -172,9 +144,7 @@ class TestSyndicationIntegration:
 
         url = "https://twitter.com/testuser/status/123456789"
 
-        result = await handle_twitter_syndication_to_vl(
-            sample_syndication_data, url, always_failing_vl_handler
-        )
+        result = await handle_twitter_syndication_to_vl(sample_syndication_data, url, always_failing_vl_handler)
 
         assert "Check out these amazing photos from my trip!" in result
         assert "Photos analyzed: 0/3" in result
@@ -201,9 +171,7 @@ class TestSyndicationIntegration:
             passed_urls.append(image_url)
             return f"Analysis of {image_url}"
 
-        result = await handle_twitter_syndication_to_vl(
-            syndication_data, url, tracking_vl_handler
-        )
+        result = await handle_twitter_syndication_to_vl(syndication_data, url, tracking_vl_handler)
 
         # Verify all URLs were processed
         assert len(passed_urls) == 3
@@ -229,16 +197,11 @@ class TestSyndicationIntegration:
 
         url = "https://twitter.com/user/status/123"
 
-        result = await handle_twitter_syndication_to_vl(
-            syndication_data, url, mock_vl_handler
-        )
+        result = await handle_twitter_syndication_to_vl(syndication_data, url, mock_vl_handler)
 
         assert "Card image only" in result
         assert "Photos analyzed: 1/1" in result
-        assert (
-            "Analysis of https://pbs.twimg.com/card_img/CARD123?name=orig: Standard result."
-            in result
-        )
+        assert "Analysis of https://pbs.twimg.com/card_img/CARD123?name=orig: Standard result." in result
 
     @pytest.mark.asyncio
     async def test_concurrent_processing_simulation(self, sample_syndication_data):
@@ -259,12 +222,7 @@ class TestSyndicationIntegration:
         url = "https://twitter.com/testuser/status/123456789"
 
         # Process multiple requests concurrently
-        tasks = [
-            handle_twitter_syndication_to_vl(
-                sample_syndication_data, url, slow_vl_handler
-            )
-            for _ in range(3)
-        ]
+        tasks = [handle_twitter_syndication_to_vl(sample_syndication_data, url, slow_vl_handler) for _ in range(3)]
 
         results = await asyncio.gather(*tasks)
 

@@ -98,9 +98,7 @@ def deduplicate_mentions_in_text(text: str) -> str:
         # Clean up spacing - remove extra spaces that might be left behind
         if before.endswith(" ") and after.startswith(" "):
             after = after.lstrip(" ")
-        elif (
-            not before.endswith(" ") and not after.startswith(" ") and before and after
-        ):
+        elif not before.endswith(" ") and not after.startswith(" ") and before and after:
             # If we removed a mention in the middle, ensure proper spacing
             if not before.endswith((" ", "\n")) and not after.startswith((" ", "\n")):
                 after = " " + after

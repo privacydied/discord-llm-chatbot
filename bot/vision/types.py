@@ -187,21 +187,11 @@ class VisionRequest:
             "fps": self.fps,
             "style": self.style,
             "mode": self.mode,
-            "preferred_provider": self.preferred_provider.value
-            if self.preferred_provider
-            else None,
+            "preferred_provider": self.preferred_provider.value if self.preferred_provider else None,
             "preferred_model": self.preferred_model,
             "safety_check": self.safety_check,
             # Persist Money as json-safe string for compatibility [REH]
-            "estimated_cost": (
-                self.estimated_cost.to_json_value()
-                if isinstance(self.estimated_cost, Money)
-                else (
-                    Money(self.estimated_cost).to_json_value()
-                    if self.estimated_cost is not None
-                    else None
-                )
-            ),
+            "estimated_cost": (self.estimated_cost.to_json_value() if isinstance(self.estimated_cost, Money) else (Money(self.estimated_cost).to_json_value() if self.estimated_cost is not None else None)),
             "timeout_seconds": self.timeout_seconds,
             "idempotency_key": self.idempotency_key,
         }
@@ -229,9 +219,7 @@ class VisionRequest:
 
         # Convert provider string back to enum (support aliases, tolerant)
         if data.get("preferred_provider") is not None:
-            data["preferred_provider"] = _parse_vision_provider(
-                data["preferred_provider"]
-            )
+            data["preferred_provider"] = _parse_vision_provider(data["preferred_provider"])
         if data.get("provider") is not None:
             data["provider"] = _parse_vision_provider(data["provider"])
 
@@ -239,9 +227,7 @@ class VisionRequest:
         if "model" in data and "preferred_model" not in data:
             data["preferred_model"] = data["model"]
         if "num_images" in data and "batch_size" not in data:
-            data["batch_size"] = (
-                int(data["num_images"]) if data["num_images"] is not None else 1
-            )
+            data["batch_size"] = int(data["num_images"]) if data["num_images"] is not None else 1
 
         # Estimated cost: accept Money JSON string, dict, or legacy numeric [REH]
         try:
@@ -304,15 +290,7 @@ class VisionResponse:
             "thumbnails": [str(p) for p in self.thumbnails],
             "processing_time_seconds": self.processing_time_seconds,
             # Persist Money as json-safe string for compatibility [REH]
-            "actual_cost": (
-                self.actual_cost.to_json_value()
-                if isinstance(self.actual_cost, Money)
-                else (
-                    Money(self.actual_cost).to_json_value()
-                    if self.actual_cost is not None
-                    else None
-                )
-            ),
+            "actual_cost": (self.actual_cost.to_json_value() if isinstance(self.actual_cost, Money) else (Money(self.actual_cost).to_json_value() if self.actual_cost is not None else None)),
             "provider_job_id": self.provider_job_id,
             "dimensions": self.dimensions,
             "duration_seconds": self.duration_seconds,
@@ -338,9 +316,7 @@ class VisionJob:
 
     # Execution tracking
     provider_assigned: Optional[VisionProvider] = None
-    provider_job_id: Optional[str] = (
-        None  # Job ID returned by provider (may differ from orchestrator job_id)
-    )
+    provider_job_id: Optional[str] = None  # Job ID returned by provider (may differ from orchestrator job_id)
     model_assigned: Optional[str] = None
     retry_count: int = 0
     max_retries: int = 3
@@ -423,13 +399,9 @@ class VisionJob:
             "state": self.state.value,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "last_updated": self.last_updated.isoformat(),
-            "provider_assigned": self.provider_assigned.value
-            if self.provider_assigned
-            else None,
+            "provider_assigned": self.provider_assigned.value if self.provider_assigned else None,
             "model_assigned": self.model_assigned,
             "retry_count": self.retry_count,
             "max_retries": self.max_retries,
@@ -447,25 +419,13 @@ class VisionJob:
         """Deserialize job from JSON storage [CMV]"""
         # Parse timestamps
         created_at = datetime.fromisoformat(data["created_at"])
-        started_at = (
-            datetime.fromisoformat(data["started_at"])
-            if data.get("started_at")
-            else None
-        )
-        completed_at = (
-            datetime.fromisoformat(data["completed_at"])
-            if data.get("completed_at")
-            else None
-        )
+        started_at = datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None
+        completed_at = datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None
         last_updated = datetime.fromisoformat(data["last_updated"])
 
         # Parse enums
         state = VisionJobState(data["state"])
-        provider_assigned = (
-            _parse_vision_provider(data.get("provider_assigned"))
-            if data.get("provider_assigned")
-            else None
-        )
+        provider_assigned = _parse_vision_provider(data.get("provider_assigned")) if data.get("provider_assigned") else None
 
         # Parse nested objects
         request = VisionRequest.from_dict(data["request"])
@@ -486,9 +446,7 @@ class VisionJob:
                     ac = response_data.get("actual_cost")
                     if isinstance(ac, dict):
                         amt = ac.get("amount")
-                        response_data["actual_cost"] = (
-                            Money(amt) if amt is not None else None
-                        )
+                        response_data["actual_cost"] = Money(amt) if amt is not None else None
                     elif ac is None:
                         response_data["actual_cost"] = None
                     else:
@@ -509,9 +467,7 @@ class VisionJob:
             elif isinstance(error_type_value, str):
                 # Handle both "SYSTEM_ERROR" and "VisionErrorType.SYSTEM_ERROR" formats
                 if "." in error_type_value:
-                    error_type_value = error_type_value.split(".")[
-                        -1
-                    ]  # Get just the enum name
+                    error_type_value = error_type_value.split(".")[-1]  # Get just the enum name
                 error_data["error_type"] = VisionErrorType[error_type_value]
             else:
                 error_data["error_type"] = VisionErrorType(error_type_value)

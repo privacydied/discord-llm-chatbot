@@ -33,9 +33,7 @@ class ExtendedMemoryCommands(commands.Cog):
             from bot.core.permissions import is_admin_user
 
             if not await is_admin_user(ctx.author, self.bot):
-                await ctx.send(
-                    "🔒 Memory status is only available to owners and admins."
-                )
+                await ctx.send("🔒 Memory status is only available to owners and admins.")
                 return
 
             service = await get_memory_service(self.bot)
@@ -52,19 +50,13 @@ class ExtendedMemoryCommands(commands.Cog):
                 embed.add_field(name="Queue Depth", value=str(queue_size), inline=True)
 
                 try:
-                    chroma_status = (
-                        "ready"
-                        if service.semantic_store._collection
-                        else "initializing"
-                    )
+                    chroma_status = "ready" if service.semantic_store._collection else "initializing"
                 except Exception:
                     chroma_status = "unknown"
                 embed.add_field(name="Vector Store", value=chroma_status, inline=True)
 
                 try:
-                    store_status = (
-                        "connected" if service.store._conn else "disconnected"
-                    )
+                    store_status = "connected" if service.store._conn else "disconnected"
                 except Exception:
                     store_status = "unknown"
                 embed.add_field(name="SQLite Store", value=store_status, inline=True)
@@ -113,12 +105,7 @@ class ExtendedMemoryCommands(commands.Cog):
                 if len(summary) > 500:
                     summary = summary[:497] + "..."
 
-                field_value = (
-                    f"**Type:** {record.context_type}\n"
-                    f"**Confidence:** {record.confidence:.2f}\n"
-                    f"**Summary:** {summary}\n"
-                    f"**Created:** {record.created_at[:10] if record.created_at else 'N/A'}"
-                )
+                field_value = f"**Type:** {record.context_type}\n**Confidence:** {record.confidence:.2f}\n**Summary:** {summary}\n**Created:** {record.created_at[:10] if record.created_at else 'N/A'}"
 
                 embed.add_field(
                     name=f"{idx}. `{record.memory_id[:8]}`",
@@ -166,16 +153,11 @@ class ExtendedMemoryCommands(commands.Cog):
                 candidates = [r for r in owned if r.memory_id.startswith(raw_id)]
 
             if len(candidates) == 0:
-                await ctx.send(
-                    f"❌ No memory owned by you matches ID prefix `{raw_id}`."
-                )
+                await ctx.send(f"❌ No memory owned by you matches ID prefix `{raw_id}`.")
                 return
             if len(candidates) > 1:
                 ids = ", ".join(f"`{r.memory_id[:8]}`" for r in candidates)
-                await ctx.send(
-                    f"❌ Ambiguous prefix `{raw_id}` matches {len(candidates)} "
-                    f"memories: {ids}. Provide more characters."
-                )
+                await ctx.send(f"❌ Ambiguous prefix `{raw_id}` matches {len(candidates)} memories: {ids}. Provide more characters.")
                 return
 
             target = candidates[0]
@@ -185,20 +167,11 @@ class ExtendedMemoryCommands(commands.Cog):
             if len(summary) > 200:
                 summary = summary[:197] + "..."
 
-            confirm_msg = (
-                "🧠 Found a matching memory. React with ✅ to delete, or ignore.\n"
-                f"**ID:** `{target.memory_id}`\n**Preview:** {summary}\n"
-                f"**Type:** {target.context_type}  "
-                f"**Confidence:** {target.confidence:.2f}"
-            )
+            confirm_msg = f"🧠 Found a matching memory. React with ✅ to delete, or ignore.\n**ID:** `{target.memory_id}`\n**Preview:** {summary}\n**Type:** {target.context_type}  **Confidence:** {target.confidence:.2f}"
             confirm_msg_ref = await ctx.send(confirm_msg)
 
             def check(reaction, user):
-                return (
-                    user.id == ctx.author.id
-                    and reaction.message.channel == ctx.channel
-                    and str(reaction.emoji) == "\u2705"
-                )
+                return user.id == ctx.author.id and reaction.message.channel == ctx.channel and str(reaction.emoji) == "\u2705"
 
             try:
                 await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
@@ -216,10 +189,7 @@ class ExtendedMemoryCommands(commands.Cog):
             else:
                 # Verify via the confirmation message.
                 if confirm_msg_ref:
-                    await ctx.send(
-                        f"❌ Delete operation for `{canonical_id[:8]}` returned failure "
-                        f"— memory may already be deleted or inaccessible."
-                    )
+                    await ctx.send(f"❌ Delete operation for `{canonical_id[:8]}` returned failure — memory may already be deleted or inaccessible.")
                 else:
                     await ctx.send("❌ Failed to delete memory.")
 
@@ -241,10 +211,7 @@ class ExtendedMemoryCommands(commands.Cog):
                 await ctx.send("🔒 In guilds, only owners/admins can disable memory.")
                 return
 
-            await ctx.send(
-                "✅ Memory ingestion preference noted. "
-                "Note: This is a placeholder - full implementation requires user preference persistence."
-            )
+            await ctx.send("✅ Memory ingestion preference noted. Note: This is a placeholder - full implementation requires user preference persistence.")
 
         except Exception as e:
             logger.error(f"Error in memory-disable: {e}", exc_info=True)
@@ -275,9 +242,7 @@ class ExtendedMemoryCommands(commands.Cog):
 
             # Save profile
             if save_profile(profile, caller_id=str(ctx.author.id)):
-                await ctx.send(
-                    "✅ Memory ingestion has been re-enabled for your profile."
-                )
+                await ctx.send("✅ Memory ingestion has been re-enabled for your profile.")
             else:
                 await ctx.send("❌ Failed to save memory preference.")
 
@@ -326,38 +291,25 @@ class ExtendedMemoryCommands(commands.Cog):
                 ]
                 json_str = json.dumps(data, indent=2, default=str)
                 if len(json_str) > 1900:
-                    file = discord.File(
-                        fp=io.BytesIO(json_str.encode()), filename="memories.json"
-                    )
-                    await ctx.send(
-                        f"📄 Your memories ({len(records)} records):", file=file
-                    )
+                    file = discord.File(fp=io.BytesIO(json_str.encode()), filename="memories.json")
+                    await ctx.send(f"📄 Your memories ({len(records)} records):", file=file)
                 else:
                     await ctx.send(f"```\n{json_str}\n```")
             else:
                 lines = [f"=== Your Memories ({len(records)}) ==="]
                 for idx, r in enumerate(records, 1):
-                    lines.append(
-                        f"\n{idx}. [{r.memory_id[:8]}] ({r.context_type})\n"
-                        f"   {r.summary or r.text}\n"
-                        f"   Created: {r.created_at[:10] if r.created_at else 'N/A'}"
-                    )
+                    lines.append(f"\n{idx}. [{r.memory_id[:8]}] ({r.context_type})\n   {r.summary or r.text}\n   Created: {r.created_at[:10] if r.created_at else 'N/A'}")
 
                 text = "\n".join(lines)
                 if len(text) > 1900:
-                    file = discord.File(
-                        fp=io.BytesIO(text.encode()), filename="memories.txt"
-                    )
-                    await ctx.send(
-                        f"📄 Your memories ({len(records)} records):", file=file
-                    )
+                    file = discord.File(fp=io.BytesIO(text.encode()), filename="memories.txt")
+                    await ctx.send(f"📄 Your memories ({len(records)} records):", file=file)
                 else:
                     await ctx.send(f"```\n{text}\n```")
 
         except Exception as e:
             logger.error(f"Error in memory-export: {e}", exc_info=True)
             await ctx.send("❌ Failed to export memories.")
-
 
     @commands.command(name="memories-show", aliases=["memories", "mem-show"])
     async def memories_show(self, ctx, limit: int = 5):

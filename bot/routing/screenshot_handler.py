@@ -59,10 +59,7 @@ class ScreenshotHandler(RouteHandler):
             screenshot_path = await external_screenshot(url)
             if not screenshot_path:
                 logger.warning("Screenshot API did not return an image for %s", url)
-                return (
-                    f"Could not capture a screenshot for: {url}. "
-                    "Please try again later."
-                )
+                return f"Could not capture a screenshot for: {url}. Please try again later."
 
             if progress_cb:
                 await progress_cb("saved", 4)
@@ -75,11 +72,7 @@ class ScreenshotHandler(RouteHandler):
 
                 analysis = await see_infer(
                     image_path=screenshot_path,
-                    prompt=(
-                        f"Analyze this screenshot from {url}. "
-                        "Summarize the main content, visible text, "
-                        "and any important details. Be concise."
-                    ),
+                    prompt=(f"Analyze this screenshot from {url}. Summarize the main content, visible text, and any important details. Be concise."),
                 )
 
                 if analysis:
@@ -89,10 +82,7 @@ class ScreenshotHandler(RouteHandler):
                 else:
                     if progress_cb:
                         await progress_cb("done", 6)
-                    return (
-                        f"Captured screenshot from {url}, but vision "
-                        "analysis returned no content."
-                    )
+                    return f"Captured screenshot from {url}, but vision analysis returned no content."
 
             except Exception as vl_err:
                 logger.error(
@@ -103,10 +93,7 @@ class ScreenshotHandler(RouteHandler):
                 )
                 if progress_cb:
                     await progress_cb("done", 6)
-                return (
-                    f"Captured screenshot from {url}, but could not "
-                    "analyze it right now."
-                )
+                return f"Captured screenshot from {url}, but could not analyze it right now."
 
         except Exception as e:
             logger.error("Error taking screenshot of URL: %s", e, exc_info=True)

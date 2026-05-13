@@ -53,9 +53,7 @@ async def test_x_api_routes_video_to_stt(monkeypatch):
     stt_mock = AsyncMock(return_value={"transcription": "hello world"})
     monkeypatch.setattr(router_mod, "hear_infer_from_url", stt_mock)
 
-    item = InputItem(
-        source_type="url", payload="https://twitter.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://twitter.com/user/status/1", order_index=0)
     res = await router._handle_general_url(item)
 
     assert "Video/audio content" in res
@@ -88,9 +86,7 @@ async def test_x_api_photo_only_formats_text(monkeypatch):
 
     monkeypatch.setattr(Router, "_get_x_api_client", _get_client)
 
-    item = InputItem(
-        source_type="url", payload="https://x.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://x.com/user/status/1", order_index=0)
     res = await router._handle_general_url(item)
 
     assert "Photos: 2" in res
@@ -119,9 +115,7 @@ async def test_x_api_text_only_formats_default(monkeypatch):
 
     monkeypatch.setattr(Router, "_get_x_api_client", _get_client)
 
-    item = InputItem(
-        source_type="url", payload="https://twitter.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://twitter.com/user/status/1", order_index=0)
     res = await router._handle_general_url(item)
 
     # Should contain the URL and text body formatted
@@ -170,9 +164,7 @@ async def test_x_api_photo_only_routes_to_vl_when_enabled(monkeypatch):
 
     monkeypatch.setattr(Router, "_vl_describe_image_from_url", _fake_vl, raising=True)
 
-    item = InputItem(
-        source_type="url", payload="https://twitter.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://twitter.com/user/status/1", order_index=0)
     res = await router._handle_general_url(item)
 
     assert "Photos analyzed: 2/2" in res
@@ -218,9 +210,7 @@ async def test_sparse_syndication_defers_to_api_video_stt(monkeypatch):
 
     monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
 
-    item = InputItem(
-        source_type="url", payload="https://x.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://x.com/user/status/1", order_index=0)
     res = await router._handle_general_url(item)
 
     assert res == "STT:hello world"
@@ -248,9 +238,7 @@ async def test_video_url_inference_error_degrades_to_caption_only_with_resolved_
     monkeypatch.setattr(Router, "_resolve_x_base_text_for_url", _fake_resolve_base)
     monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
 
-    item = InputItem(
-        source_type="url", payload="https://x.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://x.com/user/status/1", order_index=0)
     res = await router._handle_video_url(item)
 
     assert res == "FMT:base text|"
@@ -293,9 +281,7 @@ async def test_sparse_syndication_without_api_uses_direct_media_probe_for_stt(
 
     monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
 
-    item = InputItem(
-        source_type="url", payload="https://x.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://x.com/user/status/1", order_index=0)
     res = await router._handle_general_url(item)
 
     assert res == "STT:hello world"
@@ -333,9 +319,7 @@ async def test_sparse_syndication_without_api_uses_direct_media_probe_for_images
     monkeypatch.setattr(Router, "_resolve_x_media", _fake_resolve)
     import bot.syndication.handler as syn_handler_mod
 
-    async def _fake_syn_handler(
-        syn_data, url, vl_handler, vl_prompt=None, reply_style="ack+thoughts"
-    ):
+    async def _fake_syn_handler(syn_data, url, vl_handler, vl_prompt=None, reply_style="ack+thoughts"):
         assert len((syn_data or {}).get("photos") or []) == 1
         return "VL_OK_SPARSE_IMAGE"
 
@@ -346,9 +330,7 @@ async def test_sparse_syndication_without_api_uses_direct_media_probe_for_images
         raising=True,
     )
 
-    item = InputItem(
-        source_type="url", payload="https://x.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://x.com/user/status/1", order_index=0)
     res = await router._handle_general_url(item)
 
     assert res == "VL_OK_SPARSE_IMAGE"
@@ -388,9 +370,7 @@ async def test_sparse_syndication_unknown_forces_stt_before_text_fallback(monkey
 
     monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
 
-    item = InputItem(
-        source_type="url", payload="https://x.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://x.com/user/status/1", order_index=0)
     res = await router._handle_general_url(item)
 
     assert res == "STT:forced hello world"
@@ -421,18 +401,12 @@ async def test_sparse_syndication_tco_article_resolves_to_text(monkeypatch):
             "id": "2016825738041630720",
             "title": "The TESTOSTERONE Kabbalah",
             "preview_text": "They control everything.",
-            "content": {
-                "blocks": [{"text": "Cellular energy production and metabolism."}]
-            },
+            "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
         }
     )
-    monkeypatch.setattr(
-        Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True
-    )
+    monkeypatch.setattr(Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True)
 
-    resolve_mock = AsyncMock(
-        return_value={"kind": "unknown", "images": [], "url": None}
-    )
+    resolve_mock = AsyncMock(return_value={"kind": "unknown", "images": [], "url": None})
     monkeypatch.setattr(Router, "_resolve_x_media", resolve_mock, raising=True)
 
     import bot.router as router_mod
@@ -445,9 +419,7 @@ async def test_sparse_syndication_tco_article_resolves_to_text(monkeypatch):
 
     monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
 
-    item = InputItem(
-        source_type="url", payload="https://x.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://x.com/user/status/1", order_index=0)
     res = await router._handle_general_url(item)
 
     assert "The TESTOSTERONE Kabbalah" in res
@@ -530,9 +502,7 @@ async def test_hydrate_syndication_article_merges_full_article_blocks(monkeypatc
             },
         }
     )
-    monkeypatch.setattr(
-        Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True
-    )
+    monkeypatch.setattr(Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True)
 
     syn = {
         "text": "https://t.co/Zq03pbrEgu",
@@ -584,14 +554,10 @@ async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch
             "id": "2016825738041630720",
             "title": "The TESTOSTERONE Kabbalah",
             "preview_text": "They control everything.",
-            "content": {
-                "blocks": [{"text": "Cellular energy production and metabolism."}]
-            },
+            "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
         }
     )
-    monkeypatch.setattr(
-        Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True
-    )
+    monkeypatch.setattr(Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True)
 
     async def _fake_resolve(self, urls, frontend_hints=None, primary_hints=None):
         return {
@@ -605,9 +571,7 @@ async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch
     captured = {}
     import bot.syndication.handler as syn_handler_mod
 
-    async def _fake_syn_handler(
-        syn_data, url, vl_handler, vl_prompt=None, reply_style="ack+thoughts"
-    ):
+    async def _fake_syn_handler(syn_data, url, vl_handler, vl_prompt=None, reply_style="ack+thoughts"):
         captured["text"] = (syn_data or {}).get("text", "")
         return "VL_OK_SPARSE_IMAGE_ARTICLE"
 
@@ -618,9 +582,7 @@ async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch
         raising=True,
     )
 
-    item = InputItem(
-        source_type="url", payload="https://x.com/user/status/1", order_index=0
-    )
+    item = InputItem(source_type="url", payload="https://x.com/user/status/1", order_index=0)
     res = await router._handle_general_url(item)
 
     assert res == "VL_OK_SPARSE_IMAGE_ARTICLE"

@@ -93,15 +93,11 @@ def add_to_context(message: Message, role: str, content: str, **kwargs):
 
     # Clean up old messages
     current_time = time.time()
-    conversation_store[key] = [
-        msg
-        for msg in conversation_store.get(key, [])
-        if current_time - msg.get("timestamp", 0) <= _get_config_value("CONTEXT_TTL", 900)
-    ]
+    conversation_store[key] = [msg for msg in conversation_store.get(key, []) if current_time - msg.get("timestamp", 0) <= _get_config_value("CONTEXT_TTL", 900)]
 
     # Truncate content to per-message char limit
     if len(content) > CONTEXT_MAX_CHARS_PER_MESSAGE:
-        content = content[: CONTEXT_MAX_CHARS_PER_MESSAGE]
+        content = content[:CONTEXT_MAX_CHARS_PER_MESSAGE]
 
     # Add new message
     message_data = {
@@ -130,17 +126,13 @@ def add_to_context(message: Message, role: str, content: str, **kwargs):
     return message_data
 
 
-def get_conversation_history(
-    message: Message, max_messages: int = 10
-) -> List[Dict[str, Any]]:
+def get_conversation_history(message: Message, max_messages: int = 10) -> List[Dict[str, Any]]:
     """Get recent conversation history for a channel or DM."""
     key = context_key(message)
     return conversation_store.get(key, [])[-max_messages:]
 
 
-def get_conversation_context(
-    user_id: str, guild_id: Optional[str] = None
-) -> List[Dict[str, Any]]:
+def get_conversation_context(user_id: str, guild_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get conversation context by user_id and guild_id."""
     # Generate context key based on user_id and guild_id
     if guild_id:
@@ -156,15 +148,13 @@ def get_conversation_context(
 
     # Clean up old messages based on TTL
     current_time = time.time()
-    context = [
-        msg for msg in context if current_time - msg.get("timestamp", 0) <= _get_config_value("CONTEXT_TTL", 900)
-    ]
+    context = [msg for msg in context if current_time - msg.get("timestamp", 0) <= _get_config_value("CONTEXT_TTL", 900)]
 
     # Truncate each message to per-message char limit
     for msg in context:
         c = msg.get("content", "")
         if len(c) > CONTEXT_MAX_CHARS_PER_MESSAGE:
-            msg["content"] = c[: CONTEXT_MAX_CHARS_PER_MESSAGE]
+            msg["content"] = c[:CONTEXT_MAX_CHARS_PER_MESSAGE]
 
     # Update the store with cleaned context
     conversation_store[key] = context

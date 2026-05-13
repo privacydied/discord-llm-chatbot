@@ -72,10 +72,7 @@ def get_ocr_status_message() -> str:
     # Mark warning as shown
     OCR_WARNING_SHOWN = True
 
-    return (
-        "⚠ OCR is not available on this server. "
-        "Please install Tesseract + pytesseract to process scanned PDFs."
-    )
+    return "⚠ OCR is not available on this server. Please install Tesseract + pytesseract to process scanned PDFs."
 
 
 def is_ocr_warning_needed() -> bool:

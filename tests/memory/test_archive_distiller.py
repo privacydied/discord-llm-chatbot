@@ -85,13 +85,9 @@ async def distiller_env(tmp_path, monkeypatch):
         "PERSISTENT_MEMORY_MIN_IMPORTANCE": 0.55,
     }
 
-    monkeypatch.setattr(
-        "bot.server_archive.service.load_config", lambda: archive_cfg_data
-    )
+    monkeypatch.setattr("bot.server_archive.service.load_config", lambda: archive_cfg_data)
     monkeypatch.setattr("bot.memory.service.load_config", lambda: memory_cfg_data)
-    monkeypatch.setattr(
-        "bot.memory.archive_distiller.load_config", lambda: distiller_cfg_data
-    )
+    monkeypatch.setattr("bot.memory.archive_distiller.load_config", lambda: distiller_cfg_data)
 
     archive_service = ServerArchiveService()
     memory_service = CuratedMemoryService()
@@ -120,18 +116,9 @@ def _base_time() -> datetime:
     return datetime(2026, 5, 9, 1, 0, 0, tzinfo=timezone.utc)
 
 
-LONG_USER_PREFERENCE = (
-    "I prefer short replies unless I ask for detail, and I usually want the answer in one concise "
-    "paragraph with bullets only when they help explain multiple steps."
-)
-LONG_SECOND_USER_PREFERENCE = (
-    "I prefer Claude Code prompts after the summary, and I usually want them written as a short "
-    "bullet list so I can copy them quickly into the tool."
-)
-LONG_PROJECT_RULE = (
-    "For the discord-bot project, the bot should keep replies brief, lead with the answer, and avoid "
-    "long explanations unless I ask for detail."
-)
+LONG_USER_PREFERENCE = "I prefer short replies unless I ask for detail, and I usually want the answer in one concise paragraph with bullets only when they help explain multiple steps."
+LONG_SECOND_USER_PREFERENCE = "I prefer Claude Code prompts after the summary, and I usually want them written as a short bullet list so I can copy them quickly into the tool."
+LONG_PROJECT_RULE = "For the discord-bot project, the bot should keep replies brief, lead with the answer, and avoid long explanations unless I ask for detail."
 
 
 def _bundle(
@@ -147,9 +134,7 @@ def _bundle(
 ) -> ArchiveMessageBundle:
     guild = ArchiveGuild(guild_id=guild_id, name="Guild")
     channel = ArchiveChannel(channel_id=channel_id, guild_id=guild_id, name="general")
-    author = ArchiveUser(
-        user_id=author_id, username="user", display_name="User", bot=int(bot)
-    )
+    author = ArchiveUser(user_id=author_id, username="user", display_name="User", bot=int(bot))
     message = ArchiveMessage(
         message_id=message_id,
         guild_id=guild_id,
@@ -168,14 +153,10 @@ def _bundle(
             parent_channel_id=channel_id,
             name="thread",
         )
-    return ArchiveMessageBundle(
-        guild=guild, channel=channel, author=author, message=message, thread=thread
-    )
+    return ArchiveMessageBundle(guild=guild, channel=channel, author=author, message=message, thread=thread)
 
 
-async def _insert_messages(
-    archive_service: ServerArchiveService, bundles: list[ArchiveMessageBundle]
-) -> None:
+async def _insert_messages(archive_service: ServerArchiveService, bundles: list[ArchiveMessageBundle]) -> None:
     for bundle in bundles:
         await archive_service.store.upsert_bundle(bundle)
 
@@ -200,9 +181,7 @@ async def test_distiller_ignores_archive_when_disabled(distiller_env):
 
     result = await distiller.run_once()
     assert result["skipped_reason"] == "disabled"
-    memories = await memory_service.store.list_memories(
-        user_id="u1", guild_id="g1", limit=10
-    )
+    memories = await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10)
     assert memories == []
 
 
@@ -227,9 +206,7 @@ async def test_dry_run_scans_but_does_not_save_memory(distiller_env):
     result = await distiller.run_once()
     assert result["candidate_count"] == 1
     assert result["accepted_count"] == 1
-    memories = await memory_service.store.list_memories(
-        user_id="u1", guild_id="g1", limit=10
-    )
+    memories = await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10)
     assert memories == []
 
 
@@ -253,9 +230,7 @@ async def test_accepted_user_preference_creates_curated_memory(distiller_env):
 
     result = await distiller.run_once()
     assert result["accepted_count"] == 1
-    memories = await memory_service.store.list_memories(
-        user_id="u1", guild_id="g1", limit=10
-    )
+    memories = await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10)
     assert len(memories) == 1
     assert memories[0].context_type == "user_preference"
     assert "short replies" in (memories[0].summary or memories[0].text).lower()
@@ -281,9 +256,7 @@ async def test_accepted_project_rule_creates_scoped_memory(distiller_env):
 
     result = await distiller.run_once()
     assert result["accepted_count"] == 1
-    memories = await memory_service.store.list_memories(
-        user_id="u1", guild_id="g1", limit=10
-    )
+    memories = await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10)
     assert len(memories) == 1
     assert memories[0].context_type == "project_fact"
     assert memories[0].guild_id == "g1"
@@ -309,9 +282,7 @@ async def test_debugging_chatter_is_rejected(distiller_env):
 
     result = await distiller.run_once()
     assert result["candidate_count"] == 0
-    memories = await memory_service.store.list_memories(
-        user_id="u1", guild_id="g1", limit=10
-    )
+    memories = await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10)
     assert memories == []
 
 
@@ -334,9 +305,7 @@ async def test_secrets_are_rejected(distiller_env):
 
     result = await distiller.run_once()
     assert result["candidate_count"] == 0
-    memories = await memory_service.store.list_memories(
-        user_id="u1", guild_id="g1", limit=10
-    )
+    memories = await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10)
     assert memories == []
 
 
@@ -360,9 +329,7 @@ async def test_bot_messages_are_ignored_by_default(distiller_env):
 
     result = await distiller.run_once()
     assert result["candidate_count"] == 0
-    memories = await memory_service.store.list_memories(
-        user_id="u1", guild_id="g1", limit=10
-    )
+    memories = await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10)
     assert memories == []
 
 
@@ -383,9 +350,7 @@ async def test_processed_checkpoint_is_updated(distiller_env):
     )
 
     await distiller.run_once()
-    state = await archive_service.store.get_distiller_state(
-        guild_id="g1", channel_id="c1", thread_id=None, author_id="u1"
-    )
+    state = await archive_service.store.get_distiller_state(guild_id="g1", channel_id="c1", thread_id=None, author_id="u1")
     assert state is not None
     assert state["last_processed_message_id"] == "m1"
 
@@ -415,21 +380,15 @@ async def test_restart_resumes_from_checkpoint(distiller_env):
 
     first = await distiller.run_once()
     assert first["accepted_count"] == 1
-    state = await archive_service.store.get_distiller_state(
-        guild_id="g1", channel_id="c1", thread_id=None, author_id="u1"
-    )
+    state = await archive_service.store.get_distiller_state(guild_id="g1", channel_id="c1", thread_id=None, author_id="u1")
     assert state["last_processed_message_id"] == "m1"
 
     second = await distiller.run_once()
     assert second["accepted_count"] == 1
-    memories = await memory_service.store.list_memories(
-        user_id="u1", guild_id="g1", limit=10
-    )
+    memories = await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10)
     assert len(memories) == 2
     assert state["last_processed_message_id"] == "m1"
-    state = await archive_service.store.get_distiller_state(
-        guild_id="g1", channel_id="c1", thread_id=None, author_id="u1"
-    )
+    state = await archive_service.store.get_distiller_state(guild_id="g1", channel_id="c1", thread_id=None, author_id="u1")
     assert state["last_processed_message_id"] == "m2"
 
 
@@ -458,9 +417,7 @@ async def test_duplicate_memories_merge_instead_of_inserting_duplicates(distille
     result = await distiller.run_once()
     assert result["accepted_count"] == 2
     assert result["merged_count"] == 1
-    memories = await memory_service.store.list_memories(
-        user_id="u1", guild_id="g1", limit=10
-    )
+    memories = await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10)
     assert len(memories) == 1
 
 
@@ -491,16 +448,11 @@ async def test_archive_results_are_never_directly_injected_into_prompt(distiller
     )
     assert raw_text not in prompt_block
     assert prompt_block == ""
-    assert (
-        await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10)
-        == []
-    )
+    assert await memory_service.store.list_memories(user_id="u1", guild_id="g1", limit=10) == []
 
 
 @pytest.mark.asyncio
-async def test_distiller_failure_does_not_break_normal_message_handling(
-    distiller_env, monkeypatch
-):
+async def test_distiller_failure_does_not_break_normal_message_handling(distiller_env, monkeypatch):
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]

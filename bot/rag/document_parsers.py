@@ -90,9 +90,7 @@ class DocumentParserFactory:
             logger.error(f"Failed to parse {file_path}: {e}")
             raise
 
-    async def _parse_text_file(
-        self, file_path: Path, extension: str
-    ) -> Tuple[str, Dict]:
+    async def _parse_text_file(self, file_path: Path, extension: str) -> Tuple[str, Dict]:
         """Parse plain text or markdown files."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -125,9 +123,7 @@ class DocumentParserFactory:
         try:
             from bs4 import BeautifulSoup
         except ImportError:
-            logger.warning(
-                "BeautifulSoup not available, falling back to basic HTML parsing"
-            )
+            logger.warning("BeautifulSoup not available, falling back to basic HTML parsing")
             return await self._parse_text_file(file_path, ".html")
 
         try:
@@ -179,16 +175,12 @@ class DocumentParserFactory:
             loop = asyncio.get_event_loop()
 
             # Run PDF reading in thread pool to prevent blocking
-            content = await loop.run_in_executor(
-                None, self._extract_pdf_with_pypdf2, file_path
-            )
+            content = await loop.run_in_executor(None, self._extract_pdf_with_pypdf2, file_path)
 
             if content:
                 # Get page count for metadata
                 try:
-                    page_count = await loop.run_in_executor(
-                        None, self._get_pdf_page_count, file_path
-                    )
+                    page_count = await loop.run_in_executor(None, self._get_pdf_page_count, file_path)
                     metadata["page_count"] = page_count
                 except Exception:
                     metadata["page_count"] = "unknown"
@@ -231,9 +223,7 @@ class DocumentParserFactory:
                         if page_text.strip():
                             content += f"[Page {page_num + 1}]\n{page_text}\n\n"
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to extract text from page {page_num + 1}: {e}"
-                        )
+                        logger.warning(f"Failed to extract text from page {page_num + 1}: {e}")
                         continue
 
             return content
@@ -260,26 +250,20 @@ class DocumentParserFactory:
         try:
             from pdf2image import convert_from_path
         except ImportError as e:
-            raise ImportError(
-                f"OCR dependencies not available: {e}. Install with: pip install pdf2image"
-            )
+            raise ImportError(f"OCR dependencies not available: {e}. Install with: pip install pdf2image")
 
         # Check if poppler-utils is available
         try:
             subprocess.run(["pdftoppm", "-h"], capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
-            raise ImportError(
-                "poppler-utils not found. Install with: sudo apt-get install poppler-utils"
-            )
+            raise ImportError("poppler-utils not found. Install with: sudo apt-get install poppler-utils")
 
         logger.info(f"Using OCR to extract text from {file_path}")
 
         # Convert PDF to images (this can also be slow, so run in thread pool)
         loop = asyncio.get_event_loop()
         try:
-            images = await loop.run_in_executor(
-                None, lambda: convert_from_path(str(file_path))
-            )
+            images = await loop.run_in_executor(None, lambda: convert_from_path(str(file_path)))
         except Exception as e:
             logger.error(f"Failed to convert PDF to images: {e}")
             raise ValueError(f"Could not convert PDF to images: {e}")
@@ -292,9 +276,7 @@ class DocumentParserFactory:
             # Create tasks for OCR processing
             ocr_tasks = []
             for page_num, image in enumerate(images):
-                future = loop.run_in_executor(
-                    executor, self._ocr_single_page, image, page_num + 1
-                )
+                future = loop.run_in_executor(executor, self._ocr_single_page, image, page_num + 1)
                 ocr_tasks.append(future)
 
             # Wait for all OCR tasks with timeout
@@ -313,9 +295,7 @@ class DocumentParserFactory:
 
             except asyncio.TimeoutError:
                 logger.error(f"OCR processing timed out for {file_path}")
-                raise ValueError(
-                    "OCR processing timed out - PDF may be too large or complex"
-                )
+                raise ValueError("OCR processing timed out - PDF may be too large or complex")
 
         return content
 
@@ -325,9 +305,7 @@ class DocumentParserFactory:
             import pytesseract
 
             # Set timeout for individual page OCR
-            page_text = pytesseract.image_to_string(
-                image, timeout=60
-            )  # 1 minute per page
+            page_text = pytesseract.image_to_string(image, timeout=60)  # 1 minute per page
 
             if page_text.strip():
                 return f"[Page {page_num}]\n{page_text}\n\n"
@@ -342,9 +320,7 @@ class DocumentParserFactory:
         try:
             from docx import Document
         except ImportError:
-            raise ImportError(
-                "python-docx not available. Install with: pip install python-docx"
-            )
+            raise ImportError("python-docx not available. Install with: pip install python-docx")
 
         doc = Document(str(file_path))
 
@@ -371,9 +347,7 @@ class DocumentParserFactory:
             from ebooklib import epub
             from bs4 import BeautifulSoup
         except ImportError:
-            raise ImportError(
-                "ebooklib and beautifulsoup4 not available. Install with: pip install ebooklib beautifulsoup4"
-            )
+            raise ImportError("ebooklib and beautifulsoup4 not available. Install with: pip install ebooklib beautifulsoup4")
 
         book = epub.read_epub(str(file_path))
 

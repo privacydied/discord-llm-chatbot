@@ -12,9 +12,7 @@ class NoopMetrics:
     def __init__(self):
         logger.info("📊 Prometheus disabled: using NoopMetrics")
 
-    def define_counter(
-        self, name: str, description: str, labels: Optional[list] = None
-    ) -> None:
+    def define_counter(self, name: str, description: str, labels: Optional[list] = None) -> None:
         """Define a counter metric (no-op)."""
         pass
 
@@ -32,9 +30,7 @@ class NoopMetrics:
         """Increment a counter (no-op)."""
         pass
 
-    def increment(
-        self, name: str, labels: Optional[dict] = None, value: int = 1
-    ) -> None:
+    def increment(self, name: str, labels: Optional[dict] = None, value: int = 1) -> None:
         """Increment a counter (no-op) - alternative interface."""
         pass
 

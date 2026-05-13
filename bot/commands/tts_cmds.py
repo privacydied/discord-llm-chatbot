@@ -32,9 +32,7 @@ class TTSCommands(commands.Cog):
         self.bot = bot
         self.router = bot.router
         self.prefix = "!"
-        self.voice_publisher = (
-            VoiceMessagePublisher(logger=logger) if VoiceMessagePublisher else None
-        )
+        self.voice_publisher = VoiceMessagePublisher(logger=logger) if VoiceMessagePublisher else None
         # Ensure commands can be invoked in isolation during tests before being added to a bot
         for command in getattr(self, "__cog_commands__", []):
             command.cog = self
@@ -82,9 +80,7 @@ class TTSCommands(commands.Cog):
 
     @commands.command(name="speak")
     @commands.cooldown(3, 60, type=commands.BucketType.user)
-    async def speak(
-        self, ctx: commands.Context, *, text: Optional[str] = None, pcm16: bool = False
-    ):
+    async def speak(self, ctx: commands.Context, *, text: Optional[str] = None, pcm16: bool = False):
         """Make the next response TTS or speak the given text."""
         # Don't set one_time_tts when providing text directly - use voice_only instead
         # This prevents duplicate responses by avoiding double TTS triggering
@@ -197,11 +193,7 @@ class TTSCommands(commands.Cog):
                     "channel_id": channel_id,
                 },
             )
-            previous_messages = [
-                msg
-                async for msg in ctx.channel.history(limit=5)
-                if msg.id != ctx.message.id and msg.author.id == ctx.author.id
-            ]
+            previous_messages = [msg async for msg in ctx.channel.history(limit=5) if msg.id != ctx.message.id and msg.author.id == ctx.author.id]
             if previous_messages:
                 text = previous_messages[0].content
                 msg_id = str(previous_messages[0].id)
@@ -311,9 +303,7 @@ class TTSCommands(commands.Cog):
                     raise
                 except Exception:
                     try:
-                        audio_bytes = await maybe_call(
-                            self.bot.tts_manager.synthesize, text
-                        )
+                        audio_bytes = await maybe_call(self.bot.tts_manager.synthesize, text)
                         mime_type = "audio/wav"
                     except SynthesisError:
                         raise
@@ -392,9 +382,7 @@ class TTSCommands(commands.Cog):
                 # Fall back to in-memory bytes when the file is missing or not provided
                 stream = io.BytesIO(audio_bytes or b"")
                 stream.seek(0)
-                filename = (
-                    "tts_audio.ogg" if mime_type == "audio/ogg" else "tts_audio.wav"
-                )
+                filename = "tts_audio.ogg" if mime_type == "audio/ogg" else "tts_audio.wav"
                 return discord.File(stream, filename=filename)
 
             async def send_in_channel() -> bool:
@@ -529,9 +517,7 @@ class TTSCommands(commands.Cog):
                 )
                 detail = reason.split("engine_input_error", 1)[-1].lstrip(": ").strip()
                 if detail:
-                    message = (
-                        f"❌ The TTS engine could not process the request: {detail}"
-                    )
+                    message = f"❌ The TTS engine could not process the request: {detail}"
                 else:
                     message = "❌ The TTS engine could not process the request because the input phonemes are unsupported."
             else:
@@ -554,9 +540,7 @@ class TTSCommands(commands.Cog):
         except Exception as e:
             logging.error(f"Error in say command: {e}", exc_info=True)
             try:
-                await maybe_call(
-                    ctx.send, f"❌ An error occurred while generating TTS: {str(e)}"
-                )
+                await maybe_call(ctx.send, f"❌ An error occurred while generating TTS: {str(e)}")
             except Exception:
                 pass
             return

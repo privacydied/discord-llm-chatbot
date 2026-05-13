@@ -94,9 +94,7 @@ class VisionIntentRouter:
 
         self.logger.info("Vision Intent Router initialized")
 
-    async def route_message(
-        self, message: discord.Message, parsed_command: Optional[Any] = None
-    ) -> RoutingDecision:
+    async def route_message(self, message: discord.Message, parsed_command: Optional[Any] = None) -> RoutingDecision:
         """
         Main routing decision for Discord messages
 
@@ -155,16 +153,10 @@ class VisionIntentRouter:
         content = (user_message or "").strip()
 
         # Detect force prefixes similar to _extract_message_context
-        force_vision = (
-            content.startswith("!!image")
-            or content.startswith("!!video")
-            or content.startswith("!!vision")
-        )
+        force_vision = content.startswith("!!image") or content.startswith("!!video") or content.startswith("!!vision")
         force_openrouter = content.startswith("!!text") or content.startswith("!!chat")
         if force_vision or force_openrouter:
-            content = re.sub(
-                r"^!!(image|video|vision|text|chat)\s*", "", content
-            ).strip()
+            content = re.sub(r"^!!(image|video|vision|text|chat)\s*", "", content).strip()
 
         # Build lightweight MessageContext
         msg_ctx = MessageContext(
@@ -224,11 +216,7 @@ class VisionIntentRouter:
 
         # Best intent parameters (if any)
         best = intent_scores[0] if intent_scores else None
-        params: Dict[str, Any] = (
-            dict(best.extracted_parameters)
-            if best and best.extracted_parameters
-            else {}
-        )
+        params: Dict[str, Any] = dict(best.extracted_parameters) if best and best.extracted_parameters else {}
 
         # Normalize common parameters to what router expects
         # Size → width/height
@@ -297,9 +285,7 @@ class VisionIntentRouter:
             confidence=decision.confidence,
         )
 
-    def _extract_message_context(
-        self, message: discord.Message, parsed_command: Optional[Any]
-    ) -> MessageContext:
+    def _extract_message_context(self, message: discord.Message, parsed_command: Optional[Any]) -> MessageContext:
         """Extract context information from Discord message [IV]"""
         content = message.content.strip()
 
@@ -316,27 +302,19 @@ class VisionIntentRouter:
                     attachment_types.append("file")
 
         # Check for force prefixes
-        force_vision = (
-            content.startswith("!!image")
-            or content.startswith("!!video")
-            or content.startswith("!!vision")
-        )
+        force_vision = content.startswith("!!image") or content.startswith("!!video") or content.startswith("!!vision")
         force_openrouter = content.startswith("!!text") or content.startswith("!!chat")
 
         # Remove force prefixes from content for analysis
         if force_vision or force_openrouter:
-            content = re.sub(
-                r"^!!(image|video|vision|text|chat)\s*", "", content
-            ).strip()
+            content = re.sub(r"^!!(image|video|vision|text|chat)\s*", "", content).strip()
 
         return MessageContext(
             content=content,
             has_attachments=bool(message.attachments),
             attachment_types=attachment_types,
             is_slash_command=parsed_command is not None,
-            command_name=getattr(parsed_command, "command_name", None)
-            if parsed_command
-            else None,
+            command_name=getattr(parsed_command, "command_name", None) if parsed_command else None,
             user_id=str(message.author.id),
             guild_id=str(message.guild.id) if message.guild else None,
             channel_id=str(message.channel.id),
@@ -344,9 +322,7 @@ class VisionIntentRouter:
             force_openrouter=force_openrouter,
         )
 
-    def _apply_deterministic_rules(
-        self, context: MessageContext
-    ) -> Optional[RoutingDecision]:
+    def _apply_deterministic_rules(self, context: MessageContext) -> Optional[RoutingDecision]:
         """Apply high-priority deterministic routing rules [CA]"""
 
         # Rule 1: Force prefixes (highest priority)
@@ -398,9 +374,7 @@ class VisionIntentRouter:
 
         # Rule 4: Attachment + edit verbs → image editing
         if context.has_attachments and "image" in context.attachment_types:
-            edit_verbs = self.intent_patterns.get("image_editing", {}).get(
-                "trigger_phrases", []
-            )
+            edit_verbs = self.intent_patterns.get("image_editing", {}).get("trigger_phrases", [])
             content_lower = context.content.lower()
 
             for verb in edit_verbs:
@@ -414,9 +388,7 @@ class VisionIntentRouter:
 
         # Rule 5: Image attachment + motion verbs → image-to-video
         if context.has_attachments and "image" in context.attachment_types:
-            i2v_patterns = self.intent_patterns.get("image_to_video", {}).get(
-                "trigger_phrases", []
-            )
+            i2v_patterns = self.intent_patterns.get("image_to_video", {}).get("trigger_phrases", [])
             content_lower = context.content.lower()
 
             for phrase in i2v_patterns:
@@ -450,9 +422,7 @@ class VisionIntentRouter:
 
         return intent_scores
 
-    async def _score_task_intent(
-        self, context: MessageContext, task: VisionTask, task_config: Dict[str, Any]
-    ) -> IntentScore:
+    async def _score_task_intent(self, context: MessageContext, task: VisionTask, task_config: Dict[str, Any]) -> IntentScore:
         """Score intent for specific vision task [PA]"""
         confidence = 0.0
         extracted_params = {}
@@ -519,9 +489,7 @@ class VisionIntentRouter:
 
         # Cap confidence and create score
         confidence = min(1.0, max(0.0, confidence))
-        reasoning = (
-            " + ".join(reasoning_parts) if reasoning_parts else "no strong indicators"
-        )
+        reasoning = " + ".join(reasoning_parts) if reasoning_parts else "no strong indicators"
 
         return IntentScore(
             task=task,
@@ -562,9 +530,7 @@ class VisionIntentRouter:
 
         return None
 
-    def _make_routing_decision(
-        self, context: MessageContext, intent_scores: List[IntentScore]
-    ) -> RoutingDecision:
+    def _make_routing_decision(self, context: MessageContext, intent_scores: List[IntentScore]) -> RoutingDecision:
         """Make final routing decision based on intent analysis [CA]"""
 
         # No vision intents detected
@@ -585,9 +551,7 @@ class VisionIntentRouter:
                 confidence=best_intent.confidence,
                 task=best_intent.task,
                 reasoning=f"High confidence vision intent: {best_intent.reasoning}",
-                estimated_cost=self._estimate_task_cost(
-                    best_intent.task, best_intent.extracted_parameters
-                ),
+                estimated_cost=self._estimate_task_cost(best_intent.task, best_intent.extracted_parameters),
             )
 
         # Medium confidence → route to Vision with note
@@ -597,9 +561,7 @@ class VisionIntentRouter:
                 confidence=best_intent.confidence,
                 task=best_intent.task,
                 reasoning=f"Medium confidence vision intent: {best_intent.reasoning}",
-                estimated_cost=self._estimate_task_cost(
-                    best_intent.task, best_intent.extracted_parameters
-                ),
+                estimated_cost=self._estimate_task_cost(best_intent.task, best_intent.extracted_parameters),
             )
 
         # Low confidence → check for ambiguity, potentially ask for clarification
@@ -618,9 +580,7 @@ class VisionIntentRouter:
                     confidence=best_intent.confidence,
                     task=best_intent.task,
                     reasoning=f"Low confidence vision intent: {best_intent.reasoning}",
-                    estimated_cost=self._estimate_task_cost(
-                        best_intent.task, best_intent.extracted_parameters
-                    ),
+                    estimated_cost=self._estimate_task_cost(best_intent.task, best_intent.extracted_parameters),
                 )
 
         # Very low confidence → fallback to OpenRouter
@@ -702,9 +662,7 @@ class VisionIntentRouter:
         }
         return mapping.get(task_name)
 
-    def _estimate_task_cost(
-        self, task: VisionTask, parameters: Dict[str, Any]
-    ) -> float:
+    def _estimate_task_cost(self, task: VisionTask, parameters: Dict[str, Any]) -> float:
         """Rough cost estimation for routing decision [CMV]"""
         # Very rough estimates for display purposes
         base_costs = {
@@ -775,15 +733,11 @@ class VisionIntentRouter:
             VisionTask.IMAGE_TO_VIDEO,
         ]:
             # Note: Actual file download and path assignment would happen in orchestrator
-            request.input_image = Path(
-                "placeholder"
-            )  # Will be replaced with actual path
+            request.input_image = Path("placeholder")  # Will be replaced with actual path
 
         return request
 
-    def _apply_extracted_parameters(
-        self, request: VisionRequest, parameters: Dict[str, Any]
-    ) -> None:
+    def _apply_extracted_parameters(self, request: VisionRequest, parameters: Dict[str, Any]) -> None:
         """Apply extracted parameters to VisionRequest [CMV]"""
 
         # Size parameters

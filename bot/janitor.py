@@ -133,9 +133,7 @@ def compress_file_to_gz(file_path: Path) -> bool:
 # ===== CACHE PRUNING =====
 
 
-def prune_by_age(
-    policy: DirectoryPolicy, hold_off_minutes: float, active_file: Optional[Path] = None
-) -> Tuple[int, int]:
+def prune_by_age(policy: DirectoryPolicy, hold_off_minutes: float, active_file: Optional[Path] = None) -> Tuple[int, int]:
     """
     Delete files older than TTL. Returns (files_deleted, bytes_freed). [CA][REH]
 
@@ -189,9 +187,7 @@ def prune_by_age(
     return files_deleted, bytes_freed
 
 
-def prune_by_size(
-    policy: DirectoryPolicy, hold_off_minutes: float, active_file: Optional[Path] = None
-) -> Tuple[int, int]:
+def prune_by_size(policy: DirectoryPolicy, hold_off_minutes: float, active_file: Optional[Path] = None) -> Tuple[int, int]:
     """
     Delete oldest files until under size cap. Returns (files_deleted, bytes_freed). [CA][REH]
 
@@ -293,9 +289,7 @@ def compress_old_logs(log_dir: Path, compress_age_hours: float) -> int:
     return compressed_count
 
 
-def prune_old_compressed_logs(
-    log_dir: Path, retention_days: int, total_cap_mb: int
-) -> Tuple[int, int]:
+def prune_old_compressed_logs(log_dir: Path, retention_days: int, total_cap_mb: int) -> Tuple[int, int]:
     """
     Prune compressed logs by age and total size. Returns (files_deleted, bytes_freed). [CA][REH]
     """
@@ -393,9 +387,7 @@ class Janitor:
                 size_cap_mb=768,
             ),
             "stt_transcripts": DirectoryPolicy(
-                path=Path(
-                    config.get("STT_TRANSCRIPT_CACHE_DIR", "cache/stt_transcripts")
-                ),
+                path=Path(config.get("STT_TRANSCRIPT_CACHE_DIR", "cache/stt_transcripts")),
                 age_ttl_hours=48,
                 size_cap_mb=256,
             ),
@@ -460,9 +452,7 @@ class Janitor:
 
             # Calculate duration
             duration_ms = (time.monotonic() - start_time) * 1000
-            next_run_min = JANITOR_INTERVAL_MINUTES + random.uniform(
-                -JANITOR_JITTER_MINUTES, JANITOR_JITTER_MINUTES
-            )
+            next_run_min = JANITOR_INTERVAL_MINUTES + random.uniform(-JANITOR_JITTER_MINUTES, JANITOR_JITTER_MINUTES)
 
             logger.info(
                 "janitor.run done",
@@ -500,15 +490,12 @@ class Janitor:
             compressed_count = compress_old_logs(policy.path, LOG_COMPRESS_AGE_HOURS)
 
             # Prune old compressed logs
-            deleted_count, bytes_freed = prune_old_compressed_logs(
-                policy.path, LOG_RETENTION_DAYS, LOG_TOTAL_CAP_MB
-            )
+            deleted_count, bytes_freed = prune_old_compressed_logs(policy.path, LOG_RETENTION_DAYS, LOG_TOTAL_CAP_MB)
 
             after_bytes = get_directory_size_bytes(policy.path)
 
             logger.info(
-                f"janitor.dir name=logs before_bytes={before_bytes} after_bytes={after_bytes} "
-                f"deleted_files={deleted_count} deleted_bytes={bytes_freed} compressed_logs={compressed_count}",
+                f"janitor.dir name=logs before_bytes={before_bytes} after_bytes={after_bytes} deleted_files={deleted_count} deleted_bytes={bytes_freed} compressed_logs={compressed_count}",
                 extra={
                     "subsys": "janitor",
                     "event": "janitor.dir",
@@ -559,8 +546,7 @@ class Janitor:
 
             if total_deleted > 0 or total_freed > 0:
                 logger.info(
-                    f"janitor.dir name={name} before_bytes={before_bytes} after_bytes={after_bytes} "
-                    f"deleted_files={total_deleted} deleted_bytes={total_freed}",
+                    f"janitor.dir name={name} before_bytes={before_bytes} after_bytes={after_bytes} deleted_files={total_deleted} deleted_bytes={total_freed}",
                     extra={
                         "subsys": "janitor",
                         "event": "janitor.dir",
@@ -730,12 +716,8 @@ async def manual_clean() -> Dict[str, Any]:
         # Process logs
         log_policy = _janitor._policies.get("logs")
         if log_policy and log_policy.path.exists():
-            compressed_count = compress_old_logs(
-                log_policy.path, LOG_COMPRESS_AGE_HOURS
-            )
-            deleted_count, bytes_freed = prune_old_compressed_logs(
-                log_policy.path, LOG_RETENTION_DAYS, LOG_TOTAL_CAP_MB
-            )
+            compressed_count = compress_old_logs(log_policy.path, LOG_COMPRESS_AGE_HOURS)
+            deleted_count, bytes_freed = prune_old_compressed_logs(log_policy.path, LOG_RETENTION_DAYS, LOG_TOTAL_CAP_MB)
             results["logs_compressed"] = compressed_count
             results["total_files_deleted"] += deleted_count
             results["total_bytes_freed"] += bytes_freed

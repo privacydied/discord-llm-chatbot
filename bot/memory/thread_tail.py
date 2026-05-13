@@ -64,20 +64,14 @@ def _format_joined_text(items: List[PackagedItem]) -> str:
                 ts = dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         except Exception:
             pass
-        header = (
-            f"[{i}/{n}] {it.author_name} – {ts}"
-            if ts
-            else f"[{i}/{n}] {it.author_name}"
-        )
+        header = f"[{i}/{n}] {it.author_name} – {ts}" if ts else f"[{i}/{n}] {it.author_name}"
         parts.append(header)
         parts.append(it.text_plain)
         parts.append("")
     return "\n".join(parts).strip()
 
 
-async def resolve_thread_reply_target(
-    bot: discord.Client, message: discord.Message, cfg: Dict[str, Any]
-) -> Tuple[Optional[discord.Message], str]:
+async def resolve_thread_reply_target(bot: discord.Client, message: discord.Message, cfg: Dict[str, Any]) -> Tuple[Optional[discord.Message], str]:
     """
     Resolve the reply target for thread messages at send-time.
     Returns (reply_target_message_or_None, reason)
@@ -108,9 +102,7 @@ async def resolve_thread_reply_target(
         newest = msgs[0]
         # Determine if newest is ours
         try:
-            is_bot_newest = bool(getattr(newest.author, "bot", False)) and int(
-                getattr(newest.author, "id", 0)
-            ) == int(getattr(bot.user, "id", 0))
+            is_bot_newest = bool(getattr(newest.author, "bot", False)) and int(getattr(newest.author, "id", 0)) == int(getattr(bot.user, "id", 0))
         except Exception:
             is_bot_newest = False
 
@@ -138,9 +130,7 @@ async def resolve_thread_reply_target(
         return message, "fallback_current"
 
 
-async def resolve_implicit_anchor(
-    bot: discord.Client, message: discord.Message, cfg: Dict[str, Any]
-) -> Tuple[Optional[discord.Message], str]:
+async def resolve_implicit_anchor(bot: discord.Client, message: discord.Message, cfg: Dict[str, Any]) -> Tuple[Optional[discord.Message], str]:
     """
     For LONE_CASE (non-thread), when the message @mentions the bot and carries no substantive content,
     choose an implicit anchor: the most recent human message above within a small look-back window.
@@ -202,9 +192,7 @@ async def collect_implicit_anchor_context(
         try:
             async for m in ch.history(limit=k * 3, before=anchor):
                 is_bot = bool(getattr(m.author, "bot", False))
-                is_ours = int(getattr(m.author, "id", 0)) == int(
-                    getattr(bot.user, "id", 0)
-                )
+                is_ours = int(getattr(m.author, "id", 0)) == int(getattr(bot.user, "id", 0))
                 if is_bot and not is_ours:
                     continue
                 tail.append(m)
@@ -221,9 +209,7 @@ async def collect_implicit_anchor_context(
             author_name = getattr(
                 m.author,
                 "display_name",
-                getattr(
-                    m.author, "name", f"User({getattr(m.author, 'id', 'unknown')})"
-                ),
+                getattr(m.author, "name", f"User({getattr(m.author, 'id', 'unknown')})"),
             )
             txt = _sanitize_mentions(m.content or "", guild)
             items.append(
@@ -232,9 +218,7 @@ async def collect_implicit_anchor_context(
                     id=str(getattr(m, "id", "")),
                     author_name=author_name,
                     author_id=str(getattr(m.author, "id", "")),
-                    created_at_iso=(
-                        getattr(m, "created_at", None) or datetime.now(timezone.utc)
-                    ).isoformat(),
+                    created_at_iso=(getattr(m, "created_at", None) or datetime.now(timezone.utc)).isoformat(),
                     text_plain=txt,
                     has_attachments=bool(getattr(m, "attachments", None)),
                     attachment_summaries_if_available=None,
@@ -245,12 +229,8 @@ async def collect_implicit_anchor_context(
         joined_text = _format_joined_text(items) if items else ""
         anc = {
             "id": str(getattr(anchor, "id", "")),
-            "author": getattr(
-                anchor.author, "display_name", getattr(anchor.author, "name", "")
-            ),
-            "created_at_iso": (
-                getattr(anchor, "created_at", None) or datetime.now(timezone.utc)
-            ).isoformat(),
+            "author": getattr(anchor.author, "display_name", getattr(anchor.author, "name", "")),
+            "created_at_iso": (getattr(anchor, "created_at", None) or datetime.now(timezone.utc)).isoformat(),
             "jump_url": getattr(anchor, "jump_url", ""),
         }
         block = MentionContextBlock(
@@ -334,9 +314,7 @@ async def collect_thread_tail_context(
             async for m in ch.history(limit=k * 3, before=anchor):
                 # Exclude other bots; include our bot and humans
                 is_bot = bool(getattr(m.author, "bot", False))
-                is_ours = int(getattr(m.author, "id", 0)) == int(
-                    getattr(bot.user, "id", 0)
-                )
+                is_ours = int(getattr(m.author, "id", 0)) == int(getattr(bot.user, "id", 0))
                 if is_bot and not is_ours:
                     continue
                 tail.append(m)
@@ -356,9 +334,7 @@ async def collect_thread_tail_context(
             author_name = getattr(
                 m.author,
                 "display_name",
-                getattr(
-                    m.author, "name", f"User({getattr(m.author, 'id', 'unknown')})"
-                ),
+                getattr(m.author, "name", f"User({getattr(m.author, 'id', 'unknown')})"),
             )
             txt = _sanitize_mentions(m.content or "", guild)
             it = PackagedItem(
@@ -366,9 +342,7 @@ async def collect_thread_tail_context(
                 id=str(getattr(m, "id", "")),
                 author_name=author_name,
                 author_id=str(getattr(m.author, "id", "")),
-                created_at_iso=(
-                    getattr(m, "created_at", None) or datetime.now(timezone.utc)
-                ).isoformat(),
+                created_at_iso=(getattr(m, "created_at", None) or datetime.now(timezone.utc)).isoformat(),
                 text_plain=txt,
                 has_attachments=bool(getattr(m, "attachments", None)),
                 attachment_summaries_if_available=None,
@@ -381,12 +355,8 @@ async def collect_thread_tail_context(
         # Package block
         anc = {
             "id": str(getattr(anchor, "id", "")),
-            "author": getattr(
-                anchor.author, "display_name", getattr(anchor.author, "name", "")
-            ),
-            "created_at_iso": (
-                getattr(anchor, "created_at", None) or datetime.now(timezone.utc)
-            ).isoformat(),
+            "author": getattr(anchor.author, "display_name", getattr(anchor.author, "name", "")),
+            "created_at_iso": (getattr(anchor, "created_at", None) or datetime.now(timezone.utc)).isoformat(),
             "jump_url": getattr(anchor, "jump_url", ""),
         }
         block = MentionContextBlock(

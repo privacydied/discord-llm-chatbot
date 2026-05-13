@@ -19,10 +19,12 @@ pytestmark = pytest.mark.asyncio
 # Fixture helpers
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def bot_action():
     """Return the BotAction class without importing all of bot."""
     from bot.action import BotAction
+
     return BotAction
 
 
@@ -47,6 +49,7 @@ def patched_see_infer(monkeypatch):
 # Test 1: see_infer returns error=True BotAction when ladder exhausted
 # ---------------------------------------------------------------------------
 
+
 async def test_vl_ladder_exhausted_botaction_is_error(bot_action):
     """When the VL ladder exhausts, see_infer returns BotAction with error=True."""
     result = bot_action(
@@ -62,6 +65,7 @@ async def test_vl_ladder_exhausted_botaction_is_error(bot_action):
 # Test 2: see_infer empty completion still returns error=True BotAction
 # ---------------------------------------------------------------------------
 
+
 async def test_vl_empty_completion_botaction_is_error(bot_action):
     """Empty completion from VL also returns error=True BotAction."""
     result = bot_action(
@@ -75,9 +79,10 @@ async def test_vl_empty_completion_botaction_is_error(bot_action):
 # Test 3: openai_backend ladder exhaustion returns error-shaped dict
 # ---------------------------------------------------------------------------
 
+
 async def test_vl_ladder_exhausted_dict_has_metadata():
     """When the retry ladder exhausts in openai_backend, the returned dict
-       carries ladder_exhausted=True and an error text."""
+    carries ladder_exhausted=True and an error text."""
     # Simulate what openai_backend.generate_vl_response returns when
     # the except APIError block catches a VL exhaustion (lines 1328-1340).
     result = {
@@ -101,18 +106,13 @@ async def test_vl_ladder_exhausted_dict_has_metadata():
 # Test 4: ai_backend should NOT log success for ladder_exhausted results
 # ---------------------------------------------------------------------------
 
+
 async def test_ai_backend_does_not_log_success_for_exhausted_vl():
     """Check the condition used in ai_backend to decide whether to log success."""
+
     # These are the conditions that should suppress the "completed successfully" log.
     def _should_log_success(result):
-        return not (
-            isinstance(result, dict)
-            and (
-                result.get("ladder_exhausted")
-                or result.get("status") == "error"
-                or (result.get("text") or "").strip() == ""
-            )
-        )
+        return not (isinstance(result, dict) and (result.get("ladder_exhausted") or result.get("status") == "error" or (result.get("text") or "").strip() == ""))
 
     # Ladder exhausted -> must NOT log success
     exhausted_result = {
@@ -139,9 +139,10 @@ async def test_ai_backend_does_not_log_success_for_exhausted_vl():
 # Test 5: BotAction.error guard in _run_perception_notes
 # ---------------------------------------------------------------------------
 
+
 async def test_perception_notes_rejects_error_botaction(bot_action):
     """When see_infer returns an error BotAction, _run_perception_notes must
-       return (None, reason) and NOT inject the error text as perception notes."""
+    return (None, reason) and NOT inject the error text as perception notes."""
     error_action = bot_action(
         content="Vision service is temporarily unavailable.",
         error=True,
@@ -154,6 +155,7 @@ async def test_perception_notes_rejects_error_botaction(bot_action):
 # ---------------------------------------------------------------------------
 # Test 6: Successful VL BotAction is NOT rejected
 # ---------------------------------------------------------------------------
+
 
 async def test_perception_notes_accepts_ok_botaction(bot_action):
     """A successful VL BotAction should NOT be rejected by the error guard."""
@@ -169,22 +171,16 @@ async def test_perception_notes_accepts_ok_botaction(bot_action):
 # Test 7: Non-BotAction dict results (from direct backend calls)
 # ---------------------------------------------------------------------------
 
+
 async def test_direct_backend_call_ladder_exhausted_detection():
     """Handlers that call the backend directly (not via see_infer) must also
-       detect ladder_exhausted in dict results."""
+    detect ladder_exhausted in dict results."""
     error_dict = {
         "text": "Unavailable",
         "ladder_exhausted": True,
         "model": None,
     }
-    is_error = (
-        isinstance(error_dict, dict)
-        and (
-            error_dict.get("ladder_exhausted")
-            or error_dict.get("status") == "error"
-            or (error_dict.get("text") or "").strip() == ""
-        )
-    )
+    is_error = isinstance(error_dict, dict) and (error_dict.get("ladder_exhausted") or error_dict.get("status") == "error" or (error_dict.get("text") or "").strip() == "")
     assert is_error is True
 
 
@@ -192,9 +188,10 @@ async def test_direct_backend_call_ladder_exhausted_detection():
 # Test 8: ResultAggregator does not count failed items as successful
 # ---------------------------------------------------------------------------
 
+
 async def test_result_aggregator_failed_items_not_counted():
     """The ResultAggregator's success filter must properly separate failed
-       items when a VL item returned a failed result."""
+    items when a VL item returned a failed result."""
     from bot.result_aggregator import ResultAggregator
     from bot.modality import InputModality, InputItem
 
@@ -224,6 +221,7 @@ async def test_result_aggregator_failed_items_not_counted():
 # ---------------------------------------------------------------------------
 # Test 9: ResultAggregator with mixed success + failure
 # ---------------------------------------------------------------------------
+
 
 async def test_result_aggregator_mixed_success_failure():
     """When one item succeeds and one fails, only the successful one is in the prompt."""
@@ -264,6 +262,7 @@ async def test_result_aggregator_mixed_success_failure():
 # ---------------------------------------------------------------------------
 # Test 10: has_visual_facts_section should not be triggered by error text
 # ---------------------------------------------------------------------------
+
 
 async def test_error_text_does_not_trigger_visual_facts():
     """Error/failure text from failed VL should not trigger visual_facts_detected."""

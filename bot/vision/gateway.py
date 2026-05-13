@@ -107,17 +107,13 @@ class VisionGateway:
         job_id = getattr(request, "idempotency_key", None) or "pending"
 
         try:
-            self.logger.info(
-                f"Submitting {request.task.value} job for user {request.user_id}"
-            )
+            self.logger.info(f"Submitting {request.task.value} job for user {request.user_id}")
 
             # Submit through unified adapter
             response = await self.adapter.submit(request)
 
             # Extract provider job details from VisionResponse
-            job_id = (
-                response.job_id
-            )  # replace provisional id with provider-qualified id
+            job_id = response.job_id  # replace provisional id with provider-qualified id
             provider_name = response.provider.value
 
             # Track job metadata with thread-safe access
@@ -138,9 +134,7 @@ class VisionGateway:
                 if job_id in self.active_jobs:
                     del self.active_jobs[job_id]
 
-            self.logger.error(
-                f"Vision gateway failed for job {job_id}: {e}", exc_info=True
-            )
+            self.logger.error(f"Vision gateway failed for job {job_id}: {e}", exc_info=True)
             raise VisionError(
                 error_type=VisionErrorType.PROVIDER_ERROR,
                 message=f"Vision processing failed: {str(e)}",
@@ -156,11 +150,7 @@ class VisionGateway:
                 return Money("0.006")  # Safe fallback
 
             # Use pricing table to calculate actual cost (same as estimate)
-            provider = (
-                VisionProvider(result.provider_used.lower())
-                if result.provider_used
-                else VisionProvider.NOVITA
-            )
+            provider = VisionProvider(result.provider_used.lower()) if result.provider_used else VisionProvider.NOVITA
 
             return self.pricing_table.estimate_cost(
                 provider=provider,
@@ -169,8 +159,7 @@ class VisionGateway:
                 height=getattr(request, "height", 1024),
                 num_images=getattr(request, "batch_size", 1) or 1,
                 duration_seconds=getattr(request, "duration_seconds", 4.0) or 4.0,
-                model=getattr(request, "preferred_model", None)
-                or getattr(request, "model", None),
+                model=getattr(request, "preferred_model", None) or getattr(request, "model", None),
             )
         except Exception as e:
             self.logger.warning(f"Actual cost calculation failed, using fallback: {e}")
@@ -340,14 +329,11 @@ class VisionGateway:
 
             # Create job-specific artifacts directory to prevent collisions
             artifacts_dir = (
-                Path(self.config.get("VISION_ARTIFACTS_DIR", "vision_artifacts"))
-                / f"{job_id}_{int(time.time())}"  # Add timestamp for uniqueness
+                Path(self.config.get("VISION_ARTIFACTS_DIR", "vision_artifacts")) / f"{job_id}_{int(time.time())}"  # Add timestamp for uniqueness
             )
             artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-            self.logger.info(
-                f"Created artifacts directory: {artifacts_dir} for job {job_id[:8]}"
-            )
+            self.logger.info(f"Created artifacts directory: {artifacts_dir} for job {job_id[:8]}")
 
             timeout = aiohttp.ClientTimeout(total=30)
             async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -355,9 +341,7 @@ class VisionGateway:
                 @with_retry(API_RETRY_CONFIG)
                 async def _download(url: str, tmp_path: Path, final_path: Path) -> Path:
                     try:
-                        async with session.get(
-                            url, timeout=aiohttp.ClientTimeout(total=30)
-                        ) as resp:
+                        async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                             resp.raise_for_status()
 
                             # Try to detect proper file extension from content-type
@@ -431,32 +415,23 @@ class VisionGateway:
                         if data_bytes is not None and data_mime is not None:
                             base_name = f"generated_{job_id}_{idx}"
                             proper_extension = _get_extension_from_mime(data_mime)
-                            proper_final_path = (
-                                artifacts_dir / f"{base_name}{proper_extension}"
-                            )
+                            proper_final_path = artifacts_dir / f"{base_name}{proper_extension}"
                             with open(proper_final_path, "wb") as f:
                                 f.write(data_bytes)
                             file_size = proper_final_path.stat().st_size
                             saved_artifacts.append(proper_final_path)
                             total_size += file_size
-                            self.logger.info(
-                                f"Artifact saved from data URL for job {job_id}: {proper_final_path} ({file_size} bytes, {data_mime})"
-                            )
+                            self.logger.info(f"Artifact saved from data URL for job {job_id}: {proper_final_path} ({file_size} bytes, {data_mime})")
                             continue
 
                         parsed = urlparse(url)
-                        base_name = (
-                            unquote(os.path.basename(parsed.path))
-                            or f"generated_{job_id}_{idx}"
-                        )
+                        base_name = unquote(os.path.basename(parsed.path)) or f"generated_{job_id}_{idx}"
                         # Remove any existing extension for clean detection
                         if "." in base_name:
                             base_name = base_name.rsplit(".", 1)[0]
 
                         tmp_path = artifacts_dir / f".{base_name}.part"
-                        final_path = (
-                            artifacts_dir / f"{base_name}.tmp"
-                        )  # temp name for detection
+                        final_path = artifacts_dir / f"{base_name}.tmp"  # temp name for detection
                         # Download to temp file first
                         saved = await _download(url, tmp_path, final_path)
                         if saved and saved.exists():
@@ -469,9 +444,7 @@ class VisionGateway:
                             proper_extension = _get_extension_from_mime(detected_mime)
 
                             # Rename file with proper extension
-                            proper_final_path = (
-                                artifacts_dir / f"{base_name}{proper_extension}"
-                            )
+                            proper_final_path = artifacts_dir / f"{base_name}{proper_extension}"
                             if saved != proper_final_path:
                                 os.replace(saved, proper_final_path)
                                 saved = proper_final_path
@@ -479,43 +452,26 @@ class VisionGateway:
                             file_size = saved.stat().st_size
                             saved_artifacts.append(saved)
                             total_size += file_size
-                            self.logger.info(
-                                f"Artifact saved with MIME detection for job {job_id}: {saved} ({file_size} bytes, {detected_mime})"
-                            )
+                            self.logger.info(f"Artifact saved with MIME detection for job {job_id}: {saved} ({file_size} bytes, {detected_mime})")
                         else:
                             # Scrub data URLs to avoid logging base64 payloads [REH]
-                            url_display = (
-                                f"<data-url:{url.split(',')[0]}>"
-                                if url.startswith("data:")
-                                else url[:100]
-                            )
-                            self.logger.warning(
-                                f"Failed to download artifact {idx} for job {job_id}: {url_display}"
-                            )
+                            url_display = f"<data-url:{url.split(',')[0]}>" if url.startswith("data:") else url[:100]
+                            self.logger.warning(f"Failed to download artifact {idx} for job {job_id}: {url_display}")
                     except Exception as e:
                         warn_msg = f"Asset download failed: {e}"
                         warnings.append(warn_msg)
                         # Scrub data URLs to avoid logging base64 payloads [REH]
-                        url_display = (
-                            f"<data-url:{url.split(',')[0]}>"
-                            if url.startswith("data:")
-                            else url[:100]
-                        )
-                        self.logger.warning(
-                            f"{warn_msg} (job_id={job_id}, url={url_display})"
-                        )
+                        url_display = f"<data-url:{url.split(',')[0]}>" if url.startswith("data:") else url[:100]
+                        self.logger.warning(f"{warn_msg} (job_id={job_id}, url={url_display})")
 
             # Build VisionResponse with local paths
             response = VisionResponse(
                 success=True,
                 job_id=job_id,
-                provider=VisionProvider(result.provider_used.lower())
-                if result.provider_used
-                else VisionProvider.NOVITA,
+                provider=VisionProvider(result.provider_used.lower()) if result.provider_used else VisionProvider.NOVITA,
                 model_used=result.metadata.get("model", "unknown"),
                 artifacts=saved_artifacts,
-                processing_time_seconds=asyncio.get_event_loop().time()
-                - job_meta["start_time"],
+                processing_time_seconds=asyncio.get_event_loop().time() - job_meta["start_time"],
                 actual_cost=self._calculate_actual_cost(job_meta, result),
                 file_size_bytes=total_size,
                 warnings=warnings,
@@ -525,10 +481,7 @@ class VisionGateway:
             async with self._active_jobs_lock:
                 del self.active_jobs[job_id]
 
-            self.logger.info(
-                f"Job {job_id} completed successfully; assets_saved={len(saved_artifacts)}/"
-                f"{len(assets_urls)} dir={artifacts_dir}"
-            )
+            self.logger.info(f"Job {job_id} completed successfully; assets_saved={len(saved_artifacts)}/{len(assets_urls)} dir={artifacts_dir}")
             return response
 
         except Exception as e:
@@ -587,8 +540,6 @@ class VisionGateway:
         """Get available providers for specific task from unified adapter"""
         return self.adapter.get_providers_for_task(task)
 
-    def get_models_for_task(
-        self, task: VisionTask, provider: Optional[VisionProvider] = None
-    ) -> List[str]:
+    def get_models_for_task(self, task: VisionTask, provider: Optional[VisionProvider] = None) -> List[str]:
         """Get available models for task from unified adapter"""
         return self.adapter.get_models_for_task(task, provider)

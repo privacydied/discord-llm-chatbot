@@ -72,13 +72,9 @@ async def test_download_url_to_temp_applies_url_http_headers(monkeypatch) -> Non
         def stream(self, method: str, url: str):
             return _StreamCtx()
 
-    monkeypatch.setattr(
-        url_classifier.httpx, "AsyncClient", lambda *a, **kw: _Client(*a, **kw)
-    )
+    monkeypatch.setattr(url_classifier.httpx, "AsyncClient", lambda *a, **kw: _Client(*a, **kw))
 
-    path, err = await url_classifier.download_url_to_temp(
-        "https://example.com/file.pdf"
-    )
+    path, err = await url_classifier.download_url_to_temp("https://example.com/file.pdf")
 
     assert err is None
     assert path is not None

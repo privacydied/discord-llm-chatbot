@@ -53,20 +53,14 @@ class ArchiveCommands(commands.Cog):
     async def _require_permission(self, ctx: commands.Context) -> bool:
         if self._archive_admin_allowed(ctx):
             return True
-        await ctx.reply(
-            "Archive commands are admin-only on this server.", mention_author=False
-        )
+        await ctx.reply("Archive commands are admin-only on this server.", mention_author=False)
         return False
 
     def _short_time(self, iso_value: str | None) -> str:
         if not iso_value:
             return "unknown"
         try:
-            return (
-                datetime.fromisoformat(iso_value)
-                .astimezone()
-                .strftime("%Y-%m-%d %H:%M")
-            )
+            return datetime.fromisoformat(iso_value).astimezone().strftime("%Y-%m-%d %H:%M")
         except Exception:
             return iso_value
 
@@ -103,9 +97,7 @@ class ArchiveCommands(commands.Cog):
         embed = discord.Embed(
             title="Server Archive Status",
             description=f"Status: {status_text}  •  Sync: {sync_label}",
-            color=discord.Color.green()
-            if (enabled and not paused)
-            else discord.Color.yellow(),
+            color=discord.Color.green() if (enabled and not paused) else discord.Color.yellow(),
         )
         embed.set_footer(text=f"DB: {db_path}")
 
@@ -122,10 +114,7 @@ class ArchiveCommands(commands.Cog):
         )
         embed.add_field(
             name="⚙️ Sync",
-            value=(
-                f"Running: {'yes' if sync_running else 'no'}\n"
-                f"Last sync: {self._short_time(last_sync)}"
-            ),
+            value=(f"Running: {'yes' if sync_running else 'no'}\nLast sync: {self._short_time(last_sync)}"),
             inline=True,
         )
 
@@ -161,14 +150,9 @@ class ArchiveCommands(commands.Cog):
         for result in results[:limit]:
             channel_name = result.channel_name or f"#{result.channel_id}"
             author_name = result.author_name or result.author_id
-            snippet = sanitize_snippet(
-                result.snippet or result.clean_content or result.content, limit=180
-            )
+            snippet = sanitize_snippet(result.snippet or result.clean_content or result.content, limit=180)
             url = result.jump_url or ""
-            lines.append(
-                f"[{self._short_time(result.created_at)}] {channel_name} · {author_name}\n{snippet}"
-                + (f"\n{url}" if url else "")
-            )
+            lines.append(f"[{self._short_time(result.created_at)}] {channel_name} · {author_name}\n{snippet}" + (f"\n{url}" if url else ""))
         payload = "\n\n".join(lines)
         if len(payload) > 1900:
             payload = payload[:1890] + "…"
@@ -185,16 +169,10 @@ class ArchiveCommands(commands.Cog):
         guild = ctx.guild
         status = await service.get_status(guild_id=str(guild.id))
         if status.get("sync_running"):
-            await ctx.reply(
-                "Archive sync is already running for this guild.", mention_author=False
-            )
+            await ctx.reply("Archive sync is already running for this guild.", mention_author=False)
             return
         _sync_task = asyncio.create_task(service.sync_guild(guild), name=f"archive-sync-{guild.id}")
-        _sync_task.add_done_callback(
-            lambda t: logger.error(f"archive sync failed: {t.exception()}", exc_info=t.exception())
-            if t.done() and not t.cancelled() and t.exception()
-            else None
-        )
+        _sync_task.add_done_callback(lambda t: logger.error(f"archive sync failed: {t.exception()}", exc_info=t.exception()) if t.done() and not t.cancelled() and t.exception() else None)
         await ctx.reply("Archive sync started for this guild.", mention_author=False)
 
     @commands.guild_only()
@@ -211,31 +189,18 @@ class ArchiveCommands(commands.Cog):
         service = await self._service_or_raise()
         target = channel or ctx.channel
         if getattr(target, "guild", None) is not ctx.guild:
-            await ctx.reply(
-                "Archive sync targets must belong to this guild.", mention_author=False
-            )
+            await ctx.reply("Archive sync targets must belong to this guild.", mention_author=False)
             return
         key = f"{ctx.guild.id}:{getattr(target, 'id', '')}"
-        if (
-            key in service._channel_sync_tasks
-            and not service._channel_sync_tasks[key].done()
-        ):
+        if key in service._channel_sync_tasks and not service._channel_sync_tasks[key].done():
             await ctx.reply(
                 "Archive sync is already running for this channel/thread.",
                 mention_author=False,
             )
             return
-        _sync_task = asyncio.create_task(
-            service.sync_channel(target), name=f"archive-sync-channel-{key}"
-        )
-        _sync_task.add_done_callback(
-            lambda t: logger.error(f"archive channel sync failed: {t.exception()}", exc_info=t.exception())
-            if t.done() and not t.cancelled() and t.exception()
-            else None
-        )
-        await ctx.reply(
-            "Archive sync started for the target channel/thread.", mention_author=False
-        )
+        _sync_task = asyncio.create_task(service.sync_channel(target), name=f"archive-sync-channel-{key}")
+        _sync_task.add_done_callback(lambda t: logger.error(f"archive channel sync failed: {t.exception()}", exc_info=t.exception()) if t.done() and not t.cancelled() and t.exception() else None)
+        await ctx.reply("Archive sync started for the target channel/thread.", mention_author=False)
 
     @commands.guild_only()
     @commands.command(name="archive-pause")

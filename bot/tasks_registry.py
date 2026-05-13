@@ -77,9 +77,7 @@ class BackgroundTaskRegistry:
             name=name,
             task=task,
             feature=feature,
-            created_at=asyncio.get_event_loop().time()
-            if asyncio.get_event_loop().is_running()
-            else 0.0,
+            created_at=asyncio.get_event_loop().time() if asyncio.get_event_loop().is_running() else 0.0,
             metadata=dict(metadata or {}),
         )
 

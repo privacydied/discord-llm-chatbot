@@ -109,9 +109,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
 
             except ImportError as e:
                 logger.error(f"❌ sentence-transformers not installed: {e}")
-                await self._handle_fallback(
-                    "ImportError: sentence-transformers not available"
-                )
+                await self._handle_fallback("ImportError: sentence-transformers not available")
                 raise
             except Exception as e:
                 logger.error(f"❌ Failed to initialize {self.model_name}: {e}")
@@ -134,8 +132,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             self.model = SentenceTransformer(str(local_path), device="cpu")
         else:
             logger.warning(
-                "Embedding model %s not in local HF cache; first RAG/memory "
-                "semantic query will download ~90MB",
+                "Embedding model %s not in local HF cache; first RAG/memory semantic query will download ~90MB",
                 self.model_name,
             )
             self.model = SentenceTransformer(self.model_name, device="cpu")
@@ -182,9 +179,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
                     # Alternative formats
                     cache_path / self.model_name,
                     # Direct model name (for manual installs)
-                    cache_path / self.model_name.split("/")[-1]
-                    if "/" in self.model_name
-                    else None,
+                    cache_path / self.model_name.split("/")[-1] if "/" in self.model_name else None,
                 ]
 
                 # Remove None entries and check each path
@@ -202,16 +197,10 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
                     snapshots_dir = hub_model_path / "snapshots"
                     if snapshots_dir.exists():
                         for snapshot_dir in snapshots_dir.iterdir():
-                            if snapshot_dir.is_dir() and self._is_model_locally_cached(
-                                snapshot_dir
-                            ):
+                            if snapshot_dir.is_dir() and self._is_model_locally_cached(snapshot_dir):
                                 # Return the exact snapshot directory containing model files
-                                actual_path = getattr(
-                                    self, "_cached_model_path", snapshot_dir
-                                )
-                                logger.debug(
-                                    f"📂 Found cached model in snapshot: {actual_path}"
-                                )
+                                actual_path = getattr(self, "_cached_model_path", snapshot_dir)
+                                logger.debug(f"📂 Found cached model in snapshot: {actual_path}")
                                 return actual_path
 
             logger.debug(f"❌ No local cache found for {self.model_name}")
@@ -238,29 +227,21 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             # Look in the path and reasonable subdirectories
             max_depth = 3  # Prevent excessive recursion
 
-            def find_model_directory(
-                dir_path: Path, current_depth: int = 0
-            ) -> Optional[Path]:
+            def find_model_directory(dir_path: Path, current_depth: int = 0) -> Optional[Path]:
                 if current_depth > max_depth:
                     return None
 
                 try:
-                    files_in_dir = set(
-                        f.name for f in dir_path.iterdir() if f.is_file()
-                    )
+                    files_in_dir = set(f.name for f in dir_path.iterdir() if f.is_file())
 
                     # Check if core configuration files are present
                     core_files_present = all(f in files_in_dir for f in core_files)
 
                     # Check if at least one model file is present
-                    model_file_present = any(
-                        f in files_in_dir for f in model_files
-                    ) or any("pytorch_model" in f for f in files_in_dir)
+                    model_file_present = any(f in files_in_dir for f in model_files) or any("pytorch_model" in f for f in files_in_dir)
 
                     if core_files_present and model_file_present:
-                        logger.debug(
-                            f"✅ Complete model found at: {dir_path} (files: {sorted(files_in_dir)})"
-                        )
+                        logger.debug(f"✅ Complete model found at: {dir_path} (files: {sorted(files_in_dir)})")
                         # Store the exact path where the model files are located
                         self._cached_model_path = dir_path
                         return dir_path
@@ -288,9 +269,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
 
     async def _handle_fallback(self, error_reason: str):
         """Handle graceful fallback when model loading fails."""
-        logger.warning(
-            f"⚠️ {self.model_name} failed ({error_reason}), attempting fallback..."
-        )
+        logger.warning(f"⚠️ {self.model_name} failed ({error_reason}), attempting fallback...")
 
         # Try fallback to a smaller, more reliable model
         fallback_models = [
@@ -310,9 +289,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
 
                 await self._load_sentence_transformer()
 
-                logger.warning(
-                    f"✅ Using fallback model {fallback_model} instead of {original_model_name}"
-                )
+                logger.warning(f"✅ Using fallback model {fallback_model} instead of {original_model_name}")
                 return  # Success with fallback
 
             except Exception as e:
@@ -321,9 +298,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
 
         # If all fallbacks fail, restore original model name and re-raise
         logger.error(f"❌ All fallback attempts failed for {self.model_name}")
-        raise RuntimeError(
-            f"Failed to initialize any SentenceTransformer model (original: {error_reason})"
-        )
+        raise RuntimeError(f"Failed to initialize any SentenceTransformer model (original: {error_reason})")
 
     async def encode(self, texts: Union[str, List[str]]) -> np.ndarray:
         """Encode texts using sentence-transformers."""
@@ -337,9 +312,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             loop = asyncio.get_event_loop()
             embeddings = await loop.run_in_executor(
                 None,
-                lambda: self.model.encode(
-                    texts, convert_to_numpy=True, show_progress_bar=False
-                ),
+                lambda: self.model.encode(texts, convert_to_numpy=True, show_progress_bar=False),
             )
 
             # Apply normalization if enabled
@@ -391,9 +364,7 @@ class OpenAIEmbedding(EmbeddingInterface):
             self.embedding_dim = self._model_dimensions.get(self.model_name, 1536)
 
             self._initialized = True
-            logger.info(
-                f"✔ Initialized OpenAI {self.model_name} [dim={self.embedding_dim}]"
-            )
+            logger.info(f"✔ Initialized OpenAI {self.model_name} [dim={self.embedding_dim}]")
 
         except ImportError:
             logger.error("openai not installed. Install with: pip install openai")
@@ -410,18 +381,14 @@ class OpenAIEmbedding(EmbeddingInterface):
             texts = [texts]
 
         try:
-            response = await self.client.embeddings.create(
-                model=self.model_name, input=texts
-            )
+            response = await self.client.embeddings.create(model=self.model_name, input=texts)
 
             embeddings = np.array([item.embedding for item in response.data])
 
             # Apply normalization if enabled
             embeddings = self._normalize_embeddings(embeddings)
 
-            logger.debug(
-                f"[RAG] Encoded {len(texts)} texts via OpenAI [shape={embeddings.shape}]"
-            )
+            logger.debug(f"[RAG] Encoded {len(texts)} texts via OpenAI [shape={embeddings.shape}]")
             return embeddings
 
         except Exception as e:
@@ -434,9 +401,7 @@ class OpenAIEmbedding(EmbeddingInterface):
         return self.embedding_dim
 
 
-def create_embedding_model(
-    model_type: str = "sentence-transformers", **kwargs
-) -> Optional[EmbeddingInterface]:
+def create_embedding_model(model_type: str = "sentence-transformers", **kwargs) -> Optional[EmbeddingInterface]:
     """
     Factory function to create embedding models with graceful fallback.
 
@@ -459,9 +424,7 @@ def create_embedding_model(
     else:
         # Unknown model type → warn once and enter legacy mode
         if not _rag_misconfig_warned:
-            logger.warning(
-                f"[RAG] Unknown embedding model type: {model_type} → fallback to legacy mode"
-            )
+            logger.warning(f"[RAG] Unknown embedding model type: {model_type} → fallback to legacy mode")
             _rag_misconfig_warned = True
         _rag_legacy_mode = True
 

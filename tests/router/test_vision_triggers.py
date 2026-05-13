@@ -104,9 +104,7 @@ class TestVisionTriggers(unittest.TestCase):
         for content in no_trigger_cases:
             with self.subTest(content=content):
                 result = self._should_trigger(content)
-                self.assertFalse(
-                    result, f"'{content}' should NOT trigger T2I without media noun"
-                )
+                self.assertFalse(result, f"'{content}' should NOT trigger T2I without media noun")
 
         # Should trigger (has media noun)
         trigger_cases = [
@@ -133,9 +131,7 @@ class TestVisionTriggers(unittest.TestCase):
         for content in no_trigger_cases:
             with self.subTest(content=content):
                 result = self._should_trigger(content)
-                self.assertFalse(
-                    result, f"'{content}' should NOT trigger T2I without media noun"
-                )
+                self.assertFalse(result, f"'{content}' should NOT trigger T2I without media noun")
 
         # Should trigger (has media noun)
         trigger_cases = [
@@ -161,9 +157,7 @@ class TestVisionTriggers(unittest.TestCase):
         for content in no_trigger_cases:
             with self.subTest(content=content):
                 result = self._should_trigger(content)
-                self.assertFalse(
-                    result, f"'{content}' should NOT trigger T2I without media noun"
-                )
+                self.assertFalse(result, f"'{content}' should NOT trigger T2I without media noun")
 
         # Should trigger (has media noun)
         trigger_cases = [
@@ -189,9 +183,7 @@ class TestVisionTriggers(unittest.TestCase):
         for content in test_cases:
             with self.subTest(content=content):
                 result = self._should_trigger(content)
-                self.assertTrue(
-                    result, f"'{content}' should trigger T2I (case insensitive)"
-                )
+                self.assertTrue(result, f"'{content}' should trigger T2I (case insensitive)")
 
     def test_punctuation_tolerance(self):
         """Test that trigger detection handles punctuation correctly"""
@@ -205,9 +197,7 @@ class TestVisionTriggers(unittest.TestCase):
         for content in test_cases:
             with self.subTest(content=content):
                 result = self._should_trigger(content)
-                self.assertTrue(
-                    result, f"'{content}' should trigger T2I despite punctuation"
-                )
+                self.assertTrue(result, f"'{content}' should trigger T2I despite punctuation")
 
     def test_no_false_positives_common_phrases(self):
         """Test that common phrases don't accidentally trigger T2I"""

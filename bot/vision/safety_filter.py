@@ -65,26 +65,14 @@ class VisionSafetyFilter:
         self.policy = self._load_safety_policy()
 
         # Compile regex patterns for efficiency
-        self.blocked_patterns = [
-            re.compile(pattern, re.IGNORECASE)
-            for pattern in self.policy.get("blocked_patterns", [])
-        ]
-        self.warning_patterns = [
-            re.compile(pattern, re.IGNORECASE)
-            for pattern in self.policy.get("warning_patterns", [])
-        ]
+        self.blocked_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in self.policy.get("blocked_patterns", [])]
+        self.warning_patterns = [re.compile(pattern, re.IGNORECASE) for pattern in self.policy.get("warning_patterns", [])]
 
         # Keywords lists
-        self.blocked_keywords = {
-            kw.lower() for kw in self.policy.get("blocked_keywords", [])
-        }
-        self.warning_keywords = {
-            kw.lower() for kw in self.policy.get("warning_keywords", [])
-        }
+        self.blocked_keywords = {kw.lower() for kw in self.policy.get("blocked_keywords", [])}
+        self.warning_keywords = {kw.lower() for kw in self.policy.get("warning_keywords", [])}
 
-        self.logger.info(
-            f"Vision Safety Filter initialized - blocked_patterns: {len(self.blocked_patterns)}, warning_patterns: {len(self.warning_patterns)}, blocked_keywords: {len(self.blocked_keywords)}"
-        )
+        self.logger.info(f"Vision Safety Filter initialized - blocked_patterns: {len(self.blocked_patterns)}, warning_patterns: {len(self.warning_patterns)}, blocked_keywords: {len(self.blocked_keywords)}")
 
     async def validate_request(self, request: VisionRequest) -> SafetyResult:
         """
@@ -109,9 +97,7 @@ class VisionSafetyFilter:
 
             # 2. Validate negative prompt
             if request.negative_prompt:
-                neg_result = self._analyze_text_content(
-                    request.negative_prompt, "negative_prompt"
-                )
+                neg_result = self._analyze_text_content(request.negative_prompt, "negative_prompt")
                 detected_issues.extend(neg_result.detected_issues)
                 if neg_result.level.value > max_level.value:
                     max_level = neg_result.level
@@ -131,9 +117,7 @@ class VisionSafetyFilter:
             # 5. Generate final result
             approved = max_level != SafetyLevel.BLOCKED
             reason = self._generate_reason(detected_issues, max_level)
-            user_message = self._generate_user_message(
-                detected_issues, max_level, request
-            )
+            user_message = self._generate_user_message(detected_issues, max_level, request)
 
             result = SafetyResult(
                 approved=approved,
@@ -145,20 +129,14 @@ class VisionSafetyFilter:
 
             # Log result
             if not approved:
-                self.logger.warning(
-                    f"Content blocked by safety filter - user_id: {request.user_id}, task: {request.task.value}, level: {max_level.value}, issues: {len(detected_issues)}"
-                )
+                self.logger.warning(f"Content blocked by safety filter - user_id: {request.user_id}, task: {request.task.value}, level: {max_level.value}, issues: {len(detected_issues)}")
             elif max_level == SafetyLevel.WARNING:
-                self.logger.info(
-                    f"Content generated safety warning - user_id: {request.user_id}, task: {request.task.value}, issues: {len(detected_issues)}"
-                )
+                self.logger.info(f"Content generated safety warning - user_id: {request.user_id}, task: {request.task.value}, issues: {len(detected_issues)}")
 
             return result
 
         except Exception as e:
-            self.logger.error(
-                f"Safety validation error - error: {str(e)}, user_id: {request.user_id}"
-            )
+            self.logger.error(f"Safety validation error - error: {str(e)}, user_id: {request.user_id}")
             # Fail safe - block on error
             return SafetyResult(
                 approved=False,
@@ -305,9 +283,7 @@ class VisionSafetyFilter:
         server_nsfw_allowed = default_nsfw_allowed
         if guild_id:
             server_overrides = nsfw_policy.get("server_overrides", {})
-            server_nsfw_allowed = server_overrides.get(
-                str(guild_id), default_nsfw_allowed
-            )
+            server_nsfw_allowed = server_overrides.get(str(guild_id), default_nsfw_allowed)
 
         # Detect potential NSFW content
         nsfw_indicators = self._detect_nsfw_content(request)
@@ -326,14 +302,8 @@ class VisionSafetyFilter:
                 max_level = SafetyLevel.BLOCKED
 
             # Check restricted providers
-            if (
-                request.preferred_provider
-                and request.preferred_provider.value
-                in restrictions.get("blocked_providers", [])
-            ):
-                detected_issues.append(
-                    f"provider_restricted:{request.preferred_provider.value}"
-                )
+            if request.preferred_provider and request.preferred_provider.value in restrictions.get("blocked_providers", []):
+                detected_issues.append(f"provider_restricted:{request.preferred_provider.value}")
                 max_level = SafetyLevel.WARNING
 
         approved = max_level != SafetyLevel.BLOCKED
@@ -431,9 +401,7 @@ class VisionSafetyFilter:
         summary_parts = [f"{k}({v})" for k, v in issue_summary.items()]
         return f"{level.value}: {', '.join(summary_parts)}"
 
-    def _generate_user_message(
-        self, issues: List[str], level: SafetyLevel, request: VisionRequest
-    ) -> str:
+    def _generate_user_message(self, issues: List[str], level: SafetyLevel, request: VisionRequest) -> str:
         """Generate user-friendly message for policy violations [CMV]"""
         if level == SafetyLevel.SAFE:
             return ""
@@ -458,9 +426,7 @@ class VisionSafetyFilter:
             message_parts.append("Your prompt contains prohibited keywords. ")
 
         if has_deepfake:
-            message_parts.append(
-                "Creating realistic depictions of people may violate our policies. "
-            )
+            message_parts.append("Creating realistic depictions of people may violate our policies. ")
 
         if has_duration:
             message_parts.append("Video duration exceeds server limits. ")
@@ -472,9 +438,7 @@ class VisionSafetyFilter:
             message_parts.append("\n• Review our usage guidelines")
             message_parts.append("\n• Try a different approach to your creative vision")
         else:
-            message_parts.append(
-                "Please review your request and consider modifying it."
-            )
+            message_parts.append("Please review your request and consider modifying it.")
 
         return "".join(message_parts)
 

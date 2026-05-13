@@ -18,12 +18,8 @@ from bot.router_components.input_harvest import (
 
 def test_is_text_attachment_by_filename_or_content_type() -> None:
     assert is_text_attachment(SimpleNamespace(filename="note.txt", content_type=None))
-    assert is_text_attachment(
-        SimpleNamespace(filename="note.bin", content_type="text/plain")
-    )
-    assert not is_text_attachment(
-        SimpleNamespace(filename="image.png", content_type="image/png")
-    )
+    assert is_text_attachment(SimpleNamespace(filename="note.bin", content_type="text/plain"))
+    assert not is_text_attachment(SimpleNamespace(filename="image.png", content_type="image/png"))
 
 
 def test_all_attachments_are_text() -> None:
@@ -82,11 +78,7 @@ def test_existing_url_payloads_and_append_unique_url_items() -> None:
         item_ctor=ctor,
     )
     assert added == 1
-    assert any(
-        getattr(it, "source_type", None) == "url"
-        and getattr(it, "payload", None) == "https://b.com/2"
-        for it in items
-    )
+    assert any(getattr(it, "source_type", None) == "url" and getattr(it, "payload", None) == "https://b.com/2" for it in items)
 
     # strip_key behavior mirrors call sites that dedupe on stripped URL.
     added_strip = append_unique_url_items(

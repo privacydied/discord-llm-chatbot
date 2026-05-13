@@ -55,9 +55,7 @@ def __getattr__(name: str):
         from pathlib import Path
 
         events_py = Path(__file__).resolve().parent.parent / "events.py"
-        spec = importlib.util.spec_from_file_location(
-            "bot.events_legacy", str(events_py)
-        )
+        spec = importlib.util.spec_from_file_location("bot.events_legacy", str(events_py))
         if spec and spec.loader:
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)

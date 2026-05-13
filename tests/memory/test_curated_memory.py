@@ -56,9 +56,7 @@ class FakeSemanticStore:
         results = []
         for payload in self.records.values():
             metadata = payload["metadata"]
-            if where and any(
-                metadata.get(key) != value for key, value in where.items()
-            ):
+            if where and any(metadata.get(key) != value for key, value in where.items()):
                 continue
             if query.lower() not in (payload["document"] or "").lower():
                 continue
@@ -143,9 +141,7 @@ async def test_schema_bootstrap_is_idempotent(tmp_path):
     conn = sqlite3.connect(tmp_path / "memory.db")
     try:
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        table_exists = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='curated_memories'"
-        ).fetchone()
+        table_exists = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='curated_memories'").fetchone()
     finally:
         conn.close()
 
@@ -200,9 +196,7 @@ async def test_delete_and_wipe_remove_from_retrieval(tmp_path):
         chroma_id=None,
         metadata_json="{}",
     )
-    wiped = MemoryRecord(
-        **{**active.to_dict(), "memory_id": "mem-wipe", "summary": "likes tea"}
-    )
+    wiped = MemoryRecord(**{**active.to_dict(), "memory_id": "mem-wipe", "summary": "likes tea"})
     await store.upsert_memory(active)
     await store.upsert_memory(wiped)
 
@@ -530,17 +524,11 @@ async def test_queue_full_drops_inferred_memory_without_blocking():
     async def persist_callback(batch):
         await asyncio.sleep(0)
 
-    queue = CuratedMemoryIngestionQueue(
-        persist_callback, max_size=1, workers=1, batch_size=1
-    )
-    candidate = CuratedMemoryCurator().build_explicit_candidate(
-        user_id="user-1", text="I prefer dark mode"
-    )
+    queue = CuratedMemoryIngestionQueue(persist_callback, max_size=1, workers=1, batch_size=1)
+    candidate = CuratedMemoryCurator().build_explicit_candidate(user_id="user-1", text="I prefer dark mode")
     assert candidate is not None
     assert await queue.enqueue(candidate) is True
-    second = CuratedMemoryCurator().build_explicit_candidate(
-        user_id="user-1", text="I prefer light mode"
-    )
+    second = CuratedMemoryCurator().build_explicit_candidate(user_id="user-1", text="I prefer light mode")
     assert second is not None
     start = asyncio.get_event_loop().time()
     assert await queue.enqueue(second) is False
@@ -550,18 +538,8 @@ async def test_queue_full_drops_inferred_memory_without_blocking():
 @pytest.mark.asyncio
 async def test_explicit_memory_command_rejects_internal_traces_and_secrets():
     curator = CuratedMemoryCurator()
-    assert (
-        curator.build_explicit_candidate(
-            user_id="u", text="my API key is sk-123...7890"
-        )
-        is None
-    )
-    assert (
-        curator.build_explicit_candidate(
-            user_id="u", text="tool trace: hidden reasoning"
-        )
-        is None
-    )
+    assert curator.build_explicit_candidate(user_id="u", text="my API key is sk-123...7890") is None
+    assert curator.build_explicit_candidate(user_id="u", text="tool trace: hidden reasoning") is None
 
 
 # ==================
@@ -621,9 +599,7 @@ async def test_inferred_rejects_temporary_context_for_now():
         user_id="u",
         text="For now, let's just keep it as is",
     )
-    assert c is None, (
-        "Temporary phrasing without durable instruction should be rejected"
-    )
+    assert c is None, "Temporary phrasing without durable instruction should be rejected"
 
 
 # ==================
@@ -865,9 +841,7 @@ async def test_dedupe_inferred_exact_normalized_match(tmp_path):
     # Check: only one memory with this summary should exist (merged)
     mems = await store.list_memories(user_id="u", guild_id="g", limit=10)
     short_answer_mems = [m for m in mems if "short answers" in (m.summary or "")]
-    assert len(short_answer_mems) == 1, (
-        "Duplicate inferred memory should be merged, not inserted"
-    )
+    assert len(short_answer_mems) == 1, "Duplicate inferred memory should be merged, not inserted"
 
 
 @pytest.mark.asyncio
@@ -935,9 +909,7 @@ async def test_dedupe_semantic_high_similarity_merges(tmp_path):
     # Expect merged: only one memory with this theme
     mems = await store.list_memories(user_id="u", guild_id="g", limit=10)
     concise_mems = [m for m in mems if "replies" in (m.summary or "").lower()]
-    assert len(concise_mems) == 1, (
-        "Semantically similar inferred memory should be merged"
-    )
+    assert len(concise_mems) == 1, "Semantically similar inferred memory should be merged"
 
 
 @pytest.mark.asyncio
@@ -984,9 +956,7 @@ async def test_no_raw_transcript_is_injected_into_prompt(tmp_path):
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
     now = datetime.now(timezone.utc).isoformat()
-    raw_transcript = (
-        "USER RAW TRANSCRIPT: I said a lot of details that should not be injected."
-    )
+    raw_transcript = "USER RAW TRANSCRIPT: I said a lot of details that should not be injected."
     record = MemoryRecord(
         memory_id="mem-raw",
         user_id="user-1",
@@ -1081,9 +1051,7 @@ async def test_bot_message_handling_does_not_await_slow_chroma_writes(monkeypatc
         coro.close()
         return MagicMock()
 
-    monkeypatch.setattr(
-        "bot.core.bot.enqueue_inferred_memory", slow_enqueue_inferred_memory
-    )
+    monkeypatch.setattr("bot.core.bot.enqueue_inferred_memory", slow_enqueue_inferred_memory)
     monkeypatch.setattr("bot.core.bot.asyncio.create_task", fake_create_task)
 
     message = SimpleNamespace(
@@ -1107,6 +1075,4 @@ def test_recency_and_combined_scoring_decay_with_age():
     fresh = now.isoformat()
     old = (now - timedelta(days=180)).isoformat()
     assert recency_score(fresh, now=now) > recency_score(old, now=now)
-    assert combined_score(0.9, 0.8, fresh, now=now) > combined_score(
-        0.9, 0.8, old, now=now
-    )
+    assert combined_score(0.9, 0.8, fresh, now=now) > combined_score(0.9, 0.8, old, now=now)

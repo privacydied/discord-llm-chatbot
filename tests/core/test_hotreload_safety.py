@@ -31,6 +31,7 @@ def bot_instance(_mock_config):
 # Retained cleanup-task reference and exception logging              #
 # ------------------------------------------------------------------ #
 
+
 class TestTrackBackgroundTask:
     """Verify _track_background_task retains refs and logs exceptions."""
 
@@ -78,9 +79,7 @@ class TestTrackBackgroundTask:
             pass
 
         await asyncio.sleep(0.1)  # yield for done-callback dispatch
-        assert any(
-            "simulated crash" in w for w in warned
-        ), f"Expected warning with 'simulated crash', got: {warned}"
+        assert any("simulated crash" in w for w in warned), f"Expected warning with 'simulated crash', got: {warned}"
 
     @pytest.mark.asyncio
     async def test_task_cancelled_no_log(self, bot_instance):
@@ -107,14 +106,13 @@ class TestTrackBackgroundTask:
             pass
 
         await asyncio.sleep(0.1)
-        assert not any("CancelledError" in w for w in warned), (
-            f"Unexpected warning for cancellation: {warned}"
-        )
+        assert not any("CancelledError" in w for w in warned), f"Unexpected warning for cancellation: {warned}"
 
 
 # ------------------------------------------------------------------ #
 # Cleanup timeout behaviour                                          #
 # ------------------------------------------------------------------ #
+
 
 class TestCleanupTimeout:
     """Verify HTTP client cleanup during reload is bounded by timeout."""
@@ -143,6 +141,7 @@ class TestCleanupTimeout:
 # ------------------------------------------------------------------ #
 # Thread-safe config reload scheduling                               #
 # ------------------------------------------------------------------ #
+
 
 class TestThreadSafeReload:
     """Verify that config reload from non-loop thread is scheduled safely."""
@@ -190,9 +189,7 @@ class TestThreadSafeReload:
             # would call run_coroutine_threadsafe otherwise
 
         shim({}, {})
-        bot_instance.logger.warning.assert_called_once_with(
-            "Config reload skipped: event loop not running"
-        )
+        bot_instance.logger.warning.assert_called_once_with("Config reload skipped: event loop not running")
 
     def test_no_direct_cross_thread_mutation(self):
         """Regression: callback must not mutate bot.config synchronously from watcher thread."""
@@ -207,6 +204,4 @@ class TestThreadSafeReload:
         # but we can assert the source text pattern exists.
         source = inspect.getsource(LLMBot.setup_hook)
         # The shim must schedule, not mutate
-        assert "run_coroutine_threadsafe" in source, (
-            "Hot-reload shim should use run_coroutine_threadsafe for thread safety"
-        )
+        assert "run_coroutine_threadsafe" in source, "Hot-reload shim should use run_coroutine_threadsafe for thread safety"

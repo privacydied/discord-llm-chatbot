@@ -29,9 +29,7 @@ class _FakeBot:
 async def _always_fails_with_retry_after():
     # Raise APIError with a large Retry-After hint
     err = APIError("synthetic error for retry test")
-    setattr(
-        err, "retry_after_seconds", 5.0
-    )  # 5s hint (will be bounded by config.max_delay)
+    setattr(err, "retry_after_seconds", 5.0)  # 5s hint (will be bounded by config.max_delay)
     raise err
 
 
@@ -52,9 +50,7 @@ async def test_retry_respects_retry_after_bound():
         # Expected to fail after retries exhausted
         elapsed = time.perf_counter() - start
         # We expect at least ~max_delay because Retry-After=5 was bounded to 0.2 and max(delay, 0.2) applies
-        assert elapsed >= 0.18, (
-            f"elapsed {elapsed:.3f}s did not respect bounded Retry-After"
-        )
+        assert elapsed >= 0.18, f"elapsed {elapsed:.3f}s did not respect bounded Retry-After"
     else:
         raise AssertionError("retry_async unexpectedly succeeded")
 
@@ -87,24 +83,12 @@ def test_metrics_and_router_increment():
     metrics = PrometheusMetrics(port=0, enable_http_server=False)
 
     # Define counters exactly as bot.core.bot.setup_hook does
-    metrics.define_counter(
-        "x.photo_to_vl.enabled", "X photos routed to VL (feature enabled)"
-    )
-    metrics.define_counter(
-        "x.photo_to_vl.no_urls", "X photo routing: no photo URLs available"
-    )
-    metrics.define_counter(
-        "x.photo_to_vl.skipped", "X photo routing skipped", labels=["enabled"]
-    )
-    metrics.define_counter(
-        "x.photo_to_vl.attempt", "X photo routing attempts", labels=["idx"]
-    )
-    metrics.define_counter(
-        "x.photo_to_vl.success", "X photo routing success", labels=["idx"]
-    )
-    metrics.define_counter(
-        "x.photo_to_vl.failure", "X photo routing failure", labels=["idx"]
-    )
+    metrics.define_counter("x.photo_to_vl.enabled", "X photos routed to VL (feature enabled)")
+    metrics.define_counter("x.photo_to_vl.no_urls", "X photo routing: no photo URLs available")
+    metrics.define_counter("x.photo_to_vl.skipped", "X photo routing skipped", labels=["enabled"])
+    metrics.define_counter("x.photo_to_vl.attempt", "X photo routing attempts", labels=["idx"])
+    metrics.define_counter("x.photo_to_vl.success", "X photo routing success", labels=["idx"])
+    metrics.define_counter("x.photo_to_vl.failure", "X photo routing failure", labels=["idx"])
 
     # Basic presence checks (internal map)
     for name in [

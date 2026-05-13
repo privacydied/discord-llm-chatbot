@@ -42,18 +42,10 @@ class MultimodalSTTFallbackProvider:
     def __init__(self) -> None:
         self.config = load_config()
         self._session: Optional[aiohttp.ClientSession] = None
-        self._timeout = float(
-            self.config.get("STT_MULTIMODAL_FALLBACK_TIMEOUT_S", 30.0)
-        )
-        self._min_confidence = float(
-            self.config.get("STT_MULTIMODAL_FALLBACK_MIN_CONFIDENCE", 0.5)
-        )
-        self._max_retries = int(
-            self.config.get("STT_MULTIMODAL_FALLBACK_MAX_RETRIES", 1)
-        )
-        self._max_audio_duration_s = float(
-            self.config.get("STT_MAX_AUDIO_DURATION_S", 300.0)
-        )
+        self._timeout = float(self.config.get("STT_MULTIMODAL_FALLBACK_TIMEOUT_S", 30.0))
+        self._min_confidence = float(self.config.get("STT_MULTIMODAL_FALLBACK_MIN_CONFIDENCE", 0.5))
+        self._max_retries = int(self.config.get("STT_MULTIMODAL_FALLBACK_MAX_RETRIES", 1))
+        self._max_audio_duration_s = float(self.config.get("STT_MAX_AUDIO_DURATION_S", 300.0))
         self._models = self._load_fallback_models()
 
     def _load_fallback_models(self) -> List[Dict[str, Any]]:
@@ -85,9 +77,7 @@ class MultimodalSTTFallbackProvider:
                 }
             )
 
-        logger.info(
-            f"Loaded {len(models)} multimodal fallback models: {[m['name'] for m in models]}"
-        )
+        logger.info(f"Loaded {len(models)} multimodal fallback models: {[m['name'] for m in models]}")
         return models
 
     async def transcribe_with_fallback(
@@ -124,9 +114,7 @@ class MultimodalSTTFallbackProvider:
 
             for model_info in self._models:
                 try:
-                    logger.info(
-                        f"[MultimodalSTT] Attempting fallback with model: {model_info['name']}"
-                    )
+                    logger.info(f"[MultimodalSTT] Attempting fallback with model: {model_info['name']}")
 
                     result = await self._try_single_model(
                         audio_path=audio_path,
@@ -143,15 +131,11 @@ class MultimodalSTTFallbackProvider:
 
                 except Exception as e:
                     last_error = e
-                    logger.warning(
-                        f"[MultimodalSTT] Model {model_info['name']} failed: {e}"
-                    )
+                    logger.warning(f"[MultimodalSTT] Model {model_info['name']} failed: {e}")
                     continue
 
             # All models failed
-            raise InferenceError(
-                f"All multimodal fallback models failed. Last error: {last_error}"
-            )
+            raise InferenceError(f"All multimodal fallback models failed. Last error: {last_error}")
 
         except Exception as e:
             # Return error result
@@ -179,30 +163,22 @@ class MultimodalSTTFallbackProvider:
 
                 # Select the appropriate transcription strategy based on model
                 if "whisper" in model_info["name"].lower():
-                    result = await self._transcribe_with_whisper_model(
-                        audio_path, model_info
-                    )
+                    result = await self._transcribe_with_whisper_model(audio_path, model_info)
                 else:
-                    result = await self._transcribe_with_multimodal_model(
-                        audio_path, pre_result, model_info, failure_reason
-                    )
+                    result = await self._transcribe_with_multimodal_model(audio_path, pre_result, model_info, failure_reason)
 
                 if result and result.confidence >= self._min_confidence:
                     return result
 
             except Exception as e:
-                logger.warning(
-                    f"[MultimodalSTT] Model attempt {attempt + 1} failed: {e}"
-                )
+                logger.warning(f"[MultimodalSTT] Model attempt {attempt + 1} failed: {e}")
                 if attempt == model_info.get("max_retries", self._max_retries):
                     raise
                 continue
 
         return None
 
-    async def _transcribe_with_whisper_model(
-        self, audio_path: Path, model_info: Dict[str, Any]
-    ) -> FallbackTranscriptResult:
+    async def _transcribe_with_whisper_model(self, audio_path: Path, model_info: Dict[str, Any]) -> FallbackTranscriptResult:
         """Transcribe using a Whisper model via API."""
 
         # For Whisper models, we can use the audio file directly
@@ -226,9 +202,7 @@ class MultimodalSTTFallbackProvider:
                 metadata={"response_length": len(text) if text else 0},
             )
         else:
-            raise InferenceError(
-                f"Unsupported provider for Whisper model: {model_info['provider']}"
-            )
+            raise InferenceError(f"Unsupported provider for Whisper model: {model_info['provider']}")
 
     async def _transcribe_with_multimodal_model(
         self,
@@ -256,9 +230,7 @@ class MultimodalSTTFallbackProvider:
                             {"type": "text", "text": prompt},
                             {
                                 "type": "audio_url",
-                                "audio_url": {
-                                    "url": f"data:audio/wav;base64,{audio_base64}"
-                                },
+                                "audio_url": {"url": f"data:audio/wav;base64,{audio_base64}"},
                             },
                         ],
                     }
@@ -280,9 +252,7 @@ class MultimodalSTTFallbackProvider:
                 metadata={"response_length": len(text) if text else 0},
             )
         else:
-            raise InferenceError(
-                f"Unsupported provider for multimodal model: {model_info['provider']}"
-            )
+            raise InferenceError(f"Unsupported provider for multimodal model: {model_info['provider']}")
 
     async def _call_openrouter_api(
         self,
@@ -305,17 +275,11 @@ class MultimodalSTTFallbackProvider:
             "X-Title": "Discord LLM Chatbot STT Fallback",
         }
 
-        url = (
-            "https://openrouter.ai/api/v1/chat/completions"
-            if endpoint_type == "chat"
-            else "https://openrouter.ai/api/v1/audio/transcriptions"
-        )
+        url = "https://openrouter.ai/api/v1/chat/completions" if endpoint_type == "chat" else "https://openrouter.ai/api/v1/audio/transcriptions"
 
         try:
             if endpoint_type == "chat":
-                async with self._session.post(
-                    url, json=payload, headers=headers
-                ) as response:
+                async with self._session.post(url, json=payload, headers=headers) as response:
                     response.raise_for_status()
                     return await response.json()
             else:
@@ -327,9 +291,7 @@ class MultimodalSTTFallbackProvider:
                     else:
                         form_data.add_field(key, str(value))
 
-                async with self._session.post(
-                    url, data=form_data, headers=headers
-                ) as response:
+                async with self._session.post(url, data=form_data, headers=headers) as response:
                     response.raise_for_status()
                     return await response.json()
 
@@ -338,16 +300,10 @@ class MultimodalSTTFallbackProvider:
         except asyncio.TimeoutError:
             raise InferenceError(f"OpenRouter API timeout after {self._timeout}s")
 
-    def _build_multimodal_prompt(
-        self, failure_reason: Optional[FailureClassification]
-    ) -> str:
+    def _build_multimodal_prompt(self, failure_reason: Optional[FailureClassification]) -> str:
         """Build a prompt for multimodal models that includes context about the failure."""
 
-        base_prompt = (
-            "You are a transcription assistant. The user has sent an audio message. "
-            "Please transcribe the spoken content as accurately as possible. "
-            "If the audio is unclear, provide your best interpretation."
-        )
+        base_prompt = "You are a transcription assistant. The user has sent an audio message. Please transcribe the spoken content as accurately as possible. If the audio is unclear, provide your best interpretation."
 
         if failure_reason:
             context = f"Note: The primary transcription failed due to {failure_reason.category}. "
@@ -374,9 +330,7 @@ class MultimodalSTTFallbackProvider:
 
         return ""
 
-    def _calculate_confidence(
-        self, text: str, failure_reason: Optional[FailureClassification]
-    ) -> float:
+    def _calculate_confidence(self, text: str, failure_reason: Optional[FailureClassification]) -> float:
         """Calculate confidence score for the fallback result."""
 
         base_confidence = 0.6  # Default confidence for fallback
@@ -440,9 +394,7 @@ class MultimodalSTTFallbackProvider:
                 duration_s,
                 self._max_audio_duration_s,
             )
-            raise InferenceError(
-                f"Audio duration {duration_s:.1f}s exceeds cap of {self._max_audio_duration_s}s"
-            )
+            raise InferenceError(f"Audio duration {duration_s:.1f}s exceeds cap of {self._max_audio_duration_s}s")
 
     async def close(self) -> None:
         """Clean up resources."""

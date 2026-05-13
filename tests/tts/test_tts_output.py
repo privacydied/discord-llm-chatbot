@@ -23,9 +23,7 @@ except ImportError:
 
 def test_ogg_opus_output():
     """Test that TTS outputs OGG/Opus format with correct parameters."""
-    pytest.importorskip(
-        "soundfile", reason="soundfile required for audio format validation"
-    )
+    pytest.importorskip("soundfile", reason="soundfile required for audio format validation")
 
     # Mock the TTS manager to test output format
     from bot.tts.interface import TTSManager
@@ -43,9 +41,7 @@ def test_ogg_opus_output():
 
         # Mock generate_tts to return OGG format
         async def mock_generate():
-            path, mime = await manager.generate_tts(
-                text, out_path=out_path, output_format="ogg"
-            )
+            path, mime = await manager.generate_tts(text, out_path=out_path, output_format="ogg")
             return path, mime
 
         # Run the async function
@@ -121,9 +117,7 @@ def test_no_clipping_and_dc():
             asyncio.set_event_loop(loop)
 
         async def mock_generate():
-            return await manager.generate_tts(
-                text, out_path=wav_path, output_format="wav"
-            )
+            return await manager.generate_tts(text, out_path=wav_path, output_format="wav")
 
         path, mime = loop.run_until_complete(mock_generate())
 

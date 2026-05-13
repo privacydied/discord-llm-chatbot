@@ -17,9 +17,7 @@ class TextChunker:
     def __init__(self, config: HybridSearchConfig):
         self.config = config
 
-    def chunk_text(
-        self, text: str, source_metadata: Optional[Dict[str, Any]] = None
-    ) -> ChunkingResult:
+    def chunk_text(self, text: str, source_metadata: Optional[Dict[str, Any]] = None) -> ChunkingResult:
         """
         Chunk text into smaller pieces based on configuration.
 
@@ -37,9 +35,7 @@ class TextChunker:
         # Document size cap [Phase 6-9]
         max_doc_bytes = getattr(self.config, "max_doc_bytes", 1048576)
         if len(text.encode("utf-8", errors="replace")) > max_doc_bytes:
-            logger.warning(
-                f"[RAG] Truncated document from {len(text)} to {max_doc_bytes} bytes"
-            )
+            logger.warning(f"[RAG] Truncated document from {len(text)} to {max_doc_bytes} bytes")
             text = text[:max_doc_bytes]
 
         # Store original text length before cleaning [CSD]
@@ -80,18 +76,12 @@ class TextChunker:
         original_text_length = len(original_text.strip())
         effective_min_size = min(
             self.config.min_chunk_size,
-            max(
-                50, original_text_length // 2
-            ),  # Allow chunks as small as half the original text, min 50 chars
+            max(50, original_text_length // 2),  # Allow chunks as small as half the original text, min 50 chars
         )
 
-        final_chunks = [
-            chunk for chunk in final_chunks if len(chunk.strip()) >= effective_min_size
-        ]
+        final_chunks = [chunk for chunk in final_chunks if len(chunk.strip()) >= effective_min_size]
 
-        logger.debug(
-            f"[RAG] Chunked text: {len(original_text)} chars → {len(final_chunks)} chunks"
-        )
+        logger.debug(f"[RAG] Chunked text: {len(original_text)} chars → {len(final_chunks)} chunks")
 
         return ChunkingResult.create(original_text, final_chunks, source_metadata)
 
@@ -266,10 +256,7 @@ class MarkdownChunker(TextChunker):
                 if i + 1 < len(sections):
                     content = sections[i + 1].strip()
                     if content:
-                        if (
-                            len(current_chunk) + len(content) + 2
-                            <= self.config.chunk_size
-                        ):
+                        if len(current_chunk) + len(content) + 2 <= self.config.chunk_size:
                             current_chunk += "\n\n" + content
                         else:
                             # Content is too large, chunk it separately
@@ -311,9 +298,7 @@ class MarkdownChunker(TextChunker):
 class HTMLChunker(TextChunker):
     """Specialized chunker for HTML documents."""
 
-    def chunk_text(
-        self, text: str, source_metadata: Optional[Dict[str, Any]] = None
-    ) -> ChunkingResult:
+    def chunk_text(self, text: str, source_metadata: Optional[Dict[str, Any]] = None) -> ChunkingResult:
         """Chunk HTML text with awareness of structure."""
         # Remove excessive whitespace and normalize
         text = re.sub(r"\n\s*\n\s*\n", "\n\n", text)
@@ -387,9 +372,7 @@ class HTMLChunker(TextChunker):
 class PDFChunker(TextChunker):
     """Specialized chunker for PDF documents."""
 
-    def chunk_text(
-        self, text: str, source_metadata: Optional[Dict[str, Any]] = None
-    ) -> ChunkingResult:
+    def chunk_text(self, text: str, source_metadata: Optional[Dict[str, Any]] = None) -> ChunkingResult:
         """Chunk PDF text with page awareness."""
         # PDFs often have page markers like [Page N]
         page_pattern = r"\[Page \d+\]"
@@ -467,9 +450,7 @@ class PDFChunker(TextChunker):
 class StructuredDocumentChunker(TextChunker):
     """Chunker for structured documents like EPUB and DOCX."""
 
-    def chunk_text(
-        self, text: str, source_metadata: Optional[Dict[str, Any]] = None
-    ) -> ChunkingResult:
+    def chunk_text(self, text: str, source_metadata: Optional[Dict[str, Any]] = None) -> ChunkingResult:
         """Chunk structured document text with chapter/section awareness."""
         # Look for chapter markers
         chapter_pattern = r"\[Chapter \d+\]"

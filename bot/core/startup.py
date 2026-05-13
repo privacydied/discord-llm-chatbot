@@ -53,19 +53,12 @@ def _validate_remote_playwright_url(raw_url: str, logger) -> None:
         client_ver = "(unknown)"
     expected_server_ver = "1.59"  # must track requirements.txt
     if not client_ver.startswith(expected_server_ver.split(".")[0] + "."):
-        logger.warning(
-            f"Playwright version mismatch: client={client_ver}, "
-            f"expected~=server {expected_server_ver}. "
-            f"Run: pip install playwright=={expected_server_ver}"
-        )
+        logger.warning(f"Playwright version mismatch: client={client_ver}, expected~=server {expected_server_ver}. Run: pip install playwright=={expected_server_ver}")
 
     try:
         sock = socket.create_connection((host, port), timeout=5)
         sock.close()
-        logger.info(
-            f"Playwright remote server reachable at {host}:{port} "
-            f"(client v{client_ver}, expected server v{expected_server_ver})"
-        )
+        logger.info(f"Playwright remote server reachable at {host}:{port} (client v{client_ver}, expected server v{expected_server_ver})")
     except (ConnectionRefusedError, socket.timeout, OSError) as exc:
         logger.warning(
             f"Playwright remote server at {host}:{port} is unreachable: {exc}. "
@@ -83,9 +76,7 @@ def check_playwright_browsers(logger) -> None:
     """
     pw_server = os.getenv("PW_SERVER_URL", "").strip()
     if pw_server:
-        logger.info(
-            f"Playwright remote server configured ({pw_server}); validating reachability"
-        )
+        logger.info(f"Playwright remote server configured ({pw_server}); validating reachability")
         _validate_remote_playwright_url(pw_server, logger)
         return
 
@@ -95,9 +86,7 @@ def check_playwright_browsers(logger) -> None:
         logger.info("✅ Playwright Browser (Chromium) is installed.")
         return
 
-    logger.warning(
-        "❌ Playwright Browser (Chromium) not found. Attempting auto-installation..."
-    )
+    logger.warning("❌ Playwright Browser (Chromium) not found. Attempting auto-installation...")
 
     try:
         result = subprocess.run(
@@ -111,16 +100,12 @@ def check_playwright_browsers(logger) -> None:
         if _get_playwright_chromium_path():
             logger.info("✅ Successfully installed Playwright Browser (Chromium).")
         else:
-            logger.error(
-                "📛 Failed to install Playwright Browser automatically. Please run `uv run playwright install chromium` manually."
-            )
+            logger.error("📛 Failed to install Playwright Browser automatically. Please run `uv run playwright install chromium` manually.")
 
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         logger.error(f"📛 Failed to auto-install Playwright browser: {e.stderr or e}")
     except FileNotFoundError:
-        logger.error(
-            "📛 `uv` or `playwright` command not found. Cannot auto-install browsers."
-        )
+        logger.error("📛 `uv` or `playwright` command not found. Cannot auto-install browsers.")
 
 
 def run_pre_flight_checks(config: dict) -> None:
@@ -154,9 +139,7 @@ def run_pre_flight_checks(config: dict) -> None:
     if all_intents_ok:
         logger.info("[WIND][INIT] Intents verified")
     else:
-        logger.critical(
-            "One or more required intents are missing. Bot may not function correctly."
-        )
+        logger.critical("One or more required intents are missing. Bot may not function correctly.")
         # Depending on strictness, you might raise an error here.
 
     # 3. Voice Gateway Version
@@ -185,9 +168,7 @@ def create_bot_intents() -> discord.Intents:
 def get_prefix(bot, message: discord.Message) -> list[str]:
     """Dynamically get the command prefix for the bot."""
     # Base prefixes from env (comma-separated), stripped and non-empty
-    base_prefixes = [
-        p.strip() for p in os.getenv("BOT_PREFIX", "!").split(",") if p.strip()
-    ]
+    base_prefixes = [p.strip() for p in os.getenv("BOT_PREFIX", "!").split(",") if p.strip()]
 
     # Standard behavior: allow mention OR base prefixes
     dynamic = commands.when_mentioned_or(*base_prefixes)

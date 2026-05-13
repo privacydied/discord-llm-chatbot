@@ -7,9 +7,7 @@ import sys
 from pathlib import Path
 
 # Skip all tests in this module — they require system-level tokenizer binaries
-pytestmark = pytest.mark.skip(
-    reason="Requires system-level tokenizer binaries (espeak-ng, phonemizer)"
-)
+pytestmark = pytest.mark.skip(reason="Requires system-level tokenizer binaries (espeak-ng, phonemizer)")
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -39,9 +37,7 @@ class TestTokenizerSelection(unittest.TestCase):
     def test_detect_available_tokenizers(self, mock_import, mock_run, mock_which):
         """Test detection of available tokenizers."""
         # Mock shutil.which to return paths for espeak
-        mock_which.side_effect = lambda cmd: (
-            "/usr/bin/espeak" if cmd == "espeak" else None
-        )
+        mock_which.side_effect = lambda cmd: "/usr/bin/espeak" if cmd == "espeak" else None
 
         # Mock subprocess.run to return success for espeak
         mock_process = MagicMock()

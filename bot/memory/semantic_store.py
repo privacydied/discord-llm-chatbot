@@ -63,6 +63,7 @@ class CuratedMemorySemanticStore:
 
         # Cap text length before embedding to reduce CPU/memory [Phase 6-9]
         from ..config import load_config as _upsert_load_config
+
         _cfg = _upsert_load_config()
         max_chars = int(_cfg.get("MEMORY_MAX_TEXT_CHARS", 500))
         document = document[:max_chars]
@@ -103,6 +104,7 @@ class CuratedMemorySemanticStore:
 
         # Low-resource top_k cap [Phase 6-9]
         from ..config import load_config as _query_load_config
+
         _qc = _query_load_config()
         chroma_max = int(_qc.get("CHROMADB_MAX_RESULTS", 5))
         semantic_top_k_cfg = int(_qc.get("MEMORY_SEMANTIC_TOP_K", 5))
@@ -136,9 +138,7 @@ class CuratedMemorySemanticStore:
         distances = result.get("distances", [[]])[0] or []
 
         items: List[Dict[str, Any]] = []
-        for memory_id, document_text, metadata, distance in zip(
-            ids, documents, metadatas, distances
-        ):
+        for memory_id, document_text, metadata, distance in zip(ids, documents, metadatas, distances):
             metadata = metadata or {}
             similarity = 1.0 / (1.0 + float(distance))
             items.append(

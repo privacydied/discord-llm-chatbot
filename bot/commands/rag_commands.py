@@ -25,17 +25,13 @@ def is_admin_user():
     from bot.core.permissions import is_admin_user as _check
 
     async def predicate(ctx):
-        logger.info(
-            f"[RAG Admin Check] User {ctx.author.id} ({ctx.author.name}) attempting RAG command"
-        )
+        logger.info(f"[RAG Admin Check] User {ctx.author.id} ({ctx.author.name}) attempting RAG command")
 
         allowed = await _check(ctx.author, ctx.bot)
 
         # DM context: only owners/configured admins
         if isinstance(ctx.channel, discord.DMChannel) and not allowed:
-            logger.warning(
-                f"[RAG Admin Check] User {ctx.author.id} attempted RAG command in DM"
-            )
+            logger.warning(f"[RAG Admin Check] User {ctx.author.id} attempted RAG command in DM")
             return False
 
         return allowed
@@ -62,9 +58,7 @@ def safe_embed_value(text: str, limit: int = DISCORD_EMBED_FIELD_VALUE_LIMIT) ->
     return truncated + "..."
 
 
-def chunk_text(
-    text: str, chunk_size: int = DISCORD_EMBED_FIELD_VALUE_LIMIT
-) -> List[str]:
+def chunk_text(text: str, chunk_size: int = DISCORD_EMBED_FIELD_VALUE_LIMIT) -> List[str]:
     """Split text into Discord-safe chunks."""
     if not text:
         return []
@@ -112,11 +106,7 @@ class RAGCommands(commands.Cog):
         # Initialize hybrid search on startup
         self._init_task = asyncio.create_task(self._init_hybrid_search(), name="rag-init-hybrid-search")
         if self._init_task is not None:
-            self._init_task.add_done_callback(
-                lambda t: logger.error(f"hybrid search init failed: {t.exception()}", exc_info=t.exception())
-                if not t.cancelled() and t.exception()
-                else None
-            )
+            self._init_task.add_done_callback(lambda t: logger.error(f"hybrid search init failed: {t.exception()}", exc_info=t.exception()) if not t.cancelled() and t.exception() else None)
 
     async def _init_hybrid_search(self):
         """Initialize hybrid search."""
@@ -149,24 +139,19 @@ class RAGCommands(commands.Cog):
 
         embed.add_field(
             name="Status Commands",
-            value="`status` - Show RAG system status\n"
-            "`test` - Run RAG system tests\n"
-            "`reload` - Reload text index",
+            value="`status` - Show RAG system status\n`test` - Run RAG system tests\n`reload` - Reload text index",
             inline=False,
         )
 
         embed.add_field(
             name="Management Commands",
-            value="`clear` - Remove documents\n"
-            "`wipe` - ⚠️ Wipe entire database\n"
-            "`invalidate` - Invalidate collection",
+            value="`clear` - Remove documents\n`wipe` - ⚠️ Wipe entire database\n`invalidate` - Invalidate collection",
             inline=False,
         )
 
         embed.add_field(
             name="Search Commands",
-            value="`search <query>` - Search for documents\n"
-            "`index <path>` - Index documents from directory",
+            value="`search <query>` - Search for documents\n`index <path>` - Index documents from directory",
             inline=False,
         )
 
@@ -181,9 +166,7 @@ class RAGCommands(commands.Cog):
             env_info = get_rag_environment_info()
 
             # Create status embed
-            embed = discord.Embed(
-                title="🗂️  RAG System Status", color=discord.Color.blue()
-            )
+            embed = discord.Embed(title="🗂️  RAG System Status", color=discord.Color.blue())
 
             # Environment info
             env_text = f"**Mode:** {env_info.get('mode', 'unknown')}\n"
@@ -200,14 +183,10 @@ class RAGCommands(commands.Cog):
                     collection_stats = stats.get("collection_stats", {})
 
                     stats_text = (
-                        f"**Documents:** {collection_stats.get('doc_count', 'N/A')}\n"
-                        f"**Chunks:** {collection_stats.get('total_chunks', 'N/A')}\n"
-                        f"**Avg chunks/doc:** {collection_stats.get('avg_chunks_per_doc', 'N/A'):.1f}"
+                        f"**Documents:** {collection_stats.get('doc_count', 'N/A')}\n**Chunks:** {collection_stats.get('total_chunks', 'N/A')}\n**Avg chunks/doc:** {collection_stats.get('avg_chunks_per_doc', 'N/A'):.1f}"
                     )
 
-                    embed.add_field(
-                        name="📊 Collection Stats", value=stats_text, inline=False
-                    )
+                    embed.add_field(name="📊 Collection Stats", value=stats_text, inline=False)
                 except Exception as e:
                     embed.add_field(
                         name="📊 Collection Stats",
@@ -223,9 +202,7 @@ class RAGCommands(commands.Cog):
 
             # Health check
             health_emoji = "✅" if await validate_rag_environment() else "❌"
-            embed.add_field(
-                name="💚 Health Check", value=f"{health_emoji} Environment valid"
-            )
+            embed.add_field(name="💚 Health Check", value=f"{health_emoji} Environment valid")
 
             await ctx.send(embed=embed)
 
@@ -271,47 +248,31 @@ class RAGCommands(commands.Cog):
                 if self.hybrid_search:
                     results = await self.hybrid_search.search("test query", top_k=1)
                     result_count = len(results) if isinstance(results, list) else 0
-                    test_results.append(
-                        ("✅", "Search Functionality", f"Found {result_count} results")
-                    )
+                    test_results.append(("✅", "Search Functionality", f"Found {result_count} results"))
                 else:
-                    test_results.append(
-                        ("⚠️", "Search Functionality", "Hybrid search not available")
-                    )
+                    test_results.append(("⚠️", "Search Functionality", "Hybrid search not available"))
             except Exception as e:
                 error_msg = safe_embed_value(str(e), 50)
-                test_results.append(
-                    ("❌", "Search Functionality", f"Failed: {error_msg}")
-                )
+                test_results.append(("❌", "Search Functionality", f"Failed: {error_msg}"))
 
             # Test 4: Collection stats
             try:
                 search_engine_var = locals().get("search_engine")
-                if search_engine_var is not None and hasattr(
-                    search_engine_var, "get_stats"
-                ):
+                if search_engine_var is not None and hasattr(search_engine_var, "get_stats"):
                     stats = await search_engine_var.get_stats()
                     if "collection_stats" in stats:
                         chunks = stats["collection_stats"].get("total_chunks", 0)
-                        test_results.append(
-                            ("✅", "Collection Access", f"{chunks} chunks available")
-                        )
+                        test_results.append(("✅", "Collection Access", f"{chunks} chunks available"))
                     else:
-                        test_results.append(
-                            ("⚠️", "Collection Access", "No collection stats")
-                        )
+                        test_results.append(("⚠️", "Collection Access", "No collection stats"))
                 else:
-                    test_results.append(
-                        ("❌", "Collection Access", "Search engine not available")
-                    )
+                    test_results.append(("❌", "Collection Access", "Search engine not available"))
             except Exception as e:
                 error_msg = safe_embed_value(str(e), 50)
                 test_results.append(("❌", "Collection Access", f"Failed: {error_msg}"))
 
             # Update embed with test results
-            embed = discord.Embed(
-                title="🧪 RAG System Test Results", color=discord.Color.green()
-            )
+            embed = discord.Embed(title="🧪 RAG System Test Results", color=discord.Color.green())
 
             # Add test results to embed with safe truncation
             for icon, test_name, result in test_results:
@@ -325,14 +286,9 @@ class RAGCommands(commands.Cog):
             passed_tests = sum(1 for icon, _, _ in test_results if icon == "✅")
             total_tests = len(test_results)
 
-            summary_text = (
-                f"**Passed:** {passed_tests}/{total_tests} tests\n"
-                f"**Status:** {'✅ All systems operational' if passed_tests == total_tests else '⚠️ Some issues detected'}"
-            )
+            summary_text = f"**Passed:** {passed_tests}/{total_tests} tests\n**Status:** {'✅ All systems operational' if passed_tests == total_tests else '⚠️ Some issues detected'}"
 
-            embed.add_field(
-                name="📊 Summary", value=safe_embed_value(summary_text), inline=False
-            )
+            embed.add_field(name="📊 Summary", value=safe_embed_value(summary_text), inline=False)
 
             await message.edit(embed=embed)
 
@@ -378,9 +334,7 @@ class RAGCommands(commands.Cog):
                     try:
                         await ctx.send(error_msg)
                     except discord.Forbidden:
-                        logger.error(
-                            "[RAG Commands] Cannot send permission error message - missing Send Messages permission"
-                        )
+                        logger.error("[RAG Commands] Cannot send permission error message - missing Send Messages permission")
                     return
 
             # Verify hybrid search is initialized
@@ -523,9 +477,7 @@ class RAGCommands(commands.Cog):
     async def index_message_content(self, ctx, *, text: str = None):
         """Index the current message text, URLs, and supported attachments into RAG."""
         try:
-            hybrid_search = self.hybrid_search or getattr(
-                ctx.bot, "hybrid_search", None
-            )
+            hybrid_search = self.hybrid_search or getattr(ctx.bot, "hybrid_search", None)
             if hybrid_search is None:
                 hybrid_search = await get_hybrid_search()
             if hybrid_search is None:
@@ -552,9 +504,7 @@ class RAGCommands(commands.Cog):
                 work_items.append(("attachment", attachment, None))
 
             if not work_items:
-                await ctx.send(
-                    "Usage: `!index <text>` or attach files / paste a URL to index."
-                )
+                await ctx.send("Usage: `!index <text>` or attach files / paste a URL to index.")
                 return
 
             guild_id = getattr(getattr(ctx, "guild", None), "id", None)
@@ -568,11 +518,7 @@ class RAGCommands(commands.Cog):
                 "source": "discord",
             }
 
-            queue_enabled = bool(
-                getattr(
-                    getattr(hybrid_search, "_indexing_queue", None), "enabled", False
-                )
-            )
+            queue_enabled = bool(getattr(getattr(hybrid_search, "_indexing_queue", None), "enabled", False))
             action_verb = "Queued" if queue_enabled else "Indexed"
             successes = 0
             failures = []
@@ -609,9 +555,7 @@ class RAGCommands(commands.Cog):
                                 **base_metadata,
                                 "source_type": "url",
                                 "url": item,
-                                "extraction_metadata": (extracted or {}).get(
-                                    "metadata", {}
-                                ),
+                                "extraction_metadata": (extracted or {}).get("metadata", {}),
                             },
                             file_type="url",
                         )
@@ -631,10 +575,7 @@ class RAGCommands(commands.Cog):
                     if not extracted_text:
                         failures.append(getattr(item, "filename", "attachment"))
                         continue
-                    source_id = (
-                        f"discord://guild/{guild_id}/message/{message_id}/attachment/"
-                        f"{getattr(item, 'filename', 'attachment')}"
-                    )
+                    source_id = f"discord://guild/{guild_id}/message/{message_id}/attachment/{getattr(item, 'filename', 'attachment')}"
                     ok = await hybrid_search.add_document(
                         source_id=source_id,
                         text=extracted_text,
@@ -642,28 +583,19 @@ class RAGCommands(commands.Cog):
                             **base_metadata,
                             "source_type": "attachment",
                             "filename": getattr(item, "filename", "attachment"),
-                            "attachment_metadata": (extracted or {}).get(
-                                "metadata", {}
-                            ),
+                            "attachment_metadata": (extracted or {}).get("metadata", {}),
                         },
-                        file_type=Path(
-                            getattr(item, "filename", "attachment")
-                        ).suffix.lstrip(".")
-                        or "attachment",
+                        file_type=Path(getattr(item, "filename", "attachment")).suffix.lstrip(".") or "attachment",
                     )
                     if ok:
                         successes += 1
                     else:
                         failures.append(getattr(item, "filename", "attachment"))
                 except Exception as exc:
-                    failures.append(
-                        f"{getattr(item, 'filename', 'attachment')} ({exc})"
-                    )
+                    failures.append(f"{getattr(item, 'filename', 'attachment')} ({exc})")
 
             if successes == 0 and failures:
-                await ctx.send(
-                    f"❌ RAG indexing failed for: {safe_embed_value(', '.join(failures), 1800)}"
-                )
+                await ctx.send(f"❌ RAG indexing failed for: {safe_embed_value(', '.join(failures), 1800)}")
                 return
 
             summary = f"{action_verb} {successes} item{'s' if successes != 1 else ''}."
@@ -693,9 +625,7 @@ class RAGCommands(commands.Cog):
                 paths = get_text_index_paths()
 
             if not paths:
-                await ctx.send(
-                    "❌ **Error**: No text index paths configured. Set TEXT_INDEX_PATHS in .env"
-                )
+                await ctx.send("❌ **Error**: No text index paths configured. Set TEXT_INDEX_PATHS in .env")
                 return
 
             # Send initial status
@@ -770,9 +700,7 @@ class RAGCommands(commands.Cog):
                     error_text = "\n".join(f"- {err}" for err in errors[:5])
                     if len(errors) > 5:
                         error_text += f"\n... and {len(errors) - 5} more"
-                    description = (
-                        f"Indexed {indexed} documents\n\n⚠️ Errors:\n{error_text}"
-                    )
+                    description = f"Indexed {indexed} documents\n\n⚠️ Errors:\n{error_text}"
                     color = discord.Color.yellow()
                 else:
                     description = f"Successfully indexed {indexed} documents"
@@ -806,10 +734,7 @@ class RAGCommands(commands.Cog):
             # Check if an invalidation is already in progress
             request_id = f"{ctx.guild.id if ctx.guild else 'DM'}:{ctx.channel.id}"
             if _invalidation_in_progress.get(request_id, False):
-                await ctx.send(
-                    "⚠️ **Invalidation already in progress**\n"
-                    "Please wait for the current invalidation to complete."
-                )
+                await ctx.send("⚠️ **Invalidation already in progress**\nPlease wait for the current invalidation to complete.")
                 return
 
             # Mark invalidation as in progress

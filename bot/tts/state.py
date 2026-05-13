@@ -72,9 +72,7 @@ class TTSState:
         """Get TTS usage statistics."""
         return {
             "global_enabled": self.global_enabled,
-            "users_with_tts": len(
-                [u for u, enabled in self.user_preferences.items() if enabled]
-            ),
+            "users_with_tts": len([u for u, enabled in self.user_preferences.items() if enabled]),
             "total_users": len(self.user_preferences),
             "total_requests": self.total_requests,
             "cache_hits": self.cache_hits,

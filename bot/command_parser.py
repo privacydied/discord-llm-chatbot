@@ -39,9 +39,7 @@ COMMAND_MAP = {
 }
 
 
-def parse_command(
-    message: discord.Message, bot: commands.Bot
-) -> Optional[ParsedCommand]:
+def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[ParsedCommand]:
     """
     Parses a message to determine if it's an explicit command.
 

@@ -33,6 +33,7 @@ class TestIsWarningSuppressed:
         assert _is_warning_suppressed("expires") is False
         # Simulate time passage by injecting a past timestamp
         import bot.logging_enforcer as mod
+
         mod._warning_last_seen["expires"] = time.monotonic() - mod._SUPPRESS_WINDOW - 1
         assert _is_warning_suppressed("expires") is False
 

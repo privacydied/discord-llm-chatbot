@@ -27,9 +27,7 @@ class KokoroV8Engine(BaseEngine):
     def __init__(self, voice: Optional[str] = None, lang_code: Optional[str] = None):
         # Defaults align with common Kokoro-82M examples
         self.voice = voice or os.getenv("TTS_VOICE", "af_heart")
-        self.lang_code = lang_code or os.getenv(
-            "TTS_LANG_CODE", "a"
-        )  # 'a' American English
+        self.lang_code = lang_code or os.getenv("TTS_LANG_CODE", "a")  # 'a' American English
         self._pipeline = None
 
     def load(self):
@@ -65,9 +63,7 @@ class KokoroV8Engine(BaseEngine):
             self.load()
         try:
             # KPipeline returns (audio: np.ndarray, sample_rate: int)
-            logger.info(
-                "KokoroV8Engine synthesizing via KPipeline (voice=%s)", self.voice
-            )
+            logger.info("KokoroV8Engine synthesizing via KPipeline (voice=%s)", self.voice)
             audio, sr = self._pipeline(text, voice=self.voice)
             return self._to_wav_bytes(audio, sr)
         except Exception as e:

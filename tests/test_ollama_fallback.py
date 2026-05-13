@@ -65,9 +65,7 @@ async def test_run_with_fallback_ollama_success():
         async def _fake_ok():
             return "Hello from Ollama"
 
-        rr = await mgr.run_with_fallback(
-            "text", lambda pc: _fake_ok, per_item_budget=10.0
-        )
+        rr = await mgr.run_with_fallback("text", lambda pc: _fake_ok, per_item_budget=10.0)
         assert rr.success
         assert rr.result == "Hello from Ollama"
         assert rr.provider_used == "ollama:llama3"
@@ -86,9 +84,7 @@ async def test_run_with_fallback_ollama_timeout():
         async def _fail_timeout():
             raise asyncio.TimeoutError()
 
-        rr = await mgr.run_with_fallback(
-            "text", lambda pc: _fail_timeout, per_item_budget=10.0
-        )
+        rr = await mgr.run_with_fallback("text", lambda pc: _fail_timeout, per_item_budget=10.0)
         assert not rr.success
         assert rr.provider_used == "ollama:llama3"
 
@@ -106,9 +102,7 @@ async def test_run_with_fallback_ollama_connection_error():
         async def _fail_conn():
             raise ConnectionError("refused")
 
-        rr = await mgr.run_with_fallback(
-            "text", lambda pc: _fail_conn, per_item_budget=10.0
-        )
+        rr = await mgr.run_with_fallback("text", lambda pc: _fail_conn, per_item_budget=10.0)
         assert not rr.success
 
 

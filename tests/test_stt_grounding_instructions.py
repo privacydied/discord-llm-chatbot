@@ -106,9 +106,7 @@ def test_grounding_included_as_instruction_section():
 
     # Should have the instruction section
     assert "[STT Instructions]" in result
-    grounding_match = re.search(
-        r"\[STT Instructions\]\n(.+?)(?=\n\[|$)", result, re.DOTALL
-    )
+    grounding_match = re.search(r"\[STT Instructions\]\n(.+?)(?=\n\[|$)", result, re.DOTALL)
     assert grounding_match is not None
 
 

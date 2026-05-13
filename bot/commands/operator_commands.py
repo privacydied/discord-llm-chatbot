@@ -54,9 +54,7 @@ class OperatorCommands(commands.Cog):
     @commands.command(name="feature", aliases=["toggle-feature", "toggle_feature"])
     @commands.cooldown(2, 300, type=commands.BucketType.user)
     @commands.has_permissions(administrator=True)
-    async def feature_command(
-        self, ctx: commands.Context, name: str = "", setting: str = ""
-    ) -> None:
+    async def feature_command(self, ctx: commands.Context, name: str = "", setting: str = "") -> None:
         """Toggle a per-server feature flag on or off."""
         try:
             if not name:
@@ -90,16 +88,12 @@ class OperatorCommands(commands.Cog):
                 "enabled",
                 "disabled",
             }:
-                await ctx.reply(
-                    "❌ Setting must be `on` or `off`.", mention_author=False
-                )
+                await ctx.reply("❌ Setting must be `on` or `off`.", mention_author=False)
                 return
 
             enabled = setting_norm in {"on", "enable", "enabled"}
             if ctx.guild is None:
-                await ctx.reply(
-                    "❌ Feature toggles require a server context.", mention_author=False
-                )
+                await ctx.reply("❌ Feature toggles require a server context.", mention_author=False)
                 return
 
             set_server_feature_toggle(ctx.guild.id, normalized, enabled)
@@ -126,9 +120,7 @@ class OperatorCommands(commands.Cog):
     def _build_status_embed(self, ctx: commands.Context) -> discord.Embed:
         guild = ctx.guild
         guild_id = getattr(guild, "id", None)
-        toggles = (
-            get_server_feature_toggles(guild_id) if guild_id else dict(FEATURE_DEFAULTS)
-        )
+        toggles = get_server_feature_toggles(guild_id) if guild_id else dict(FEATURE_DEFAULTS)
 
         uptime = self._format_uptime()
         rss = self._format_rss_mb()
@@ -168,18 +160,11 @@ class OperatorCommands(commands.Cog):
         embed.add_field(name="Storage", value=storage_line, inline=False)
         embed.add_field(name="Embedding model", value=embedding_line, inline=False)
 
-        feature_lines = [
-            f"• {name}: {feature_status_label(enabled)}"
-            for name, enabled in sorted(toggles.items())
-        ]
+        feature_lines = [f"• {name}: {feature_status_label(enabled)}" for name, enabled in sorted(toggles.items())]
         if feature_lines:
-            embed.add_field(
-                name="Feature toggles", value="\n".join(feature_lines), inline=False
-            )
+            embed.add_field(name="Feature toggles", value="\n".join(feature_lines), inline=False)
 
-        embed.set_footer(
-            text="Health checks are cached/local only; no outbound probes are sent."
-        )
+        embed.set_footer(text="Health checks are cached/local only; no outbound probes are sent.")
         return embed
 
     def _format_uptime(self) -> str:
@@ -216,9 +201,7 @@ class OperatorCommands(commands.Cog):
     def _get_backend_name(self) -> str:
         config = getattr(self.bot, "config", {}) or {}
         backend_name = config.get("TEXT_BACKEND", config.get("text_backend", "unknown"))
-        model = config.get(
-            "OPENAI_TEXT_MODEL", config.get("openai_text_model", "unknown")
-        )
+        model = config.get("OPENAI_TEXT_MODEL", config.get("openai_text_model", "unknown"))
         if backend_name == "openrouter":
             return f"openrouter ({model})"
         return f"{backend_name} ({model})"
@@ -231,9 +214,7 @@ class OperatorCommands(commands.Cog):
             return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; orchestrator=missing"
 
         # Try to get adapter status
-        adapter = getattr(orchestrator, "adapter", None) or getattr(
-            orchestrator, "unified_adapter", None
-        )
+        adapter = getattr(orchestrator, "adapter", None) or getattr(orchestrator, "unified_adapter", None)
         providers = getattr(adapter, "providers", {}) if adapter else {}
         provider_count = len(providers) if providers else 0
 
@@ -254,9 +235,7 @@ class OperatorCommands(commands.Cog):
     def _get_memory_service_status(self, toggles: Dict[str, bool]) -> str:
         """Return memory service status from the existing service state."""
         enabled = toggles.get("memory", True)
-        svc = getattr(self.bot, "_memory_service", None) or getattr(
-            self.bot, "memory_service", None
-        )
+        svc = getattr(self.bot, "_memory_service", None) or getattr(self.bot, "memory_service", None)
         if svc is None:
             return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; service=missing"
 
@@ -289,9 +268,7 @@ class OperatorCommands(commands.Cog):
         return "⚠️ yes"
 
     def _get_rag_status(self, guild_id: Optional[int], toggles: Dict[str, bool]) -> str:
-        global_enabled = bool(
-            (getattr(self.bot, "config", {}) or {}).get("rag_enabled", True)
-        )
+        global_enabled = bool((getattr(self.bot, "config", {}) or {}).get("rag_enabled", True))
         guild_enabled = toggles.get("rag", True) if guild_id is not None else True
         effective = global_enabled and guild_enabled
         try:
@@ -344,10 +321,7 @@ class OperatorCommands(commands.Cog):
         if router:
             ollama_backend = getattr(router, "ollama_backend", None)
         available = ollama_backend is not None
-        return (
-            f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; "
-            f"host={ollama_host}; available={available}"
-        )
+        return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; host={ollama_host}; available={available}"
 
     def _get_playwright_status(self, toggles: Dict[str, bool]) -> str:
         """Return Playwright / web-extraction status including health probe info."""
@@ -361,11 +335,7 @@ class OperatorCommands(commands.Cog):
             cons_fails = health.get("consecutive_failures", 0)
             degraded = health.get("degraded", False)
             service = getattr(self.bot, "web_extraction_service", None)
-            tier_b_available = (
-                getattr(service, "_tier_b_available", ENABLE_TIER_B)
-                if service
-                else ENABLE_TIER_B
-            )
+            tier_b_available = getattr(service, "_tier_b_available", ENABLE_TIER_B) if service else ENABLE_TIER_B
             enabled = toggles.get("web_extraction", True)
             health_parts: list[str] = []
             if hw_available is True:
@@ -378,10 +348,7 @@ class OperatorCommands(commands.Cog):
             if cons_fails:
                 health_parts.append(f"fails={cons_fails}")
             health_str = "; ".join(health_parts) if health_parts else "health=n/a"
-            return (
-                f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; "
-                f"configured={configured}; available={tier_b_available}; {health_str}"
-            )
+            return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; configured={configured}; available={tier_b_available}; {health_str}"
         except Exception:
             return "unknown"
 
@@ -400,12 +367,12 @@ class OperatorCommands(commands.Cog):
         backpressure = "yes" if queued_messages or active_tasks else "no"
         return f"active_tasks={active_tasks}; user_queues={len(user_queues)}; queued={queued_messages}; backpressure={backpressure}"
 
-
     def _get_storage_status(self) -> str:
         """Return a concise storage summary: mem_db, chroma, and cache sizes."""
         # Try diagnostics module first
         try:
             from ..maintenance.diagnostics import get_storage_status as _gs
+
             result = _gs()
             if isinstance(result, str) and len(result) < 300:
                 return result
@@ -438,15 +405,11 @@ class OperatorCommands(commands.Cog):
             parts.append("mem_db=none")
 
         # Chroma persistent store size
-        memory_svc = getattr(self.bot, "_memory_service", None) or getattr(
-            self.bot, "memory_service", None
-        )
+        memory_svc = getattr(self.bot, "_memory_service", None) or getattr(self.bot, "memory_service", None)
         store = getattr(memory_svc, "_persistent_store", None) if memory_svc else None
         if store is not None:
             try:
-                persist_dir = getattr(store, "_persist_directory", None) or getattr(
-                    store, "persist_directory", None
-                )
+                persist_dir = getattr(store, "_persist_directory", None) or getattr(store, "persist_directory", None)
                 if persist_dir:
                     import pathlib
 
@@ -457,7 +420,7 @@ class OperatorCommands(commands.Cog):
                                 total += p.stat().st_size
                         except Exception:
                             pass
-                    parts.append(f"chroma={total / (1024*1024):.1f}MB")
+                    parts.append(f"chroma={total / (1024 * 1024):.1f}MB")
                 else:
                     parts.append("chroma=in-memory")
             except Exception:
@@ -488,9 +451,7 @@ class OperatorCommands(commands.Cog):
         """Check if the RAG embedding model is cached locally."""
         import os
 
-        model_name = os.getenv(
-            "RAG_EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"
-        ).strip()
+        model_name = os.getenv("RAG_EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2").strip()
         model_type = os.getenv("RAG_EMBEDDING_MODEL_TYPE", "sentence-transformers").strip()
 
         if model_type != "sentence-transformers":
@@ -525,10 +486,7 @@ class OperatorCommands(commands.Cog):
                     break
                 for root, dirs, files in os.walk(cdir):
                     if safe_name.lower() in root.lower() or model_name.lower() in root.lower():
-                        if any(
-                            f in files
-                            for f in ("model.safetensors", "pytorch_model.bin", "config.json")
-                        ):
+                        if any(f in files for f in ("model.safetensors", "pytorch_model.bin", "config.json")):
                             cached = True
                             found_at = root
                             break

@@ -14,8 +14,6 @@ def test_tts_tokenizer_env_alias(monkeypatch):
     val.AVAILABLE_TOKENIZERS.clear()
     val.AVAILABLE_TOKENIZERS.update({"espeak"})
 
-    tok = val.select_tokenizer_for_language(
-        "en", available_tokenizers={"espeak": True, "grapheme": True}
-    )
+    tok = val.select_tokenizer_for_language("en", available_tokenizers={"espeak": True, "grapheme": True})
     # For English, select_tokenizer_for_language enforces phonetic; env override should return the alias value
     assert tok == "espeak"

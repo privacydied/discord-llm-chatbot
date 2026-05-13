@@ -44,16 +44,12 @@ class Money:
         if isinstance(value, Money):
             self._amount = value._amount
         elif isinstance(value, Decimal):
-            self._amount = value.quantize(
-                self.INTERNAL_PRECISION, rounding=ROUND_HALF_UP
-            )
+            self._amount = value.quantize(self.INTERNAL_PRECISION, rounding=ROUND_HALF_UP)
         else:
             try:
                 # Convert to Decimal first, then quantize
                 decimal_value = Decimal(str(value))
-                self._amount = decimal_value.quantize(
-                    self.INTERNAL_PRECISION, rounding=ROUND_HALF_UP
-                )
+                self._amount = decimal_value.quantize(self.INTERNAL_PRECISION, rounding=ROUND_HALF_UP)
             except (InvalidOperation, ValueError) as e:
                 logger.error(f"Invalid money value: {value} - {e}")
                 raise ValueError(f"Cannot convert {value} to Money: {e}")
@@ -68,9 +64,7 @@ class Money:
         return cls(Decimal(str(cents)) / 100)
 
     @classmethod
-    def from_credits(
-        cls, credits: Union[int, float], credits_per_dollar: float = 100
-    ) -> Money:
+    def from_credits(cls, credits: Union[int, float], credits_per_dollar: float = 100) -> Money:
         """Create Money from provider credits with configurable exchange rate"""
         return cls(Decimal(str(credits)) / Decimal(str(credits_per_dollar)))
 
@@ -94,14 +88,10 @@ class Money:
     def to_display_string(self, precision: int = 2) -> str:
         """Format for user display with $ symbol"""
         if precision == 2:
-            quantized = self._amount.quantize(
-                self.DISPLAY_PRECISION, rounding=ROUND_HALF_UP
-            )
+            quantized = self._amount.quantize(self.DISPLAY_PRECISION, rounding=ROUND_HALF_UP)
         else:
             precision_str = f"0.{'0' * precision}"
-            quantized = self._amount.quantize(
-                Decimal(precision_str), rounding=ROUND_HALF_UP
-            )
+            quantized = self._amount.quantize(Decimal(precision_str), rounding=ROUND_HALF_UP)
         return f"${quantized}"
 
     def to_json_value(self) -> str:

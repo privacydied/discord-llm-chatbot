@@ -112,6 +112,7 @@ async def safe_edit(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _maybe_sanitize_text(text: str) -> str:
     """Apply sanitization only when text is non-empty and non-whitespace."""
     if not text or not text.strip():

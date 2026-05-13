@@ -22,9 +22,7 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 if not TOKEN:
-    logger.warning(
-        "DISCORD_TOKEN not found in .env file; bot will not start without it."
-    )
+    logger.warning("DISCORD_TOKEN not found in .env file; bot will not start without it.")
 
 # Set up intents
 intents = discord.Intents.default()
@@ -45,9 +43,7 @@ async def on_ready():
 
     # Set presence
     try:
-        await bot.change_presence(
-            activity=discord.Activity(type=discord.ActivityType.listening, name="!ping")
-        )
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="!ping"))
         logger.info('Bot presence set to "Listening to !ping"')
     except Exception as e:
         logger.error(f"Error setting presence: {e}")
@@ -56,9 +52,7 @@ async def on_ready():
 @bot.command()
 async def ping(ctx):
     """Simple ping command to test if the bot is responding."""
-    logger.info(
-        f"Ping command received from {ctx.author} in {ctx.guild.name if ctx.guild else 'DM'}"
-    )
+    logger.info(f"Ping command received from {ctx.author} in {ctx.guild.name if ctx.guild else 'DM'}")
     try:
         await ctx.send("Pong! 🏓")
         logger.info("Successfully sent pong response")
@@ -73,9 +67,7 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    logger.debug(
-        f"Message from {message.author} in {message.guild.name if message.guild else 'DM'}: {message.content}"
-    )
+    logger.debug(f"Message from {message.author} in {message.guild.name if message.guild else 'DM'}: {message.content}")
 
     # Process commands
     try:

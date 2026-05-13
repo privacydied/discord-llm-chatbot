@@ -70,11 +70,7 @@ class VideoCommands(commands.Cog):
             if not url:
                 url = self._extract_url_from_message(ctx.message.content)
                 if not url:
-                    await ctx.reply(
-                        "❌ Please provide a YouTube or TikTok URL.\n"
-                        "**Usage:** `!watch <url>` or `!transcribe <url>`\n"
-                        "**Example:** `!watch https://youtu.be/dQw4w9WgXcQ`"
-                    )
+                    await ctx.reply("❌ Please provide a YouTube or TikTok URL.\n**Usage:** `!watch <url>` or `!transcribe <url>`\n**Example:** `!watch https://youtu.be/dQw4w9WgXcQ`")
                     return
 
             # Parse options
@@ -99,11 +95,7 @@ class VideoCommands(commands.Cog):
             url_type = self._get_url_type(url)
 
             # Send initial processing message
-            processing_msg = await ctx.reply(
-                f"🎥 Processing {url_type} video...\n"
-                f"📊 Speed: {speedup}x | Cache: {'Refresh' if force_refresh else 'Enabled'}\n"
-                f"⏳ This may take a moment..."
-            )
+            processing_msg = await ctx.reply(f"🎥 Processing {url_type} video...\n📊 Speed: {speedup}x | Cache: {'Refresh' if force_refresh else 'Enabled'}\n⏳ This may take a moment...")
 
             # Show typing indicator
             async with ctx.typing():
@@ -179,11 +171,7 @@ class VideoCommands(commands.Cog):
 
         except Exception as e:
             # Unexpected error
-            await processing_msg.edit(
-                content="❌ **Unexpected Error**\n"
-                "An unexpected error occurred while processing the video. "
-                "Please try again or contact support."
-            )
+            await processing_msg.edit(content="❌ **Unexpected Error**\nAn unexpected error occurred while processing the video. Please try again or contact support.")
             logger.error(
                 f"Unexpected video transcription error: {e}",
                 exc_info=True,
@@ -206,39 +194,31 @@ class VideoCommands(commands.Cog):
 
         embed.add_field(
             name="📋 Commands",
-            value="`!watch <url>` - Transcribe video audio\n"
-            "`!transcribe <url>` - Same as watch\n"
-            "`!listen <url>` - Same as watch",
+            value="`!watch <url>` - Transcribe video audio\n`!transcribe <url>` - Same as watch\n`!listen <url>` - Same as watch",
             inline=False,
         )
 
         embed.add_field(
             name="⚙️ Options",
-            value="`--speed <number>` - Set playback speed (0.5x to 3.0x)\n"
-            "`--force` - Force re-download (ignore cache)",
+            value="`--speed <number>` - Set playback speed (0.5x to 3.0x)\n`--force` - Force re-download (ignore cache)",
             inline=False,
         )
 
         embed.add_field(
             name="🌐 Supported Sites",
-            value="• YouTube (youtube.com, youtu.be)\n"
-            "• TikTok (tiktok.com, tiktok.com/t, m.tiktok.com, vm.tiktok.com)",
+            value="• YouTube (youtube.com, youtu.be)\n• TikTok (tiktok.com, tiktok.com/t, m.tiktok.com, vm.tiktok.com)",
             inline=False,
         )
 
         embed.add_field(
             name="📝 Examples",
-            value="`!watch https://youtu.be/dQw4w9WgXcQ`\n"
-            "`!transcribe https://tiktok.com/@user/video/123 --speed 2.0`\n"
-            "`!listen https://youtu.be/example --force`",
+            value="`!watch https://youtu.be/dQw4w9WgXcQ`\n`!transcribe https://tiktok.com/@user/video/123 --speed 2.0`\n`!listen https://youtu.be/example --force`",
             inline=False,
         )
 
         embed.add_field(
             name="⚠️ Limitations",
-            value="• Maximum video length: 10 minutes\n"
-            "• Rate limited to prevent abuse\n"
-            "• Cached results expire after 7 days",
+            value="• Maximum video length: 10 minutes\n• Rate limited to prevent abuse\n• Cached results expire after 7 days",
             inline=False,
         )
 
@@ -266,25 +246,19 @@ class VideoCommands(commands.Cog):
 
             # Calculate cache statistics
             total_entries = len(index)
-            total_duration = sum(
-                entry.get("duration_seconds", 0) for entry in index.values()
-            )
+            total_duration = sum(entry.get("duration_seconds", 0) for entry in index.values())
 
             # Create cache info embed
             embed = discord.Embed(title="📁 Video Cache Information", color=0x0099FF)
 
             embed.add_field(
                 name="📊 Statistics",
-                value=f"**Entries:** {total_entries}\n"
-                f"**Total Duration:** {total_duration / 60:.1f} minutes\n"
-                f"**Cache Directory:** `{video_manager.cache_dir}`",
+                value=f"**Entries:** {total_entries}\n**Total Duration:** {total_duration / 60:.1f} minutes\n**Cache Directory:** `{video_manager.cache_dir}`",
                 inline=False,
             )
 
             # Show recent entries
-            recent_entries = sorted(
-                index.items(), key=lambda x: x[1].get("cached_at", ""), reverse=True
-            )[:5]
+            recent_entries = sorted(index.items(), key=lambda x: x[1].get("cached_at", ""), reverse=True)[:5]
 
             if recent_entries:
                 recent_list = []
@@ -294,9 +268,7 @@ class VideoCommands(commands.Cog):
                     duration = entry.get("duration_seconds", 0)
                     recent_list.append(f"• **{title}** ({source}, {duration:.0f}s)")
 
-                embed.add_field(
-                    name="🕒 Recent Entries", value="\n".join(recent_list), inline=False
-                )
+                embed.add_field(name="🕒 Recent Entries", value="\n".join(recent_list), inline=False)
 
             await ctx.reply(embed=embed)
 

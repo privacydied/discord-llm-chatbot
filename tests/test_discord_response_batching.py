@@ -32,10 +32,7 @@ class _MessageProcessorMock:
             return True
         author_is_bot = bool(getattr(author, "bot", False))
         try:
-            author_is_self = (
-                getattr(author, "id", None)
-                == getattr(self._bot_stub.user, "id", None)
-            )
+            author_is_self = getattr(author, "id", None) == getattr(self._bot_stub.user, "id", None)
         except Exception:
             author_is_self = False
         if author_is_bot or author_is_self:
@@ -146,9 +143,7 @@ async def test_chunk_does_not_mangle_code_block_worse_than_current(bot_stub):
     assert joined == text, "Chunking must preserve full content"
     assert all(len(c) <= _DISCORD_MAX_CONTENT_LEN for c in chunks)
     # Ensure no extra code fences are invented:
-    assert joined.count("```") == text.count("```"), (
-        "No extra code fences introduced by chunking"
-    )
+    assert joined.count("```") == text.count("```"), "No extra code fences introduced by chunking"
 
 
 # ===================== send_chunked_reply: behavior =====================
@@ -275,19 +270,13 @@ async def test_send_chunked_long_message_is_sequential_and_ordered(bot_stub):
 
     # Ensure our logical content is fully preserved inside the concatenation.
     joined = "".join(all_contents)
-    assert content in joined, (
-        "Full logical content must be preserved (ignoring mentions)"
-    )
+    assert content in joined, "Full logical content must be preserved (ignoring mentions)"
 
     # First chunk may include a user mention prefix, so only strictly enforce
     # length limit on continuation chunks.
-    (
-        channel_send_calls[0]["content"] if channel_send_calls else ""
-    )
+    (channel_send_calls[0]["content"] if channel_send_calls else "")
     for c in all_contents[1:]:
-        assert len(c) <= _DISCORD_MAX_CONTENT_LEN, (
-            "Continuation chunk exceeds Discord limit"
-        )
+        assert len(c) <= _DISCORD_MAX_CONTENT_LEN, "Continuation chunk exceeds Discord limit"
 
     # First chunk: uses reply() with embeds/files.
     assert len(reply_calls) == 1, "First chunk should use reply()"

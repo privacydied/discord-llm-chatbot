@@ -119,25 +119,17 @@ def test_longest_match_encoding():
                 try:
                     token_ids = encode_ipa(ipa, MockONNXSession())
                     # Convert back to check if tokens match expected
-                    actual_tokens = [
-                        vocab.id_to_phoneme[tid]
-                        for tid in token_ids
-                        if tid < len(vocab.id_to_phoneme)
-                    ]
+                    actual_tokens = [vocab.id_to_phoneme[tid] for tid in token_ids if tid < len(vocab.id_to_phoneme)]
                     actual_clean = [t for t in actual_tokens if t.strip()]
 
                     if actual_clean == expected_tokens:
                         print(f"  ✅ '{ipa}' → {actual_clean}")
                     else:
-                        print(
-                            f"  ⚠️  '{ipa}' → {actual_clean} (expected {expected_tokens})"
-                        )
+                        print(f"  ⚠️  '{ipa}' → {actual_clean} (expected {expected_tokens})")
                         all_good = False
 
                 except UnsupportedIPASymbolError as e:
-                    print(
-                        f"  ⚠️  '{ipa}' → Unsupported symbols: {e.unsupported_symbols}"
-                    )
+                    print(f"  ⚠️  '{ipa}' → Unsupported symbols: {e.unsupported_symbols}")
                     all_good = False
 
             return all_good
@@ -215,10 +207,7 @@ def test_voice_memo_sender():
         from bot.infra.voice_memo_sender import wav_bytes_to_voice_memo, VoiceMemoError
 
         # Create dummy WAV bytes (minimal WAV header + silence)
-        dummy_wav = (
-            b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00D\xac\x00\x00"
-            b"\x88X\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
-        )
+        dummy_wav = b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00D\xac\x00\x00\x88X\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
 
         try:
             # This should fail due to missing bot token, but validates import/structure

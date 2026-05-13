@@ -95,6 +95,4 @@ def resolve_ffmpeg_bin(*, logger: Any | None = None) -> str:
                 pass
         return ffmpeg_bin
 
-    raise RuntimeError(
-        "ffmpeg executable not found; set STT_FFMPEG_BIN to an installed ffmpeg binary"
-    )
+    raise RuntimeError("ffmpeg executable not found; set STT_FFMPEG_BIN to an installed ffmpeg binary")

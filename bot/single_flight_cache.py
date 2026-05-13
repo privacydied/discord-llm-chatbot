@@ -213,12 +213,8 @@ class LRUCache:
                 "entries": len(self.cache),
                 "max_size": self.max_size,
                 "memory_usage_bytes": total_size,
-                "oldest_entry_age": min(
-                    (e.age_seconds for e in self.cache.values()), default=0
-                ),
-                "newest_entry_age": max(
-                    (e.age_seconds for e in self.cache.values()), default=0
-                ),
+                "oldest_entry_age": min((e.age_seconds for e in self.cache.values()), default=0),
+                "newest_entry_age": max((e.age_seconds for e in self.cache.values()), default=0),
             }
 
 
@@ -237,18 +233,10 @@ class SingleFlightCache:
 
         # Family-specific TTL configuration
         self.family_ttls = {
-            CacheFamily.TWEET_TEXT: float(
-                self.config.get("TWEET_CACHE_TTL_S", 86400)
-            ),  # 24 hours
-            CacheFamily.TWEET_NEGATIVE: float(
-                self.config.get("TWEET_NEGATIVE_TTL_S", 900)
-            ),  # 15 minutes
-            CacheFamily.READABILITY: float(
-                self.config.get("CACHE_READABILITY_TTL_S", 14400)
-            ),  # 4 hours
-            CacheFamily.STT_RESULT: float(
-                self.config.get("STT_CACHE_TTL_S", 604800)
-            ),  # 7 days
+            CacheFamily.TWEET_TEXT: float(self.config.get("TWEET_CACHE_TTL_S", 86400)),  # 24 hours
+            CacheFamily.TWEET_NEGATIVE: float(self.config.get("TWEET_NEGATIVE_TTL_S", 900)),  # 15 minutes
+            CacheFamily.READABILITY: float(self.config.get("CACHE_READABILITY_TTL_S", 14400)),  # 4 hours
+            CacheFamily.STT_RESULT: float(self.config.get("STT_CACHE_TTL_S", 604800)),  # 7 days
             CacheFamily.SCREENSHOT: 3600.0,  # 1 hour
             CacheFamily.WEB_EXTRACTION: 7200.0,  # 2 hours
         }
@@ -257,9 +245,7 @@ class SingleFlightCache:
         self.enabled = self.config.get("CACHE_SINGLE_FLIGHT_ENABLE", True)
         self.cache_backend = self.config.get("CACHE_BACKEND", "memory")
 
-        logger.info(
-            f"💾 SingleFlightCache initialized (backend: {self.cache_backend}, max_entries: {max_entries})"
-        )
+        logger.info(f"💾 SingleFlightCache initialized (backend: {self.cache_backend}, max_entries: {max_entries})")
 
     def _make_cache_key(self, family: CacheFamily, key_parts: List[str]) -> str:
         """Create cache key from family and parts. [IV]"""
@@ -341,9 +327,7 @@ class SingleFlightCache:
                 # Optionally cache negative results
                 if negative_on_exception:
                     # Use shorter TTL for negative cache
-                    negative_ttl = min(
-                        self.family_ttls.get(family, 3600.0) / 10, 900.0
-                    )  # Max 15 minutes
+                    negative_ttl = min(self.family_ttls.get(family, 3600.0) / 10, 900.0)  # Max 15 minutes
                     entry = CacheEntry(
                         key=cache_key,
                         value=e,
@@ -358,9 +342,7 @@ class SingleFlightCache:
                 raise e
 
         try:
-            result, was_duplicate = await self.single_flight.do(
-                cache_key, compute_and_cache
-            )
+            result, was_duplicate = await self.single_flight.do(cache_key, compute_and_cache)
 
             if was_duplicate:
                 self.metrics.single_flight_hits += 1
@@ -415,9 +397,7 @@ class SingleFlightCache:
         # This is expensive but useful for cache management
         removed_count = 0
         async with self.cache.lock:
-            keys_to_remove = [
-                key for key, entry in self.cache.cache.items() if entry.family == family
-            ]
+            keys_to_remove = [key for key, entry in self.cache.cache.items() if entry.family == family]
 
             for key in keys_to_remove:
                 await self.cache.remove(key)
@@ -442,9 +422,7 @@ class SingleFlightCache:
 
         removed_count = 0
         async with self.cache.lock:
-            expired_keys = [
-                key for key, entry in self.cache.cache.items() if entry.is_expired
-            ]
+            expired_keys = [key for key, entry in self.cache.cache.items() if entry.is_expired]
 
             for key in expired_keys:
                 await self.cache.remove(key)

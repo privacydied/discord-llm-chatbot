@@ -66,10 +66,7 @@ class TestJoinSegments:
             {"text": "boundary"},  # first of chunk 1 (duplicate)
             {"text": "second chunk continues"},
         ]
-        assert (
-            _text(_join_segments(segments))
-            == "first chunk ends here boundary second chunk continues"
-        )
+        assert _text(_join_segments(segments)) == "first chunk ends here boundary second chunk continues"
 
     def test_join_normalizes_whitespace(self):
         """Join should normalize whitespace."""

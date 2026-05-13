@@ -75,9 +75,7 @@ class ProviderUsageParser:
                 return Money.zero()
 
         except Exception as e:
-            logger.error(
-                f"Failed to parse usage for {provider}: {e}, usage_data: {usage_data}"
-            )
+            logger.error(f"Failed to parse usage for {provider}: {e}, usage_data: {usage_data}")
             return Money.zero()
 
     def _parse_openai_usage(self, usage_data: Dict[str, Any]) -> Money:
@@ -126,9 +124,7 @@ class ProviderUsageParser:
         logger.warning(f"No cost info in Anthropic usage: {usage_data}")
         return Money.zero()
 
-    def _parse_novita_usage(
-        self, usage_data: Dict[str, Any], task: VisionTask, model: Optional[str] = None
-    ) -> Money:
+    def _parse_novita_usage(self, usage_data: Dict[str, Any], task: VisionTask, model: Optional[str] = None) -> Money:
         """
         Parse Novita usage (credits) and convert to USD [REH]
 
@@ -159,9 +155,7 @@ class ProviderUsageParser:
         logger.warning(f"No credits info in Novita usage: {usage_data}")
         return Money.zero()
 
-    def _parse_chutes_usage(
-        self, usage_data: Dict[str, Any], task: VisionTask, model: Optional[str] = None
-    ) -> Money:
+    def _parse_chutes_usage(self, usage_data: Dict[str, Any], task: VisionTask, model: Optional[str] = None) -> Money:
         """
         Parse Chutes usage (GPU seconds) and convert to USD [REH]
 
@@ -229,9 +223,7 @@ class ProviderUsageParser:
         logger.warning(f"No cost info in Together usage: {usage_data}")
         return Money.zero()
 
-    def _parse_generic_usage(
-        self, usage_data: Dict[str, Any], provider_name: str
-    ) -> Money:
+    def _parse_generic_usage(self, usage_data: Dict[str, Any], provider_name: str) -> Money:
         """
         Parse generic provider usage (for providers not in enum) [REH]
         """
@@ -253,17 +245,13 @@ class ProviderUsageParser:
 
         # GPU seconds (for Chutes-like providers)
         if "gpu_seconds" in usage_data or "compute_time" in usage_data:
-            gpu_seconds = usage_data.get(
-                "gpu_seconds", usage_data.get("compute_time", 0)
-            )
+            gpu_seconds = usage_data.get("gpu_seconds", usage_data.get("compute_time", 0))
             return Money(gpu_seconds * 0.0006)  # Default GPU rate
 
         logger.warning(f"No cost info in {provider_name} usage: {usage_data}")
         return Money.zero()
 
-    def extract_usage_from_response(
-        self, provider: VisionProvider, response: Any
-    ) -> Dict[str, Any]:
+    def extract_usage_from_response(self, provider: VisionProvider, response: Any) -> Dict[str, Any]:
         """
         Extract usage data from provider response [REH]
 
@@ -342,17 +330,11 @@ class ProviderUsageParser:
         ratio = actual_cost.to_float() / estimated_cost.to_float()
 
         if ratio > error_threshold:
-            error_msg = (
-                f"Actual cost {actual_cost} is {ratio:.1f}x higher than "
-                f"estimate {estimated_cost} for {provider}/{task}"
-            )
+            error_msg = f"Actual cost {actual_cost} is {ratio:.1f}x higher than estimate {estimated_cost} for {provider}/{task}"
             logger.error(error_msg)
             return False, error_msg
 
         elif ratio > warning_threshold:
-            logger.warning(
-                f"Actual cost {actual_cost} is {ratio:.1f}x higher than "
-                f"estimate {estimated_cost} for {provider}/{task}"
-            )
+            logger.warning(f"Actual cost {actual_cost} is {ratio:.1f}x higher than estimate {estimated_cost} for {provider}/{task}")
 
         return True, None

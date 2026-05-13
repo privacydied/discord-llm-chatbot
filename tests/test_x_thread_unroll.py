@@ -25,9 +25,7 @@ async def test_single_tweet_minimal(monkeypatch):
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
-    ctx, reason = await unroll_author_thread(
-        "https://x.com/author/status/99999", timeout_s=5, max_tweets=30, max_chars=6000
-    )
+    ctx, reason = await unroll_author_thread("https://x.com/author/status/99999", timeout_s=5, max_tweets=30, max_chars=6000)
     assert ctx is not None, reason
     assert ctx.tweet_count == 1
     assert "Single tweet only" in ctx.joined_text
@@ -49,9 +47,7 @@ async def test_mid_thread_collects_all_in_order(monkeypatch):
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
     # Linked to the 4/7 tweet
-    ctx, reason = await unroll_author_thread(
-        "https://x.com/author/status/44444", timeout_s=5, max_tweets=30, max_chars=6000
-    )
+    ctx, reason = await unroll_author_thread("https://x.com/author/status/44444", timeout_s=5, max_tweets=30, max_chars=6000)
     assert ctx is not None, reason
     assert ctx.tweet_count == 7
     # Ensure chronological order and coverage
@@ -75,9 +71,7 @@ async def test_non_author_replies_are_skipped(monkeypatch):
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
-    ctx, reason = await unroll_author_thread(
-        "https://x.com/author/status/10001", timeout_s=5, max_tweets=30, max_chars=6000
-    )
+    ctx, reason = await unroll_author_thread("https://x.com/author/status/10001", timeout_s=5, max_tweets=30, max_chars=6000)
     assert ctx is not None, reason
     # Only two author tweets should be present (other user's reply ignored)
     assert ctx.tweet_count == 2
@@ -115,9 +109,7 @@ async def test_limits_cap_items_and_mark_truncated(monkeypatch):
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
-    ctx, reason = await unroll_author_thread(
-        "https://x.com/author/status/10000", timeout_s=5, max_tweets=30, max_chars=6000
-    )
+    ctx, reason = await unroll_author_thread("https://x.com/author/status/10000", timeout_s=5, max_tweets=30, max_chars=6000)
     assert ctx is not None, reason
     assert ctx.tweet_count == 30
     assert ctx.truncated is True
@@ -136,9 +128,7 @@ async def test_dom_change_or_timeout_fallback(monkeypatch):
     monkeypatch.setattr(xu, "_fetch_html_with_playwright", fake_fetch)
     monkeypatch.setattr(xu, "_expand_tco_if_needed", no_expand)
 
-    ctx, reason = await unroll_author_thread(
-        "https://x.com/author/status/424242", timeout_s=5, max_tweets=30, max_chars=6000
-    )
+    ctx, reason = await unroll_author_thread("https://x.com/author/status/424242", timeout_s=5, max_tweets=30, max_chars=6000)
     assert ctx is None
     assert reason in {"dom_mismatch", "no_items"}
 
@@ -165,9 +155,7 @@ async def test_mirrors_and_mobile_urls_normalize(monkeypatch):
         "https://vxtwitter.com/author/status/99999",
         "https://fixupx.com/author/status/99999",
     ]:
-        ctx, reason = await unroll_author_thread(
-            u, timeout_s=5, max_tweets=30, max_chars=6000
-        )
+        ctx, reason = await unroll_author_thread(u, timeout_s=5, max_tweets=30, max_chars=6000)
         assert ctx is not None, reason
         assert ctx.tweet_count == 1
         assert "Single tweet only" in ctx.joined_text

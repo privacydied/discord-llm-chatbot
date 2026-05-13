@@ -79,13 +79,9 @@ class CancellationTree:
         self.contexts: Dict[str, TaskContext] = {}
         self.root_contexts: Set[TaskContext] = set()
 
-    def create_context(
-        self, task_id: str, pool_type: PoolType, parent_id: Optional[str] = None
-    ) -> TaskContext:
+    def create_context(self, task_id: str, pool_type: PoolType, parent_id: Optional[str] = None) -> TaskContext:
         """Create a new task context with optional parent. [CA]"""
-        context = TaskContext(
-            task_id=task_id, pool_type=pool_type, created_at=time.time()
-        )
+        context = TaskContext(task_id=task_id, pool_type=pool_type, created_at=time.time())
 
         if parent_id and parent_id in self.contexts:
             parent = self.contexts[parent_id]
@@ -156,9 +152,7 @@ class BoundedExecutionPool:
         self.active_tasks: Dict[str, asyncio.Task] = {}
         self.task_futures: Dict[str, concurrent.futures.Future] = {}
 
-        logger.info(
-            f"🏊 {pool_type.value.upper()} pool initialized with {max_workers} workers"
-        )
+        logger.info(f"🏊 {pool_type.value.upper()} pool initialized with {max_workers} workers")
 
     async def submit_async(
         self,
@@ -168,16 +162,12 @@ class BoundedExecutionPool:
         timeout: Optional[float] = None,
     ) -> T:
         """Submit async coroutine to the pool. [PA]"""
-        context = self.cancellation_tree.create_context(
-            task_id, self.pool_type, parent_id
-        )
+        context = self.cancellation_tree.create_context(task_id, self.pool_type, parent_id)
 
         try:
             self.metrics.tasks_submitted += 1
             self.metrics.current_active += 1
-            self.metrics.max_active_seen = max(
-                self.metrics.max_active_seen, self.metrics.current_active
-            )
+            self.metrics.max_active_seen = max(self.metrics.max_active_seen, self.metrics.current_active)
 
             context.started_at = time.time()
 
@@ -200,11 +190,7 @@ class BoundedExecutionPool:
                     execution_time = context.completed_at - context.started_at
                     self.metrics.total_execution_time += execution_time
                     if self.metrics.tasks_completed > 0:
-                        self.metrics.avg_execution_time_ms = (
-                            self.metrics.total_execution_time
-                            * 1000
-                            / self.metrics.tasks_completed
-                        )
+                        self.metrics.avg_execution_time_ms = self.metrics.total_execution_time * 1000 / self.metrics.tasks_completed
 
                 return result
 
@@ -233,16 +219,12 @@ class BoundedExecutionPool:
         **kwargs,
     ) -> T:
         """Submit synchronous function to thread pool. [PA]"""
-        context = self.cancellation_tree.create_context(
-            task_id, self.pool_type, parent_id
-        )
+        context = self.cancellation_tree.create_context(task_id, self.pool_type, parent_id)
 
         try:
             self.metrics.tasks_submitted += 1
             self.metrics.current_active += 1
-            self.metrics.max_active_seen = max(
-                self.metrics.max_active_seen, self.metrics.current_active
-            )
+            self.metrics.max_active_seen = max(self.metrics.max_active_seen, self.metrics.current_active)
 
             context.started_at = time.time()
 
@@ -266,11 +248,7 @@ class BoundedExecutionPool:
                     execution_time = context.completed_at - context.started_at
                     self.metrics.total_execution_time += execution_time
                     if self.metrics.tasks_completed > 0:
-                        self.metrics.avg_execution_time_ms = (
-                            self.metrics.total_execution_time
-                            * 1000
-                            / self.metrics.tasks_completed
-                        )
+                        self.metrics.avg_execution_time_ms = self.metrics.total_execution_time * 1000 / self.metrics.tasks_completed
 
                 return result
 
@@ -310,9 +288,7 @@ class BoundedExecutionPool:
                 if not future.done():
                     future.cancel()
 
-        logger.info(
-            f"🚫 Cancelled {len(cancelled_ids)} tasks in {self.pool_type.value} pool"
-        )
+        logger.info(f"🚫 Cancelled {len(cancelled_ids)} tasks in {self.pool_type.value} pool")
         return cancelled_ids
 
     def get_metrics(self) -> PoolMetrics:
@@ -385,9 +361,7 @@ class ConcurrencyManager:
                 return await pool.submit_async(task_id, coro, parent_id, timeout)
 
             async def sync_task(self, func: Callable[..., T], *args, **kwargs) -> T:
-                return await pool.submit_sync(
-                    task_id, func, *args, parent_id=parent_id, timeout=timeout, **kwargs
-                )
+                return await pool.submit_sync(task_id, func, *args, parent_id=parent_id, timeout=timeout, **kwargs)
 
             def cancel(self) -> List[str]:
                 return pool.cancel_task_branch(task_id)
@@ -406,9 +380,7 @@ class ConcurrencyManager:
         timeout: Optional[float] = None,
     ) -> T:
         """Run a lightweight task (planning, parsing). [PA]"""
-        async with self.submit_to_pool(
-            PoolType.LIGHT, task_name, timeout=timeout
-        ) as submitter:
+        async with self.submit_to_pool(PoolType.LIGHT, task_name, timeout=timeout) as submitter:
             return await submitter.async_task(coro)
 
     async def run_network_task(
@@ -418,9 +390,7 @@ class ConcurrencyManager:
         timeout: Optional[float] = None,
     ) -> T:
         """Run a network-bound task (HTTP, API calls). [PA]"""
-        async with self.submit_to_pool(
-            PoolType.NETWORK, task_name, timeout=timeout
-        ) as submitter:
+        async with self.submit_to_pool(PoolType.NETWORK, task_name, timeout=timeout) as submitter:
             return await submitter.async_task(coro)
 
     async def run_heavy_task(
@@ -430,9 +400,7 @@ class ConcurrencyManager:
         timeout: Optional[float] = None,
     ) -> T:
         """Run a heavy task (OCR, STT, ffmpeg). [PA]"""
-        async with self.submit_to_pool(
-            PoolType.HEAVY, task_name, timeout=timeout
-        ) as submitter:
+        async with self.submit_to_pool(PoolType.HEAVY, task_name, timeout=timeout) as submitter:
             return await submitter.async_task(coro)
 
     async def run_heavy_sync(
@@ -444,9 +412,7 @@ class ConcurrencyManager:
         **kwargs,
     ) -> T:
         """Run a heavy synchronous task in thread pool. [PA]"""
-        async with self.submit_to_pool(
-            PoolType.HEAVY, task_name, timeout=timeout
-        ) as submitter:
+        async with self.submit_to_pool(PoolType.HEAVY, task_name, timeout=timeout) as submitter:
             return await submitter.sync_task(func, *args, **kwargs)
 
     def get_all_metrics(self) -> Dict[PoolType, PoolMetrics]:

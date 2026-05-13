@@ -17,13 +17,7 @@ def test_native_over_card_prefers_photos_only(monkeypatch):
         "photos": [
             {"url": _pbs("AAA111")},
         ],
-        "card": {
-            "binding_values": {
-                "photo_image_full_size_large": {
-                    "image_value": {"url": _pbs("CARD999", size="large")}
-                }
-            }
-        },
+        "card": {"binding_values": {"photo_image_full_size_large": {"image_value": {"url": _pbs("CARD999", size="large")}}}},
     }
     res = extract_text_and_images_from_syndication(tw)
     assert res["source"] == "photos"
@@ -60,13 +54,7 @@ def test_quoted_fallback_when_primary_empty(monkeypatch):
 def test_card_fallback_when_no_native():
     tw = {
         "text": "Link card only",
-        "card": {
-            "binding_values": {
-                "thumbnail_image_large": {
-                    "image_value": {"url": _pbs("CARDX", size="small")}
-                }
-            }
-        },
+        "card": {"binding_values": {"thumbnail_image_large": {"image_value": {"url": _pbs("CARDX", size="small")}}}},
     }
     res = extract_text_and_images_from_syndication(tw)
     assert res["source"] == "card"
@@ -79,11 +67,7 @@ def test_dedup_when_card_and_native_same_asset():
     tw = {
         "text": "",
         "photos": [{"url": base_native}],
-        "card": {
-            "binding_values": {
-                "photo_image_full_size": {"image_value": {"url": base_card}}
-            }
-        },
+        "card": {"binding_values": {"photo_image_full_size": {"image_value": {"url": base_card}}}},
     }
     res = extract_text_and_images_from_syndication(tw)
     assert res["image_urls"] == [upgrade_pbs_to_orig(base_native)]
@@ -115,11 +99,7 @@ def test_regression_wrong_card_previously_selected():
     tw = {
         "text": "A nice picture",
         "photos": [{"url": _pbs("NATIVEZ", size="small")}],
-        "card": {
-            "binding_values": {
-                "thumbnail_image": {"string_value": _pbs("CARDZ", size="large")}
-            }
-        },
+        "card": {"binding_values": {"thumbnail_image": {"string_value": _pbs("CARDZ", size="large")}}},
     }
     res = extract_text_and_images_from_syndication(tw)
     assert res["source"] == "photos"

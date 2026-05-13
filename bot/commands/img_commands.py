@@ -27,12 +27,8 @@ logger = get_logger(__name__)
 
 # === Attachment prompt feature toggles (env-driven) ===
 # Defaults: enabled, max 256 KiB, preferred extensions order informational only
-IMG_ATTACHMENT_MAX_BYTES = int(
-    os.getenv("IMG_ATTACHMENT_MAX_BYTES", "262144") or "262144"
-)
-IMG_ATTACHMENT_ENABLE = os.getenv(
-    "IMG_ATTACHMENT_ENABLE", "true"
-).strip().lower() not in {"0", "false", "no", "off"}
+IMG_ATTACHMENT_MAX_BYTES = int(os.getenv("IMG_ATTACHMENT_MAX_BYTES", "262144") or "262144")
+IMG_ATTACHMENT_ENABLE = os.getenv("IMG_ATTACHMENT_ENABLE", "true").strip().lower() not in {"0", "false", "no", "off"}
 IMG_ATTACHMENT_EXTS = [".txt", ".md", ".json", ".rtf", ".yaml", ".yml"]
 
 
@@ -72,9 +68,7 @@ class ImgCommands(commands.Cog):
             return True
         return False
 
-    async def _read_attachment_text(
-        self, att: discord.Attachment, limit_bytes: int
-    ) -> Optional[str]:
+    async def _read_attachment_text(self, att: discord.Attachment, limit_bytes: int) -> Optional[str]:
         """Read and decode attachment text using Discord's API with size checks and sanitization."""
         try:
             # Read the full attachment, enforce limit after
@@ -132,9 +126,7 @@ class ImgCommands(commands.Cog):
                     else:
                         params_prompt = None
                     # Optional params
-                    if "negative_prompt" in obj and isinstance(
-                        obj.get("negative_prompt"), str
-                    ):
+                    if "negative_prompt" in obj and isinstance(obj.get("negative_prompt"), str):
                         params["negative_prompt"] = obj.get("negative_prompt").strip()
                     for k in ("width", "height", "steps", "seed"):
                         if k in obj:
@@ -164,12 +156,8 @@ class ImgCommands(commands.Cog):
         s = s.strip()
         return (s[:2000] if s else None), params
 
-    @commands.command(
-        name="img", aliases=["image"], help="Generate images from text prompts"
-    )
-    async def img_command(
-        self, ctx: commands.Context, *, prompt: Optional[str] = None
-    ) -> None:
+    @commands.command(name="img", aliases=["image"], help="Generate images from text prompts")
+    async def img_command(self, ctx: commands.Context, *, prompt: Optional[str] = None) -> None:
         """
         Handle !img prefix command - delegates to vision generation system
 
@@ -186,18 +174,14 @@ class ImgCommands(commands.Cog):
         parsed_params: Dict[str, Any] = {}
         inline = (prompt or "").strip()
 
-        self.logger.info(
-            f"IMG: Raw prompt param: '{prompt}' (type: {type(prompt)}), stripped inline: '{inline}' (len: {len(inline)})"
-        )
+        self.logger.info(f"IMG: Raw prompt param: '{prompt}' (type: {type(prompt)}), stripped inline: '{inline}' (len: {len(inline)})")
 
         # Only use inline if it's actually meaningful content (not just whitespace or empty)
         if inline and len(inline) > 0:
             # Inline prompt takes precedence
             final_prompt = inline
             try:
-                self.logger.info(
-                    f"IMG.prompt_source=inline len={len(inline)} content='{inline[:50]}...' msg_id={ctx.message.id}"
-                )
+                self.logger.info(f"IMG.prompt_source=inline len={len(inline)} content='{inline[:50]}...' msg_id={ctx.message.id}")
             except Exception:
                 pass
         else:
@@ -205,9 +189,7 @@ class ImgCommands(commands.Cog):
             attachments = list(getattr(ctx.message, "attachments", []) or [])
             current_count = len(attachments)
 
-            self.logger.info(
-                f"IMG: Processing attachments - found {current_count} attachments, enable={IMG_ATTACHMENT_ENABLE}"
-            )
+            self.logger.info(f"IMG: Processing attachments - found {current_count} attachments, enable={IMG_ATTACHMENT_ENABLE}")
 
             # Respect feature flag: if disabled and no inline, show help immediately
             if not IMG_ATTACHMENT_ENABLE:
@@ -219,9 +201,7 @@ class ImgCommands(commands.Cog):
                 ref = getattr(ctx.message, "reference", None)
                 ref_msg = None
                 if ref:
-                    if getattr(ref, "resolved", None) and isinstance(
-                        ref.resolved, discord.Message
-                    ):
+                    if getattr(ref, "resolved", None) and isinstance(ref.resolved, discord.Message):
                         ref_msg = ref.resolved
                     elif getattr(ref, "message_id", None):
                         ref_msg = await ctx.channel.fetch_message(ref.message_id)
@@ -233,13 +213,9 @@ class ImgCommands(commands.Cog):
             try:
                 reply_has = bool(ref_msg and getattr(ref_msg, "attachments", None))
                 total = len(attachments)
-                self.logger.info(
-                    f"IMG.attachments current={current_count} reply_has={reply_has} total={total} msg_id={ctx.message.id}"
-                )
+                self.logger.info(f"IMG.attachments current={current_count} reply_has={reply_has} total={total} msg_id={ctx.message.id}")
                 for i, att in enumerate(attachments):
-                    self.logger.info(
-                        f"IMG: Attachment {i}: {att.filename} ({att.size} bytes, type: {att.content_type})"
-                    )
+                    self.logger.info(f"IMG: Attachment {i}: {att.filename} ({att.size} bytes, type: {att.content_type})")
             except Exception:
                 pass
 
@@ -260,9 +236,7 @@ class ImgCommands(commands.Cog):
                 try:
                     self.logger.info(f"IMG: Trying to read attachment: {cand.filename}")
                     blob = await self._read_attachment_text(cand, max_bytes)
-                    self.logger.info(
-                        f"IMG: Read blob from {cand.filename}: '{blob[:100] if blob else None}...'"
-                    )
+                    self.logger.info(f"IMG: Read blob from {cand.filename}: '{blob[:100] if blob else None}...'")
                     if not blob:
                         self.logger.info(f"IMG: No text content from {cand.filename}")
                         continue
@@ -270,16 +244,12 @@ class ImgCommands(commands.Cog):
                     if not p:
                         # Fall back to using plain text if JSON lacked 'prompt'
                         p = blob.strip()[:2000]
-                        self.logger.info(
-                            f"IMG: Using fallback plain text: '{p[:50]}...'"
-                        )
+                        self.logger.info(f"IMG: Using fallback plain text: '{p[:50]}...'")
                     if p:
                         final_prompt = p
                         parsed_params = params or {}
                         try:
-                            self.logger.info(
-                                f"IMG.prompt_source=attachment file={cand.filename} size={getattr(cand, 'size', 0)} prompt='{p[:50]}...' msg_id={ctx.message.id}"
-                            )
+                            self.logger.info(f"IMG.prompt_source=attachment file={cand.filename} size={getattr(cand, 'size', 0)} prompt='{p[:50]}...' msg_id={ctx.message.id}")
                         except Exception:
                             pass
                         found = True
@@ -296,15 +266,11 @@ class ImgCommands(commands.Cog):
                 return
 
         # Log command detection
-        self.logger.info(
-            f"Found command 'IMG', delegating to vision system (msg_id: {ctx.message.id})"
-        )
+        self.logger.info(f"Found command 'IMG', delegating to vision system (msg_id: {ctx.message.id})")
 
         # Check if Vision is enabled
         if not self.config.get("VISION_ENABLED", False):
-            await ctx.send(
-                "🚫 Vision generation is currently disabled.", ephemeral=True
-            )
+            await ctx.send("🚫 Vision generation is currently disabled.", ephemeral=True)
             return
 
         # Delegate to router's vision generation handler
@@ -349,9 +315,7 @@ class ImgCommands(commands.Cog):
                                 setattr(ep, k, parsed_params[k])
                             except Exception:
                                 pass
-                    if "model" in parsed_params and isinstance(
-                        parsed_params["model"], str
-                    ):
+                    if "model" in parsed_params and isinstance(parsed_params["model"], str):
                         try:
                             ep.model = parsed_params["model"]
                         except Exception:
@@ -363,21 +327,13 @@ class ImgCommands(commands.Cog):
                 )
 
                 # The vision handler manages its own response, so we don't need to do anything more
-                self.logger.info(
-                    f"Successfully delegated !img to vision system (msg_id: {ctx.message.id})"
-                )
+                self.logger.info(f"Successfully delegated !img to vision system (msg_id: {ctx.message.id})")
 
             except Exception as e:
-                self.logger.error(
-                    f"Failed to delegate !img to vision system: {e}", exc_info=True
-                )
-                await ctx.send(
-                    "❌ Failed to process image generation request. Please try again."
-                )
+                self.logger.error(f"Failed to delegate !img to vision system: {e}", exc_info=True)
+                await ctx.send("❌ Failed to process image generation request. Please try again.")
         else:
-            await ctx.send(
-                "🚫 Vision system is not available right now. Please try again later."
-            )
+            await ctx.send("🚫 Vision system is not available right now. Please try again later.")
 
     def _build_img_help_embed(self) -> discord.Embed:
         """Build the single, stylish help embed card for !img usage."""
@@ -385,10 +341,7 @@ class ImgCommands(commands.Cog):
         BRAND_PRIMARY = 0x5865F2
         embed = discord.Embed(
             title="🎨 Image Generation Help",
-            description=(
-                "Generate images from text prompts.\n"
-                "Send text inline, or attach a small .txt/.json file and send !img."
-            ),
+            description=("Generate images from text prompts.\nSend text inline, or attach a small .txt/.json file and send !img."),
             color=BRAND_PRIMARY,
         )
         embed.add_field(name="Usage", value="!img <description>", inline=False)
@@ -399,15 +352,10 @@ class ImgCommands(commands.Cog):
         )
         embed.add_field(
             name="Attachments:",
-            value=(
-                "Attach a small .txt or .json (≤256 KB) and send !img with no text. "
-                'JSON may include options: {"prompt":"a foggy forest","width":1024,"height":1024}.'
-            ),
+            value=('Attach a small .txt or .json (≤256 KB) and send !img with no text. JSON may include options: {"prompt":"a foggy forest","width":1024,"height":1024}.'),
             inline=False,
         )
-        embed.set_footer(
-            text="Works in DMs and guild channels. You can also reply to a message with a file."
-        )
+        embed.set_footer(text="Works in DMs and guild channels. You can also reply to a message with a file.")
         return embed
 
 

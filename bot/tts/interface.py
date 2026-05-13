@@ -53,24 +53,16 @@ class TTSManager:
                 pass
 
         self.enabled = bool(self.config.get("TTS_ENABLE", True))
-        env_engine = (
-            (self.config.get("TTS_ENGINE") or os.getenv("TTS_ENGINE") or "")
-            .strip()
-            .lower()
-        )
+        env_engine = (self.config.get("TTS_ENGINE") or os.getenv("TTS_ENGINE") or "").strip().lower()
         model_hint = self.config.get("TTS_MODEL_PATH") or os.getenv("TTS_MODEL_PATH")
         voices_hint = self.config.get("TTS_VOICES_PATH") or os.getenv("TTS_VOICES_PATH")
         has_local_assets = bool(model_hint and voices_hint)
         if not env_engine:
             default_model = Path("tts/kokoro-v1.0.onnx")
             default_voices = Path("tts/voices-v1.0.bin")
-            has_local_assets = has_local_assets or (
-                default_model.exists() and default_voices.exists()
-            )
+            has_local_assets = has_local_assets or (default_model.exists() and default_voices.exists())
         self.backend = env_engine or ("kokoro-onnx" if has_local_assets else "stub")
-        self.voice = str(
-            self.config.get("TTS_VOICE") or os.getenv("TTS_VOICE") or "af_heart"
-        )
+        self.voice = str(self.config.get("TTS_VOICE") or os.getenv("TTS_VOICE") or "af_heart")
         self.voices: list[str] = []
         self.available = False
         self.degraded = False
@@ -82,15 +74,9 @@ class TTSManager:
         self.cache_dir = Path(self.config.get("TTS_CACHE_DIR") or _default_cache_dir())
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        self.timeout_s = float(
-            os.getenv("TTS_TIMEOUT_S", self.config.get("TTS_TIMEOUT_S", 25.0))
-        )
-        self.timeout_cold_s = float(
-            os.getenv("TTS_TIMEOUT_COLD_S", self.config.get("TTS_TIMEOUT_COLD_S", 10.0))
-        )
-        self.timeout_warm_s = float(
-            os.getenv("TTS_TIMEOUT_WARM_S", self.config.get("TTS_TIMEOUT_WARM_S", 2.0))
-        )
+        self.timeout_s = float(os.getenv("TTS_TIMEOUT_S", self.config.get("TTS_TIMEOUT_S", 25.0)))
+        self.timeout_cold_s = float(os.getenv("TTS_TIMEOUT_COLD_S", self.config.get("TTS_TIMEOUT_COLD_S", 10.0)))
+        self.timeout_warm_s = float(os.getenv("TTS_TIMEOUT_WARM_S", self.config.get("TTS_TIMEOUT_WARM_S", 2.0)))
 
         self._warmup_status = "not_started"  # not_started | running | complete | failed
         self._warmup_task: asyncio.Task[Any] | None = None
@@ -141,12 +127,7 @@ class TTSManager:
         # In all cases: non-fatal, normal synthesis proceeds with cold/warm timeout.
 
     def is_available(self) -> bool:
-        return bool(
-            self.enabled
-            and self.available
-            and self._engine is not None
-            and not self.degraded
-        )
+        return bool(self.enabled and self.available and self._engine is not None and not self.degraded)
 
     def get_status(self) -> dict[str, Any]:
         return {
@@ -260,9 +241,7 @@ class TTSManager:
                 else:
                     result = await result
             elif timeout is not None:
-                result = await asyncio.wait_for(
-                    asyncio.to_thread(lambda: result), timeout=timeout
-                )
+                result = await asyncio.wait_for(asyncio.to_thread(lambda: result), timeout=timeout)
 
             audio_bytes = self._coerce_audio_bytes(result)
             self._warmed_up = True
@@ -303,9 +282,7 @@ class TTSManager:
             raise ValueError("Text cannot be empty")
 
         if timeout is None:
-            timeout = (
-                self.timeout_cold_s if not self._warmed_up else self.timeout_warm_s
-            )
+            timeout = self.timeout_cold_s if not self._warmed_up else self.timeout_warm_s
 
         chosen_voice = voice or self.voice
         old_voice = getattr(self._engine, "voice", None)
@@ -327,9 +304,7 @@ class TTSManager:
         output_format = (output_format or "wav").strip().lower()
         if out_path is None:
             suffix = ".ogg" if output_format == "ogg" else ".wav"
-            fd, temp_name = tempfile.mkstemp(
-                prefix="tts_", suffix=suffix, dir=str(self.cache_dir)
-            )
+            fd, temp_name = tempfile.mkstemp(prefix="tts_", suffix=suffix, dir=str(self.cache_dir))
             os.close(fd)
             out_path = Path(temp_name)
         else:
@@ -339,14 +314,8 @@ class TTSManager:
         if output_format == "ogg":
             # If the engine returned a valid WAV payload, transcode it; otherwise
             # preserve the bytes for tests and degraded paths.
-            if (
-                len(audio_bytes) >= 44
-                and audio_bytes[:4] == b"RIFF"
-                and audio_bytes[8:12] == b"WAVE"
-            ):
-                with tempfile.NamedTemporaryFile(
-                    suffix=".wav", delete=False, dir=str(self.cache_dir)
-                ) as tmp:
+            if len(audio_bytes) >= 44 and audio_bytes[:4] == b"RIFF" and audio_bytes[8:12] == b"WAVE":
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=str(self.cache_dir)) as tmp:
                     tmp.write(audio_bytes)
                     wav_path = Path(tmp.name)
                 try:

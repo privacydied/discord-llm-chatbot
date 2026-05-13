@@ -101,17 +101,12 @@ class IndexingQueue:
             "last_activity": datetime.utcnow(),
         }
 
-        logger.info(
-            f"[RAG Indexing] Queue initialized: max_size={max_queue_size}, "
-            f"workers={num_workers}, batch_size={batch_size}, enabled={enabled}"
-        )
+        logger.info(f"[RAG Indexing] Queue initialized: max_size={max_queue_size}, workers={num_workers}, batch_size={batch_size}, enabled={enabled}")
 
     async def start_workers(self) -> None:
         """Start the background worker tasks."""
         if not self.enabled:
-            logger.info(
-                "[RAG Indexing] Background indexing disabled, skipping worker startup"
-            )
+            logger.info("[RAG Indexing] Background indexing disabled, skipping worker startup")
             return
 
         async with self._worker_lock:
@@ -119,19 +114,13 @@ class IndexingQueue:
                 logger.warning("[RAG Indexing] Workers already started")
                 return
 
-            logger.info(
-                f"[RAG Indexing] Starting {self.num_workers} background workers"
-            )
+            logger.info(f"[RAG Indexing] Starting {self.num_workers} background workers")
 
             for i in range(self.num_workers):
-                worker_task = asyncio.create_task(
-                    self._worker_loop(worker_id=i), name=f"rag-indexing-worker-{i}"
-                )
+                worker_task = asyncio.create_task(self._worker_loop(worker_id=i), name=f"rag-indexing-worker-{i}")
                 self._workers.append(worker_task)
 
-            logger.info(
-                f"[RAG Indexing] ✔ {len(self._workers)} workers started successfully"
-            )
+            logger.info(f"[RAG Indexing] ✔ {len(self._workers)} workers started successfully")
 
     async def enqueue_task(self, task: IndexingTask) -> bool:
         """
@@ -145,24 +134,20 @@ class IndexingQueue:
         """
         if not self.enabled:
             # Synchronous processing when background indexing is disabled
-            logger.debug(
-                f"[RAG Indexing] Background indexing disabled, processing synchronously: {task.source_id}"
-            )
+            logger.debug(f"[RAG Indexing] Background indexing disabled, processing synchronously: {task.source_id}")
             return await self._process_task_sync(task)
 
         # Chunk dedup by content hash [Phase 6-9]
         text_hash = hashlib.sha256(task.text.encode("utf-8", errors="replace")).hexdigest()[:16]
         dedup_key = f"{task.source_id}:{text_hash}"
         if dedup_key in self._seen_chunks:
-            logger.debug(
-                f"[RAG Indexing] Skipping already-indexed chunk: {task.source_id}"
-            )
+            logger.debug(f"[RAG Indexing] Skipping already-indexed chunk: {task.source_id}")
             return True  # Already indexed; not an error
 
         if len(self._seen_chunks) >= self._dedup_max:
             # Evict oldest entries when dedup set gets too large
             seen = list(self._seen_chunks)
-            self._seen_chunks = set(seen[len(seen)//2:])
+            self._seen_chunks = set(seen[len(seen) // 2 :])
 
         self._seen_chunks.add(dedup_key)
 
@@ -172,10 +157,7 @@ class IndexingQueue:
             self._stats["tasks_enqueued"] += 1
             self._stats["last_activity"] = datetime.utcnow()
 
-            logger.debug(
-                f"[RAG Indexing] ✔ Enqueued task: {task.source_id} "
-                f"(queue_depth={self._queue.qsize()})"
-            )
+            logger.debug(f"[RAG Indexing] ✔ Enqueued task: {task.source_id} (queue_depth={self._queue.qsize()})")
             return True
 
         except asyncio.QueueFull:
@@ -183,10 +165,7 @@ class IndexingQueue:
             self._stats["queue_overflows"] += 1
             self._stats["tasks_dropped"] += 1
 
-            logger.warning(
-                f"[RAG Indexing] ⚠ Queue overflow, dropping task: {task.source_id} "
-                f"(queue_size={self._queue.qsize()}/{self.max_queue_size})"
-            )
+            logger.warning(f"[RAG Indexing] ⚠ Queue overflow, dropping task: {task.source_id} (queue_size={self._queue.qsize()}/{self.max_queue_size})")
 
             # Could implement priority-based dropping here
             # For now, just drop the new task
@@ -213,27 +192,20 @@ class IndexingQueue:
             if success:
                 task.status = IndexingTaskStatus.COMPLETED
                 self._stats["tasks_processed"] += 1
-                logger.debug(
-                    f"[RAG Indexing] ✔ Synchronously processed: {task.source_id} "
-                    f"({processing_time:.2f}s)"
-                )
+                logger.debug(f"[RAG Indexing] ✔ Synchronously processed: {task.source_id} ({processing_time:.2f}s)")
                 return True
             else:
                 task.status = IndexingTaskStatus.FAILED
                 task.error_message = "Backend processing failed"
                 self._stats["tasks_failed"] += 1
-                logger.error(
-                    f"[RAG Indexing] ✖ Synchronous processing failed: {task.source_id}"
-                )
+                logger.error(f"[RAG Indexing] ✖ Synchronous processing failed: {task.source_id}")
                 return False
 
         except Exception as e:
             task.status = IndexingTaskStatus.FAILED
             task.error_message = str(e)
             self._stats["tasks_failed"] += 1
-            logger.error(
-                f"[RAG Indexing] ✖ Synchronous processing error: {task.source_id} - {e}"
-            )
+            logger.error(f"[RAG Indexing] ✖ Synchronous processing error: {task.source_id} - {e}")
             return False
 
     async def _worker_loop(self, worker_id: int) -> None:
@@ -272,10 +244,7 @@ class IndexingQueue:
         task.attempts += 1
 
         try:
-            logger.debug(
-                f"[RAG Indexing] Worker {worker_id} processing: {task.source_id} "
-                f"(attempt {task.attempts}/{task.max_attempts})"
-            )
+            logger.debug(f"[RAG Indexing] Worker {worker_id} processing: {task.source_id} (attempt {task.attempts}/{task.max_attempts})")
 
             # Process the document
             success = await self.rag_backend.add_document(
@@ -295,26 +264,16 @@ class IndexingQueue:
 
                 # Update average processing time
                 if self._stats["tasks_processed"] > 0:
-                    self._stats["avg_processing_time"] = (
-                        self._stats["total_processing_time"]
-                        / self._stats["tasks_processed"]
-                    )
+                    self._stats["avg_processing_time"] = self._stats["total_processing_time"] / self._stats["tasks_processed"]
 
-                logger.debug(
-                    f"[RAG Indexing] ✔ Worker {worker_id} completed: {task.source_id} "
-                    f"({processing_time:.2f}s)"
-                )
+                logger.debug(f"[RAG Indexing] ✔ Worker {worker_id} completed: {task.source_id} ({processing_time:.2f}s)")
             else:
-                await self._handle_task_failure(
-                    task, "Backend processing failed", worker_id
-                )
+                await self._handle_task_failure(task, "Backend processing failed", worker_id)
 
         except Exception as e:
             await self._handle_task_failure(task, str(e), worker_id)
 
-    async def _handle_task_failure(
-        self, task: IndexingTask, error_message: str, worker_id: int
-    ) -> None:
+    async def _handle_task_failure(self, task: IndexingTask, error_message: str, worker_id: int) -> None:
         """Handle task failure with retry logic."""
         task.error_message = error_message
 
@@ -322,10 +281,7 @@ class IndexingQueue:
             # Retry with exponential backoff
             backoff_delay = min(2 ** (task.attempts - 1), 30)  # Cap at 30 seconds
 
-            logger.warning(
-                f"[RAG Indexing] Worker {worker_id} task failed, retrying in {backoff_delay}s: "
-                f"{task.source_id} (attempt {task.attempts}/{task.max_attempts}) - {error_message}"
-            )
+            logger.warning(f"[RAG Indexing] Worker {worker_id} task failed, retrying in {backoff_delay}s: {task.source_id} (attempt {task.attempts}/{task.max_attempts}) - {error_message}")
 
             # Reset status for retry
             task.status = IndexingTaskStatus.PENDING
@@ -338,18 +294,13 @@ class IndexingQueue:
                 # If queue is full during retry, mark as failed
                 task.status = IndexingTaskStatus.FAILED
                 self._stats["tasks_failed"] += 1
-                logger.error(
-                    f"[RAG Indexing] Failed to re-enqueue task due to queue overflow: {task.source_id}"
-                )
+                logger.error(f"[RAG Indexing] Failed to re-enqueue task due to queue overflow: {task.source_id}")
         else:
             # Max attempts reached
             task.status = IndexingTaskStatus.FAILED
             self._stats["tasks_failed"] += 1
 
-            logger.error(
-                f"[RAG Indexing] ✖ Worker {worker_id} task failed permanently: "
-                f"{task.source_id} - {error_message}"
-            )
+            logger.error(f"[RAG Indexing] ✖ Worker {worker_id} task failed permanently: {task.source_id} - {error_message}")
 
     async def shutdown(self, timeout: float = 30.0) -> Dict[str, Any]:
         """
@@ -362,9 +313,7 @@ class IndexingQueue:
             Shutdown statistics
         """
         if not self.enabled:
-            logger.info(
-                "[RAG Indexing] Background indexing was disabled, nothing to shutdown"
-            )
+            logger.info("[RAG Indexing] Background indexing was disabled, nothing to shutdown")
             return {"status": "disabled"}
 
         logger.info(f"[RAG Indexing] Starting graceful shutdown (timeout={timeout}s)")
@@ -378,9 +327,7 @@ class IndexingQueue:
             await asyncio.wait_for(self._queue.join(), timeout=timeout / 2)
             logger.info("[RAG Indexing] ✔ Queue drained successfully")
         except asyncio.TimeoutError:
-            logger.warning(
-                f"[RAG Indexing] ⚠ Queue drain timeout, {self._queue.qsize()} tasks remaining"
-            )
+            logger.warning(f"[RAG Indexing] ⚠ Queue drain timeout, {self._queue.qsize()} tasks remaining")
 
         # Cancel and wait for workers
         async with self._worker_lock:
@@ -444,13 +391,9 @@ class IndexingQueue:
 
         # Check queue overflow rate
         if self._stats["tasks_enqueued"] > 0:
-            overflow_rate = (
-                self._stats["queue_overflows"] / self._stats["tasks_enqueued"]
-            )
+            overflow_rate = self._stats["queue_overflows"] / self._stats["tasks_enqueued"]
             if overflow_rate > 0.1:  # More than 10% overflow
-                logger.warning(
-                    f"[RAG Indexing] High overflow rate: {overflow_rate:.2%}"
-                )
+                logger.warning(f"[RAG Indexing] High overflow rate: {overflow_rate:.2%}")
                 return False
 
         return True

@@ -13,9 +13,7 @@ from typing import Optional
 import discord
 
 
-async def read_attachment_text(
-    att: discord.Attachment, limit_bytes: int = 262_144
-) -> Optional[str]:
+async def read_attachment_text(att: discord.Attachment, limit_bytes: int = 262_144) -> Optional[str]:
     """Read and decode attachment text with size checks and sanitization.
 
     Mirrors the behavior used by the existing !img flow:

@@ -35,11 +35,7 @@ def log_tts_config(config: Dict[str, Any]) -> None:
         config: Dictionary containing TTS configuration
     """
     # Filter out sensitive information
-    safe_config = {
-        k: v
-        for k, v in config.items()
-        if not k.lower().endswith(("key", "secret", "password", "token"))
-    }
+    safe_config = {k: v for k, v in config.items() if not k.lower().endswith(("key", "secret", "password", "token"))}
 
     # Log the configuration
     logger.info(
@@ -79,9 +75,7 @@ def log_tts_config(config: Dict[str, Any]) -> None:
         )
 
 
-def log_phonemiser_selection(
-    language: str, selected: str, available: Dict[str, bool]
-) -> None:
+def log_phonemiser_selection(language: str, selected: str, available: Dict[str, bool]) -> None:
     """
     Log the phonemiser selection for a language.
 
@@ -123,9 +117,7 @@ def log_voice_loading(voice_id: str, vector_shape: tuple, vector_norm: float) ->
     )
 
 
-def log_tts_generation(
-    text: str, voice_id: str, output_path: Path, duration_ms: float
-) -> None:
+def log_tts_generation(text: str, voice_id: str, output_path: Path, duration_ms: float) -> None:
     """
     Log TTS generation details.
 
@@ -153,14 +145,10 @@ def log_tts_generation(
     # Update metrics
     global TTS_METRICS
     TTS_METRICS["tts_generation_count"] += 1
-    TTS_METRICS["tts_generation_time_total"] += (
-        duration_ms / 1000.0
-    )  # Convert to seconds
+    TTS_METRICS["tts_generation_time_total"] += duration_ms / 1000.0  # Convert to seconds
 
 
-def log_tts_error(
-    error_type: str, error_message: str, details: Optional[Dict[str, Any]] = None
-) -> None:
+def log_tts_error(error_type: str, error_message: str, details: Optional[Dict[str, Any]] = None) -> None:
     """
     Log TTS error details.
 
@@ -294,9 +282,7 @@ def get_tts_metrics() -> Dict[str, Any]:
 
     # Calculate average generation time if there are any generations
     if metrics["tts_generation_count"] > 0:
-        metrics["tts_generation_time_avg"] = (
-            metrics["tts_generation_time_total"] / metrics["tts_generation_count"]
-        )
+        metrics["tts_generation_time_avg"] = metrics["tts_generation_time_total"] / metrics["tts_generation_count"]
     else:
         metrics["tts_generation_time_avg"] = 0.0
 
@@ -309,9 +295,7 @@ def get_tts_metrics() -> Dict[str, Any]:
 
     # Calculate error rate if there are any generations
     if metrics["tts_generation_count"] > 0:
-        metrics["tts_error_rate"] = (
-            metrics["tts_generation_errors"] / metrics["tts_generation_count"]
-        )
+        metrics["tts_error_rate"] = metrics["tts_generation_errors"] / metrics["tts_generation_count"]
     else:
         metrics["tts_error_rate"] = 0.0
 

@@ -216,10 +216,7 @@ async def test_no_parallelism():
     message.id = 789
     message.content = ""
     message.mentions = []
-    message.attachments = [
-        MagicMock(spec=Attachment, filename=f"file{i}.jpg", content_type="image/jpeg")
-        for i in range(5)
-    ]
+    message.attachments = [MagicMock(spec=Attachment, filename=f"file{i}.jpg", content_type="image/jpeg") for i in range(5)]
     message.embeds = []
 
     # Create router and mock handler
@@ -235,9 +232,7 @@ async def test_no_parallelism():
     await router._process_multimodal_message_internal(message, "context")
 
     # Verify no parallelism occurred
-    assert max_concurrent == 1, (
-        f"Expected max 1 concurrent handler, got {max_concurrent}"
-    )
+    assert max_concurrent == 1, f"Expected max 1 concurrent handler, got {max_concurrent}"
 
 
 @pytest.mark.asyncio
@@ -404,14 +399,8 @@ def test_collect_input_items_order():
     assert len(items) == 5
     assert items[0].source_type == "url" and items[0].payload == "https://example.com"
     assert items[1].source_type == "url" and items[1].payload == "https://test.org"
-    assert (
-        items[2].source_type == "attachment"
-        and items[2].payload.filename == "file1.pdf"
-    )
-    assert (
-        items[3].source_type == "attachment"
-        and items[3].payload.filename == "file2.jpg"
-    )
+    assert items[2].source_type == "attachment" and items[2].payload.filename == "file1.pdf"
+    assert items[3].source_type == "attachment" and items[3].payload.filename == "file2.jpg"
     assert items[4].source_type == "embed"
 
     # Verify order indices

@@ -9,9 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 def _normalize_text(value: Optional[str]) -> str:
     if not value:
         return ""
-    return "\n".join(
-        part.strip() for part in str(value).splitlines() if part.strip()
-    ).strip()
+    return "\n".join(part.strip() for part in str(value).splitlines() if part.strip()).strip()
 
 
 def _trim_text(value: str, max_chars: int) -> str:
@@ -49,9 +47,7 @@ class EvidenceBundle:
     source_platform: str = ""
     source_url: str = ""
     primary_tweet_id: Optional[str] = None  # Anchor for deterministic media selection
-    selected_tweet_id: Optional[str] = (
-        None  # Actual media host tweet id (may equal primary)
-    )
+    selected_tweet_id: Optional[str] = None  # Actual media host tweet id (may equal primary)
     caption_text: str = ""
     quoted_text: str = ""  # For quote tweets and retweets
     media_transcript: str = ""
@@ -101,9 +97,7 @@ class EvidenceBundle:
             return right
         return f"{left}\n\n{right}"
 
-    def _sections_similar(
-        self, section1: EvidenceSection, section2: EvidenceSection
-    ) -> bool:
+    def _sections_similar(self, section1: EvidenceSection, section2: EvidenceSection) -> bool:
         """Check if two sections are near-duplicates for deduplication."""
         if section1.kind == section2.kind:
             return False  # Same kind should not be deduped
@@ -208,9 +202,7 @@ class EvidenceBundle:
 
         return sections
 
-    def compose_prompt_text(
-        self, *, token_budget: int = 0, section_limit: int = 0
-    ) -> str:
+    def compose_prompt_text(self, *, token_budget: int = 0, section_limit: int = 0) -> str:
         """
         Compose evidence into final prompt text with token guard and ordering.
         Args:
@@ -285,9 +277,7 @@ class EvidenceBundle:
                         "lengths": lens,
                         "stt_no_speech": bool(getattr(self, "stt_no_speech", False)),
                         "primary": self.primary_tweet_id or "",
-                        "selected": (
-                            self.selected_tweet_id or self.primary_tweet_id or ""
-                        ),
+                        "selected": (self.selected_tweet_id or self.primary_tweet_id or ""),
                         "sections_kept": kept_sections,
                         "total_sections": len(sections),
                         "token_budget": token_budget,
@@ -302,12 +292,4 @@ class EvidenceBundle:
 
     def has_evidence(self) -> bool:
         """Check if bundle contains any evidence."""
-        return bool(
-            self.caption_text
-            or self.quoted_text
-            or self.media_transcript
-            or self.media_alt_text
-            or self.media_ocr_text
-            or self.media_vision_notes
-            or self.extra_sections
-        )
+        return bool(self.caption_text or self.quoted_text or self.media_transcript or self.media_alt_text or self.media_ocr_text or self.media_vision_notes or self.extra_sections)

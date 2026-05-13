@@ -39,14 +39,10 @@ def validate_config(cfg: dict[str, Any] | None = None) -> list[str]:
         "STT_MULTIMODAL_FALLBACK_MODELS": cfg.get("STT_MULTIMODAL_FALLBACK_MODELS"),
     }
     for name, raw in ladders.items():
-        models = _parse_model_list(raw) if raw else _parse_model_list(
-            os.getenv(name)
-        )
+        models = _parse_model_list(raw) if raw else _parse_model_list(os.getenv(name))
         if len(models) != len(set(models)):
             dupes = [m for m in models if models.count(m) > 1]
-            warnings.append(
-                f"Config: {name} contains duplicate models: {dupes}"
-            )
+            warnings.append(f"Config: {name} contains duplicate models: {dupes}")
 
     # --- Timeout ladder length mismatch ---
     # Check that the number of timeout values matches the number of models
@@ -59,9 +55,6 @@ def validate_config(cfg: dict[str, Any] | None = None) -> list[str]:
         if raw_timeouts:
             timeouts = [t.strip() for t in raw_timeouts.split(",") if t.strip()]
             if len(timeouts) != len(models) and len(timeouts) > 0:
-                warnings.append(
-                    f"Config: {timeout_name} has {len(timeouts)} entries but "
-                    f"{name} has {len(models)} models"
-                )
+                warnings.append(f"Config: {timeout_name} has {len(timeouts)} entries but {name} has {len(models)} models")
 
     return warnings

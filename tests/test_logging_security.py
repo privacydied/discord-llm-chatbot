@@ -271,9 +271,7 @@ class TestPartialSecretRedaction:
         fake_token = "sk-fake-discord-token-abc123"
         with patch.dict(os.environ, {"DISCORD_TOKEN": fake_token}):
             f = SensitiveDataFilter()
-            record = _make_log_record(
-                extra_data={"url": f"https://api.example.com?token={fake_token}"}
-            )
+            record = _make_log_record(extra_data={"url": f"https://api.example.com?token={fake_token}"})
             f.filter(record)
             assert fake_token not in str(record.extra_data["url"])
             assert "[REDACTED]" in str(record.extra_data["url"])
@@ -330,9 +328,7 @@ class TestSecretKeysCompleteness:
             fake_val = f"fake-{key}-value-12345678"
             with patch.dict(os.environ, {key: fake_val}):
                 result = redact_sensitive_values(f"text with {fake_val} inside")
-                assert fake_val not in result, (
-                    f"redact_sensitive_values didn't redact {key}"
-                )
+                assert fake_val not in result, f"redact_sensitive_values didn't redact {key}"
 
 
 # ---------------------------------------------------------------------------

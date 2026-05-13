@@ -38,9 +38,7 @@ async def _load_vector_index(self) -> bool:
 
         if self._index_state == IndexState.LOADING:
             # Another coroutine is already loading, wait for it — release lock during await
-            logger.debug(
-                "[RAG] Vector index already loading, waiting for completion..."
-            )
+            logger.debug("[RAG] Vector index already loading, waiting for completion...")
         else:
             # We're the first to attempt loading
             logger.info("[RAG] Starting lazy vector index load...")
@@ -51,10 +49,7 @@ async def _load_vector_index(self) -> bool:
     # Wait for loading to complete (outside the lock)
     if not acquired_loading:
         start_wait = time.time()
-        while (
-            self._index_state == IndexState.LOADING
-            and time.time() - start_wait < self.config.lazy_load_timeout
-        ):
+        while self._index_state == IndexState.LOADING and time.time() - start_wait < self.config.lazy_load_timeout:
             await asyncio.sleep(0.1)
 
         return self._index_state == IndexState.LOADED
@@ -75,14 +70,10 @@ async def _load_vector_index(self) -> bool:
         stats = await self.rag_backend.get_collection_stats()
         total_chunks = stats.get("total_chunks", 0)
         if total_chunks == 0:
-            logger.info(
-                "[RAG] ⚠️ Vector index loaded but collection is empty - no documents indexed yet"
-            )
+            logger.info("[RAG] ⚠️ Vector index loaded but collection is empty - no documents indexed yet")
             logger.info("[RAG] 💡 To populate the knowledge base, run: !rag bootstrap")
         else:
-            logger.info(
-                f"[RAG] ✅ Vector index loaded successfully with {total_chunks:,} chunks"
-            )
+            logger.info(f"[RAG] ✅ Vector index loaded successfully with {total_chunks:,} chunks")
 
         self._vector_load_time = (time.time() - vector_load_start) * 1000
 
@@ -94,11 +85,7 @@ async def _load_vector_index(self) -> bool:
         self.search_stats["first_query_lazy_loads"] += 1
         self.search_stats["lazy_load_time_ms"] = self._vector_load_time
 
-        logger.info(
-            f"[RAG] ✔ Lazy vector index load completed: "
-            f"load_time={self._vector_load_time:.1f}ms, "
-            f"total_chunks={stats.get('total_chunks', 0)}"
-        )
+        logger.info(f"[RAG] ✔ Lazy vector index load completed: load_time={self._vector_load_time:.1f}ms, total_chunks={stats.get('total_chunks', 0)}")
 
         return True
 
@@ -148,7 +135,5 @@ async def _ensure_vector_index_loaded(self) -> bool:
         return False
 
     # Trigger lazy load
-    logger.info(
-        "[RAG] Vector index not loaded, triggering lazy load for first search..."
-    )
+    logger.info("[RAG] Vector index not loaded, triggering lazy load for first search...")
     return await self._load_vector_index()

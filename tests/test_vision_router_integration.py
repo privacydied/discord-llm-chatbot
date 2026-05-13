@@ -90,12 +90,8 @@ async def test_vision_router_integration():
         router = Router(mock_bot)
 
         # Verify Vision components initialized
-        assert router._vision_intent_router is not None, (
-            "VisionIntentRouter should be initialized"
-        )
-        assert router._vision_orchestrator is not None, (
-            "VisionOrchestrator should be initialized"
-        )
+        assert router._vision_intent_router is not None, "VisionIntentRouter should be initialized"
+        assert router._vision_orchestrator is not None, "VisionOrchestrator should be initialized"
         print("✅ Vision components initialized in router")
 
         # Test intent detection for various prompts
@@ -122,9 +118,7 @@ async def test_vision_router_integration():
 
                 if intent_result.decision.use_vision:
                     vision_detected += 1
-                    print(
-                        f"  ✅ Vision detected for: '{prompt}' (confidence: {intent_result.confidence:.2f})"
-                    )
+                    print(f"  ✅ Vision detected for: '{prompt}' (confidence: {intent_result.confidence:.2f})")
                     print(f"     Task: {intent_result.extracted_params.task}")
                     print(f"     Prompt: {intent_result.extracted_params.prompt}")
                 else:
@@ -133,9 +127,7 @@ async def test_vision_router_integration():
             except Exception as e:
                 print(f"  ❌ Error processing '{prompt}': {e}")
 
-        print(
-            f"📊 Vision intent detected in {vision_detected}/{len(test_prompts)} prompts"
-        )
+        print(f"📊 Vision intent detected in {vision_detected}/{len(test_prompts)} prompts")
 
         # Test _invoke_text_flow with vision intent
         print("🔀 Testing text flow routing...")
@@ -144,9 +136,7 @@ async def test_vision_router_integration():
 
         # Mock the vision generation to avoid actual API calls
         with patch.object(router, "_handle_vision_generation") as mock_vision_handler:
-            mock_vision_handler.return_value = MagicMock(
-                content="Vision generation completed", has_payload=True
-            )
+            mock_vision_handler.return_value = MagicMock(content="Vision generation completed", has_payload=True)
 
             # Test with vision prompt
             await router._invoke_text_flow(

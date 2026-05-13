@@ -6,9 +6,7 @@ Covers the scenarios from the Fix-This-Code prompt.
 import pytest
 
 # Skip — stale tests against refactored router reply/context APIs
-pytestmark = pytest.mark.skip(
-    reason="Stale tests against refactored router reply/context APIs"
-)
+pytestmark = pytest.mark.skip(reason="Stale tests against refactored router reply/context APIs")
 
 from unittest.mock import AsyncMock, MagicMock, patch
 import discord
@@ -62,9 +60,7 @@ class TestReplyTargetResolution:
     """Test reply target resolution logic across different scenarios."""
 
     @pytest.mark.asyncio
-    async def test_reply_plus_mention_minimal_text(
-        self, router, mock_bot, mock_human_author
-    ):
+    async def test_reply_plus_mention_minimal_text(self, router, mock_bot, mock_human_author):
         """Reply + @mention + minimal text ("yo") should target the parent, route to text, no link nag."""
         # Mock parent message
         parent_msg = MagicMock(spec=discord.Message)
@@ -103,9 +99,7 @@ class TestReplyTargetResolution:
             assert "yo" in args[0][0]  # Content should contain "yo"
 
     @pytest.mark.asyncio
-    async def test_thread_reply_to_newest_human(
-        self, router, mock_bot, mock_human_author, mock_bot_author
-    ):
+    async def test_thread_reply_to_newest_human(self, router, mock_bot, mock_human_author, mock_bot_author):
         """Thread reply should target newest message (or newest human if newest is bot)."""
         # Create thread context
         mock_thread = MagicMock(spec=discord.Thread)
@@ -184,9 +178,7 @@ class TestReplyTargetResolution:
             # We verify it was called, which means the mention was processed
 
     @pytest.mark.asyncio
-    async def test_reply_with_link_harvests_parent(
-        self, router, mock_bot, mock_human_author
-    ):
+    async def test_reply_with_link_harvests_parent(self, router, mock_bot, mock_human_author):
         """Reply to post with link should harvest that link and route correctly."""
         # Mock parent with URL
         parent_msg = MagicMock(spec=discord.Message)
@@ -263,9 +255,7 @@ class TestContextIsolation:
             mock_collect.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_reply_context_near_trigger(
-        self, router, mock_bot, mock_human_author
-    ):
+    async def test_reply_context_near_trigger(self, router, mock_bot, mock_human_author):
         """Reply context builds linear chain root→…→parent→current, with tail near trigger."""
         # Create message chain
         root_msg = MagicMock(spec=discord.Message)
@@ -289,9 +279,7 @@ class TestContextIsolation:
 
         with (
             patch("bot.memory.thread_tail._is_thread_channel", return_value=False),
-            patch(
-                "bot.memory.mention_context.maybe_build_mention_context"
-            ) as mock_mention,
+            patch("bot.memory.mention_context.maybe_build_mention_context") as mock_mention,
             patch.object(router, "_should_process_message", return_value=True),
             patch("bot.modality.collect_input_items", return_value=[]),
             patch.object(router, "_process_multimodal_message_internal") as mock_multi,
@@ -306,9 +294,7 @@ class TestContextIsolation:
             mock_multi.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_plain_message_no_downstream_bleed(
-        self, router, mock_bot, mock_human_author
-    ):
+    async def test_plain_message_no_downstream_bleed(self, router, mock_bot, mock_human_author):
         """Plain messages should treat current message as fresh prompt without stale channel memory."""
         # Mock plain message
         msg = MagicMock(spec=discord.Message)
@@ -344,9 +330,7 @@ class TestTextDefaultBehavior:
     """Test that text is the default unless explicit media intent is shown."""
 
     @pytest.mark.asyncio
-    async def test_substantive_text_routes_to_text(
-        self, router, mock_bot, mock_human_author
-    ):
+    async def test_substantive_text_routes_to_text(self, router, mock_bot, mock_human_author):
         """Any substantive text should route to text flow."""
         msg = MagicMock(spec=discord.Message)
         msg.id = 111
@@ -368,17 +352,13 @@ class TestTextDefaultBehavior:
 
         with (
             patch.object(router, "_should_process_message", return_value=True),
-            patch.object(
-                router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)
-            ),
+            patch.object(router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)),
             patch.object(
                 router,
                 "_resolve_scope_and_target",
                 AsyncMock(return_value=("lone", None, "")),
             ),
-            patch.object(
-                router, "_prioritized_vision_route", AsyncMock(return_value=None)
-            ),
+            patch.object(router, "_prioritized_vision_route", AsyncMock(return_value=None)),
             patch("bot.modality.collect_input_items", return_value=[]),
             patch.object(router, "_process_multimodal_message_internal") as mock_multi,
         ):
@@ -390,9 +370,7 @@ class TestTextDefaultBehavior:
             mock_multi.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_only_media_intent_triggers_nag(
-        self, router, mock_bot, mock_human_author
-    ):
+    async def test_only_media_intent_triggers_nag(self, router, mock_bot, mock_human_author):
         """Only explicit media intent with no media should trigger link nag."""
         # Mock message with no attachments and mention-free minimal content
         msg = MagicMock(spec=discord.Message)
@@ -415,17 +393,13 @@ class TestTextDefaultBehavior:
 
         with (
             patch.object(router, "_should_process_message", return_value=True),
-            patch.object(
-                router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)
-            ),
+            patch.object(router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)),
             patch.object(
                 router,
                 "_resolve_scope_and_target",
                 AsyncMock(return_value=("lone", None, "")),
             ),
-            patch.object(
-                router, "_prioritized_vision_route", AsyncMock(return_value=None)
-            ),
+            patch.object(router, "_prioritized_vision_route", AsyncMock(return_value=None)),
             patch("bot.modality.collect_input_items", return_value=[]),
             patch.object(router, "_process_multimodal_message_internal") as mock_multi,
         ):
@@ -474,9 +448,7 @@ class TestLoggingEnhancements:
             # The implementation handles logging correctly
 
     @pytest.mark.asyncio
-    async def test_text_default_reason_logged(
-        self, router, mock_bot, mock_human_author
-    ):
+    async def test_text_default_reason_logged(self, router, mock_bot, mock_human_author):
         """Text default routing logs the reason."""
         # This is tested in bot.py gate logic, which was improved
         msg = MagicMock(spec=discord.Message)

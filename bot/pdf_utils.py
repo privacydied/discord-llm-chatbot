@@ -29,9 +29,7 @@ try:
     TESSERACT_AVAILABLE = TESSERACT_EXECUTABLE is not None
 
     if not TESSERACT_AVAILABLE:
-        logging.warning(
-            "Tesseract OCR executable not found in PATH. Image-based PDFs will not be processed."
-        )
+        logging.warning("Tesseract OCR executable not found in PATH. Image-based PDFs will not be processed.")
     else:
         logging.debug(f"Found Tesseract OCR at: {TESSERACT_EXECUTABLE}")
 
@@ -39,9 +37,7 @@ except ImportError:
     pytesseract = None
     Image = None
     TESSERACT_AVAILABLE = False
-    logging.warning(
-        "Tesseract OCR Python libraries not installed. Image-based PDFs will not be processed."
-    )
+    logging.warning("Tesseract OCR Python libraries not installed. Image-based PDFs will not be processed.")
 
 
 class PDFProcessor:
@@ -123,9 +119,7 @@ class PDFProcessor:
         # If the text is very short, it's likely scanned.
         return len(text.strip()) < 100
 
-    def extract_all(
-        self, file_path: Union[str, Path, BinaryIO], extract_images: bool = False
-    ) -> Dict[str, any]:
+    def extract_all(self, file_path: Union[str, Path, BinaryIO], extract_images: bool = False) -> Dict[str, any]:
         """Extract all available information from a PDF using PyMuPDF."""
         result = {
             "text": "",
@@ -172,9 +166,7 @@ class PDFProcessor:
             result["error"] = str(e)
             return result
 
-    async def process(
-        self, file_path: Union[str, Path, BinaryIO], extract_images: bool = False
-    ) -> Dict[str, any]:
+    async def process(self, file_path: Union[str, Path, BinaryIO], extract_images: bool = False) -> Dict[str, any]:
         """
         Asynchronously process a PDF file by running the synchronous extract_all
         method in an executor to avoid blocking the event loop.

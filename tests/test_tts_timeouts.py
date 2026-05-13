@@ -52,9 +52,7 @@ async def test_process_timeout_selection_with_meta(monkeypatch, tmp_path):
 
     captured = {"timeout": None}
 
-    async def fake_generate(
-        self, text: str, out_path=None, timeout: float | None = None
-    ):
+    async def fake_generate(self, text: str, out_path=None, timeout: float | None = None):
         captured["timeout"] = timeout
         # Create a temporary path to return
         fd, name = tempfile.mkstemp(prefix="test_tts_", suffix=".wav", dir=tmp_path)
@@ -117,9 +115,7 @@ async def test_process_heuristic_env_when_no_meta(monkeypatch, tmp_path):
 
     captured = {"timeout": None}
 
-    async def fake_generate(
-        self, text: str, out_path=None, timeout: float | None = None
-    ):
+    async def fake_generate(self, text: str, out_path=None, timeout: float | None = None):
         captured["timeout"] = timeout
         fd, name = tempfile.mkstemp(prefix="test_tts_", suffix=".wav", dir=tmp_path)
         os.close(fd)

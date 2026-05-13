@@ -139,9 +139,7 @@ def test_document_parsing(test_dir):
                 if parser:
                     print(f"   Parser: {parser.__class__.__name__}")
 
-                    content, metadata = document_parser_factory.parse_document(
-                        test_file
-                    )
+                    content, metadata = document_parser_factory.parse_document(test_file)
 
                     print(f"   Content length: {len(content)} characters")
                     print(f"   Content type: {metadata.get('content_type', 'unknown')}")

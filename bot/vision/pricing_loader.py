@@ -167,11 +167,7 @@ class PricingTable:
         cost = cost * safety_factor
 
         # Apply global safety factor for estimation
-        global_safety = Decimal(
-            str(
-                self.pricing_data.get("estimation_config", {}).get("safety_factor", 1.2)
-            )
-        )
+        global_safety = Decimal(str(self.pricing_data.get("estimation_config", {}).get("safety_factor", 1.2)))
         cost = cost * global_safety
 
         logger.debug(
@@ -234,9 +230,7 @@ class PricingTable:
             return "playground"
         return "default"
 
-    def _get_default_estimate(
-        self, task: VisionTask, num_images: int = 1, duration_seconds: float = 4.0
-    ) -> Money:
+    def _get_default_estimate(self, task: VisionTask, num_images: int = 1, duration_seconds: float = 4.0) -> Money:
         """Get default estimate when provider/task pricing not available"""
         defaults = self.pricing_data.get("default_estimates", {})
         task_key = self._task_to_pricing_key(task)
@@ -253,9 +247,7 @@ class PricingTable:
             # Scale by number of images
             return Money(base_cost) * num_images
 
-    def normalize_provider_usage(
-        self, provider: VisionProvider, usage_data: Dict[str, Any]
-    ) -> Money:
+    def normalize_provider_usage(self, provider: VisionProvider, usage_data: Dict[str, Any]) -> Money:
         """
         Normalize provider usage data to USD.
 
@@ -291,9 +283,7 @@ class PricingTable:
         if "gpu_seconds" in usage_data:
             gpu_seconds = usage_data["gpu_seconds"]
             gpu_seconds_per_dollar = provider_config.get("gpu_seconds_per_dollar", 1000)
-            return Money(
-                Decimal(str(gpu_seconds)) / Decimal(str(gpu_seconds_per_dollar))
-            )
+            return Money(Decimal(str(gpu_seconds)) / Decimal(str(gpu_seconds_per_dollar)))
 
         # Check for cents
         if "cents" in usage_data or "cost_cents" in usage_data:
@@ -313,23 +303,11 @@ class PricingTable:
 
     def get_max_discrepancy_ratio(self) -> Decimal:
         """Get maximum allowed discrepancy ratio between estimate and actual"""
-        return Decimal(
-            str(
-                self.pricing_data.get("estimation_config", {}).get(
-                    "max_discrepancy_ratio", 5.0
-                )
-            )
-        )
+        return Decimal(str(self.pricing_data.get("estimation_config", {}).get("max_discrepancy_ratio", 5.0)))
 
     def get_warning_discrepancy_ratio(self) -> Decimal:
         """Get discrepancy ratio threshold for warnings"""
-        return Decimal(
-            str(
-                self.pricing_data.get("estimation_config", {}).get(
-                    "warning_discrepancy_ratio", 2.0
-                )
-            )
-        )
+        return Decimal(str(self.pricing_data.get("estimation_config", {}).get("warning_discrepancy_ratio", 2.0)))
 
 
 # Global pricing table instance

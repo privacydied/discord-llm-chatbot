@@ -195,9 +195,7 @@ class STTManager:
             finally:
                 self._ready_event.set()
 
-        self._init_thread = threading.Thread(
-            target=_loader, name="stt-fw-init", daemon=True
-        )
+        self._init_thread = threading.Thread(target=_loader, name="stt-fw-init", daemon=True)
         self._init_thread.start()
 
     def _load_model(self, spec: ModelSpec) -> WhisperModel:

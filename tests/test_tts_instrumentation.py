@@ -99,9 +99,7 @@ class TestTTSInstrumentation(unittest.TestCase):
             initial_metrics = get_tts_metrics()
 
             # Log a TTS generation
-            log_tts_generation(
-                "This is a test text", "test_voice", Path("/tmp/test_output.wav"), 150.5
-            )
+            log_tts_generation("This is a test text", "test_voice", Path("/tmp/test_output.wav"), 150.5)
 
             # Check that info was logged
             self.assertTrue(mock_info.called)
@@ -131,9 +129,7 @@ class TestTTSInstrumentation(unittest.TestCase):
             initial_metrics = get_tts_metrics()
 
             # Log a TTS error
-            log_tts_error(
-                "TestError", "This is a test error", {"detail": "test_detail"}
-            )
+            log_tts_error("TestError", "This is a test error", {"detail": "test_detail"})
 
             # Check that error was logged
             self.assertTrue(mock_error.called)
@@ -199,9 +195,7 @@ class TestTTSInstrumentation(unittest.TestCase):
 
             # Check that metrics were updated
             updated_metrics = get_tts_metrics()
-            self.assertEqual(
-                updated_metrics["tts_cache_hits"], initial_metrics["tts_cache_hits"] + 1
-            )
+            self.assertEqual(updated_metrics["tts_cache_hits"], initial_metrics["tts_cache_hits"] + 1)
 
             # Reset mock
             mock_debug.reset_mock()

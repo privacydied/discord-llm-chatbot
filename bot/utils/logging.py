@@ -50,11 +50,7 @@ class JsonlFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         # Local time with millisecond precision
-        ts = (
-            datetime.fromtimestamp(record.created, tz=timezone.utc)
-            .astimezone()
-            .strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-        )
+        ts = datetime.fromtimestamp(record.created, tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
         # Detail prefers explicit record.detail; otherwise message
         try:
@@ -126,17 +122,13 @@ def init_logging() -> None:
     pretty.addFilter(SensitiveDataFilter())
     jsonl.addFilter(SensitiveDataFilter())
 
-    logging.basicConfig(
-        handlers=[pretty, jsonl], level=level, force=True, format="%(message)s"
-    )
+    logging.basicConfig(handlers=[pretty, jsonl], level=level, force=True, format="%(message)s")
 
     # Enforce exactly the two sinks are present
     names = sorted(h.get_name() for h in logging.getLogger().handlers)
     if names != ["jsonl_handler", "pretty_handler"]:
         try:
-            sys.stderr.write(
-                f"[logging-enforcer] expected pretty_handler + jsonl_handler, got {names}\n"
-            )
+            sys.stderr.write(f"[logging-enforcer] expected pretty_handler + jsonl_handler, got {names}\n")
             sys.stderr.flush()
         finally:
             logging.shutdown()
@@ -150,9 +142,7 @@ def init_logging() -> None:
     except Exception:
         pass
 
-    logging.getLogger(__name__).info(
-        "✔ Logging initialized (dual-sink)", extra={"subsys": "logging"}
-    )
+    logging.getLogger(__name__).info("✔ Logging initialized (dual-sink)", extra={"subsys": "logging"})
 
 
 def get_logger(name: str) -> logging.Logger:

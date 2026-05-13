@@ -22,9 +22,7 @@ from bot.server_archive.store import ServerArchiveStore
 FIXED_NOW = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc).isoformat()
 
 
-def make_bundle(
-    *, message_id: str, guild_id: str, channel_id: str, content: str
-) -> ArchiveMessageBundle:
+def make_bundle(*, message_id: str, guild_id: str, channel_id: str, content: str) -> ArchiveMessageBundle:
     guild = ArchiveGuild(guild_id=guild_id, name=f"Guild {guild_id}")
     channel = ArchiveChannel(
         channel_id=channel_id,
@@ -32,9 +30,7 @@ def make_bundle(
         name=f"channel-{channel_id}",
         type="text",
     )
-    author = ArchiveUser(
-        user_id=f"user-{guild_id}", username="alice", display_name="Alice"
-    )
+    author = ArchiveUser(user_id=f"user-{guild_id}", username="alice", display_name="Alice")
     message = ArchiveMessage(
         message_id=message_id,
         guild_id=guild_id,
@@ -46,9 +42,7 @@ def make_bundle(
         created_at=FIXED_NOW,
         jump_url=f"https://discord.com/channels/{guild_id}/{channel_id}/{message_id}",
     )
-    return ArchiveMessageBundle(
-        guild=guild, channel=channel, author=author, message=message
-    )
+    return ArchiveMessageBundle(guild=guild, channel=channel, author=author, message=message)
 
 
 class FakeHistoryChannel:
@@ -110,9 +104,7 @@ def archive_config(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_live_tail_enqueue_ignores_dms_and_bot_messages_by_default(
-    tmp_path, monkeypatch: pytest.MonkeyPatch, archive_config
-) -> None:
+async def test_live_tail_enqueue_ignores_dms_and_bot_messages_by_default(tmp_path, monkeypatch: pytest.MonkeyPatch, archive_config) -> None:
     monkeypatch.setattr(service_module, "load_config", lambda: archive_config)
     service = ServerArchiveService(SimpleNamespace(command_prefix="!"))
     await service.start()
@@ -139,9 +131,7 @@ async def test_live_tail_enqueue_ignores_dms_and_bot_messages_by_default(
 
 
 @pytest.mark.asyncio
-async def test_live_tail_enqueue_does_not_write_to_sqlite_immediately(
-    tmp_path, monkeypatch: pytest.MonkeyPatch, archive_config
-) -> None:
+async def test_live_tail_enqueue_does_not_write_to_sqlite_immediately(tmp_path, monkeypatch: pytest.MonkeyPatch, archive_config) -> None:
     monkeypatch.setattr(service_module, "load_config", lambda: archive_config)
     service = ServerArchiveService(SimpleNamespace(command_prefix="!"))
     await service.start()
@@ -175,9 +165,7 @@ async def test_live_tail_enqueue_does_not_write_to_sqlite_immediately(
 
 
 @pytest.mark.asyncio
-async def test_pause_blocks_live_tail_enqueue(
-    tmp_path, monkeypatch: pytest.MonkeyPatch, archive_config
-) -> None:
+async def test_pause_blocks_live_tail_enqueue(tmp_path, monkeypatch: pytest.MonkeyPatch, archive_config) -> None:
     monkeypatch.setattr(service_module, "load_config", lambda: archive_config)
     service = ServerArchiveService(SimpleNamespace(command_prefix="!"))
     await service.start()
@@ -202,9 +190,7 @@ async def test_pause_blocks_live_tail_enqueue(
 
 
 @pytest.mark.asyncio
-async def test_sync_checkpoint_is_stored_and_reused(
-    tmp_path, archive_config, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_sync_checkpoint_is_stored_and_reused(tmp_path, archive_config, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(service_module, "load_config", lambda: archive_config)
     store = ServerArchiveStore(tmp_path / "archive.sqlite3")
     await store.initialize()
@@ -218,9 +204,7 @@ async def test_sync_checkpoint_is_stored_and_reused(
                 id="100",
                 guild=guild,
                 channel=None,
-                author=SimpleNamespace(
-                    id="200", bot=False, display_name="Alice", name="Alice"
-                ),
+                author=SimpleNamespace(id="200", bot=False, display_name="Alice", name="Alice"),
                 content="first",
                 clean_content="first",
                 attachments=[],
@@ -235,9 +219,7 @@ async def test_sync_checkpoint_is_stored_and_reused(
                 id="101",
                 guild=guild,
                 channel=None,
-                author=SimpleNamespace(
-                    id="200", bot=False, display_name="Alice", name="Alice"
-                ),
+                author=SimpleNamespace(id="200", bot=False, display_name="Alice", name="Alice"),
                 content="second",
                 clean_content="second",
                 attachments=[],
@@ -267,9 +249,7 @@ async def test_sync_checkpoint_is_stored_and_reused(
                 id="102",
                 guild=guild,
                 channel=channel,
-                author=SimpleNamespace(
-                    id="200", bot=False, display_name="Alice", name="Alice"
-                ),
+                author=SimpleNamespace(id="200", bot=False, display_name="Alice", name="Alice"),
                 content="third",
                 clean_content="third",
                 attachments=[],
@@ -293,9 +273,7 @@ async def test_sync_checkpoint_is_stored_and_reused(
 
 
 @pytest.mark.asyncio
-async def test_failed_channel_sync_does_not_abort_whole_guild_sync(
-    tmp_path, archive_config, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_failed_channel_sync_does_not_abort_whole_guild_sync(tmp_path, archive_config, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(service_module, "load_config", lambda: archive_config)
     store = ServerArchiveStore(tmp_path / "archive.sqlite3")
     await store.initialize()
@@ -309,9 +287,7 @@ async def test_failed_channel_sync_does_not_abort_whole_guild_sync(
                 id="500",
                 guild=guild,
                 channel=None,
-                author=SimpleNamespace(
-                    id="200", bot=False, display_name="Alice", name="Alice"
-                ),
+                author=SimpleNamespace(id="200", bot=False, display_name="Alice", name="Alice"),
                 content="ok",
                 clean_content="ok",
                 attachments=[],

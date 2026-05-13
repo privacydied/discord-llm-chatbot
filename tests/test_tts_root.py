@@ -13,9 +13,7 @@ from discord.ext import commands
 from bot.tts import TTSManager
 
 # Configure logging
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("tts_test")
 
 
@@ -47,20 +45,14 @@ async def test_tts():
 
     if is_available:
         # Generate TTS
-        test_text = (
-            "This is a test of the TTS system with our new KokoroDirect implementation."
-        )
+        test_text = "This is a test of the TTS system with our new KokoroDirect implementation."
         logger.info(f"Generating TTS for text: '{test_text}'")
 
         try:
             audio_path = await tts.generate_tts(test_text)
             if audio_path:
-                file_size = (
-                    Path(audio_path).stat().st_size if os.path.exists(audio_path) else 0
-                )
-                logger.info(
-                    f"Generated audio path: {audio_path} (size: {file_size} bytes)"
-                )
+                file_size = Path(audio_path).stat().st_size if os.path.exists(audio_path) else 0
+                logger.info(f"Generated audio path: {audio_path} (size: {file_size} bytes)")
 
                 # Check if file exists and has content
                 if os.path.exists(audio_path) and file_size > 0:

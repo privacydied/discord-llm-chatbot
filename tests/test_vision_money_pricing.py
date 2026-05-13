@@ -225,21 +225,15 @@ class TestPricingTable:
     def test_normalize_provider_usage(self, pricing_table):
         """Test provider usage normalization"""
         # Credits-based
-        cost1 = pricing_table.normalize_provider_usage(
-            provider=VisionProvider.NOVITA, usage_data={"credits": 200}
-        )
+        cost1 = pricing_table.normalize_provider_usage(provider=VisionProvider.NOVITA, usage_data={"credits": 200})
         assert cost1.to_float() == 2.00  # 200 credits / 100 per dollar
 
         # Direct USD
-        cost2 = pricing_table.normalize_provider_usage(
-            provider=VisionProvider.NOVITA, usage_data={"cost_usd": 1.50}
-        )
+        cost2 = pricing_table.normalize_provider_usage(provider=VisionProvider.NOVITA, usage_data={"cost_usd": 1.50})
         assert cost2.to_float() == 1.50
 
         # Cents
-        cost3 = pricing_table.normalize_provider_usage(
-            provider=VisionProvider.NOVITA, usage_data={"cents": 150}
-        )
+        cost3 = pricing_table.normalize_provider_usage(provider=VisionProvider.NOVITA, usage_data={"cents": 150})
         assert cost3.to_float() == 1.50
 
 
@@ -368,9 +362,7 @@ class TestBudgetManager:
 
         # Record some spend
         await budget_manager.reserve_budget(user_id, Money("2.00"))
-        await budget_manager.record_actual_cost(
-            user_id=user_id, reserved_amount=Money("2.00"), actual_cost=Money("1.80")
-        )
+        await budget_manager.record_actual_cost(user_id=user_id, reserved_amount=Money("2.00"), actual_cost=Money("1.80"))
 
         # Check current stats
         stats = await budget_manager.get_user_stats(user_id)
@@ -432,9 +424,7 @@ class TestIntegration:
 
         # Simulate provider response with actual cost
         actual_usage = {"credits": 2.5}  # 2.5 credits = $0.025
-        actual_cost = pricing_table.normalize_provider_usage(
-            provider=VisionProvider.NOVITA, usage_data=actual_usage
-        )
+        actual_cost = pricing_table.normalize_provider_usage(provider=VisionProvider.NOVITA, usage_data=actual_usage)
 
         # Record actual cost
         await budget_manager.record_actual_cost(

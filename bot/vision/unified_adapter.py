@@ -208,26 +208,18 @@ class TogetherPlugin(ProviderPlugin):
         }
 
         try:
-            async with self.session.post(
-                f"{self.base_url}/v1/images/generations", json=payload, headers=headers
-            ) as response:
+            async with self.session.post(f"{self.base_url}/v1/images/generations", json=payload, headers=headers) as response:
                 error_text = await response.text()
 
                 # Unified error handling with proper taxonomy [REH]
                 if response.status == 400:
-                    if (
-                        "content policy" in error_text.lower()
-                        or "safety" in error_text.lower()
-                    ):
+                    if "content policy" in error_text.lower() or "safety" in error_text.lower():
                         raise VisionError(
                             message=f"Content filtered: {error_text}",
                             error_type=VisionErrorType.CONTENT_FILTERED,
                             user_message="Your request was blocked by content safety filters. Please modify your prompt.",
                         )
-                    elif (
-                        "invalid" in error_text.lower()
-                        or "malformed" in error_text.lower()
-                    ):
+                    elif "invalid" in error_text.lower() or "malformed" in error_text.lower():
                         raise VisionError(
                             message=f"Invalid request: {error_text}",
                             error_type=VisionErrorType.VALIDATION_ERROR,
@@ -383,9 +375,7 @@ class NovitaPlugin(ProviderPlugin):
             "video_max_seconds": 6,
         }
 
-    def normalize_size_for_endpoint(
-        self, endpoint: str, width: int, height: int
-    ) -> Tuple[Dict[str, Any], List[str]]:
+    def normalize_size_for_endpoint(self, endpoint: str, width: int, height: int) -> Tuple[Dict[str, Any], List[str]]:
         """Normalize size parameters for specific endpoint [IV]"""
         endpoint_config = self.endpoints[endpoint]
         max_w, max_h = endpoint_config["max_size"]
@@ -398,9 +388,7 @@ class NovitaPlugin(ProviderPlugin):
             scale = min(max_w / width, max_h / height)
             width = int(width * scale)
             height = int(height * scale)
-            warnings.append(
-                f"Size downscaled from {original_w}x{original_h} to {width}x{height} for {endpoint} limits"
-            )
+            warnings.append(f"Size downscaled from {original_w}x{original_h} to {width}x{height} for {endpoint} limits")
 
         # Ensure minimum sizes
         width = max(256, width)
@@ -416,9 +404,7 @@ class NovitaPlugin(ProviderPlugin):
         else:
             return {"width": width, "height": height}, warnings
 
-    def build_payload_for_endpoint(
-        self, endpoint: str, request: NormalizedRequest
-    ) -> Tuple[Dict[str, Any], List[str]]:
+    def build_payload_for_endpoint(self, endpoint: str, request: NormalizedRequest) -> Tuple[Dict[str, Any], List[str]]:
         """Build request payload for specific Novita endpoint [CA]"""
         self.endpoints[endpoint]
         warnings = []
@@ -427,36 +413,25 @@ class NovitaPlugin(ProviderPlugin):
         payload = {"prompt": request.prompt.strip() if request.prompt else ""}
 
         # Add size parameters
-        size_params, size_warnings = self.normalize_size_for_endpoint(
-            endpoint, request.width, request.height
-        )
+        size_params, size_warnings = self.normalize_size_for_endpoint(endpoint, request.width, request.height)
         payload.update(size_params)
         warnings.extend(size_warnings)
 
         if endpoint == "qwen-image-txt2img":
             # Qwen endpoint: minimal parameters [CMV]
             if request.negative_prompt:
-                warnings.append(
-                    "Negative prompt not supported by Qwen-Image endpoint, ignoring"
-                )
+                warnings.append("Negative prompt not supported by Qwen-Image endpoint, ignoring")
             if request.steps != 20:
-                warnings.append(
-                    "Custom steps not supported by Qwen-Image endpoint, using default"
-                )
+                warnings.append("Custom steps not supported by Qwen-Image endpoint, using default")
             if request.guidance_scale != 7.5:
-                warnings.append(
-                    "Custom guidance scale not supported by Qwen-Image endpoint, using default"
-                )
+                warnings.append("Custom guidance scale not supported by Qwen-Image endpoint, using default")
             if request.seed:
-                warnings.append(
-                    "Custom seed not supported by Qwen-Image endpoint, ignoring"
-                )
+                warnings.append("Custom seed not supported by Qwen-Image endpoint, ignoring")
         elif endpoint == "txt2img":
             # SDXL endpoint: full parameter support [REH]
             payload.update(
                 {
-                    "model_name": request.preferred_model
-                    or "sd_xl_base_1.0.safetensors",
+                    "model_name": request.preferred_model or "sd_xl_base_1.0.safetensors",
                     "steps": max(1, min(100, request.steps)),
                     "guidance_scale": max(1.0, min(30.0, request.guidance_scale)),
                     "batch_size": 1,
@@ -482,9 +457,7 @@ class NovitaPlugin(ProviderPlugin):
 
         return payload, warnings
 
-    def _normalize_payload_for_novita(
-        self, endpoint: str, payload: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _normalize_payload_for_novita(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Sanitize/normalize payload before sending to Novita [IV][REH].
         - Drops None/empty strings
         - Clamps steps 1..100, guidance 1..20
@@ -533,9 +506,7 @@ class NovitaPlugin(ProviderPlugin):
 
         # negative_prompt as CSV
         if isinstance(norm.get("negative_prompt"), list):
-            norm["negative_prompt"] = ", ".join(
-                str(x).strip() for x in norm["negative_prompt"] if str(x).strip()
-            )
+            norm["negative_prompt"] = ", ".join(str(x).strip() for x in norm["negative_prompt"] if str(x).strip())
 
         # steps clamp
         if "steps" in norm:
@@ -547,9 +518,7 @@ class NovitaPlugin(ProviderPlugin):
         # guidance_scale clamp
         if "guidance_scale" in norm:
             try:
-                norm["guidance_scale"] = max(
-                    1.0, min(float(norm["guidance_scale"]), 20.0)
-                )
+                norm["guidance_scale"] = max(1.0, min(float(norm["guidance_scale"]), 20.0))
             except Exception:
                 norm.pop("guidance_scale", None)
 
@@ -563,11 +532,7 @@ class NovitaPlugin(ProviderPlugin):
         # Size rounding depending on endpoint format
         try:
             max_w, max_h = self.endpoints[endpoint]["max_size"]
-            if (
-                endpoint == "qwen-image-txt2img"
-                and isinstance(norm.get("size"), str)
-                and "*" in norm["size"]
-            ):
+            if endpoint == "qwen-image-txt2img" and isinstance(norm.get("size"), str) and "*" in norm["size"]:
                 w_str, h_str = norm["size"].split("*", 1)
                 w = min(max_w, (max(256, int(w_str)) // 8) * 8)
                 h = min(max_h, (max(256, int(h_str)) // 8) * 8)
@@ -587,16 +552,11 @@ class NovitaPlugin(ProviderPlugin):
         norm = {k: v for k, v in norm.items() if k in allowed}
 
         # Debug without leaking prompt text
-        debug_view = {
-            k: ("…" if k in ("prompt", "negative_prompt") else v)
-            for k, v in norm.items()
-        }
+        debug_view = {k: ("…" if k in ("prompt", "negative_prompt") else v) for k, v in norm.items()}
         logger.debug(f"Novita normalized payload for {endpoint}: {debug_view}")
         return norm
 
-    async def submit(
-        self, request: NormalizedRequest, endpoint: str = "qwen-image-txt2img"
-    ) -> str:
+    async def submit(self, request: NormalizedRequest, endpoint: str = "qwen-image-txt2img") -> str:
         """Submit to Novita.ai API with endpoint selection and unified error handling [REH]"""
         if endpoint not in self.endpoints:
             raise VisionError(
@@ -631,19 +591,13 @@ class NovitaPlugin(ProviderPlugin):
                             error_type=VisionErrorType.CONTENT_FILTERED,
                             user_message="Your request was blocked by content safety filters. Please modify your prompt.",
                         )
-                    elif (
-                        "invalid" in error_text.lower()
-                        or "parameter" in error_text.lower()
-                    ):
+                    elif "invalid" in error_text.lower() or "parameter" in error_text.lower():
                         raise VisionError(
                             message=f"Invalid request: {error_text}",
                             error_type=VisionErrorType.VALIDATION_ERROR,
                             user_message="There was an issue with your request parameters. Please check and try again.",
                         )
-                    elif (
-                        "prompt: value length must be between 1 and 2000"
-                        in error_text.lower()
-                    ):
+                    elif "prompt: value length must be between 1 and 2000" in error_text.lower():
                         raise VisionError(
                             message=f"Invalid request: {error_text}",
                             error_type=VisionErrorType.VALIDATION_ERROR,
@@ -746,11 +700,7 @@ class NovitaPlugin(ProviderPlugin):
                 if status == "TASK_STATUS_SUCCEED":
                     unified = UnifiedStatus.COMPLETED
                 elif status in ("TASK_STATUS_FAILED", "TASK_STATUS_CANCELED"):
-                    unified = (
-                        UnifiedStatus.FAILED
-                        if status == "TASK_STATUS_FAILED"
-                        else UnifiedStatus.CANCELLED
-                    )
+                    unified = UnifiedStatus.FAILED if status == "TASK_STATUS_FAILED" else UnifiedStatus.CANCELLED
                 elif status in (
                     "TASK_STATUS_PROCESSING",
                     "TASK_STATUS_QUEUED",
@@ -818,9 +768,7 @@ class NovitaPlugin(ProviderPlugin):
             assets: List[str] = []
             images = data.get("images", []) or data.get("data", [])
             for item in images:
-                url = (
-                    item.get("image_url") or item.get("url") or item.get("download_url")
-                )
+                url = item.get("image_url") or item.get("url") or item.get("download_url")
                 if url:
                     assets.append(url)
             if not assets:
@@ -853,9 +801,7 @@ class NovitaPlugin(ProviderPlugin):
                 metadata={"task": task},
             )
 
-    def _calculate_cost(
-        self, request: NormalizedRequest, endpoint: str = "qwen-image-txt2img"
-    ) -> float:
+    def _calculate_cost(self, request: NormalizedRequest, endpoint: str = "qwen-image-txt2img") -> float:
         """Calculate estimated cost for Novita.ai using endpoint-specific pricing [PA][CMV]"""
         # Defaults if config missing
         base_cost = 0.018
@@ -936,11 +882,7 @@ class OpenRouterPlugin(ProviderPlugin):
             "stream": False,
         }
         if self._is_gemini_model(model):
-            payload["image_config"] = {
-                "aspect_ratio": self._aspect_ratio_for_dims(
-                    request.width, request.height
-                )
-            }
+            payload["image_config"] = {"aspect_ratio": self._aspect_ratio_for_dims(request.width, request.height)}
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -948,9 +890,7 @@ class OpenRouterPlugin(ProviderPlugin):
         }
 
         try:
-            async with self.session.post(
-                f"{self.base_url}/chat/completions", json=payload, headers=headers
-            ) as response:
+            async with self.session.post(f"{self.base_url}/chat/completions", json=payload, headers=headers) as response:
                 error_text = await response.text()
 
                 if response.status == 400:
@@ -987,10 +927,7 @@ class OpenRouterPlugin(ProviderPlugin):
                 result = await response.json()
 
                 # Debug: log response structure without raw data [REH]
-                logger.debug(
-                    f"{self.name} response keys: {list(result.keys())}, "
-                    f"choices count: {len(result.get('choices') or [])}"
-                )
+                logger.debug(f"{self.name} response keys: {list(result.keys())}, choices count: {len(result.get('choices') or [])}")
 
                 urls: List[str] = []
 
@@ -1019,12 +956,7 @@ class OpenRouterPlugin(ProviderPlugin):
                         if not isinstance(item, dict):
                             continue
                         # Check various field names for image URL
-                        image_url = (
-                            item.get("image_url")
-                            or item.get("imageUrl")
-                            or item.get("url")
-                            or item.get("data")
-                        )
+                        image_url = item.get("image_url") or item.get("imageUrl") or item.get("url") or item.get("data")
                         if isinstance(image_url, str) and image_url:
                             urls.append(image_url)
                             continue
@@ -1062,14 +994,10 @@ class OpenRouterPlugin(ProviderPlugin):
                                 if isinstance(u, str) and u:
                                     urls.append(u)
                                 elif block.get("b64_json"):
-                                    urls.append(
-                                        f"data:image/png;base64,{block['b64_json']}"
-                                    )
+                                    urls.append(f"data:image/png;base64,{block['b64_json']}")
                             # Check for b64_json at block level regardless of type
                             elif block.get("b64_json"):
-                                urls.append(
-                                    f"data:image/png;base64,{block['b64_json']}"
-                                )
+                                urls.append(f"data:image/png;base64,{block['b64_json']}")
 
                     # Method 3: Check for raw base64 in message.content string [REH]
                     if isinstance(content, str):
@@ -1084,9 +1012,7 @@ class OpenRouterPlugin(ProviderPlugin):
 
                                 if re.match(r"^[A-Za-z0-9+/=]+$", content[:100]):
                                     urls.append(f"data:image/png;base64,{content}")
-                                    logger.debug(
-                                        "Detected raw base64 in message.content string"
-                                    )
+                                    logger.debug("Detected raw base64 in message.content string")
                             except Exception:
                                 pass
 
@@ -1101,12 +1027,7 @@ class OpenRouterPlugin(ProviderPlugin):
 
                 if not urls:
                     # Log response structure for debugging (without sensitive data)
-                    logger.warning(
-                        f"{self.name}: No images found. Response structure: "
-                        f"keys={list(result.keys())}, "
-                        f"choices={len(choices)}, "
-                        f"message_keys={list(message.keys()) if isinstance(message, dict) else 'N/A'}"
-                    )
+                    logger.warning(f"{self.name}: No images found. Response structure: keys={list(result.keys())}, choices={len(choices)}, message_keys={list(message.keys()) if isinstance(message, dict) else 'N/A'}")
                     raise VisionError(
                         message="No images returned from provider",
                         error_type=VisionErrorType.PROVIDER_ERROR,
@@ -1122,9 +1043,7 @@ class OpenRouterPlugin(ProviderPlugin):
                         url_summary.append(f"<data-url:{mime_part}>")
                     else:
                         url_summary.append(u[:100] if len(u) > 100 else u)
-                logger.debug(
-                    f"{self.name} extracted {len(urls)} image(s): {url_summary}"
-                )
+                logger.debug(f"{self.name} extracted {len(urls)} image(s): {url_summary}")
 
                 job_id = f"{self.name}_{int(time.time() * 1000)}"
                 self._results = getattr(self, "_results", {})
@@ -1181,11 +1100,7 @@ class NvidiaPlugin(OpenRouterPlugin):
         # generation NIMs are exposed on ai.api.nvidia.com/v1/genai/{model}.
         # Calling integrate /chat/completions with image models returns 404.
         self.base_url = config.get("base_url", "https://integrate.api.nvidia.com/v1")
-        self.genai_base_url = (
-            config.get("genai_base_url")
-            or os.getenv("NVIDIA_IMAGE_API_BASE")
-            or "https://ai.api.nvidia.com/v1"
-        ).rstrip("/")
+        self.genai_base_url = (config.get("genai_base_url") or os.getenv("NVIDIA_IMAGE_API_BASE") or "https://ai.api.nvidia.com/v1").rstrip("/")
         self.model_map = {
             VisionTask.TEXT_TO_IMAGE: "black-forest-labs/flux.1-dev",
         }
@@ -1218,9 +1133,7 @@ class NvidiaPlugin(OpenRouterPlugin):
         url = f"{self.genai_base_url}/genai/{model}"
 
         try:
-            async with self.session.post(
-                url, json=payload, headers=headers
-            ) as response:
+            async with self.session.post(url, json=payload, headers=headers) as response:
                 error_text = await response.text()
                 if response.status == 400:
                     raise VisionError(
@@ -1329,9 +1242,7 @@ class UnifiedVisionAdapter:
         # Model override from environment [CMV]
         self.vision_model_override = self._parse_vision_model_override(config)
         if self.vision_model_override:
-            self.logger.info(
-                f"🎯 VISION_MODEL override active: {self.vision_model_override}"
-            )
+            self.logger.info(f"🎯 VISION_MODEL override active: {self.vision_model_override}")
 
         # Load provider configuration
         self._load_provider_config()
@@ -1366,9 +1277,7 @@ class UnifiedVisionAdapter:
         self._model_aliases = self._build_model_aliases()
 
         fallback_key = str(config.get("VISION_API_KEY") or "")
-        for provider_config in self.provider_config.get("vision", {}).get(
-            "providers", []
-        ):
+        for provider_config in self.provider_config.get("vision", {}).get("providers", []):
             name = str(provider_config.get("name") or "").lower()
             provider = self.providers.get(name)
             if provider is None:
@@ -1379,9 +1288,7 @@ class UnifiedVisionAdapter:
             if hasattr(provider, "base_url"):
                 provider.base_url = provider_config.get("base_url", provider.base_url)
             if hasattr(provider, "genai_base_url"):
-                provider.genai_base_url = provider_config.get(
-                    "genai_base_url", provider.genai_base_url
-                )
+                provider.genai_base_url = provider_config.get("genai_base_url", provider.genai_base_url)
 
         self.logger.info(
             "vision.adapter.config_updated default=%s allowed=%s model_override=%s",
@@ -1528,13 +1435,9 @@ class UnifiedVisionAdapter:
                     plugin.config = provider_config
                     plugin.api_key = provider_key
                     if hasattr(plugin, "base_url"):
-                        plugin.base_url = provider_config.get(
-                            "base_url", plugin.base_url
-                        )
+                        plugin.base_url = provider_config.get("base_url", plugin.base_url)
                     if hasattr(plugin, "genai_base_url"):
-                        plugin.genai_base_url = provider_config.get(
-                            "genai_base_url", plugin.genai_base_url
-                        )
+                        plugin.genai_base_url = provider_config.get("genai_base_url", plugin.genai_base_url)
                     continue
 
                 if name == "together":
@@ -1562,30 +1465,13 @@ class UnifiedVisionAdapter:
         try:
             name = provider_name.split(":")[0].lower()
             if name == "novita":
-                key = (
-                    self.config.get("NOVITA_API_KEY")
-                    or self.config.get("VISION_API_KEY")
-                    or ""
-                )
+                key = self.config.get("NOVITA_API_KEY") or self.config.get("VISION_API_KEY") or ""
             elif name == "together":
-                key = (
-                    self.config.get("TOGETHER_API_KEY")
-                    or self.config.get("VISION_API_KEY_TOGETHER")
-                    or ""
-                )
+                key = self.config.get("TOGETHER_API_KEY") or self.config.get("VISION_API_KEY_TOGETHER") or ""
             elif name == "openrouter":
-                key = (
-                    self.config.get("OPENROUTER_API_KEY")
-                    or self.config.get("VISION_API_KEY")
-                    or ""
-                )
+                key = self.config.get("OPENROUTER_API_KEY") or self.config.get("VISION_API_KEY") or ""
             elif name == "nvidia":
-                key = (
-                    self.config.get("NVIDIA_NIM_API_KEY")
-                    or self.config.get("OPENAI_API_KEY")
-                    or self.config.get("VISION_API_KEY")
-                    or ""
-                )
+                key = self.config.get("NVIDIA_NIM_API_KEY") or self.config.get("OPENAI_API_KEY") or self.config.get("VISION_API_KEY") or ""
             else:
                 key = self.config.get("VISION_API_KEY", "")
             return isinstance(key, str) and len(key.strip()) > 10
@@ -1596,9 +1482,7 @@ class UnifiedVisionAdapter:
         """Lightweight health gate. Currently mirrors credential presence/shape [PA]."""
         return self._has_valid_credentials(provider_name)
 
-    def _estimate_cost_money(
-        self, provider_name: str, request: NormalizedRequest
-    ) -> Optional[Money]:
+    def _estimate_cost_money(self, provider_name: str, request: NormalizedRequest) -> Optional[Money]:
         """Best-effort Money estimate using pricing table [PA][CMV].
         Returns None if pricing table does not cover this provider/task.
         """
@@ -1729,9 +1613,7 @@ class UnifiedVisionAdapter:
 
         return aliases
 
-    def resolve_model_selection(
-        self, request: NormalizedRequest
-    ) -> Optional[ModelSelection]:
+    def resolve_model_selection(self, request: NormalizedRequest) -> Optional[ModelSelection]:
         """Resolve VISION_MODEL override to specific provider/endpoint [CA]"""
         if not self.vision_model_override:
             return None
@@ -1739,9 +1621,7 @@ class UnifiedVisionAdapter:
         # Direct alias lookup
         selection = self._model_aliases.get(self.vision_model_override.lower())
         if selection:
-            self.logger.info(
-                f" Resolved VISION_MODEL '{self.vision_model_override}' → {selection.provider}:{selection.endpoint}"
-            )
+            self.logger.info(f" Resolved VISION_MODEL '{self.vision_model_override}' → {selection.provider}:{selection.endpoint}")
             return selection
 
         # Parse provider:model format
@@ -1769,9 +1649,7 @@ class UnifiedVisionAdapter:
                 elif provider_name == "openrouter":
                     # OpenRouter: use the model part as-is if provided [CA]
                     model_hint = model_part or "black-forest-labs/flux-pro"
-                    self.logger.info(
-                        f"Resolved VISION_MODEL '{self.vision_model_override}' → openrouter with model={model_hint}"
-                    )
+                    self.logger.info(f"Resolved VISION_MODEL '{self.vision_model_override}' → openrouter with model={model_hint}")
                     return ModelSelection(
                         provider="openrouter",
                         endpoint="chat/completions",
@@ -1780,9 +1658,7 @@ class UnifiedVisionAdapter:
                     )
                 elif provider_name == "nvidia":
                     model_hint = model_part or "black-forest-labs/flux.1-dev"
-                    self.logger.info(
-                        f"Resolved VISION_MODEL '{self.vision_model_override}' → nvidia with model={model_hint}"
-                    )
+                    self.logger.info(f"Resolved VISION_MODEL '{self.vision_model_override}' → nvidia with model={model_hint}")
                     return ModelSelection(
                         provider="nvidia",
                         endpoint="genai",
@@ -1790,9 +1666,7 @@ class UnifiedVisionAdapter:
                         supports_advanced=False,
                     )
 
-        self.logger.warning(
-            f"Unrecognized VISION_MODEL '{self.vision_model_override}', falling back to policy"
-        )
+        self.logger.warning(f"Unrecognized VISION_MODEL '{self.vision_model_override}', falling back to policy")
         return None
 
     async def startup(self):
@@ -1861,19 +1735,13 @@ class UnifiedVisionAdapter:
                 budget_limit = policy.get("budget_per_job_usd", 0.25)
 
                 if estimated_cost > budget_limit:
-                    self.logger.warning(
-                        f"Provider {provider_key} cost ${estimated_cost:.3f} exceeds budget ${budget_limit:.3f}"
-                    )
+                    self.logger.warning(f"Provider {provider_key} cost ${estimated_cost:.3f} exceeds budget ${budget_limit:.3f}")
                     continue
 
                 if money_est is not None:
-                    self.logger.info(
-                        f"Selected provider: {provider_key} (cost: ${estimated_cost:.3f}, money={money_est})"
-                    )
+                    self.logger.info(f"Selected provider: {provider_key} (cost: ${estimated_cost:.3f}, money={money_est})")
                 else:
-                    self.logger.info(
-                        f"Selected provider: {provider_key} (cost: ${estimated_cost:.3f})"
-                    )
+                    self.logger.info(f"Selected provider: {provider_key} (cost: ${estimated_cost:.3f})")
                 return provider
 
             except Exception as e:
@@ -1882,16 +1750,10 @@ class UnifiedVisionAdapter:
 
         return None
 
-    def _estimate_cost(
-        self, provider: ProviderPlugin, request: NormalizedRequest
-    ) -> float:
+    def _estimate_cost(self, provider: ProviderPlugin, request: NormalizedRequest) -> float:
         """Estimate cost for provider and request [PA]"""
         config = next(
-            (
-                p
-                for p in self.provider_config["vision"]["providers"]
-                if p["name"] == provider.name
-            ),
+            (p for p in self.provider_config["vision"]["providers"] if p["name"] == provider.name),
             {},
         )
 
@@ -1923,19 +1785,14 @@ class UnifiedVisionAdapter:
                 entries.append((provider, model))
         return entries
 
-    async def _submit_text_to_image_ladder(
-        self, normalized_request: NormalizedRequest, raw_ladder: str
-    ) -> VisionResponse:
+    async def _submit_text_to_image_ladder(self, normalized_request: NormalizedRequest, raw_ladder: str) -> VisionResponse:
         last_error: Optional[VisionError] = None
         for provider_name, model_name in self._parse_provider_model_ladder(raw_ladder):
             if self.allowed_providers and provider_name not in self.allowed_providers:
                 continue
             if provider_name not in self.providers:
                 continue
-            if not (
-                self._has_valid_credentials(provider_name)
-                and self._is_provider_healthy(provider_name)
-            ):
+            if not (self._has_valid_credentials(provider_name) and self._is_provider_healthy(provider_name)):
                 continue
 
             provider = self.providers[provider_name]
@@ -1945,9 +1802,7 @@ class UnifiedVisionAdapter:
 
             normalized_request.preferred_model = model_name
             try:
-                self.logger.info(
-                    f"image.ladder.attempt provider={provider_name} model={model_name}"
-                )
+                self.logger.info(f"image.ladder.attempt provider={provider_name} model={model_name}")
                 task_id = await provider.submit(normalized_request)
                 return VisionResponse(
                     success=True,
@@ -1958,9 +1813,7 @@ class UnifiedVisionAdapter:
                 )
             except VisionError as exc:
                 last_error = exc
-                self.logger.warning(
-                    f"image.ladder.fail provider={provider_name} model={model_name} error={exc.message}"
-                )
+                self.logger.warning(f"image.ladder.fail provider={provider_name} model={model_name} error={exc.message}")
                 continue
             except Exception as exc:
                 last_error = VisionError(
@@ -1968,9 +1821,7 @@ class UnifiedVisionAdapter:
                     error_type=VisionErrorType.PROVIDER_ERROR,
                     user_message="Image generation is temporarily unavailable. Please try again later.",
                 )
-                self.logger.warning(
-                    f"image.ladder.fail provider={provider_name} model={model_name} error={exc}"
-                )
+                self.logger.warning(f"image.ladder.fail provider={provider_name} model={model_name} error={exc}")
                 continue
 
         raise last_error or VisionError(
@@ -1984,13 +1835,9 @@ class UnifiedVisionAdapter:
         policy = self.provider_config.get("vision", {}).get("default_policy", {})
         normalized_request = self.normalize_request(request)
 
-        image_ladder_raw = str(
-            self.config.get("VISION_IMAGE_FALLBACK_MODELS") or ""
-        ).strip()
+        image_ladder_raw = str(self.config.get("VISION_IMAGE_FALLBACK_MODELS") or "").strip()
         if normalized_request.task == VisionTask.TEXT_TO_IMAGE and image_ladder_raw:
-            return await self._submit_text_to_image_ladder(
-                normalized_request, image_ladder_raw
-            )
+            return await self._submit_text_to_image_ladder(normalized_request, image_ladder_raw)
 
         preferred_provider_obj = getattr(request, "preferred_provider", None)
         if preferred_provider_obj is not None:
@@ -2025,15 +1872,10 @@ class UnifiedVisionAdapter:
             # Apply model_hint to normalized request so provider uses correct model [CA]
             if model_selection.model_hint:
                 normalized_request.preferred_model = model_selection.model_hint
-            self.logger.info(
-                f"🎯 Using VISION_MODEL override: {model_selection.provider}:{model_selection.endpoint} "
-                f"(model={model_selection.model_hint})"
-            )
+            self.logger.info(f"🎯 Using VISION_MODEL override: {model_selection.provider}:{model_selection.endpoint} (model={model_selection.model_hint})")
         else:
             # Use policy-driven selection
-            provider_order = policy.get(
-                "provider_order", ["novita:qwen-image", "novita:txt2img", "together"]
-            )
+            provider_order = policy.get("provider_order", ["novita:qwen-image", "novita:txt2img", "together"])
             forced_endpoint = None
 
             # Parse provider:endpoint format in policy
@@ -2056,9 +1898,7 @@ class UnifiedVisionAdapter:
 
         if self.default_provider == "openrouter":
             try:
-                provider_order = ["openrouter"] + [
-                    p for p in provider_order if p != "openrouter"
-                ]
+                provider_order = ["openrouter"] + [p for p in provider_order if p != "openrouter"]
             except Exception:
                 pass
 
@@ -2068,11 +1908,7 @@ class UnifiedVisionAdapter:
             base = name.split(":")[0]
             if self.allowed_providers and base.lower() not in self.allowed_providers:
                 continue
-            if (
-                self._has_valid_credentials(base)
-                and self._is_provider_healthy(base)
-                and base in self.providers
-            ):
+            if self._has_valid_credentials(base) and self._is_provider_healthy(base) and base in self.providers:
                 if base not in filtered_order:
                     filtered_order.append(base)
         if not filtered_order:
@@ -2098,18 +1934,11 @@ class UnifiedVisionAdapter:
                     if not self._is_provider_healthy(provider_name):
                         continue
             except Exception as e:
-                self.logger.warning(
-                    f"Provider {provider_name} initialization failed: {e}"
-                )
+                self.logger.warning(f"Provider {provider_name} initialization failed: {e}")
                 continue
             # Belt-and-braces: skip if not configured/healthy
-            if not (
-                self._has_valid_credentials(provider_name)
-                and self._is_provider_healthy(provider_name)
-            ):
-                self.logger.debug(
-                    f"Skipping provider {provider_name}: not configured/unhealthy"
-                )
+            if not (self._has_valid_credentials(provider_name) and self._is_provider_healthy(provider_name)):
+                self.logger.debug(f"Skipping provider {provider_name}: not configured/unhealthy")
                 continue
 
             # Check if provider supports the task
@@ -2119,20 +1948,12 @@ class UnifiedVisionAdapter:
 
             # Determine endpoint for this provider
             endpoint = None
-            if (
-                forced_endpoint
-                and model_selection
-                and provider_name == model_selection.provider
-            ):
+            if forced_endpoint and model_selection and provider_name == model_selection.provider:
                 endpoint = forced_endpoint
             elif provider_name == "novita":
                 # Default endpoint selection for Novita based on policy order
                 original_entry = next(
-                    (
-                        e
-                        for e in policy.get("provider_order", [])
-                        if e.startswith("novita")
-                    ),
+                    (e for e in policy.get("provider_order", []) if e.startswith("novita")),
                     "novita:qwen-image",
                 )
                 if "qwen-image" in original_entry:
@@ -2145,11 +1966,7 @@ class UnifiedVisionAdapter:
             for attempt in range(policy.get("max_retries_per_provider", 2)):
                 try:
                     # Submit with endpoint if supported (Novita), otherwise default
-                    if (
-                        hasattr(provider, "submit")
-                        and endpoint
-                        and provider_name == "novita"
-                    ):
+                    if hasattr(provider, "submit") and endpoint and provider_name == "novita":
                         task_id = await provider.submit(normalized_request, endpoint)
                     else:
                         task_id = await provider.submit(normalized_request)
@@ -2158,33 +1975,22 @@ class UnifiedVisionAdapter:
                         success=True,
                         job_id=f"{provider_name}:{task_id}",
                         provider=VisionProvider(provider_name.lower()),
-                        model_used=getattr(provider, "model_map", {}).get(
-                            normalized_request.task, "unknown"
-                        ),
+                        model_used=getattr(provider, "model_map", {}).get(normalized_request.task, "unknown"),
                         provider_job_id=task_id,
                     )
 
                 except VisionError as e:
                     last_error = e
                     # Special-case: Novita 400 prompt length error → one clean retry with 2000-char prompt [REH]
-                    if (
-                        provider_name == "novita"
-                        and e.error_type == VisionErrorType.VALIDATION_ERROR
-                        and "prompt: value length must be between 1 and 2000"
-                        in (e.message or "").lower()
-                    ):
+                    if provider_name == "novita" and e.error_type == VisionErrorType.VALIDATION_ERROR and "prompt: value length must be between 1 and 2000" in (e.message or "").lower():
                         if not did_prompt_retry:
                             # Normalize whitespace and clamp to 2000
-                            clamped = " ".join(
-                                (normalized_request.prompt or "").split()
-                            ).strip()
+                            clamped = " ".join((normalized_request.prompt or "").split()).strip()
                             if len(clamped) > 2000:
                                 clamped = clamped[:2000]
                             if len(clamped) == 0:
                                 # Nothing to retry with
-                                self.logger.debug(
-                                    "Novita prompt length retry skipped: prompt empty after normalization"
-                                )
+                                self.logger.debug("Novita prompt length retry skipped: prompt empty after normalization")
                             else:
                                 normalized_request.prompt = clamped
                                 self.logger.debug("Novita retry with 2000-char prompt")
@@ -2194,15 +2000,11 @@ class UnifiedVisionAdapter:
                         # Already retried once; fall through to existing handling
                     elif e.error_type == VisionErrorType.QUOTA_EXCEEDED:
                         # Payment/quota errors - NOT retryable, try next provider immediately [REH]
-                        self.logger.warning(
-                            f"Quota/balance error from {provider_name}: {e.message}. Trying next provider..."
-                        )
+                        self.logger.warning(f"Quota/balance error from {provider_name}: {e.message}. Trying next provider...")
                         break
                     else:
                         # Non-retryable error, try next provider
-                        self.logger.warning(
-                            f"Non-retryable error from {provider_name}: {e.message}"
-                        )
+                        self.logger.warning(f"Non-retryable error from {provider_name}: {e.message}")
                         break
 
                 except Exception as e:
@@ -2211,9 +2013,7 @@ class UnifiedVisionAdapter:
                         error_type=VisionErrorType.PROVIDER_ERROR,
                         user_message="An unexpected error occurred during image generation.",
                     )
-                    self.logger.error(
-                        f"Unexpected error from {provider_name}: {e}", exc_info=True
-                    )
+                    self.logger.error(f"Unexpected error from {provider_name}: {e}", exc_info=True)
                     break
 
         # All providers failed
@@ -2270,9 +2070,7 @@ class UnifiedVisionAdapter:
             raise VisionError("Invalid job ID format", VisionErrorType.VALIDATION_ERROR)
         except Exception as e:
             self.logger.error(f"Failed to fetch result for {full_job_id}: {e}")
-            raise VisionError(
-                f"Result fetch failed: {e}", VisionErrorType.PROVIDER_ERROR
-            )
+            raise VisionError(f"Result fetch failed: {e}", VisionErrorType.PROVIDER_ERROR)
 
     async def cancel(self, full_job_id: str) -> bool:
         """Cancel job if provider supports it"""
@@ -2310,9 +2108,7 @@ class UnifiedVisionAdapter:
                     self.logger.warning(f"Unknown provider enum for {provider_name}")
         return providers
 
-    def get_models_for_task(
-        self, task: VisionTask, provider: Optional[VisionProvider] = None
-    ) -> List[str]:
+    def get_models_for_task(self, task: VisionTask, provider: Optional[VisionProvider] = None) -> List[str]:
         """Get available models for task, optionally filtered by provider [CA]"""
         models = []
 

@@ -50,9 +50,7 @@ else:
 
 def _require_openai() -> Any:
     if _openai is None:
-        raise APIError(
-            "OpenAI backend is unavailable because the 'openai' package is not installed"
-        )
+        raise APIError("OpenAI backend is unavailable because the 'openai' package is not installed")
     return _openai
 
 
@@ -130,24 +128,18 @@ def _make_openai_async_client(
         raise
 
 
-def _resolve_openai_compatible_endpoint(
-    provider_name: str | None, config: Dict[str, Any]
-) -> tuple[str | None, str | None, str]:
+def _resolve_openai_compatible_endpoint(provider_name: str | None, config: Dict[str, Any]) -> tuple[str | None, str | None, str]:
     """Resolve API key/base URL for OpenAI-compatible ladders."""
     provider = str(provider_name or "openrouter").strip().lower()
     if provider == "nvidia":
         return (
             config.get("NVIDIA_NIM_API_KEY") or config.get("OPENAI_API_KEY"),
-            config.get("NVIDIA_NIM_API_BASE")
-            or config.get("OPENAI_API_BASE")
-            or "https://integrate.api.nvidia.com/v1",
+            config.get("NVIDIA_NIM_API_BASE") or config.get("OPENAI_API_BASE") or "https://integrate.api.nvidia.com/v1",
             "nvidia",
         )
     if provider == "openrouter":
         return (
-            config.get("OPENROUTER_API_KEY")
-            or config.get("OPENAI_API_KEY")
-            or config.get("VISION_API_KEY"),
+            config.get("OPENROUTER_API_KEY") or config.get("OPENAI_API_KEY") or config.get("VISION_API_KEY"),
             "https://openrouter.ai/api/v1",
             "openrouter",
         )
@@ -177,11 +169,7 @@ def _ollama_coro_factory(
     async def _run():
         from .ollama import OllamaClient
 
-        base_url = (
-            config.get("OLLAMA_HOST")
-            or os.getenv("OLLAMA_HOST")
-            or "http://localhost:11434"
-        )
+        base_url = config.get("OLLAMA_HOST") or os.getenv("OLLAMA_HOST") or "http://localhost:11434"
         ollama_client = OllamaClient(base_url=base_url)
 
         # Convert OpenAI messages to a single prompt for Ollama
@@ -285,16 +273,8 @@ async def generate_openai_response(
         backend = str(config.get("TEXT_BACKEND", "openai") or "openai").lower()
         if backend == "nvidia":
             api_key = config.get("NVIDIA_NIM_API_KEY") or config.get("OPENAI_API_KEY")
-            api_base = (
-                config.get("NVIDIA_NIM_API_BASE")
-                or config.get("OPENAI_API_BASE")
-                or "https://integrate.api.nvidia.com/v1"
-            )
-            configured_model = (
-                config.get("NVIDIA_NIM_TEXT_MODEL")
-                or config.get("OPENAI_TEXT_MODEL")
-                or "meta/llama3-70b-instruct"
-            )
+            api_base = config.get("NVIDIA_NIM_API_BASE") or config.get("OPENAI_API_BASE") or "https://integrate.api.nvidia.com/v1"
+            configured_model = config.get("NVIDIA_NIM_TEXT_MODEL") or config.get("OPENAI_TEXT_MODEL") or "meta/llama3-70b-instruct"
         else:
             api_key = config.get("OPENAI_API_KEY")
             api_base = config.get("OPENAI_API_BASE", "https://api.openai.com/v1")
@@ -302,11 +282,7 @@ async def generate_openai_response(
 
         # Prefer TEXTGEN_TIMEOUT_SECONDS; fall back to TEXT_REQUEST_TIMEOUT; default 45s
         try:
-            timeout_seconds = float(
-                config.get(
-                    "TEXTGEN_TIMEOUT_SECONDS", config.get("TEXT_REQUEST_TIMEOUT", "45")
-                )
-            )
+            timeout_seconds = float(config.get("TEXTGEN_TIMEOUT_SECONDS", config.get("TEXT_REQUEST_TIMEOUT", "45")))
         except Exception:
             timeout_seconds = 45.0
 
@@ -327,9 +303,7 @@ async def generate_openai_response(
 
             # Apply user preferences if not overridden
             if temperature is None:
-                temperature = user_prefs.get(
-                    "temperature", config.get("TEMPERATURE", 0.7)
-                )
+                temperature = user_prefs.get("temperature", config.get("TEMPERATURE", 0.7))
         else:
             temperature = temperature or config.get("TEMPERATURE", 0.7)
 
@@ -382,14 +356,10 @@ Server Context: {server_context}"""
             max_tokens = config.get("MAX_RESPONSE_TOKENS", 1000)
 
         logger.info(f"Configured OpenAI-compatible text model: {model}")
-        logger.debug(
-            f"[OpenAI] Request params: temp={temperature}, max_tokens={max_tokens}, stream={stream}"
-        )
+        logger.debug(f"[OpenAI] Request params: temp={temperature}, max_tokens={max_tokens}, stream={stream}")
 
         # Helper to normalize a completion response into our result dict
-        def _normalize_nonstream_response(
-            response_obj, used_model: str
-        ) -> Dict[str, Any]:
+        def _normalize_nonstream_response(response_obj, used_model: str) -> Dict[str, Any]:
             try:
                 if not getattr(response_obj, "choices", None):
                     raise APIError("No choices returned in OpenAI response")
@@ -416,9 +386,7 @@ Server Context: {server_context}"""
                     "backend": "openai",
                 }
             except Exception as norm_error:
-                raise APIError(
-                    f"Response normalization failed: {type(norm_error).__name__}: {norm_error}"
-                )
+                raise APIError(f"Response normalization failed: {type(norm_error).__name__}: {norm_error}")
 
         if stream:
             logger.debug("[OpenAI] 🔄 Sending request to API (streaming)...")
@@ -443,9 +411,7 @@ Server Context: {server_context}"""
                                 "text": chunk.choices[0].delta.content,
                                 "finished": False,
                             }
-                    logger.debug(
-                        f"[OpenAI] ✅ Streaming complete, processed {chunk_count} chunks"
-                    )
+                    logger.debug(f"[OpenAI] ✅ Streaming complete, processed {chunk_count} chunks")
                     yield {"text": "", "finished": True}
                 finally:
                     await _safe_aclose_openai_client(client)
@@ -459,9 +425,7 @@ Server Context: {server_context}"""
 
         if use_text_fallback:
             ladder_label = "NVIDIA" if "nvidia.com" in base_url_l else "OpenRouter"
-            logger.info(
-                f"[OpenAI] Using EnhancedRetryManager text fallback ladder ({ladder_label})"
-            )
+            logger.info(f"[OpenAI] Using EnhancedRetryManager text fallback ladder ({ladder_label})")
             await _safe_aclose_openai_client(client)
             retry_mgr = get_retry_manager()
 
@@ -480,9 +444,7 @@ Server Context: {server_context}"""
                         provider_config,
                     )
 
-                attempt_api_key, attempt_base_url, attempt_provider = (
-                    _resolve_openai_compatible_endpoint(provider_config.name, config)
-                )
+                attempt_api_key, attempt_base_url, attempt_provider = _resolve_openai_compatible_endpoint(provider_config.name, config)
 
                 async def _run():
                     attempt_client = _make_openai_async_client(
@@ -492,9 +454,7 @@ Server Context: {server_context}"""
                         max_retries=0,
                     )
                     try:
-                        logger.debug(
-                            f"[OpenAI] 🔄 Sending request to {attempt_provider} with model: {selected_model}"
-                        )
+                        logger.debug(f"[OpenAI] 🔄 Sending request to {attempt_provider} with model: {selected_model}")
                         t0 = time.monotonic()
                         resp = await attempt_client.chat.completions.create(
                             model=selected_model,
@@ -507,11 +467,7 @@ Server Context: {server_context}"""
                         logger.debug("[OpenAI] ✅ Received response from API")
                         return _normalize_nonstream_response(resp, selected_model)
                     except httpx.HTTPStatusError as he:
-                        status_code = (
-                            he.response.status_code
-                            if getattr(he, "response", None) is not None
-                            else "unknown"
-                        )
+                        status_code = he.response.status_code if getattr(he, "response", None) is not None else "unknown"
                         retry_after = None
                         try:
                             # Prefer standard Retry-After; fall back to common rate-limit reset hints
@@ -522,32 +478,20 @@ Server Context: {server_context}"""
                                     retry_after = float(ra)
                                 else:
                                     # OpenRouter-style reset headers (may be a unix epoch or delta seconds)
-                                    reset = (
-                                        hdrs.get("x-ratelimit-reset")
-                                        or hdrs.get("X-RateLimit-Reset")
-                                        or hdrs.get("rate-limit-reset")
-                                    )
+                                    reset = hdrs.get("x-ratelimit-reset") or hdrs.get("X-RateLimit-Reset") or hdrs.get("rate-limit-reset")
                                     if reset is not None:
                                         try:
                                             val = float(reset)
                                             now = time.time()
-                                            retry_after = (
-                                                val - now if val > now + 1 else val
-                                            )
+                                            retry_after = val - now if val > now + 1 else val
                                             if retry_after < 0:
                                                 retry_after = 0.0
                                         except Exception:
                                             retry_after = None
                         except Exception:
                             retry_after = None
-                        extra = (
-                            f" (retry-after={retry_after}s)"
-                            if retry_after is not None
-                            else ""
-                        )
-                        logger.warning(
-                            f"OpenAI HTTP error during fallback attempt: {status_code} {he}{extra}"
-                        )
+                        extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""
+                        logger.warning(f"OpenAI HTTP error during fallback attempt: {status_code} {he}{extra}")
                         err = APIError(f"HTTP {status_code}: {str(he)}{extra}")
                         # Propagate Retry-After to outer retry harness
                         try:
@@ -561,12 +505,8 @@ Server Context: {server_context}"""
                         elapsed_ms = int((time.monotonic() - t0) * 1000)
                         etype = type(e).__name__
                         if "timeout" in str(e).lower() or "timeout" in etype.lower():
-                            logger.warning(
-                                f"TextGen timeout (model {selected_model}): {elapsed_ms}ms"
-                            )
-                            raise APIError(
-                                f"Request timeout after ~{elapsed_ms}ms for model {selected_model}"
-                            )
+                            logger.warning(f"TextGen timeout (model {selected_model}): {elapsed_ms}ms")
+                            raise APIError(f"Request timeout after ~{elapsed_ms}ms for model {selected_model}")
                         raise
                     finally:
                         await _safe_aclose_openai_client(attempt_client)
@@ -579,9 +519,7 @@ Server Context: {server_context}"""
             except Exception:
                 pass
             try:
-                rr = await retry_mgr.run_with_fallback(
-                    "text", _coro_factory, per_item_budget=per_item_budget
-                )
+                rr = await retry_mgr.run_with_fallback("text", _coro_factory, per_item_budget=per_item_budget)
             finally:
                 await _safe_aclose_openai_client(client)
             if not rr.success:
@@ -589,57 +527,26 @@ Server Context: {server_context}"""
                 if rr.error:
                     base_err = rr.error
                     try:
-                        prov = (
-                            getattr(rr, "provider_used", None)
-                            or getattr(base_err, "provider_key", None)
-                            or "unknown"
-                        )
+                        prov = getattr(rr, "provider_used", None) or getattr(base_err, "provider_key", None) or "unknown"
                         attempts = getattr(rr, "attempts", 0)
                         total_time = getattr(rr, "total_time", 0.0)
                         err_str = str(base_err).lower()
-                        if "no endpoints found" in err_str or (
-                            "404" in err_str and "endpoint" in err_str
-                        ):
+                        if "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str):
                             msg = (
-                                "Text providers unavailable via OpenRouter (404 / no endpoints) "
-                                f"after {attempts} attempt(s) in {total_time:.2f}s "
-                                f"(last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
+                                f"Text providers unavailable via OpenRouter (404 / no endpoints) after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
                             )
-                        elif ("401" in err_str or "403" in err_str) and (
-                            "authentication" in err_str
-                            or "unauthorized" in err_str
-                            or "forbidden" in err_str
-                            or "user not found" in err_str
-                            or "invalid api key" in err_str
-                        ):
-                            msg = (
-                                "Text provider authentication failed "
-                                f"(last_provider={prov}). Check OPENAI_API_KEY / OpenRouter account. "
-                                f"Last error: {type(base_err).__name__}: {base_err}"
-                            )
+                        elif ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str):
+                            msg = f"Text provider authentication failed (last_provider={prov}). Check OPENAI_API_KEY / OpenRouter account. Last error: {type(base_err).__name__}: {base_err}"
                         elif "timeout" in err_str:
-                            msg = (
-                                f"Text generation timeout after {total_time:.2f}s across "
-                                f"{attempts} attempt(s) (last_provider={prov}). "
-                                f"Last error: {type(base_err).__name__}: {base_err}"
-                            )
+                            msg = f"Text generation timeout after {total_time:.2f}s across {attempts} attempt(s) (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
                         else:
-                            msg = (
-                                f"Text fallback ladder failed after {attempts} attempt(s) in "
-                                f"{total_time:.2f}s (last_provider={prov}): {type(base_err).__name__}: {base_err}"
-                            )
+                            msg = f"Text fallback ladder failed after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}): {type(base_err).__name__}: {base_err}"
                         api_err = APIError(msg)
                         try:
-                            if "no endpoints found" in err_str or (
-                                "404" in err_str and "endpoint" in err_str
-                            ):
+                            if "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str):
                                 setattr(api_err, "retryable", False)
                             if ("401" in err_str or "403" in err_str) and (
-                                "authentication" in err_str
-                                or "unauthorized" in err_str
-                                or "forbidden" in err_str
-                                or "user not found" in err_str
-                                or "invalid api key" in err_str
+                                "authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str
                             ):
                                 setattr(api_err, "retryable", False)
                         except Exception:
@@ -667,12 +574,8 @@ Server Context: {server_context}"""
                     **kwargs,
                 )
             except Exception as e:
-                if "timeout" in str(e).lower() or "TimeoutError" in str(
-                    type(e).__name__
-                ):
-                    logger.warning(
-                        f"[OpenAI] ⏰ Request timeout after {config.get('TEXT_REQUEST_TIMEOUT', 30)}s: {e}"
-                    )
+                if "timeout" in str(e).lower() or "TimeoutError" in str(type(e).__name__):
+                    logger.warning(f"[OpenAI] ⏰ Request timeout after {config.get('TEXT_REQUEST_TIMEOUT', 30)}s: {e}")
                     raise APIError(f"Request timeout: {str(e)}")
                 else:
                     logger.error(f"[OpenAI] ❌ API request failed: {e}")
@@ -699,10 +602,7 @@ Server Context: {server_context}"""
                     retry_after = float(ra)
         except Exception:
             retry_after = None
-        err = APIError(
-            f"OpenAI rate limit exceeded: {str(e)}"
-            + (f" (retry-after={retry_after}s)" if retry_after is not None else "")
-        )
+        err = APIError(f"OpenAI rate limit exceeded: {str(e)}" + (f" (retry-after={retry_after}s)" if retry_after is not None else ""))
         try:
             if retry_after is not None:
                 setattr(err, "retry_after_seconds", retry_after)
@@ -724,11 +624,7 @@ Server Context: {server_context}"""
                     retry_after = float(ra)
                 else:
                     # OpenRouter-style reset headers (epoch or delta seconds)
-                    reset = (
-                        hdrs.get("x-ratelimit-reset")
-                        or hdrs.get("X-RateLimit-Reset")
-                        or hdrs.get("rate-limit-reset")
-                    )
+                    reset = hdrs.get("x-ratelimit-reset") or hdrs.get("X-RateLimit-Reset") or hdrs.get("rate-limit-reset")
                     if reset is not None:
                         try:
                             val = float(reset)
@@ -793,22 +689,10 @@ async def get_base64_image(image_url: str) -> str:
 
             # Determine content type from file extension
             ext = os.path.splitext(file_path)[1].lower()
-            content_type = (
-                "image/jpeg"
-                if ext in (".jpg", ".jpeg")
-                else "image/png"
-                if ext == ".png"
-                else "image/webp"
-                if ext == ".webp"
-                else "image/gif"
-                if ext == ".gif"
-                else "image/png"
-            )  # Default to PNG
+            content_type = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png" if ext == ".png" else "image/webp" if ext == ".webp" else "image/gif" if ext == ".gif" else "image/png"  # Default to PNG
 
             base64_data = base64.b64encode(data).decode("utf-8")
-            logger.debug(
-                f"✅ Image loaded from file: size={len(data)} bytes, type={content_type}"
-            )
+            logger.debug(f"✅ Image loaded from file: size={len(data)} bytes, type={content_type}")
             return f"data:{content_type};base64,{base64_data}"
 
         except Exception as e:
@@ -826,14 +710,10 @@ async def get_base64_image(image_url: str) -> str:
                         data = await response.read()
                         base64_data = base64.b64encode(data).decode("utf-8")
                         content_type = response.headers.get("Content-Type", "image/png")
-                        logger.debug(
-                            f"✅ Image downloaded: size={len(data)} bytes, type={content_type}"
-                        )
+                        logger.debug(f"✅ Image downloaded: size={len(data)} bytes, type={content_type}")
                         return f"data:{content_type};base64,{base64_data}"
                     else:
-                        error_msg = (
-                            f"Failed to download image: status={response.status}"
-                        )
+                        error_msg = f"Failed to download image: status={response.status}"
                         logger.error(error_msg)
                         raise APIError(error_msg)
         except Exception as e:
@@ -883,9 +763,7 @@ async def _generate_vl_response_with_retry(
     except FileNotFoundError as exc:
         raise APIError(f"VL prompt file not found: {vl_prompt_file_path}") from exc
     except Exception as exc:
-        raise APIError(
-            f"Error reading VL prompt file {vl_prompt_file_path}: {exc}"
-        ) from exc
+        raise APIError(f"Error reading VL prompt file {vl_prompt_file_path}: {exc}") from exc
 
     if user_id:
         profile = get_profile(str(user_id))
@@ -934,22 +812,16 @@ async def _generate_vl_response_with_retry(
 
     # Use EnhancedRetryManager for vision ladder fallback (mirrors text flow) [CA][REH]
     # Skip ladder if model_override is explicitly provided (caller wants specific model)
-    use_provider_fallback = (
-        "openrouter" in base_url.lower() or "nvidia.com" in base_url.lower()
-    ) and not model_override
+    use_provider_fallback = ("openrouter" in base_url.lower() or "nvidia.com" in base_url.lower()) and not model_override
 
     if use_provider_fallback:
         ladder_label = "NVIDIA" if "nvidia.com" in base_url.lower() else "OpenRouter"
-        logger.info(
-            f"[VL] Using EnhancedRetryManager vision fallback ladder ({ladder_label})"
-        )
+        logger.info(f"[VL] Using EnhancedRetryManager vision fallback ladder ({ladder_label})")
         retry_mgr = get_retry_manager()
 
         def _coro_factory(provider_config):
             selected_model = provider_config.model
-            attempt_api_key, attempt_base_url, attempt_provider = (
-                _resolve_openai_compatible_endpoint(provider_config.name, config)
-            )
+            attempt_api_key, attempt_base_url, attempt_provider = _resolve_openai_compatible_endpoint(provider_config.name, config)
 
             async def _run():
                 # Create client with per-provider timeout from ladder config
@@ -967,27 +839,16 @@ async def _generate_vl_response_with_retry(
                     "max_tokens": max_tokens,
                 }
                 # Filter to allowed params
-                api_params = {
-                    k: v
-                    for k, v in api_params.items()
-                    if k in OPENROUTER_ALLOWED_PARAMS
-                }
+                api_params = {k: v for k, v in api_params.items() if k in OPENROUTER_ALLOWED_PARAMS}
 
                 t0 = time.monotonic()
                 try:
-                    logger.debug(
-                        f"[VL] 🔄 Sending request to {attempt_provider} with model: {selected_model}"
-                    )
+                    logger.debug(f"[VL] 🔄 Sending request to {attempt_provider} with model: {selected_model}")
                     response = await client.chat.completions.create(**api_params)
 
                     if response is None:
                         raise APIError("VL API returned None response")
-                    if not (
-                        hasattr(response, "choices")
-                        and response.choices
-                        and hasattr(response.choices[0], "message")
-                        and response.choices[0].message
-                    ):
+                    if not (hasattr(response, "choices") and response.choices and hasattr(response.choices[0], "message") and response.choices[0].message):
                         raise APIError("Invalid VL API response structure")
 
                     logger.debug("[VL] ✅ Received response from API")
@@ -1000,9 +861,7 @@ async def _generate_vl_response_with_retry(
 
                     # Empty completion is a soft failure — retry with next model [REH]
                     if not response_text.strip():
-                        raise APIError(
-                            f"VL model {selected_model} returned empty completion"
-                        )
+                        raise APIError(f"VL model {selected_model} returned empty completion")
                     usage = getattr(response, "usage", None)
                     usage_info = {
                         "prompt_tokens": getattr(usage, "prompt_tokens", 0),
@@ -1019,11 +878,7 @@ async def _generate_vl_response_with_retry(
                     }
 
                 except httpx.HTTPStatusError as he:
-                    status_code = (
-                        he.response.status_code
-                        if getattr(he, "response", None) is not None
-                        else "unknown"
-                    )
+                    status_code = he.response.status_code if getattr(he, "response", None) is not None else "unknown"
                     retry_after = None
                     try:
                         if getattr(he, "response", None) is not None:
@@ -1033,14 +888,8 @@ async def _generate_vl_response_with_retry(
                                 retry_after = float(ra)
                     except Exception:
                         retry_after = None
-                    extra = (
-                        f" (retry-after={retry_after}s)"
-                        if retry_after is not None
-                        else ""
-                    )
-                    logger.warning(
-                        f"VL HTTP error during fallback attempt: {status_code} {he}{extra}"
-                    )
+                    extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""
+                    logger.warning(f"VL HTTP error during fallback attempt: {status_code} {he}{extra}")
                     err = APIError(f"HTTP {status_code}: {str(he)}{extra}")
                     try:
                         if retry_after is not None:
@@ -1052,12 +901,8 @@ async def _generate_vl_response_with_retry(
                     elapsed_ms = int((time.monotonic() - t0) * 1000)
                     etype = type(e).__name__
                     if "timeout" in str(e).lower() or "timeout" in etype.lower():
-                        logger.warning(
-                            f"VL timeout (model {selected_model}): {elapsed_ms}ms"
-                        )
-                        raise APIError(
-                            f"Request timeout after ~{elapsed_ms}ms for model {selected_model}"
-                        )
+                        logger.warning(f"VL timeout (model {selected_model}): {elapsed_ms}ms")
+                        raise APIError(f"Request timeout after ~{elapsed_ms}ms for model {selected_model}")
                     raise
                 finally:
                     await _safe_aclose_openai_client(client)
@@ -1075,75 +920,36 @@ async def _generate_vl_response_with_retry(
         except Exception:
             pass
 
-        rr = await retry_mgr.run_with_fallback(
-            "vision", _coro_factory, per_item_budget=per_item_budget
-        )
+        rr = await retry_mgr.run_with_fallback("vision", _coro_factory, per_item_budget=per_item_budget)
 
         if not rr.success:
             # Enrich error with ladder context for better observability [REH]
             if rr.error:
                 base_err = rr.error
                 try:
-                    prov = (
-                        getattr(rr, "provider_used", None)
-                        or getattr(base_err, "provider_key", None)
-                        or "unknown"
-                    )
+                    prov = getattr(rr, "provider_used", None) or getattr(base_err, "provider_key", None) or "unknown"
                     attempts = getattr(rr, "attempts", 0)
                     total_time = getattr(rr, "total_time", 0.0)
                     err_str = str(base_err).lower()
 
-                    if "no endpoints found" in err_str or (
-                        "404" in err_str and "endpoint" in err_str
-                    ):
-                        msg = (
-                            "Vision providers unavailable via OpenRouter (404 / no endpoints) "
-                            f"after {attempts} attempt(s) in {total_time:.2f}s "
-                            f"(last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
-                        )
-                    elif ("401" in err_str or "403" in err_str) and (
-                        "authentication" in err_str
-                        or "unauthorized" in err_str
-                        or "forbidden" in err_str
-                        or "user not found" in err_str
-                        or "invalid api key" in err_str
-                    ):
-                        msg = (
-                            "Vision provider authentication failed "
-                            f"(last_provider={prov}). Check OPENAI_API_KEY / OpenRouter account. "
-                            f"Last error: {type(base_err).__name__}: {base_err}"
-                        )
+                    if "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str):
+                        msg = f"Vision providers unavailable via OpenRouter (404 / no endpoints) after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
+                    elif ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str):
+                        msg = f"Vision provider authentication failed (last_provider={prov}). Check OPENAI_API_KEY / OpenRouter account. Last error: {type(base_err).__name__}: {base_err}"
                     elif "timeout" in err_str:
-                        msg = (
-                            f"Vision generation timeout after {total_time:.2f}s across "
-                            f"{attempts} attempt(s) (last_provider={prov}). "
-                            f"Last error: {type(base_err).__name__}: {base_err}"
-                        )
+                        msg = f"Vision generation timeout after {total_time:.2f}s across {attempts} attempt(s) (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
                     else:
-                        msg = (
-                            f"Vision fallback ladder failed after {attempts} attempt(s) in "
-                            f"{total_time:.2f}s (last_provider={prov}): {type(base_err).__name__}: {base_err}"
-                        )
+                        msg = f"Vision fallback ladder failed after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}): {type(base_err).__name__}: {base_err}"
 
                     api_err = APIError(msg)
                     api_err.vl_exhausted = True
-                    api_err.vl_ladder_summary = (
-                        f"attempts={attempts},time={total_time:.2f}s,last={prov}"
-                    )
+                    api_err.vl_ladder_summary = f"attempts={attempts},time={total_time:.2f}s,last={prov}"
                     api_err.vl_attempts = attempts
                     api_err.vl_provider_base = base_url
                     try:
-                        if "no endpoints found" in err_str or (
-                            "404" in err_str and "endpoint" in err_str
-                        ):
+                        if "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str):
                             setattr(api_err, "retryable", False)
-                        if ("401" in err_str or "403" in err_str) and (
-                            "authentication" in err_str
-                            or "unauthorized" in err_str
-                            or "forbidden" in err_str
-                            or "user not found" in err_str
-                            or "invalid api key" in err_str
-                        ):
+                        if ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str):
                             setattr(api_err, "retryable", False)
                     except Exception:
                         pass
@@ -1179,15 +985,9 @@ async def _generate_vl_response_with_retry(
     except Exception:
         timeout_seconds = 30.0
 
-    single_api_key, single_base_url, single_provider = (
-        _resolve_openai_compatible_endpoint(
-            "nvidia"
-            if "nvidia.com" in base_url.lower()
-            else "openrouter"
-            if "openrouter" in base_url.lower()
-            else "openai",
-            config,
-        )
+    single_api_key, single_base_url, single_provider = _resolve_openai_compatible_endpoint(
+        "nvidia" if "nvidia.com" in base_url.lower() else "openrouter" if "openrouter" in base_url.lower() else "openai",
+        config,
     )
     client = _make_openai_async_client(
         api_key=single_api_key,
@@ -1217,12 +1017,7 @@ async def _generate_vl_response_with_retry(
             response = await client.chat.completions.create(**api_params)
             if response is None:
                 raise APIError("VL API returned None response")
-            if not (
-                hasattr(response, "choices")
-                and response.choices
-                and hasattr(response.choices[0], "message")
-                and response.choices[0].message
-            ):
+            if not (hasattr(response, "choices") and response.choices and hasattr(response.choices[0], "message") and response.choices[0].message):
                 raise APIError("Invalid VL API response structure")
         except Exception as exc:
             elapsed_ms = int((time.monotonic() - start) * 1000)

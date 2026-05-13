@@ -79,13 +79,9 @@ class MemoryArchiveDistiller:
         self.last_run: dict[str, Any] | None = None
         self.refresh_config()
         self.curator = CuratedMemoryCurator(
-            default_ttl_days=int(
-                self.config.get("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS", 180)
-            ),
+            default_ttl_days=int(self.config.get("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS", 180)),
             temp_ttl_days=int(self.config.get("PERSISTENT_MEMORY_TEMP_TTL_DAYS", 14)),
-            min_importance=float(
-                self.config.get("PERSISTENT_MEMORY_MIN_IMPORTANCE", 0.55)
-            ),
+            min_importance=float(self.config.get("PERSISTENT_MEMORY_MIN_IMPORTANCE", 0.55)),
         )
 
     def refresh_config(self) -> None:
@@ -97,19 +93,11 @@ class MemoryArchiveDistiller:
         else:
             self.dry_run = self._dry_run_override
         self.batch_size = max(1, int(cfg.get("MEMORY_DISTILLER_BATCH_SIZE", 200)))
-        self.interval_seconds = max(
-            1, int(cfg.get("MEMORY_DISTILLER_INTERVAL_SECONDS", 900))
-        )
-        self.window_messages = max(
-            1, int(cfg.get("MEMORY_DISTILLER_WINDOW_MESSAGES", 25))
-        )
+        self.interval_seconds = max(1, int(cfg.get("MEMORY_DISTILLER_INTERVAL_SECONDS", 900)))
+        self.window_messages = max(1, int(cfg.get("MEMORY_DISTILLER_WINDOW_MESSAGES", 25)))
         self.min_confidence = float(cfg.get("MEMORY_DISTILLER_MIN_CONFIDENCE", 0.85))
-        self.max_memories_per_window = max(
-            1, int(cfg.get("MEMORY_DISTILLER_MAX_MEMORIES_PER_WINDOW", 3))
-        )
-        self.exclude_bot_messages = bool(
-            cfg.get("MEMORY_DISTILLER_EXCLUDE_BOT_MESSAGES", True)
-        )
+        self.max_memories_per_window = max(1, int(cfg.get("MEMORY_DISTILLER_MAX_MEMORIES_PER_WINDOW", 3)))
+        self.exclude_bot_messages = bool(cfg.get("MEMORY_DISTILLER_EXCLUDE_BOT_MESSAGES", True))
 
     def set_dry_run(self, enabled: bool) -> None:
         self._dry_run_override = bool(enabled)
@@ -195,9 +183,7 @@ class MemoryArchiveDistiller:
                     extra={"subsys": "memory", "event": "memory_distiller_loop_failed"},
                 )
             try:
-                await asyncio.wait_for(
-                    self._stop_event.wait(), timeout=self.interval_seconds
-                )
+                await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval_seconds)
             except asyncio.TimeoutError:
                 continue
 
@@ -224,9 +210,7 @@ class MemoryArchiveDistiller:
             "error": None,
         }
 
-        self.archive_service = self.archive_service or await get_server_archive_service(
-            self.bot
-        )
+        self.archive_service = self.archive_service or await get_server_archive_service(self.bot)
         self.memory_service = self.memory_service or await get_memory_service(self.bot)
         if not self.enabled:
             summary["skipped_reason"] = "disabled"
@@ -279,9 +263,7 @@ class MemoryArchiveDistiller:
                     summary["candidate_count"] += len(distilled)
                     accepted: list[MemoryCandidate] = []
                     window_candidates = distilled[: self.max_memories_per_window]
-                    summary["rejected_count"] += max(
-                        0, len(distilled) - len(window_candidates)
-                    )
+                    summary["rejected_count"] += max(0, len(distilled) - len(window_candidates))
                     for candidate in window_candidates:
                         curated = self._curate_candidate(candidate)
                         if curated is None:
@@ -294,28 +276,18 @@ class MemoryArchiveDistiller:
 
                     summary["accepted_count"] += len(accepted)
                     if accepted and not self.dry_run:
-                        persist_stats = await self.memory_service._persist_batch(
-                            accepted
-                        )
+                        persist_stats = await self.memory_service._persist_batch(accepted)
                         if isinstance(persist_stats, dict):
-                            summary["merged_count"] += int(
-                                persist_stats.get("merged", 0)
-                            )
+                            summary["merged_count"] += int(persist_stats.get("merged", 0))
                     elif not accepted:
                         pass
 
                     last = window.messages[-1]
                     await store.upsert_distiller_state(
                         guild_id=str(last["guild_id"]),
-                        channel_id=str(last["channel_id"])
-                        if last.get("channel_id") is not None
-                        else None,
-                        thread_id=str(last["thread_id"])
-                        if last.get("thread_id") is not None
-                        else None,
-                        author_id=str(last["author_id"])
-                        if last.get("author_id") is not None
-                        else None,
+                        channel_id=str(last["channel_id"]) if last.get("channel_id") is not None else None,
+                        thread_id=str(last["thread_id"]) if last.get("thread_id") is not None else None,
+                        author_id=str(last["author_id"]) if last.get("author_id") is not None else None,
                         last_processed_message_id=str(last["message_id"]),
                         last_processed_created_at=str(last["created_at"]),
                         error=None,
@@ -343,22 +315,12 @@ class MemoryArchiveDistiller:
 
     async def get_status(self, *, guild_id: str | None = None) -> dict[str, Any]:
         self.refresh_config()
-        archive_enabled = (
-            bool(getattr(self.archive_service, "enabled", False))
-            if self.archive_service
-            else False
-        )
-        memory_enabled = (
-            bool(getattr(self.memory_service, "enabled", False))
-            if self.memory_service
-            else False
-        )
+        archive_enabled = bool(getattr(self.archive_service, "enabled", False)) if self.archive_service else False
+        memory_enabled = bool(getattr(self.memory_service, "enabled", False)) if self.memory_service else False
         backlog = None
         if self.archive_service is not None:
             try:
-                backlog = await self.archive_service.store.count_distiller_backlog(
-                    guild_id=guild_id
-                )
+                backlog = await self.archive_service.store.count_distiller_backlog(guild_id=guild_id)
             except Exception:
                 logger.debug("Failed to calculate distiller backlog", exc_info=True)
         latest_run = None
@@ -383,36 +345,20 @@ class MemoryArchiveDistiller:
             "last_run": self.last_run or latest_run,
         }
 
-    async def _fetch_scope_batch(
-        self, store: Any, scope: dict[str, Any], remaining: int
-    ) -> list[dict[str, Any]]:
+    async def _fetch_scope_batch(self, store: Any, scope: dict[str, Any], remaining: int) -> list[dict[str, Any]]:
         state = await store.get_distiller_state(
             guild_id=str(scope["guild_id"]),
-            channel_id=str(scope["channel_id"])
-            if scope.get("channel_id") is not None
-            else None,
-            thread_id=str(scope["thread_id"])
-            if scope.get("thread_id") is not None
-            else None,
-            author_id=str(scope["author_id"])
-            if scope.get("author_id") is not None
-            else None,
+            channel_id=str(scope["channel_id"]) if scope.get("channel_id") is not None else None,
+            thread_id=str(scope["thread_id"]) if scope.get("thread_id") is not None else None,
+            author_id=str(scope["author_id"]) if scope.get("author_id") is not None else None,
         )
         return await store.fetch_distiller_messages(
             guild_id=str(scope["guild_id"]),
-            channel_id=str(scope["channel_id"])
-            if scope.get("channel_id") is not None
-            else None,
-            thread_id=str(scope["thread_id"])
-            if scope.get("thread_id") is not None
-            else None,
+            channel_id=str(scope["channel_id"]) if scope.get("channel_id") is not None else None,
+            thread_id=str(scope["thread_id"]) if scope.get("thread_id") is not None else None,
             author_id=str(scope["author_id"]),
-            after_created_at=str(state["last_processed_created_at"])
-            if state and state.get("last_processed_created_at")
-            else None,
-            after_message_id=str(state["last_processed_message_id"])
-            if state and state.get("last_processed_message_id")
-            else None,
+            after_created_at=str(state["last_processed_created_at"]) if state and state.get("last_processed_created_at") else None,
+            after_message_id=str(state["last_processed_message_id"]) if state and state.get("last_processed_message_id") else None,
             limit=min(self.window_messages, remaining),
         )
 
@@ -432,11 +378,7 @@ class MemoryArchiveDistiller:
         for message in ordered:
             created_at = self._parse_datetime(message.get("created_at"))
             if current:
-                gap = (
-                    (created_at - previous_at).total_seconds()
-                    if created_at and previous_at
-                    else 0
-                )
+                gap = (created_at - previous_at).total_seconds() if created_at and previous_at else 0
                 if len(current) >= self.window_messages or gap > 15 * 60:
                     windows.append(DistillerWindow(messages=current))
                     current = []
@@ -452,9 +394,7 @@ class MemoryArchiveDistiller:
         for message in messages:
             if self.exclude_bot_messages and self._as_bool(message.get("author_bot")):
                 continue
-            text = self._normalize_text(
-                message.get("clean_content") or message.get("content") or ""
-            )
+            text = self._normalize_text(message.get("clean_content") or message.get("content") or "")
             if not text or len(text) < 16:
                 continue
             if self._looks_blocked(text):

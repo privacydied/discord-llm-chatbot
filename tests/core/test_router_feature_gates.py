@@ -46,9 +46,7 @@ def guild_message():
 
 
 @pytest.mark.asyncio
-async def test_feature_gate_blocks_image_generation_before_command_handler(
-    router, guild_message, monkeypatch
-):
+async def test_feature_gate_blocks_image_generation_before_command_handler(router, guild_message, monkeypatch):
     router._handle_img_command = AsyncMock()
     monkeypatch.setattr(
         "bot.router.is_server_feature_enabled",
@@ -63,9 +61,7 @@ async def test_feature_gate_blocks_image_generation_before_command_handler(
 
 
 @pytest.mark.asyncio
-async def test_feature_gate_blocks_disabled_vision_before_attachment_flow(
-    router, monkeypatch
-):
+async def test_feature_gate_blocks_disabled_vision_before_attachment_flow(router, monkeypatch):
     router._flows["process_attachments"] = AsyncMock()
     message = SimpleNamespace(
         id=2,
@@ -73,9 +69,7 @@ async def test_feature_gate_blocks_disabled_vision_before_attachment_flow(
         guild=SimpleNamespace(id=123),
         channel=SimpleNamespace(id=456),
         author=SimpleNamespace(bot=False, id=42),
-        attachments=[
-            SimpleNamespace(content_type="image/png", filename="screenshot.png")
-        ],
+        attachments=[SimpleNamespace(content_type="image/png", filename="screenshot.png")],
     )
     monkeypatch.setattr(
         "bot.router.is_server_feature_enabled",
@@ -90,9 +84,7 @@ async def test_feature_gate_blocks_disabled_vision_before_attachment_flow(
 
 
 @pytest.mark.asyncio
-async def test_feature_gate_blocks_disabled_stt_before_attachment_flow(
-    router, monkeypatch
-):
+async def test_feature_gate_blocks_disabled_stt_before_attachment_flow(router, monkeypatch):
     router._flows["process_attachments"] = AsyncMock()
     message = SimpleNamespace(
         id=3,
@@ -115,9 +107,7 @@ async def test_feature_gate_blocks_disabled_stt_before_attachment_flow(
 
 
 @pytest.mark.asyncio
-async def test_feature_gate_blocks_disabled_web_extraction_before_url_flow(
-    router, monkeypatch
-):
+async def test_feature_gate_blocks_disabled_web_extraction_before_url_flow(router, monkeypatch):
     router._flows["process_url"] = AsyncMock()
     message = SimpleNamespace(
         id=4,
@@ -140,9 +130,7 @@ async def test_feature_gate_blocks_disabled_web_extraction_before_url_flow(
 
 
 @pytest.mark.asyncio
-async def test_feature_gate_blocks_disabled_x_extraction_before_url_flow(
-    router, monkeypatch
-):
+async def test_feature_gate_blocks_disabled_x_extraction_before_url_flow(router, monkeypatch):
     router._flows["process_url"] = AsyncMock()
 
     class _Typing:

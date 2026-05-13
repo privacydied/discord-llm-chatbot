@@ -237,9 +237,7 @@ class TestCacheKeyIsolation:
         """TikTok URLs should have identity suffix in key."""
         resolved = "https://cdn.tiktok.com/video/abc123.mp4"
 
-        key = _compute_download_key(
-            resolved, "ba", 1000000, original_url="https://www.tiktok.com/t/ABC123/"
-        )
+        key = _compute_download_key(resolved, "ba", 1000000, original_url="https://www.tiktok.com/t/ABC123/")
 
         # Key should have the "-v" identity suffix
         assert "-v" in key

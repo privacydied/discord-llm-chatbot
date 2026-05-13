@@ -65,18 +65,14 @@ def validate_environment() -> Tuple[bool, Optional[str]]:
     # Check AI backend environment variables
     backend = os.environ.get("TEXT_BACKEND", "").lower()
     if backend == "openai":
-        missing_openai = [
-            var for var in REQUIRED_ENV_VARS["openai"] if not os.environ.get(var)
-        ]
+        missing_openai = [var for var in REQUIRED_ENV_VARS["openai"] if not os.environ.get(var)]
         if missing_openai:
             return (
                 False,
                 f"OpenAI backend selected but missing required variables: {', '.join(missing_openai)}",
             )
     elif backend == "ollama":
-        missing_ollama = [
-            var for var in REQUIRED_ENV_VARS["ollama"] if not os.environ.get(var)
-        ]
+        missing_ollama = [var for var in REQUIRED_ENV_VARS["ollama"] if not os.environ.get(var)]
         if missing_ollama:
             return (
                 False,
@@ -164,10 +160,7 @@ def validate_on_startup() -> bool:
     if is_valid:
         logger.info("✅ Environment validation passed")
         env_info = get_environment_info()
-        logger.info(
-            f"Environment info: backend={env_info['backend']}, model={env_info['model']}, "
-            f"tts_voice={env_info['tts_voice']}"
-        )
+        logger.info(f"Environment info: backend={env_info['backend']}, model={env_info['model']}, tts_voice={env_info['tts_voice']}")
         return True
     else:
         logger.error(f"❌ Environment validation failed: {error}")

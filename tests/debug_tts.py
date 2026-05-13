@@ -89,16 +89,10 @@ def main():
         if voices:
             logger.info(f"Testing TTS generation with voice: {voices[0]}")
             try:
-                output_path = kokoro.create(
-                    "This is a test of the TTS system.", voices[0]
-                )
-                logger.info(
-                    f"✅ TTS generation successful! Output saved to: {output_path}"
-                )
+                output_path = kokoro.create("This is a test of the TTS system.", voices[0])
+                logger.info(f"✅ TTS generation successful! Output saved to: {output_path}")
                 if output_path.exists():
-                    logger.info(
-                        f"  - Output file size: {output_path.stat().st_size} bytes"
-                    )
+                    logger.info(f"  - Output file size: {output_path.stat().st_size} bytes")
                 else:
                     logger.error("  - Output file does not exist!")
             except Exception as e:

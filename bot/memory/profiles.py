@@ -56,6 +56,8 @@ def _consume_dirty(scope: str) -> bool:
             globals()["_servers_dirty"] = False
             return val
     return False
+
+
 # Legacy/test aliases
 user_profiles = user_cache
 server_profiles = server_cache
@@ -128,9 +130,7 @@ def default_profile(user_id=None, username=None):
     }
 
 
-def ensure_profile_schema(
-    profile: dict, user_id: Optional[str] = None, username: Optional[str] = None
-) -> dict:
+def ensure_profile_schema(profile: dict, user_id: Optional[str] = None, username: Optional[str] = None) -> dict:
     """Ensure a user profile has all required fields."""
     if not isinstance(profile, dict):
         profile = {}
@@ -221,9 +221,7 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
         return profile.copy()
 
 
-def save_profile(
-    profile: dict, force: bool = False, caller_id: Optional[str] = None
-) -> bool:
+def save_profile(profile: dict, force: bool = False, caller_id: Optional[str] = None) -> bool:
     """Save a user profile to disk using atomic writes with corruption recovery.
 
     [REH] Atomic writes ensure readers see only complete writes
@@ -244,10 +242,7 @@ def save_profile(
 
         # Cross-user overwrite prevention [SFT]
         if caller_id is not None and str(caller_id) != user_id:
-            logging.error(
-                f"Profile overwrite blocked: caller {caller_id} attempted to save "
-                f"profile for user {user_id}"
-            )
+            logging.error(f"Profile overwrite blocked: caller {caller_id} attempted to save profile for user {user_id}")
             return False
 
         with user_cache_lock:
@@ -269,10 +264,7 @@ def save_profile(
             except Exception:
                 max_memories = 20
 
-            if (
-                isinstance(profile.get("memories"), list)
-                and len(profile["memories"]) > max_memories
-            ):
+            if isinstance(profile.get("memories"), list) and len(profile["memories"]) > max_memories:
                 profile["memories"] = profile["memories"][-max_memories:]
 
             # Save to disk using atomic persistence
@@ -284,9 +276,7 @@ def save_profile(
             # Validate profile before saving
             is_valid, error_msg = validate_profile_integrity(profile)
             if not is_valid:
-                logging.error(
-                    f"Profile validation failed for user {user_id}: {error_msg}"
-                )
+                logging.error(f"Profile validation failed for user {user_id}: {error_msg}")
                 return False
 
             # Atomic save with backup
@@ -411,9 +401,7 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
             profile = guild_id
             gid = str(profile.get("guild_id") or profile.get("server_id") or "")
             if not gid:
-                logging.error(
-                    "Cannot save server profile: missing guild_id/server_id in profile"
-                )
+                logging.error("Cannot save server profile: missing guild_id/server_id in profile")
                 return False
             profile = ensure_server_profile_schema(profile, gid)
             with server_lock:
@@ -425,9 +413,7 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
                 cached_profile = server_cache.get(gid)
 
             if cached_profile is None:
-                logging.warning(
-                    f"Server profile for guild {gid} not in cache; loading/creating before save"
-                )
+                logging.warning(f"Server profile for guild {gid} not in cache; loading/creating before save")
                 cached_profile = get_server_profile(gid, force_reload=True)
                 if cached_profile is None:
                     logging.error(f"Failed to load server profile for guild {gid}")
@@ -455,19 +441,14 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
         except Exception:
             max_memories = 100
 
-        if (
-            isinstance(working_profile.get("memories"), list)
-            and len(working_profile["memories"]) > max_memories
-        ):
+        if isinstance(working_profile.get("memories"), list) and len(working_profile["memories"]) > max_memories:
             working_profile["memories"] = working_profile["memories"][-max_memories:]
 
         profile_path.parent.mkdir(parents=True, exist_ok=True)
 
         is_valid, error_msg = validate_profile_integrity(working_profile)
         if not is_valid:
-            logging.error(
-                f"Server profile validation failed for guild {gid}: {error_msg}"
-            )
+            logging.error(f"Server profile validation failed for guild {gid}: {error_msg}")
             return False
 
         if not atomic_save_json(
@@ -571,18 +552,14 @@ def load_all_profiles():
                         user_cache[user_id] = profile
                     loaded_count += 1
                 else:
-                    logging.warning(
-                        f"Skipping corrupted profile {profile_file}: {error_msg}"
-                    )
+                    logging.warning(f"Skipping corrupted profile {profile_file}: {error_msg}")
                     corrupted_count += 1
             else:
                 logging.warning(f"Could not load or recover profile {profile_file}")
                 corrupted_count += 1
 
         if corrupted_count > 0:
-            logging.warning(
-                f"Encountered {corrupted_count} corrupted profiles during load"
-            )
+            logging.warning(f"Encountered {corrupted_count} corrupted profiles during load")
         logging.info(f"Loaded {loaded_count} user profiles from disk")
 
     # Load server profiles
@@ -688,15 +665,8 @@ def add_memory(
     Returns:
         bool: True if the memory was added successfully, False otherwise
     """
-    if (
-        not user_id
-        or not memory_text
-        or not isinstance(memory_text, str)
-        or not memory_text.strip()
-    ):
-        logging.warning(
-            f"Invalid memory data - user_id: {user_id}, memory_text: {type(memory_text)}"
-        )
+    if not user_id or not memory_text or not isinstance(memory_text, str) or not memory_text.strip():
+        logging.warning(f"Invalid memory data - user_id: {user_id}, memory_text: {type(memory_text)}")
         return False
 
     memory_text = memory_text.strip()
@@ -731,9 +701,7 @@ def add_memory(
 
             # Save the updated profile
             if not save_profile(profile):
-                logging.error(
-                    f"Failed to save profile after adding memory for user {user_id}"
-                )
+                logging.error(f"Failed to save profile after adding memory for user {user_id}")
                 success = False
 
     except Exception as e:
@@ -741,12 +709,7 @@ def add_memory(
         success = False
 
     # Optionally add to server memories if guild_id is provided
-    if (
-        guild_id
-        and username
-        and isinstance(guild_id, str)
-        and isinstance(username, str)
-    ):
+    if guild_id and username and isinstance(guild_id, str) and isinstance(username, str):
         try:
             server_profile = get_server_profile(guild_id)
             if not server_profile:
@@ -768,9 +731,7 @@ def add_memory(
                 config = load_config()
                 max_memories = config.get("MAX_SERVER_MEMORY", 100)
                 if len(server_profile["memories"]) > max_memories:
-                    server_profile["memories"] = server_profile["memories"][
-                        -max_memories:
-                    ]
+                    server_profile["memories"] = server_profile["memories"][-max_memories:]
 
                 server_profile["last_updated"] = datetime.now().isoformat()
 

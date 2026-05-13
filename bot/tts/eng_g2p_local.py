@@ -34,9 +34,7 @@ _ESPEAK_TMPDIR_PATH: Optional[Path] = None
 
 def get_kokoro_tempdir() -> Path:
     """Return the directory used for espeak temp artifacts."""
-    override = os.environ.get("KOKORO_ESPEAK_TMPDIR") or os.environ.get(
-        "KOKORO_PHONEMIZER_TMPDIR"
-    )
+    override = os.environ.get("KOKORO_ESPEAK_TMPDIR") or os.environ.get("KOKORO_PHONEMIZER_TMPDIR")
     if override:
         return Path(override).expanduser()
     return Path(__file__).resolve().parents[2] / ".kokoro_espeak_tmp"
@@ -1320,9 +1318,7 @@ def text_to_ipa(text: str) -> str:
 
         cmudict_dict = cmudict.dict()
     except Exception as exc:
-        raise G2PUnavailableError(
-            "CMU Pronouncing Dictionary is not available for English IPA synthesis"
-        ) from exc
+        raise G2PUnavailableError("CMU Pronouncing Dictionary is not available for English IPA synthesis") from exc
 
     # 1. Normalize text and apply lexicon
     text = normalize_text(text)
@@ -1415,9 +1411,7 @@ def _load_real_vocab():
         return _REAL_VOCAB, _VOCAB_SIZE
 
     except Exception as e:
-        raise RuntimeError(
-            f"Failed to load hardcoded Kokoro IPA vocabulary: {e}. No fallbacks allowed for English."
-        )
+        raise RuntimeError(f"Failed to load hardcoded Kokoro IPA vocabulary: {e}. No fallbacks allowed for English.")
 
 
 def _ipa_to_ids(phonemes: str) -> List[int]:
@@ -1505,18 +1499,14 @@ def _ipa_to_ids(phonemes: str) -> List[int]:
         max_id = max(ids)
         min_id = min(ids)
         if max_id >= vocab_size or min_id < 0:
-            raise ValueError(
-                f"Token ID out of bounds: min={min_id}, max={max_id}, vocab_size={vocab_size}"
-            )
+            raise ValueError(f"Token ID out of bounds: min={min_id}, max={max_id}, vocab_size={vocab_size}")
 
     # Log results
     oov_count = len(oov_symbols)
     if oov_count > 0:
         logger.debug(f"OOV symbols: {oov_symbols[:3]}{'...' if oov_count > 3 else ''}")
 
-    logger.debug(
-        f"ipa_len={len(phonemes)} tokens={len(ids)} vocab_size={vocab_size} max_id={max(ids) if ids else 0} oov={oov_count}"
-    )
+    logger.debug(f"ipa_len={len(phonemes)} tokens={len(ids)} vocab_size={vocab_size} max_id={max(ids) if ids else 0} oov={oov_count}")
 
     if oov_count > 0:
         raise ValueError(f"Unsupported IPA symbol(s): {', '.join(oov_symbols[:5])}")

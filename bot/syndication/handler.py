@@ -131,19 +131,13 @@ async def handle_twitter_syndication_to_vl(
                             elif "webp" in image_url.lower():
                                 suffix = ".webp"
 
-                            with tempfile.NamedTemporaryFile(
-                                delete=False, suffix=suffix
-                            ) as tmp_file:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
                                 data = await response.read()
                                 tmp_file.write(data)
                                 temp_paths.append(tmp_file.name)
-                                log.debug(
-                                    f"Downloaded image {i + 1} to {tmp_file.name}"
-                                )
+                                log.debug(f"Downloaded image {i + 1} to {tmp_file.name}")
                         else:
-                            log.warning(
-                                f"Failed to download image {i + 1}: HTTP {response.status}"
-                            )
+                            log.warning(f"Failed to download image {i + 1}: HTTP {response.status}")
                 except Exception as e:
                     log.warning(f"Error downloading image {i + 1}: {e}")
 

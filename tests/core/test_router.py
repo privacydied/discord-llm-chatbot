@@ -49,11 +49,7 @@ async def test_dispatch_text_only_message(router, mock_bot, mock_flows):
     with pytest.MonkeyPatch.context() as m:
         m.setattr(
             "bot.router.parse_command",
-            MagicMock(
-                return_value=ParsedCommand(
-                    command=Command.CHAT, cleaned_content="Hello bot"
-                )
-            ),
+            MagicMock(return_value=ParsedCommand(command=Command.CHAT, cleaned_content="Hello bot")),
         )
         response = await router.dispatch_message(message)
 
@@ -73,9 +69,7 @@ async def test_dispatch_ping_command(router, mock_bot):
     with pytest.MonkeyPatch.context() as m:
         m.setattr(
             "bot.router.parse_command",
-            MagicMock(
-                return_value=ParsedCommand(command=Command.PING, cleaned_content="")
-            ),
+            MagicMock(return_value=ParsedCommand(command=Command.PING, cleaned_content="")),
         )
         response = await router.dispatch_message(message)
 
@@ -94,11 +88,7 @@ async def test_dispatch_tts_command(router, mock_bot, mock_flows):
     with pytest.MonkeyPatch.context() as m:
         m.setattr(
             "bot.router.parse_command",
-            MagicMock(
-                return_value=ParsedCommand(
-                    command=Command.SAY, cleaned_content="speak this"
-                )
-            ),
+            MagicMock(return_value=ParsedCommand(command=Command.SAY, cleaned_content="speak this")),
         )
         response = await router.dispatch_message(message)
 
@@ -121,11 +111,7 @@ async def test_dispatch_image_attachment(router, mock_bot, mock_flows):
     with pytest.MonkeyPatch.context() as m:
         m.setattr(
             "bot.router.parse_command",
-            MagicMock(
-                return_value=ParsedCommand(
-                    command=Command.CHAT, cleaned_content="what is this?"
-                )
-            ),
+            MagicMock(return_value=ParsedCommand(command=Command.CHAT, cleaned_content="what is this?")),
         )
         response = await router.dispatch_message(message)
 
@@ -141,9 +127,7 @@ async def test_process_document_txt(router):
     import tempfile
 
     file_content = "This is a test text file."
-    with tempfile.NamedTemporaryFile(
-        mode="w+", delete=False, suffix=".txt"
-    ) as tmp_file:
+    with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".txt") as tmp_file:
         tmp_file.write(file_content)
         tmp_file_path = tmp_file.name
 
@@ -183,9 +167,7 @@ async def test_process_document_pdf(router):
     """Verify that the router can correctly process a .pdf file by mocking the PDFProcessor."""
     # Ensure the router's PDF processor is mocked
     router.pdf_processor = MagicMock()
-    router.pdf_processor.process = AsyncMock(
-        return_value={"text": "This is a test PDF."}
-    )
+    router.pdf_processor.process = AsyncMock(return_value={"text": "This is a test PDF."})
 
     with pytest.MonkeyPatch.context() as m:
         m.setattr("bot.router.PDF_SUPPORT", True)

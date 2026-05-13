@@ -26,9 +26,7 @@ class ConfigCommands(commands.Cog):
     async def reload_config(self, ctx: commands.Context) -> None:
         """Manually reload configuration from .env file (Admin only)."""
         try:
-            logger.info(
-                f"🔄 Manual config reload requested by {ctx.author.id} in {ctx.guild.id if ctx.guild else 'DM'}"
-            )
+            logger.info(f"🔄 Manual config reload requested by {ctx.author.id} in {ctx.guild.id if ctx.guild else 'DM'}")
 
             # Show typing indicator
             async with ctx.typing():
@@ -95,9 +93,7 @@ class ConfigCommands(commands.Cog):
             if key_settings:
                 embed.add_field(
                     name="🔑 Key Settings",
-                    value="\n".join(
-                        key_settings[:10]
-                    ),  # Limit to avoid embed size issues
+                    value="\n".join(key_settings[:10]),  # Limit to avoid embed size issues
                     inline=False,
                 )
 
@@ -113,9 +109,7 @@ class ConfigCommands(commands.Cog):
             )
         except Exception as e:
             logger.error(f"❌ Config status command failed: {e}")
-            await ctx.reply(
-                "❌ Failed to retrieve configuration status.", mention_author=False
-            )
+            await ctx.reply("❌ Failed to retrieve configuration status.", mention_author=False)
 
     @commands.command(name="config-help", aliases=["config_help"])
     async def config_help(self, ctx: commands.Context) -> None:
@@ -140,10 +134,7 @@ class ConfigCommands(commands.Cog):
 
         embed.add_field(
             name="🔄 Automatic Reloading",
-            value="Configuration automatically reloads when:\n"
-            "• .env file is modified (file watcher)\n"
-            "• SIGHUP signal is sent (Unix systems)\n"
-            "• Manual reload command is used",
+            value="Configuration automatically reloads when:\n• .env file is modified (file watcher)\n• SIGHUP signal is sent (Unix systems)\n• Manual reload command is used",
             inline=False,
         )
 
@@ -160,9 +151,7 @@ class ConfigCommands(commands.Cog):
             inline=False,
         )
 
-        embed.set_footer(
-            text="Changes are logged with before/after values (sensitive data redacted)"
-        )
+        embed.set_footer(text="Changes are logged with before/after values (sensitive data redacted)")
 
         await ctx.reply(embed=embed, mention_author=False)
 

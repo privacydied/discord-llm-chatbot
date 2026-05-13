@@ -42,37 +42,27 @@ def mock_message():
 
 class TestPrioritizedVisionRoute:
     @pytest.mark.asyncio
-    async def test_cfg_disabled_returns_none_and_increments_skipped(
-        self, router, mock_message
-    ):
+    async def test_cfg_disabled_returns_none_and_increments_skipped(self, router, mock_message):
         mock_message.content = "hello"
         router.config["VISION_ENABLED"] = False
 
         with patch.object(router, "_metric_inc") as metric_inc:
-            result = await router._prioritized_vision_route(
-                mock_message, context_str=""
-            )
+            result = await router._prioritized_vision_route(mock_message, context_str="")
 
         assert result is None
         metric_inc.assert_any_call("vision.route.skipped", {"reason": "cfg_disabled"})
 
     @pytest.mark.asyncio
-    async def test_direct_trigger_dry_run_returns_action_and_metrics(
-        self, router, mock_message
-    ):
+    async def test_direct_trigger_dry_run_returns_action_and_metrics(self, router, mock_message):
         mock_message.content = "generate an image of a red cat"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = True
 
         with (
             patch.object(router, "_metric_inc") as metric_inc,
-            patch.object(
-                router, "_handle_vision_generation", new_callable=AsyncMock
-            ) as handle_vision,
+            patch.object(router, "_handle_vision_generation", new_callable=AsyncMock) as handle_vision,
         ):
-            result = await router._prioritized_vision_route(
-                mock_message, context_str=""
-            )
+            result = await router._prioritized_vision_route(mock_message, context_str="")
 
         assert isinstance(result, BotAction)
         assert result.content.startswith("[DRY RUN]")
@@ -82,24 +72,17 @@ class TestPrioritizedVisionRoute:
         metric_inc.assert_any_call("vision.route.dry_run", {"path": "direct"})
 
     @pytest.mark.asyncio
-    async def test_direct_trigger_blocked_without_orchestrator(
-        self, router, mock_message
-    ):
+    async def test_direct_trigger_blocked_without_orchestrator(self, router, mock_message):
         mock_message.content = "draw a dragon breathing fire"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = False
         router._vision_orchestrator = None
 
         with patch.object(router, "_metric_inc") as metric_inc:
-            result = await router._prioritized_vision_route(
-                mock_message, context_str="ctx"
-            )
+            result = await router._prioritized_vision_route(mock_message, context_str="ctx")
 
         assert isinstance(result, BotAction)
-        assert (
-            result.content
-            == "🚫 Vision generation is not available right now. Please try again later."
-        )
+        assert result.content == "🚫 Vision generation is not available right now. Please try again later."
         metric_inc.assert_any_call("vision.route.direct", {"stage": "precheck"})
         metric_inc.assert_any_call(
             "vision.route.blocked",
@@ -114,20 +97,14 @@ class TestPrioritizedVisionRoute:
         router._vision_orchestrator = MagicMock()  # mark as available
 
         expected = BotAction(content="ok")
-        with patch.object(
-            router, "_handle_vision_generation", new=AsyncMock(return_value=expected)
-        ) as handle_vision:
-            result = await router._prioritized_vision_route(
-                mock_message, context_str="ctx"
-            )
+        with patch.object(router, "_handle_vision_generation", new=AsyncMock(return_value=expected)) as handle_vision:
+            result = await router._prioritized_vision_route(mock_message, context_str="ctx")
 
         assert result is expected
         handle_vision.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_intent_dry_run_returns_action_and_metrics(
-        self, router, mock_message
-    ):
+    async def test_intent_dry_run_returns_action_and_metrics(self, router, mock_message):
         mock_message.content = "this is a normal request"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = True
@@ -144,19 +121,13 @@ class TestPrioritizedVisionRoute:
                 self.extracted_params = MagicMock()
 
         router._vision_intent_router = MagicMock()
-        router._vision_intent_router.determine_intent = AsyncMock(
-            return_value=IntentResult()
-        )
+        router._vision_intent_router.determine_intent = AsyncMock(return_value=IntentResult())
 
         with (
             patch.object(router, "_metric_inc") as metric_inc,
-            patch.object(
-                router, "_handle_vision_generation", new_callable=AsyncMock
-            ) as handle_vision,
+            patch.object(router, "_handle_vision_generation", new_callable=AsyncMock) as handle_vision,
         ):
-            result = await router._prioritized_vision_route(
-                mock_message, context_str="ctx"
-            )
+            result = await router._prioritized_vision_route(mock_message, context_str="ctx")
 
         assert isinstance(result, BotAction)
         assert result.content.startswith("[DRY RUN]")
@@ -182,20 +153,13 @@ class TestPrioritizedVisionRoute:
                 self.extracted_params = MagicMock()
 
         router._vision_intent_router = MagicMock()
-        router._vision_intent_router.determine_intent = AsyncMock(
-            return_value=IntentResult()
-        )
+        router._vision_intent_router.determine_intent = AsyncMock(return_value=IntentResult())
 
         with patch.object(router, "_metric_inc") as metric_inc:
-            result = await router._prioritized_vision_route(
-                mock_message, context_str="ctx"
-            )
+            result = await router._prioritized_vision_route(mock_message, context_str="ctx")
 
         assert isinstance(result, BotAction)
-        assert (
-            result.content
-            == "🚫 Vision generation is not available right now. Please try again later."
-        )
+        assert result.content == "🚫 Vision generation is not available right now. Please try again later."
         metric_inc.assert_any_call("vision.route.intent", {"stage": "precheck"})
         metric_inc.assert_any_call(
             "vision.route.blocked",
@@ -220,38 +184,26 @@ class TestPrioritizedVisionRoute:
                 self.extracted_params = MagicMock()
 
         router._vision_intent_router = MagicMock()
-        router._vision_intent_router.determine_intent = AsyncMock(
-            return_value=IntentResult()
-        )
+        router._vision_intent_router.determine_intent = AsyncMock(return_value=IntentResult())
 
         expected = BotAction(content="ok")
-        with patch.object(
-            router, "_handle_vision_generation", new=AsyncMock(return_value=expected)
-        ) as handle_vision:
-            result = await router._prioritized_vision_route(
-                mock_message, context_str="ctx"
-            )
+        with patch.object(router, "_handle_vision_generation", new=AsyncMock(return_value=expected)) as handle_vision:
+            result = await router._prioritized_vision_route(mock_message, context_str="ctx")
 
         assert result is expected
         handle_vision.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_intent_error_returns_none_and_increments_metric(
-        self, router, mock_message
-    ):
+    async def test_intent_error_returns_none_and_increments_metric(self, router, mock_message):
         mock_message.content = "plain message"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = False
         router._vision_orchestrator = MagicMock()
         router._vision_intent_router = MagicMock()
-        router._vision_intent_router.determine_intent = AsyncMock(
-            side_effect=Exception("boom")
-        )
+        router._vision_intent_router.determine_intent = AsyncMock(side_effect=Exception("boom"))
 
         with patch.object(router, "_metric_inc") as metric_inc:
-            result = await router._prioritized_vision_route(
-                mock_message, context_str="ctx"
-            )
+            result = await router._prioritized_vision_route(mock_message, context_str="ctx")
 
         assert result is None
         metric_inc.assert_any_call("vision.intent.error", None)

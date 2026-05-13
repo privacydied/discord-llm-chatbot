@@ -25,9 +25,7 @@ class ContextCommands(commands.Cog):
         try:
             response = await self.context_handlers["context_reset"](ctx.message)
             await ctx.reply(response, mention_author=False)
-            logger.info(
-                f"✔ Context reset requested by {ctx.author.id} in {ctx.channel.id}"
-            )
+            logger.info(f"✔ Context reset requested by {ctx.author.id} in {ctx.channel.id}")
         except Exception as e:
             logger.error(f"❌ Context reset failed: {e}")
             await ctx.reply("❌ Failed to reset context.", mention_author=False)
@@ -52,9 +50,7 @@ class ContextCommands(commands.Cog):
             logger.info(f"✔ Privacy opt-out by {ctx.author.id}")
         except Exception as e:
             logger.error(f"❌ Privacy opt-out failed: {e}")
-            await ctx.reply(
-                "❌ Failed to process privacy opt-out.", mention_author=False
-            )
+            await ctx.reply("❌ Failed to process privacy opt-out.", mention_author=False)
 
     @commands.command(name="privacy_optin", aliases=["opt_in", "enable_context"])
     async def privacy_optin(self, ctx: commands.Context) -> None:
@@ -65,9 +61,7 @@ class ContextCommands(commands.Cog):
             logger.info(f"✔ Privacy opt-in by {ctx.author.id}")
         except Exception as e:
             logger.error(f"❌ Privacy opt-in failed: {e}")
-            await ctx.reply(
-                "❌ Failed to process privacy opt-in.", mention_author=False
-            )
+            await ctx.reply("❌ Failed to process privacy opt-in.", mention_author=False)
 
     @commands.command(name="context_help", aliases=["ctx_help"])
     async def context_help(self, ctx: commands.Context) -> None:

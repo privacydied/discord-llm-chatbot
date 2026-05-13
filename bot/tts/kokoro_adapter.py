@@ -55,15 +55,11 @@ def Kokoro(*args: Any, **kwargs: Any):  # pragma: no cover - thin wrapper
     ImportError with the original exception chained.
     """
     if _RealKokoro is None:
-        raise ImportError(
-            "kokoro_onnx is not available. Install it or patch the Kokoro symbol in tests."
-        ) from _IMPORT_ERR
+        raise ImportError("kokoro_onnx is not available. Install it or patch the Kokoro symbol in tests.") from _IMPORT_ERR
     return _RealKokoro(*args, **kwargs)
 
 
-def get_kokoro_engine(
-    model_path: Optional[str] = None, voices_path: Optional[str] = None
-):
+def get_kokoro_engine(model_path: Optional[str] = None, voices_path: Optional[str] = None):
     """Construct and return a Kokoro engine instance.
 
     This wrapper exists to centralize construction logic in case we need to

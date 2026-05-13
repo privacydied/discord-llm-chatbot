@@ -5,9 +5,7 @@ import bot.tts.eng_g2p_local as g2p
 
 
 def _reset_official(monkeypatch):
-    monkeypatch.setattr(
-        g2p, "_OFFICIAL_TOKENIZER_STATE", "uninitialized", raising=False
-    )
+    monkeypatch.setattr(g2p, "_OFFICIAL_TOKENIZER_STATE", "uninitialized", raising=False)
     monkeypatch.setattr(g2p, "_OFFICIAL_TOKENIZER", None, raising=False)
     monkeypatch.setattr(g2p, "_ESPEAK_TMPDIR_CONFIGURED", False, raising=False)
     monkeypatch.setattr(g2p, "_ESPEAK_TMPDIR_PATH", None, raising=False)
@@ -36,9 +34,7 @@ def test_text_to_ipa_prefers_official_tokenizer(monkeypatch):
 def test_text_to_ipa_falls_back_to_cmudict(monkeypatch):
     _reset_official(monkeypatch)
 
-    fake_cmudict = types.SimpleNamespace(
-        dict=lambda: {"testing": [["T", "EH1", "S", "T", "IH0", "NG"]]}
-    )
+    fake_cmudict = types.SimpleNamespace(dict=lambda: {"testing": [["T", "EH1", "S", "T", "IH0", "NG"]]})
 
     monkeypatch.setattr(g2p, "_OFFICIAL_TOKENIZER_STATE", "failed", raising=False)
     monkeypatch.setattr(g2p, "cmudict", fake_cmudict, raising=False)
@@ -86,9 +82,7 @@ def test_text_to_ipa_retries_tempdir_failure(monkeypatch, tmp_path):
         configured.append(True)
         return tmp_path
 
-    monkeypatch.setattr(
-        g2p, "_configure_official_tokenizer_tmpdir", fake_configure, raising=False
-    )
+    monkeypatch.setattr(g2p, "_configure_official_tokenizer_tmpdir", fake_configure, raising=False)
 
     ipa = g2p.text_to_ipa("testing")
 

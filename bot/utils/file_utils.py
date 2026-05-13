@@ -10,9 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 
-async def download_robust_image(
-    image_ref, local_path: str, max_size_mb: int = 25
-) -> bool:
+async def download_robust_image(image_ref, local_path: str, max_size_mb: int = 25) -> bool:
     """
     Robust image download with fallback candidate chain.
 
@@ -53,31 +51,23 @@ async def download_robust_image(
                 async with session.get(candidate_url, allow_redirects=True) as response:
                     # Check status
                     if response.status in (403, 404, 410):
-                        logger.warning(
-                            f"Image download candidate {idx + 1}/{len(candidates)} failed: {response.status} {candidate_url[:60]}..."
-                        )
+                        logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: {response.status} {candidate_url[:60]}...")
                         continue
 
                     if response.status != 200:
-                        logger.warning(
-                            f"Image download candidate {idx + 1}/{len(candidates)} failed: HTTP {response.status}"
-                        )
+                        logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: HTTP {response.status}")
                         continue
 
                     # Check content type
                     content_type = response.headers.get("content-type", "")
                     if not content_type.startswith("image/"):
-                        logger.warning(
-                            f"Image download candidate {idx + 1}/{len(candidates)} failed: invalid content-type {content_type}"
-                        )
+                        logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: invalid content-type {content_type}")
                         continue
 
                     # Check size
                     content_length = response.headers.get("content-length")
                     if content_length and int(content_length) > max_size_bytes:
-                        logger.warning(
-                            f"Image download candidate {idx + 1}/{len(candidates)} failed: size {content_length} exceeds {max_size_mb}MB"
-                        )
+                        logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: size {content_length} exceeds {max_size_mb}MB")
                         continue
 
                     # Download with size guard
@@ -86,16 +76,12 @@ async def download_robust_image(
                         async for chunk in response.content.iter_chunked(8192):
                             downloaded_size += len(chunk)
                             if downloaded_size > max_size_bytes:
-                                logger.warning(
-                                    f"Image download candidate {idx + 1}/{len(candidates)} failed: size exceeded {max_size_mb}MB during download"
-                                )
+                                logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: size exceeded {max_size_mb}MB during download")
                                 break
                             f.write(chunk)
                         else:
                             # Success - download completed
-                            logger.debug(
-                                f"Image download succeeded with candidate {idx + 1}/{len(candidates)}: {downloaded_size} bytes"
-                            )
+                            logger.debug(f"Image download succeeded with candidate {idx + 1}/{len(candidates)}: {downloaded_size} bytes")
                             return True
 
                     # If we broke out of the loop due to size, try next candidate
@@ -107,23 +93,17 @@ async def download_robust_image(
                         pass
 
             except asyncio.TimeoutError:
-                logger.warning(
-                    f"Image download candidate {idx + 1}/{len(candidates)} failed: timeout"
-                )
+                logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: timeout")
                 continue
             except Exception as e:
-                logger.warning(
-                    f"Image download candidate {idx + 1}/{len(candidates)} failed: {e}"
-                )
+                logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: {e}")
                 continue
 
     # All candidates failed
     return False
 
 
-async def download_file(
-    url: str, save_path: Path, session: Optional[aiohttp.ClientSession] = None
-) -> bool:
+async def download_file(url: str, save_path: Path, session: Optional[aiohttp.ClientSession] = None) -> bool:
     """
     Download a file from a URL and save it to the specified path.
 
@@ -158,8 +138,7 @@ async def download_file(
     headers = {
         "User-Agent": os.getenv(
             "IMAGEDL_USER_AGENT",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
         ),
         "Referer": os.getenv("IMAGEDL_REFERER", "https://x.com/"),
         "Accept": "image/*,*/*;q=0.8",
@@ -175,9 +154,7 @@ async def download_file(
         async with session.get(url, headers=headers, timeout=timeout) as response:
             if response.status != 200:
                 if debug:
-                    logging.info(
-                        f"IMAGEDL_DEBUG | get | url={url} status={response.status}"
-                    )
+                    logging.info(f"IMAGEDL_DEBUG | get | url={url} status={response.status}")
                 logging.error(f"Failed to download {url}: HTTP {response.status}")
                 return False
 
@@ -193,9 +170,7 @@ async def download_file(
                     f.write(chunk)
 
             if debug:
-                logging.info(
-                    f"IMAGEDL_DEBUG | get | url={url} status=200 bytes={save_path.stat().st_size}"
-                )
+                logging.info(f"IMAGEDL_DEBUG | get | url={url} status=200 bytes={save_path.stat().st_size}")
             return True
     except asyncio.TimeoutError:
         if debug:

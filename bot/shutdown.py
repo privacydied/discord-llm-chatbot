@@ -94,9 +94,7 @@ class GracefulShutdown:
 
     def add_shutdown_task(self, task: Callable, description: str = "") -> None:
         """Add a task to be executed during shutdown."""
-        self.shutdown_tasks.append(
-            {"task": task, "description": description or task.__name__}
-        )
+        self.shutdown_tasks.append({"task": task, "description": description or task.__name__})
 
     async def execute_shutdown(self, signal_num: Optional[int] = None) -> None:
         """Execute graceful shutdown sequence."""
@@ -108,9 +106,7 @@ class GracefulShutdown:
         shutdown_start_time = asyncio.get_event_loop().time()
 
         if signal_num:
-            logger.info(
-                f"🔄 Received signal {signal_num}, initiating graceful shutdown..."
-            )
+            logger.info(f"🔄 Received signal {signal_num}, initiating graceful shutdown...")
         else:
             logger.info("🔄 Initiating graceful shutdown...")
 
@@ -125,20 +121,14 @@ class GracefulShutdown:
 
             # Execute shutdown tasks with timeout
             logger.debug(f"⏱️ Starting shutdown tasks with {_shutdown_timeout}s timeout")
-            await asyncio.wait_for(
-                self._execute_shutdown_tasks(), timeout=_shutdown_timeout
-            )
+            await asyncio.wait_for(self._execute_shutdown_tasks(), timeout=_shutdown_timeout)
 
             shutdown_duration = asyncio.get_event_loop().time() - shutdown_start_time
-            logger.info(
-                f"✅ Graceful shutdown completed successfully in {shutdown_duration:.2f}s"
-            )
+            logger.info(f"✅ Graceful shutdown completed successfully in {shutdown_duration:.2f}s")
 
         except asyncio.TimeoutError:
             shutdown_duration = asyncio.get_event_loop().time() - shutdown_start_time
-            logger.error(
-                f"❌ Shutdown timed out after {_shutdown_timeout} seconds (actual: {shutdown_duration:.2f}s)"
-            )
+            logger.error(f"❌ Shutdown timed out after {_shutdown_timeout} seconds (actual: {shutdown_duration:.2f}s)")
         except Exception as e:
             shutdown_duration = asyncio.get_event_loop().time() - shutdown_start_time
             logger.error(
@@ -195,17 +185,13 @@ class GracefulShutdown:
 
         # Execute any custom shutdown tasks
         if self.shutdown_tasks:
-            logger.debug(
-                f"🔧 Executing {len(self.shutdown_tasks)} custom shutdown tasks..."
-            )
+            logger.debug(f"🔧 Executing {len(self.shutdown_tasks)} custom shutdown tasks...")
             for i, task_info in enumerate(self.shutdown_tasks, 1):
                 try:
                     task = task_info["task"]
                     description = task_info["description"]
 
-                    logger.debug(
-                        f"🔧 [{i}/{len(self.shutdown_tasks)}] Executing: {description}"
-                    )
+                    logger.debug(f"🔧 [{i}/{len(self.shutdown_tasks)}] Executing: {description}")
                     custom_start = asyncio.get_event_loop().time()
 
                     if asyncio.iscoroutinefunction(task):
@@ -214,14 +200,10 @@ class GracefulShutdown:
                         task()
 
                     custom_duration = asyncio.get_event_loop().time() - custom_start
-                    logger.debug(
-                        f"✅ [{i}/{len(self.shutdown_tasks)}] Completed '{description}' in {custom_duration:.2f}s"
-                    )
+                    logger.debug(f"✅ [{i}/{len(self.shutdown_tasks)}] Completed '{description}' in {custom_duration:.2f}s")
 
                 except Exception as e:
-                    logger.error(
-                        f"❌ Error in shutdown task '{description}': {e}", exc_info=True
-                    )
+                    logger.error(f"❌ Error in shutdown task '{description}': {e}", exc_info=True)
 
         total_duration = asyncio.get_event_loop().time() - task_start_time
         logger.info(f"✅ All shutdown tasks completed in {total_duration:.2f}s")
@@ -284,9 +266,7 @@ class GracefulShutdown:
 
             # Cancel any active long-running RAG tasks
             if hasattr(self.bot, "_active_long_running_tasks"):
-                active_tasks = dict(
-                    self.bot._active_long_running_tasks
-                )  # Copy to avoid modification during iteration
+                active_tasks = dict(self.bot._active_long_running_tasks)  # Copy to avoid modification during iteration
                 if active_tasks:
                     logger.info(f"Cancelling {len(active_tasks)} active RAG tasks...")
                     for task_id, task in active_tasks.items():
@@ -301,11 +281,7 @@ class GracefulShutdown:
                     try:
                         await asyncio.wait_for(
                             asyncio.gather(
-                                *[
-                                    task
-                                    for task in active_tasks.values()
-                                    if not task.done()
-                                ],
+                                *[task for task in active_tasks.values() if not task.done()],
                                 return_exceptions=True,
                             ),
                             timeout=3.0,
@@ -324,10 +300,7 @@ class GracefulShutdown:
                 from bot.rag import hybrid_search
 
                 # Check if there's an existing search engine instance to clean up
-                if (
-                    hasattr(hybrid_search, "_hybrid_search")
-                    and hybrid_search._hybrid_search
-                ):
+                if hasattr(hybrid_search, "_hybrid_search") and hybrid_search._hybrid_search:
                     search_engine = hybrid_search._hybrid_search
                     logger.debug("Found existing RAG search engine, cleaning up...")
 
@@ -335,9 +308,7 @@ class GracefulShutdown:
                     if hasattr(search_engine, "close"):
                         try:
                             if asyncio.iscoroutinefunction(search_engine.close):
-                                await asyncio.wait_for(
-                                    search_engine.close(), timeout=5.0
-                                )
+                                await asyncio.wait_for(search_engine.close(), timeout=5.0)
                             else:
                                 search_engine.close()
                             logger.debug("RAG search engine closed")
@@ -347,10 +318,7 @@ class GracefulShutdown:
                             logger.debug(f"RAG search engine close warning: {e}")
 
                     # Clean up ChromaDB client if available
-                    if (
-                        hasattr(search_engine, "rag_backend")
-                        and search_engine.rag_backend
-                    ):
+                    if hasattr(search_engine, "rag_backend") and search_engine.rag_backend:
                         try:
                             backend = search_engine.rag_backend
                             if hasattr(backend, "client") and backend.client:
@@ -512,9 +480,7 @@ def add_shutdown_task(task: Callable, description: str = "") -> None:
     logger.debug(f"Added shutdown task: {description or task.__name__}")
 
 
-async def emergency_shutdown(
-    bot: commands.Bot, reason: str = "Emergency shutdown"
-) -> None:
+async def emergency_shutdown(bot: commands.Bot, reason: str = "Emergency shutdown") -> None:
     """Perform an emergency shutdown without full cleanup."""
     logger.critical(f"Emergency shutdown triggered: {reason}")
 

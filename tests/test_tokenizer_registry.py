@@ -145,9 +145,7 @@ class TestTokenizerRegistry(unittest.TestCase):
         self.assertEqual(registry2._size_at_init, len(known))
 
         # Selecting a tokenizer should trigger rediscovery due to corruption detection
-        with patch.object(
-            registry2, "discover_tokenizers", wraps=registry2.discover_tokenizers
-        ) as mock_discover:
+        with patch.object(registry2, "discover_tokenizers", wraps=registry2.discover_tokenizers) as mock_discover:
             tokenizer = registry2.select_tokenizer_for_language("en")
             mock_discover.assert_called_once_with(force=True)
             self.assertTrue(tokenizer)
@@ -170,9 +168,7 @@ class TestTokenizerRegistry(unittest.TestCase):
         self.assertEqual(registry._canonicalize_language("en"), "en")
         self.assertEqual(registry._canonicalize_language("EN"), "en")
         self.assertEqual(registry._canonicalize_language("en-US"), "en")
-        self.assertEqual(
-            registry._canonicalize_language("en_US"), "en_us"
-        )  # Underscores preserved
+        self.assertEqual(registry._canonicalize_language("en_US"), "en_us")  # Underscores preserved
         self.assertEqual(registry._canonicalize_language("eng"), "en")
         self.assertEqual(registry._canonicalize_language("  en  "), "en")
         self.assertEqual(registry._canonicalize_language("ja-JP"), "ja")

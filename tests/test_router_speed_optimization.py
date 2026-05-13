@@ -25,9 +25,7 @@ import time
 from unittest.mock import MagicMock
 
 # Skip all tests — use real asyncio.sleep, race with async budget monitors
-pytestmark = pytest.mark.skip(
-    reason="Uses real asyncio.sleep; races with async budget monitors; not isolated"
-)
+pytestmark = pytest.mark.skip(reason="Uses real asyncio.sleep; races with async budget monitors; not isolated")
 
 from bot.router_classifier import FastClassifier
 from bot.http_client import SharedHttpClient, RequestConfig
@@ -61,12 +59,8 @@ class TestFastClassifier:
         for url in test_cases:
             result = self.classifier.classify_url(url)
             assert result.is_twitter, f"URL {url} should be classified as Twitter"
-            assert result.modality == InputModality.GENERAL_URL, (
-                "Twitter URLs should route through GENERAL_URL but be flagged as Twitter"
-            )
-            assert result.confidence > 0.8, (
-                "Twitter classification should have high confidence"
-            )
+            assert result.modality == InputModality.GENERAL_URL, "Twitter URLs should route through GENERAL_URL but be flagged as Twitter"
+            assert result.confidence > 0.8, "Twitter classification should have high confidence"
 
     def test_classify_video_urls(self):
         """Test video URL classification. [PA]"""
@@ -81,16 +75,10 @@ class TestFastClassifier:
         for url, should_be_video in test_cases:
             result = self.classifier.classify_url(url)
             if should_be_video:
-                assert result.modality == InputModality.VIDEO_URL, (
-                    f"URL {url} should be classified as video"
-                )
-                assert result.is_video_capable, (
-                    "Video URLs should be marked as video capable"
-                )
+                assert result.modality == InputModality.VIDEO_URL, f"URL {url} should be classified as video"
+                assert result.is_video_capable, "Video URLs should be marked as video capable"
             else:
-                assert result.modality == InputModality.GENERAL_URL, (
-                    f"URL {url} should be general URL"
-                )
+                assert result.modality == InputModality.GENERAL_URL, f"URL {url} should be general URL"
 
     def test_classify_direct_images(self):
         """Test direct image URL classification. [PA]"""
@@ -102,12 +90,8 @@ class TestFastClassifier:
 
         for url in test_cases:
             result = self.classifier.classify_url(url)
-            assert result.modality == InputModality.SINGLE_IMAGE, (
-                f"URL {url} should be classified as image"
-            )
-            assert result.is_direct_image, (
-                "Direct image URLs should be marked as direct images"
-            )
+            assert result.modality == InputModality.SINGLE_IMAGE, f"URL {url} should be classified as image"
+            assert result.is_direct_image, "Direct image URLs should be marked as direct images"
 
     def test_plan_message_performance(self, mock_message):
         """Test planning completes within 30ms budget. [PA]"""
@@ -123,9 +107,7 @@ class TestFastClassifier:
 
         assert duration_ms < 30.0, f"Planning took {duration_ms:.1f}ms, should be <30ms"
         assert len(plan_result.items) == 2, "Should classify both items"
-        assert plan_result.plan_duration_ms < 30.0, (
-            "Internal plan duration should also be <30ms"
-        )
+        assert plan_result.plan_duration_ms < 30.0, "Internal plan duration should also be <30ms"
 
     def test_streaming_eligibility_text_only(self, mock_message):
         """Test text-only messages are never streaming eligible. [CA]"""
@@ -133,20 +115,14 @@ class TestFastClassifier:
 
         plan_result = self.classifier.plan_message(mock_message, [])
 
-        assert not plan_result.streaming_eligible, (
-            "Text-only should never be streaming eligible"
-        )
-        assert plan_result.streaming_reason == "TEXT_ONLY", (
-            "Should indicate text-only reason"
-        )
+        assert not plan_result.streaming_eligible, "Text-only should never be streaming eligible"
+        assert plan_result.streaming_reason == "TEXT_ONLY", "Should indicate text-only reason"
 
     def test_streaming_eligibility_heavy_work(self, mock_message):
         """Test heavy work enables streaming. [CA]"""
         items = [
             InputItem(source_type="url", payload="https://youtube.com/watch?v=abc"),
-            InputItem(
-                source_type="attachment", payload=MagicMock(filename="document.pdf")
-            ),
+            InputItem(source_type="attachment", payload=MagicMock(filename="document.pdf")),
         ]
 
         plan_result = self.classifier.plan_message(mock_message, items)
@@ -256,9 +232,7 @@ class TestConcurrencyManager:
         duration = time.time() - start_time
 
         assert len(results) == 3, "All tasks should complete"
-        assert duration < 0.3, (
-            f"Concurrent execution took {duration:.2f}s, should be <0.3s"
-        )
+        assert duration < 0.3, f"Concurrent execution took {duration:.2f}s, should be <0.3s"
 
         await manager.shutdown_all()
 
@@ -278,20 +252,12 @@ class TestConcurrencyManager:
                 raise
 
         # Start tasks with parent-child relationship
-        async with manager.submit_to_pool(
-            PoolType.LIGHT, "parent_task"
-        ) as parent_submitter:
-            parent_task = asyncio.create_task(
-                parent_submitter.async_task(cancellable_task("parent"))
-            )
+        async with manager.submit_to_pool(PoolType.LIGHT, "parent_task") as parent_submitter:
+            parent_task = asyncio.create_task(parent_submitter.async_task(cancellable_task("parent")))
 
             # Start child task
-            async with manager.submit_to_pool(
-                PoolType.LIGHT, "child_task", parent_id="parent_task"
-            ) as child_submitter:
-                child_task = asyncio.create_task(
-                    child_submitter.async_task(cancellable_task("child"))
-                )
+            async with manager.submit_to_pool(PoolType.LIGHT, "child_task", parent_id="parent_task") as child_submitter:
+                child_task = asyncio.create_task(child_submitter.async_task(cancellable_task("child")))
 
                 # Cancel parent - should cascade to child
                 await asyncio.sleep(0.1)  # Let tasks start
@@ -329,24 +295,16 @@ class TestSingleFlightCache:
 
         # Make 3 concurrent requests for same cache key
         results = await asyncio.gather(
-            cache.get_or_compute(
-                CacheFamily.TWEET_TEXT, ["test", "key"], expensive_operation
-            ),
-            cache.get_or_compute(
-                CacheFamily.TWEET_TEXT, ["test", "key"], expensive_operation
-            ),
-            cache.get_or_compute(
-                CacheFamily.TWEET_TEXT, ["test", "key"], expensive_operation
-            ),
+            cache.get_or_compute(CacheFamily.TWEET_TEXT, ["test", "key"], expensive_operation),
+            cache.get_or_compute(CacheFamily.TWEET_TEXT, ["test", "key"], expensive_operation),
+            cache.get_or_compute(CacheFamily.TWEET_TEXT, ["test", "key"], expensive_operation),
         )
 
         # Should have called expensive operation only once
         assert call_count == 1, f"Expected 1 call, got {call_count} calls"
 
         # All results should be the same
-        assert all(result[0] == "result_1" for result in results), (
-            "All results should be identical"
-        )
+        assert all(result[0] == "result_1" for result in results), "All results should be identical"
 
         # First result should be cache miss, others should be single-flight hits
         cache_hits = [result[1] for result in results]
@@ -365,15 +323,11 @@ class TestSingleFlightCache:
             return "cached_value"
 
         # First call should be cache miss
-        result1, hit1 = await cache.get_or_compute(
-            CacheFamily.READABILITY, ["url1"], compute_value
-        )
+        result1, hit1 = await cache.get_or_compute(CacheFamily.READABILITY, ["url1"], compute_value)
         assert not hit1, "First call should be cache miss"
 
         # Second call should be cache hit
-        result2, hit2 = await cache.get_or_compute(
-            CacheFamily.READABILITY, ["url1"], compute_value
-        )
+        result2, hit2 = await cache.get_or_compute(CacheFamily.READABILITY, ["url1"], compute_value)
         assert hit2, "Second call should be cache hit"
         assert result1 == result2, "Results should be identical"
 
@@ -400,9 +354,7 @@ class TestBudgetManager:
 
         # Should raise SoftBudgetExceeded
         with pytest.raises(SoftBudgetExceeded) as exc_info:
-            async with manager.execute_with_budget(
-                BudgetFamily.TWEET_SYNDICATION, "test_op"
-            ):
+            async with manager.execute_with_budget(BudgetFamily.TWEET_SYNDICATION, "test_op"):
                 await slow_operation()
 
         assert exc_info.value.family == BudgetFamily.TWEET_SYNDICATION
@@ -422,9 +374,7 @@ class TestBudgetManager:
 
         # Should raise HardDeadlineExceeded
         with pytest.raises(HardDeadlineExceeded) as exc_info:
-            async with manager.execute_with_budget(
-                BudgetFamily.TWEET_SYNDICATION, "test_op"
-            ):
+            async with manager.execute_with_budget(BudgetFamily.TWEET_SYNDICATION, "test_op"):
                 await very_slow_operation()
 
         assert exc_info.value.family == BudgetFamily.TWEET_SYNDICATION

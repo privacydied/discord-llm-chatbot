@@ -77,9 +77,7 @@ class ComponentSpec:
         if self.timeout_seconds <= 0:
             raise ValueError(f"Component '{self.name}' timeout must be positive")
         if self.retry_count < 0:
-            raise ValueError(
-                f"Component '{self.name}' retry_count must be non-negative"
-            )
+            raise ValueError(f"Component '{self.name}' retry_count must be non-negative")
 
 
 class StartupOrchestrator:
@@ -117,9 +115,7 @@ class StartupOrchestrator:
         # Validate dependencies exist
         for dep in spec.dependencies:
             if dep not in self.components:
-                raise ValueError(
-                    f"Component '{spec.name}' depends on undefined component '{dep}'"
-                )
+                raise ValueError(f"Component '{spec.name}' depends on undefined component '{dep}'")
 
         self.components[spec.name] = spec
         self.logger.debug(
@@ -140,11 +136,7 @@ class StartupOrchestrator:
 
         while remaining:
             # Find components with all dependencies satisfied
-            ready = {
-                name
-                for name in remaining
-                if self.components[name].dependencies.issubset(completed)
-            }
+            ready = {name for name in remaining if self.components[name].dependencies.issubset(completed)}
 
             if not ready:
                 # Circular dependency detected
@@ -184,9 +176,7 @@ class StartupOrchestrator:
                 duration_ms = (time.time() - start_time) * 1000
 
                 # Success path
-                metrics.increment(
-                    METRIC_COMPONENT_INIT_SUCCESS, {"component": spec.name}
-                )
+                metrics.increment(METRIC_COMPONENT_INIT_SUCCESS, {"component": spec.name})
                 metrics.gauge(
                     METRIC_COMPONENT_LAST_INIT_TIMESTAMP,
                     time.time(),
@@ -231,10 +221,7 @@ class StartupOrchestrator:
                 )
 
             # Don't retry on fatal errors or programming errors
-            if (
-                error_class in (ErrorClass.PROGRAMMING_ERROR, ErrorClass.CONFIG_ERROR)
-                or spec.is_fatal
-            ):
+            if error_class in (ErrorClass.PROGRAMMING_ERROR, ErrorClass.CONFIG_ERROR) or spec.is_fatal:
                 break
 
         duration_ms = (time.time() - start_time) * 1000
@@ -304,17 +291,11 @@ class StartupOrchestrator:
         type(error).__name__.lower()
         error_msg = str(error).lower()
 
-        if any(
-            keyword in error_msg for keyword in ["config", "configuration", "setting"]
-        ):
+        if any(keyword in error_msg for keyword in ["config", "configuration", "setting"]):
             return ErrorClass.CONFIG_ERROR
-        elif any(
-            keyword in error_msg for keyword in ["timeout", "connection", "network"]
-        ):
+        elif any(keyword in error_msg for keyword in ["timeout", "connection", "network"]):
             return ErrorClass.EXTERNAL_TIMEOUT
-        elif any(
-            keyword in error_msg for keyword in ["not found", "unavailable", "missing"]
-        ):
+        elif any(keyword in error_msg for keyword in ["not found", "unavailable", "missing"]):
             return ErrorClass.DEPENDENCY_UNAVAILABLE
         else:
             return ErrorClass.PROGRAMMING_ERROR
@@ -326,9 +307,7 @@ class StartupOrchestrator:
             Dictionary of component results with timing and status information
         """
         if not self.components:
-            self.logger.warning(
-                "No components registered for startup", extra={"subsys": "startup"}
-            )
+            self.logger.warning("No components registered for startup", extra={"subsys": "startup"})
             return {}
 
         startup_start = time.time()
@@ -387,13 +366,7 @@ class StartupOrchestrator:
                 )
 
                 # Check for fatal failures before continuing
-                fatal_failures = [
-                    r
-                    for r in group_results
-                    if isinstance(r, ComponentResult)
-                    and r.status == ComponentStatus.FAILED
-                    and self.components[r.name].is_fatal
-                ]
+                fatal_failures = [r for r in group_results if isinstance(r, ComponentResult) and r.status == ComponentStatus.FAILED and self.components[r.name].is_fatal]
 
                 if fatal_failures:
                     fatal_names = [f.name for f in fatal_failures]
@@ -403,19 +376,12 @@ class StartupOrchestrator:
             metrics.observe(METRIC_STARTUP_TOTAL_DURATION, total_duration)
 
             # Summary statistics
-            success_count = sum(
-                1 for r in self.results.values() if r.status == ComponentStatus.SUCCESS
-            )
-            degraded_count = sum(
-                1 for r in self.results.values() if r.status == ComponentStatus.DEGRADED
-            )
-            failed_count = sum(
-                1 for r in self.results.values() if r.status == ComponentStatus.FAILED
-            )
+            success_count = sum(1 for r in self.results.values() if r.status == ComponentStatus.SUCCESS)
+            degraded_count = sum(1 for r in self.results.values() if r.status == ComponentStatus.DEGRADED)
+            failed_count = sum(1 for r in self.results.values() if r.status == ComponentStatus.FAILED)
 
             self.logger.info(
-                f"🎉 Startup completed in {total_duration:.2f}s: "
-                f"{success_count} success, {degraded_count} degraded, {failed_count} failed",
+                f"🎉 Startup completed in {total_duration:.2f}s: {success_count} success, {degraded_count} degraded, {failed_count} failed",
                 extra={"subsys": "startup"},
             )
 
@@ -447,17 +413,13 @@ class StartupOrchestrator:
                     "duration_ms": result.duration_ms,
                     "status": result.status.value,
                     "fallback_used": result.fallback_used,
-                    "error_class": result.error_class.value
-                    if result.error_class
-                    else None,
+                    "error_class": result.error_class.value if result.error_class else None,
                     "error_message": result.error_message,
                     "attempt_count": result.attempt_count,
                 }
             )
 
-        success_count = sum(
-            1 for r in self.results.values() if r.status == ComponentStatus.SUCCESS
-        )
+        success_count = sum(1 for r in self.results.values() if r.status == ComponentStatus.SUCCESS)
         total_count = len(self.results)
 
         return {

@@ -35,9 +35,7 @@ def memory_cog(mock_bot):
 
 
 def test_memory_status_command_is_registered():
-    assert isinstance(
-        ExtendedMemoryCommands.__dict__["memory_status"], commands.Command
-    )
+    assert isinstance(ExtendedMemoryCommands.__dict__["memory_status"], commands.Command)
 
 
 @pytest.mark.asyncio
@@ -56,14 +54,10 @@ async def test_memory_status_command_sends_embed(memory_cog, mock_ctx, monkeypat
         AsyncMock(return_value=fake_service),
     )
 
-    await ExtendedMemoryCommands.__dict__["memory_status"].callback(
-        memory_cog, mock_ctx
-    )
+    await ExtendedMemoryCommands.__dict__["memory_status"].callback(memory_cog, mock_ctx)
 
     mock_ctx.send.assert_called_once()
     embed = mock_ctx.send.call_args.kwargs["embed"]
     assert isinstance(embed, discord.Embed)
     assert embed.title == "Memory Service Status"
-    assert any(
-        field.name == "Enabled" and field.value == "True" for field in embed.fields
-    )
+    assert any(field.name == "Enabled" and field.value == "True" for field in embed.fields)

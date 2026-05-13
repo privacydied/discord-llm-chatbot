@@ -144,9 +144,7 @@ class SoftBudgetExceeded(Exception):
         self.family = family
         self.elapsed_ms = elapsed_ms
         self.budget_ms = budget_ms
-        super().__init__(
-            f"{family.value} soft budget exceeded: {elapsed_ms:.1f}ms > {budget_ms:.1f}ms"
-        )
+        super().__init__(f"{family.value} soft budget exceeded: {elapsed_ms:.1f}ms > {budget_ms:.1f}ms")
 
 
 class HardDeadlineExceeded(Exception):
@@ -156,9 +154,7 @@ class HardDeadlineExceeded(Exception):
         self.family = family
         self.elapsed_ms = elapsed_ms
         self.deadline_ms = deadline_ms
-        super().__init__(
-            f"{family.value} hard deadline exceeded: {elapsed_ms:.1f}ms > {deadline_ms:.1f}ms"
-        )
+        super().__init__(f"{family.value} hard deadline exceeded: {elapsed_ms:.1f}ms > {deadline_ms:.1f}ms")
 
 
 class BudgetManager:
@@ -171,41 +167,32 @@ class BudgetManager:
         # Default budget configurations
         self.budget_configs = {
             BudgetFamily.TWEET_SYNDICATION: BudgetConfig(
-                soft_budget_ms=float(
-                    self.config.get("TWEET_SYNDICATION_TOTAL_DEADLINE_MS", 3500)
-                ),
-                hard_deadline_ms=float(
-                    self.config.get("TWEET_SYNDICATION_TOTAL_DEADLINE_MS", 3500)
-                )
-                * 1.5,
+                soft_budget_ms=float(self.config.get("TWEET_SYNDICATION_TOTAL_DEADLINE_MS", 3500)),
+                hard_deadline_ms=float(self.config.get("TWEET_SYNDICATION_TOTAL_DEADLINE_MS", 3500)) * 1.5,
                 baseline_ms=2000.0,
                 max_clamp_ms=8000.0,
             ),
             BudgetFamily.TWEET_WEB_TIER_A: BudgetConfig(
                 soft_budget_ms=float(self.config.get("TWEET_WEB_TIER_A_MS", 2500)),
-                hard_deadline_ms=float(self.config.get("TWEET_WEB_TIER_A_MS", 2500))
-                * 1.5,
+                hard_deadline_ms=float(self.config.get("TWEET_WEB_TIER_A_MS", 2500)) * 1.5,
                 baseline_ms=1500.0,
                 max_clamp_ms=5000.0,
             ),
             BudgetFamily.TWEET_WEB_TIER_B: BudgetConfig(
                 soft_budget_ms=float(self.config.get("TWEET_WEB_TIER_B_MS", 8000)),
-                hard_deadline_ms=float(self.config.get("TWEET_WEB_TIER_B_MS", 8000))
-                * 1.5,
+                hard_deadline_ms=float(self.config.get("TWEET_WEB_TIER_B_MS", 8000)) * 1.5,
                 baseline_ms=5000.0,
                 max_clamp_ms=15000.0,
             ),
             BudgetFamily.TWEET_WEB_TIER_C: BudgetConfig(
                 soft_budget_ms=float(self.config.get("TWEET_WEB_TIER_C_MS", 8000)),
-                hard_deadline_ms=float(self.config.get("TWEET_WEB_TIER_C_MS", 8000))
-                * 1.5,
+                hard_deadline_ms=float(self.config.get("TWEET_WEB_TIER_C_MS", 8000)) * 1.5,
                 baseline_ms=5000.0,
                 max_clamp_ms=15000.0,
             ),
             BudgetFamily.X_API_CALL: BudgetConfig(
                 soft_budget_ms=float(self.config.get("X_API_TOTAL_DEADLINE_MS", 6000)),
-                hard_deadline_ms=float(self.config.get("X_API_TOTAL_DEADLINE_MS", 6000))
-                * 1.5,
+                hard_deadline_ms=float(self.config.get("X_API_TOTAL_DEADLINE_MS", 6000)) * 1.5,
                 baseline_ms=3000.0,
                 max_clamp_ms=12000.0,
             ),
@@ -217,8 +204,7 @@ class BudgetManager:
             ),
             BudgetFamily.STT_PROCESSING: BudgetConfig(
                 soft_budget_ms=float(self.config.get("STT_TOTAL_DEADLINE_MS", 300000)),
-                hard_deadline_ms=float(self.config.get("STT_TOTAL_DEADLINE_MS", 300000))
-                * 1.2,
+                hard_deadline_ms=float(self.config.get("STT_TOTAL_DEADLINE_MS", 300000)) * 1.2,
                 baseline_ms=60000.0,
                 max_clamp_ms=600000.0,
             ),
@@ -230,17 +216,13 @@ class BudgetManager:
             ),
             BudgetFamily.OCR_BATCH: BudgetConfig(
                 soft_budget_ms=float(self.config.get("OCR_BATCH_DEADLINE_MS", 20000)),
-                hard_deadline_ms=float(self.config.get("OCR_BATCH_DEADLINE_MS", 20000))
-                * 1.2,
+                hard_deadline_ms=float(self.config.get("OCR_BATCH_DEADLINE_MS", 20000)) * 1.2,
                 baseline_ms=10000.0,
                 max_clamp_ms=40000.0,
             ),
             BudgetFamily.OCR_GLOBAL: BudgetConfig(
                 soft_budget_ms=float(self.config.get("OCR_GLOBAL_DEADLINE_MS", 240000)),
-                hard_deadline_ms=float(
-                    self.config.get("OCR_GLOBAL_DEADLINE_MS", 240000)
-                )
-                * 1.2,
+                hard_deadline_ms=float(self.config.get("OCR_GLOBAL_DEADLINE_MS", 240000)) * 1.2,
                 baseline_ms=120000.0,
                 max_clamp_ms=480000.0,
             ),
@@ -259,9 +241,7 @@ class BudgetManager:
         }
 
         # Metrics tracking
-        self.metrics: Dict[BudgetFamily, BudgetMetrics] = {
-            family: BudgetMetrics() for family in BudgetFamily
-        }
+        self.metrics: Dict[BudgetFamily, BudgetMetrics] = {family: BudgetMetrics() for family in BudgetFamily}
 
         # Active executions
         self.active_executions: Dict[str, BudgetExecution] = {}
@@ -277,16 +257,12 @@ class BudgetManager:
             return config.soft_budget_ms
 
         # Adaptive budget: max(baseline, 1.2×p95) within clamps
-        adaptive_budget = max(
-            config.baseline_ms, min(config.max_clamp_ms, metrics.p95_latency_ms * 1.2)
-        )
+        adaptive_budget = max(config.baseline_ms, min(config.max_clamp_ms, metrics.p95_latency_ms * 1.2))
 
         return adaptive_budget
 
     @asynccontextmanager
-    async def execute_with_budget(
-        self, family: BudgetFamily, operation_id: str, check_interval_ms: float = 100.0
-    ):
+    async def execute_with_budget(self, family: BudgetFamily, operation_id: str, check_interval_ms: float = 100.0):
         """Context manager for budget-controlled execution. [CA][REH]"""
         # Calculate current budgets
         soft_budget_ms = self._calculate_adaptive_soft_budget(family)
@@ -305,9 +281,7 @@ class BudgetManager:
         self.metrics[family].total_operations += 1
 
         # Start budget monitoring task
-        monitor_task = asyncio.create_task(
-            self._monitor_budget(execution, check_interval_ms)
-        )
+        monitor_task = asyncio.create_task(self._monitor_budget(execution, check_interval_ms))
 
         try:
             yield execution
@@ -322,8 +296,7 @@ class BudgetManager:
             self.metrics[family].update_success_rate()
 
             logger.debug(
-                f"✅ {family.value} completed in {latency_ms:.1f}ms "
-                f"(budget: {soft_budget_ms:.1f}ms, deadline: {hard_deadline_ms:.1f}ms)",
+                f"✅ {family.value} completed in {latency_ms:.1f}ms (budget: {soft_budget_ms:.1f}ms, deadline: {hard_deadline_ms:.1f}ms)",
                 extra={
                     "event": "budget.completed",
                     "detail": {
@@ -390,9 +363,7 @@ class BudgetManager:
             if operation_id in self.active_executions:
                 del self.active_executions[operation_id]
 
-    async def _monitor_budget(
-        self, execution: BudgetExecution, check_interval_ms: float
-    ) -> None:
+    async def _monitor_budget(self, execution: BudgetExecution, check_interval_ms: float) -> None:
         """Monitor execution against budget and deadline. [REH]"""
         check_interval_s = check_interval_ms / 1000.0
 
@@ -414,9 +385,7 @@ class BudgetManager:
 
                 # Check soft budget (route switch opportunity)
                 if execution.is_soft_exceeded and not execution.route_switched:
-                    raise SoftBudgetExceeded(
-                        execution.family, execution.elapsed_ms, execution.soft_budget_ms
-                    )
+                    raise SoftBudgetExceeded(execution.family, execution.elapsed_ms, execution.soft_budget_ms)
 
         except asyncio.CancelledError:
             # Monitor task was cancelled (normal cleanup)
@@ -443,25 +412,19 @@ class BudgetManager:
             except SoftBudgetExceeded:
                 # Try route switching if handler provided
                 if on_soft_exceeded is not None:
-                    logger.info(
-                        f"🔄 {family.value} route switching after soft budget exceeded"
-                    )
+                    logger.info(f"🔄 {family.value} route switching after soft budget exceeded")
                     try:
                         result = await on_soft_exceeded()
                         execution.result = result
                         return result
                     except Exception as fallback_error:
-                        logger.error(
-                            f"❌ {family.value} route switch also failed: {fallback_error}"
-                        )
+                        logger.error(f"❌ {family.value} route switch also failed: {fallback_error}")
                         raise fallback_error
                 else:
                     # No route switching available, re-raise
                     raise
 
-    def get_metrics(
-        self, family: Optional[BudgetFamily] = None
-    ) -> Dict[BudgetFamily, BudgetMetrics]:
+    def get_metrics(self, family: Optional[BudgetFamily] = None) -> Dict[BudgetFamily, BudgetMetrics]:
         """Get metrics for specific family or all families. [PA]"""
         if family is not None:
             return {family: self.metrics[family]}

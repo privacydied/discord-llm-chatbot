@@ -97,10 +97,7 @@ def is_direct_image_url(url: str) -> bool:
         u = str(url).lower()
     except Exception:
         return False
-    return bool(
-        re.search(r"\.(jpe?g|png|webp)(?:\?|#|$)", u)
-        or re.search(r"[?&]format=(jpe?g|png|webp)(?:&|$)", u)
-    )
+    return bool(re.search(r"\.(jpe?g|png|webp)(?:\?|#|$)", u) or re.search(r"[?&]format=(jpe?g|png|webp)(?:&|$)", u))
 
 
 def extract_urls_loose(text: str) -> List[str]:
@@ -137,9 +134,7 @@ def strip_discord_mentions_and_urls(text: str) -> str:
         return (text or "").strip()
 
 
-def existing_url_payloads(
-    items: Sequence[Any], *, strip_payload: bool = False
-) -> Set[str]:
+def existing_url_payloads(items: Sequence[Any], *, strip_payload: bool = False) -> Set[str]:
     """Collect URL payloads from InputItem-like entries into a dedupe set."""
     urls: Set[str] = set()
     for it in items or []:
@@ -171,9 +166,7 @@ def append_unique_url_items(
             key = ""
         if not key or key in seen:
             continue
-        items.append(
-            item_ctor(source_type="url", payload=u, order_index=len(items) + 1)
-        )
+        items.append(item_ctor(source_type="url", payload=u, order_index=len(items) + 1))
         seen.add(key)
         added += 1
     return added

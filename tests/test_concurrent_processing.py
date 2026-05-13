@@ -58,9 +58,7 @@ class TestProcessItemWithBudget:
         async def handler(item, message=None):
             return "processed_result"
 
-        result = await _process_item_with_budget(
-            item, modality, handler, timeout=10.0, message=None
-        )
+        result = await _process_item_with_budget(item, modality, handler, timeout=10.0, message=None)
 
         assert result.success is True
         assert result.result_text == "processed_result"
@@ -78,9 +76,7 @@ class TestProcessItemWithBudget:
             await asyncio.sleep(10)  # Will timeout
             return "never"
 
-        result = await _process_item_with_budget(
-            item, modality, slow_handler, timeout=0.01, message=None
-        )
+        result = await _process_item_with_budget(item, modality, slow_handler, timeout=0.01, message=None)
 
         assert result.success is False
         assert "Timed out" in result.result_text
@@ -97,9 +93,7 @@ class TestProcessItemWithBudget:
         async def failing_handler(item, message=None):
             raise ValueError("processing error")
 
-        result = await _process_item_with_budget(
-            item, modality, failing_handler, timeout=10.0, message=None
-        )
+        result = await _process_item_with_budget(item, modality, failing_handler, timeout=10.0, message=None)
 
         assert result.success is False
         assert "Failed" in result.result_text
@@ -113,9 +107,7 @@ class TestProcessIndependentItemsConcurrently:
             BatchConfig,
         )
 
-        results = await process_independent_items_concurrently(
-            items=[], message=None, config=BatchConfig()
-        )
+        results = await process_independent_items_concurrently(items=[], message=None, config=BatchConfig())
 
         assert results == []
 
@@ -174,9 +166,7 @@ class TestProcessIndependentItemsConcurrently:
             items.append((item, modality, await make_handler(i)))
 
         start = asyncio.get_event_loop().time()
-        results = await process_independent_items_concurrently(
-            items=items, message=None, config=BatchConfig()
-        )
+        results = await process_independent_items_concurrently(items=items, message=None, config=BatchConfig())
         duration = asyncio.get_event_loop().time() - start
 
         # Should complete much faster than sequential (0.15s)
@@ -206,9 +196,7 @@ class TestProcessIndependentItemsConcurrently:
             (Mock(), modality, success_handler),
         ]
 
-        results = await process_independent_items_concurrently(
-            items=items, message=None, config=BatchConfig()
-        )
+        results = await process_independent_items_concurrently(items=items, message=None, config=BatchConfig())
 
         assert len(results) == 3
         assert results[0].success is True
@@ -268,9 +256,7 @@ class TestProcessItemsSequentialWithTimeout:
         for i in range(5):
             items.append((Mock(), modality, await make_handler(i)))
 
-        results = await process_items_sequential_with_timeout(
-            items=items, message=None, timeout_per_item=10.0
-        )
+        results = await process_items_sequential_with_timeout(items=items, message=None, timeout_per_item=10.0)
 
         # Should execute in order
         assert execution_order == [0, 1, 2, 3, 4]
@@ -294,9 +280,7 @@ class TestUrlNormalization:
     def test_normalization_removes_tracking_params(self):
         from bot.concurrent_processing import _normalize_url_for_dedup
 
-        result = _normalize_url_for_dedup(
-            "https://example.com/page?utm_source=google&fbclid=123"
-        )
+        result = _normalize_url_for_dedup("https://example.com/page?utm_source=google&fbclid=123")
         assert "utm_source" not in result
         assert "fbclid" not in result
 

@@ -7,9 +7,7 @@ Tests cover unit, integration, and fault-injection scenarios.
 import pytest
 
 # Skip all tests in this module — they require live X/Twitter API and vision service integration
-pytestmark = pytest.mark.skip(
-    reason="Requires live X/Twitter API and vision service integration"
-)
+pytestmark = pytest.mark.skip(reason="Requires live X/Twitter API and vision service integration")
 
 import asyncio
 from unittest.mock import Mock, AsyncMock, patch
@@ -92,9 +90,7 @@ class TestImageOnlyTweetFlow:
             "created_at": "2024-01-01T15:30:00Z",
         }
 
-    def test_is_image_only_tweet_detection(
-        self, router, sample_image_only_tweet, sample_mixed_content_tweet
-    ):
+    def test_is_image_only_tweet_detection(self, router, sample_image_only_tweet, sample_mixed_content_tweet):
         """Test detection of image flow tweets (images present, no video)."""
         # Test image-only tweet (empty text + photos)
         assert router._is_image_only_tweet(sample_image_only_tweet)
@@ -121,9 +117,7 @@ class TestImageOnlyTweetFlow:
         assert not router._is_image_only_tweet(mixed_media)
 
     @pytest.mark.asyncio
-    async def test_handle_image_only_tweet_single_image(
-        self, router, sample_image_only_tweet
-    ):
+    async def test_handle_image_only_tweet_single_image(self, router, sample_image_only_tweet):
         """Test processing single image in image-only tweet."""
         # Mock vision API response
         vision_response = {
@@ -133,9 +127,7 @@ class TestImageOnlyTweetFlow:
             "confidence": 0.95,
         }
 
-        with patch.object(
-            router, "_vl_describe_image_from_url", new_callable=AsyncMock
-        ) as mock_vision:
+        with patch.object(router, "_vl_describe_image_from_url", new_callable=AsyncMock) as mock_vision:
             mock_vision.return_value = json.dumps(vision_response)
 
             with patch.object(router, "_build_neutral_vision_prompt") as mock_prompt:
@@ -161,9 +153,7 @@ class TestImageOnlyTweetFlow:
 
                     # Verify result structure
                     assert "📷 Image Analysis" in result
-                    assert (
-                        "A serene mountain landscape with snow-capped peaks" in result
-                    )
+                    assert "A serene mountain landscape with snow-capped peaks" in result
                     assert "PEAK SUMMIT 2024" in result
                     assert "@testuser" in result
                     assert "https://twitter.com/testuser/status/123456789" in result
@@ -174,9 +164,7 @@ class TestImageOnlyTweetFlow:
                     assert "https://pbs.twimg.com/media/test1.jpg" in str(call_args)
 
     @pytest.mark.asyncio
-    async def test_handle_image_only_tweet_multiple_images(
-        self, router, sample_image_only_tweet
-    ):
+    async def test_handle_image_only_tweet_multiple_images(self, router, sample_image_only_tweet):
         """Test processing multiple images in image-only tweet."""
         vision_responses = [
             {
@@ -193,9 +181,7 @@ class TestImageOnlyTweetFlow:
             },
         ]
 
-        with patch.object(
-            router, "_vl_describe_image_from_url", new_callable=AsyncMock
-        ) as mock_vision:
+        with patch.object(router, "_vl_describe_image_from_url", new_callable=AsyncMock) as mock_vision:
             mock_vision.side_effect = [json.dumps(resp) for resp in vision_responses]
 
             with patch.object(router, "_build_neutral_vision_prompt") as mock_prompt:
@@ -226,9 +212,7 @@ class TestImageOnlyTweetFlow:
                     assert mock_vision.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_handle_image_only_tweet_includes_article_caption(
-        self, router, sample_image_only_tweet
-    ):
+    async def test_handle_image_only_tweet_includes_article_caption(self, router, sample_image_only_tweet):
         """Image-only flow should carry X article text into composed evidence."""
         tweet_with_article = {
             **sample_image_only_tweet,
@@ -237,15 +221,11 @@ class TestImageOnlyTweetFlow:
                 "id": "2016825738041630720",
                 "title": "The TESTOSTERONE Kabbalah",
                 "preview_text": "They control everything.",
-                "content": {
-                    "blocks": [{"text": "Cellular energy production and metabolism."}]
-                },
+                "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
             },
         }
 
-        with patch.object(
-            router, "_vl_describe_image_from_url", new_callable=AsyncMock
-        ) as mock_vision:
+        with patch.object(router, "_vl_describe_image_from_url", new_callable=AsyncMock) as mock_vision:
             mock_vision.return_value = "analysis text"
 
             with patch.object(router, "_build_neutral_vision_prompt") as mock_prompt:
@@ -282,9 +262,7 @@ class TestImageOnlyTweetFlow:
             "confidence": 0.92,
         }
 
-        with patch.object(
-            router, "_vl_describe_image_from_url", new_callable=AsyncMock
-        ) as mock_vision:
+        with patch.object(router, "_vl_describe_image_from_url", new_callable=AsyncMock) as mock_vision:
             mock_vision.return_value = json.dumps(toxic_response)
 
             with patch.object(router, "_parse_vision_analysis") as mock_parse:
@@ -295,9 +273,7 @@ class TestImageOnlyTweetFlow:
                     ["toxic", "offensive"],
                 )
 
-                result = await router._handle_image_only_tweet(
-                    "https://twitter.com/baduser/status/987654321", toxic_tweet
-                )
+                result = await router._handle_image_only_tweet("https://twitter.com/baduser/status/987654321", toxic_tweet)
 
                 # Verify toxic content was filtered
                 assert "⚠️ Content flagged by safety filters" in result
@@ -347,9 +323,7 @@ class TestImageUpgradeSystem:
         original_analysis = ["Test analysis"]
 
         # Store context
-        await upgrade_manager.store_upgrade_context(
-            message_id, url, syn_data, source, original_analysis
-        )
+        await upgrade_manager.store_upgrade_context(message_id, url, syn_data, source, original_analysis)
 
         # Retrieve context
         retrieved = upgrade_manager.get_upgrade_context(message_id)
@@ -360,16 +334,12 @@ class TestImageUpgradeSystem:
         assert retrieved["original_analysis"] == original_analysis
 
     @pytest.mark.asyncio
-    async def test_detailed_caption_upgrade(
-        self, upgrade_manager, mock_reaction_payload
-    ):
+    async def test_detailed_caption_upgrade(self, upgrade_manager, mock_reaction_payload):
         """Test 🖼️ detailed caption upgrade."""
         # Setup upgrade context
         context = {
             "url": "https://twitter.com/test/status/123",
-            "syndication_data": {
-                "photos": [{"url": "https://pbs.twimg.com/media/test.jpg"}]
-            },
+            "syndication_data": {"photos": [{"url": "https://pbs.twimg.com/media/test.jpg"}]},
             "source": "syndication",
         }
         upgrade_manager.store_upgrade_context(mock_reaction_payload.message_id, context)
@@ -382,14 +352,10 @@ class TestImageUpgradeSystem:
             "confidence": 0.97,
         }
 
-        with patch.object(
-            upgrade_manager, "_get_detailed_vision_analysis", new_callable=AsyncMock
-        ) as mock_detailed:
+        with patch.object(upgrade_manager, "_get_detailed_vision_analysis", new_callable=AsyncMock) as mock_detailed:
             mock_detailed.return_value = detailed_response
 
-            result = await upgrade_manager.handle_upgrade_reaction(
-                mock_reaction_payload
-            )
+            result = await upgrade_manager.handle_upgrade_reaction(mock_reaction_payload)
 
             assert "🖼️ **Detailed Caption**" in result
             assert "majestic snow-covered mountain peak" in result
@@ -403,9 +369,7 @@ class TestImageUpgradeSystem:
 
         context = {
             "url": "https://twitter.com/test/status/123",
-            "syndication_data": {
-                "photos": [{"url": "https://pbs.twimg.com/media/document.jpg"}]
-            },
+            "syndication_data": {"photos": [{"url": "https://pbs.twimg.com/media/document.jpg"}]},
             "source": "syndication",
         }
         upgrade_manager.store_upgrade_context(mock_reaction_payload.message_id, context)
@@ -416,14 +380,10 @@ class TestImageUpgradeSystem:
             "languages": ["en"],
         }
 
-        with patch.object(
-            upgrade_manager, "_get_ocr_analysis", new_callable=AsyncMock
-        ) as mock_ocr:
+        with patch.object(upgrade_manager, "_get_ocr_analysis", new_callable=AsyncMock) as mock_ocr:
             mock_ocr.return_value = ocr_response
 
-            result = await upgrade_manager.handle_upgrade_reaction(
-                mock_reaction_payload
-            )
+            result = await upgrade_manager.handle_upgrade_reaction(mock_reaction_payload)
 
             assert "🔎 **OCR Text Details**" in result
             assert "INVOICE #INV-2024-001" in result
@@ -457,14 +417,10 @@ class TestImageUpgradeSystem:
             "thread_start": "2024-01-01T10:00:00Z",
         }
 
-        with patch.object(
-            upgrade_manager, "_get_thread_context", new_callable=AsyncMock
-        ) as mock_thread:
+        with patch.object(upgrade_manager, "_get_thread_context", new_callable=AsyncMock) as mock_thread:
             mock_thread.return_value = thread_context
 
-            result = await upgrade_manager.handle_upgrade_reaction(
-                mock_reaction_payload
-            )
+            result = await upgrade_manager.handle_upgrade_reaction(mock_reaction_payload)
 
             assert "↩️ **Thread Context**" in result
             assert "photography series" in result
@@ -505,14 +461,10 @@ class TestFaultInjection:
         }
 
         # Mock vision API failure
-        with patch.object(
-            router, "_vl_describe_image_from_url", new_callable=AsyncMock
-        ) as mock_vision:
+        with patch.object(router, "_vl_describe_image_from_url", new_callable=AsyncMock) as mock_vision:
             mock_vision.side_effect = Exception("Vision API unavailable")
 
-            result = await router._handle_image_only_tweet(
-                "https://twitter.com/testuser/status/123", failing_tweet
-            )
+            result = await router._handle_image_only_tweet("https://twitter.com/testuser/status/123", failing_tweet)
 
             # Should return user-friendly error message
             assert "⚠️ Could not process images from this tweet right now" in result
@@ -536,9 +488,7 @@ class TestFaultInjection:
         ]
 
         for malformed_data in malformed_cases:
-            result = await router._handle_image_only_tweet(
-                "https://twitter.com/test/status/123", malformed_data
-            )
+            result = await router._handle_image_only_tweet("https://twitter.com/test/status/123", malformed_data)
 
             # Should handle gracefully without crashing
             assert isinstance(result, str)
@@ -564,9 +514,7 @@ class TestFaultInjection:
             payload.emoji.name = emoji
             payloads.append(payload)
 
-        with patch.object(
-            upgrade_manager, "_get_detailed_vision_analysis", new_callable=AsyncMock
-        ) as mock_vision:
+        with patch.object(upgrade_manager, "_get_detailed_vision_analysis", new_callable=AsyncMock) as mock_vision:
             mock_vision.return_value = {"alt_text": "Test response", "confidence": 0.9}
 
             # Execute concurrent requests
@@ -589,14 +537,10 @@ class TestFaultInjection:
         }
 
         # Mock rate limit error
-        with patch.object(
-            router, "_vl_describe_image_from_url", new_callable=AsyncMock
-        ) as mock_vision:
+        with patch.object(router, "_vl_describe_image_from_url", new_callable=AsyncMock) as mock_vision:
             mock_vision.side_effect = Exception("Rate limit exceeded")
 
-            result = await router._handle_image_only_tweet(
-                "https://twitter.com/testuser/status/123", rate_limited_tweet
-            )
+            result = await router._handle_image_only_tweet("https://twitter.com/testuser/status/123", rate_limited_tweet)
 
             # Should handle rate limits gracefully
             assert "⚠️ Could not process images" in result

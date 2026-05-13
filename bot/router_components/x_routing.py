@@ -224,9 +224,7 @@ def append_embed_candidate_attr_urls(urls: List[str], embed: Any) -> None:
         append_embed_attr_url_if_present(urls, embed, attr_name)
 
 
-def append_embed_attr_url_if_present(
-    urls: List[str], embed: Any, attr_name: str
-) -> None:
+def append_embed_attr_url_if_present(urls: List[str], embed: Any, attr_name: str) -> None:
     """Append nested embed attribute URL when present (e.g., video/image/thumbnail)."""
     attr = getattr(embed, attr_name, None)
     url = getattr(attr, "url", None) if attr else None
@@ -247,9 +245,7 @@ def append_attachment_urls_if_present(urls: List[str], attachment: Any) -> None:
     append_attachment_url_attr_if_present(urls, attachment, "proxy_url")
 
 
-def append_attachment_url_attr_if_present(
-    urls: List[str], attachment: Any, attr_name: str
-) -> None:
+def append_attachment_url_attr_if_present(urls: List[str], attachment: Any, attr_name: str) -> None:
     """Append one attachment URL attribute when present."""
     value = getattr(attachment, attr_name, None)
     if value:
@@ -696,17 +692,13 @@ def normalize_x_api_text(text: Any) -> str:
     return str(text or "").strip()
 
 
-def extract_sparse_media_resolution(
-    resolved_sparse: Any, *, default_url: str
-) -> tuple[str, List[str], str]:
+def extract_sparse_media_resolution(resolved_sparse: Any, *, default_url: str) -> tuple[str, List[str], str]:
     """Extract sparse media kind/images/url from resolved payload."""
     if not isinstance(resolved_sparse, dict):
         return ("unknown", [], default_url)
     sparse_kind = normalize_sparse_kind_value(resolved_sparse.get("kind"))
     sparse_images = normalize_sparse_images_value(resolved_sparse.get("images"))
-    sparse_url = normalize_sparse_url_value(
-        resolved_sparse.get("url"), default_url=default_url
-    )
+    sparse_url = normalize_sparse_url_value(resolved_sparse.get("url"), default_url=default_url)
     return sparse_media_resolution_tuple(sparse_kind, sparse_images, sparse_url)
 
 
@@ -812,9 +804,7 @@ def build_stt_fail_log_payload(
     return payload
 
 
-def build_stt_fail_detail(
-    reason: str, *, media_kind: Optional[str] = None
-) -> Dict[str, Any]:
+def build_stt_fail_detail(reason: str, *, media_kind: Optional[str] = None) -> Dict[str, Any]:
     """Build detail object for STT failure breadcrumb payloads."""
     detail: Dict[str, Any] = {"reason": reason}
     if media_kind:
@@ -925,9 +915,7 @@ def normalized_article_header_text(article_node: Dict[str, Any], key: str) -> st
     return unescape(str(article_node.get(key) or "").strip())
 
 
-def append_unique_article_block_texts(
-    parts: List[str], article_node: Dict[str, Any]
-) -> None:
+def append_unique_article_block_texts(parts: List[str], article_node: Dict[str, Any]) -> None:
     """Append unique normalized block texts to article text parts."""
     for text in iter_article_block_texts(article_node):
         append_unique_article_text_part(parts, text)
@@ -1013,19 +1001,12 @@ def syndication_needs_article_hydration(
 
 def resolve_syndication_pointer_text(syn: Dict[str, Any]) -> str:
     """Resolve pointer-probe text from syndication precedence (text/full_text/legacy.full_text)."""
-    return (
-        str(syn.get("text") or "").strip()
-        or str(syn.get("full_text") or "").strip()
-        or str((syn.get("legacy") or {}).get("full_text") or "").strip()
-    )
+    return str(syn.get("text") or "").strip() or str(syn.get("full_text") or "").strip() or str((syn.get("legacy") or {}).get("full_text") or "").strip()
 
 
 def article_has_metadata_hints(article: Dict[str, Any]) -> bool:
     """Return True when article payload contains identifying metadata fields."""
-    return any(
-        str(article.get(key) or "").strip()
-        for key in ("id", "rest_id", "title", "preview_text")
-    )
+    return any(str(article.get(key) or "").strip() for key in ("id", "rest_id", "title", "preview_text"))
 
 
 def has_news_action_type(syn: Dict[str, Any]) -> bool:
@@ -1043,13 +1024,7 @@ def extract_syndication_base_text(node: Any) -> str:
     if not isinstance(node, dict):
         return ""
     note = node.get("note_tweet") or {}
-    base_text = (
-        extract_note_tweet_text(note)
-        or (node.get("legacy", {}) or {}).get("full_text")
-        or node.get("full_text")
-        or node.get("text")
-        or ""
-    )
+    base_text = extract_note_tweet_text(note) or (node.get("legacy", {}) or {}).get("full_text") or node.get("full_text") or node.get("text") or ""
     return (base_text or "").strip()
 
 
@@ -1225,9 +1200,7 @@ def build_x_text_resolve_payload(
     )
 
 
-def build_event_with_detail_payload(
-    event: str, detail: Dict[str, Any]
-) -> Dict[str, Any]:
+def build_event_with_detail_payload(event: str, detail: Dict[str, Any]) -> Dict[str, Any]:
     """Build payload with canonical event/detail shape."""
     return {
         "event": event,
@@ -1272,9 +1245,7 @@ def build_oembed_text_payload(
 def extract_oembed_payload_from_response(
     response: Any,
     *,
-    build_payload: Callable[
-        [Any], Optional[Dict[str, Any]]
-    ] = build_oembed_text_payload,
+    build_payload: Callable[[Any], Optional[Dict[str, Any]]] = build_oembed_text_payload,
 ) -> Optional[Dict[str, Any]]:
     """Extract oEmbed text payload from an HTTP response-like object."""
     if response.status_code != 200:
@@ -1321,10 +1292,7 @@ def build_syndication_base_url() -> str:
 
 def build_syndication_fetch_user_agent() -> str:
     """Return canonical user-agent for CDN syndication fetches."""
-    return (
-        f"Mozilla/5.0 ({build_syndication_user_agent_platform()}) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-    )
+    return f"Mozilla/5.0 ({build_syndication_user_agent_platform()}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 
 def build_syndication_user_agent_platform() -> str:
@@ -1383,11 +1351,7 @@ def build_syndication_platform_host() -> str:
 
 def build_syndication_fetch_accept() -> str:
     """Return canonical Accept header for CDN syndication fetches."""
-    return (
-        f"{build_syndication_accept_json_mime()}, "
-        f"{build_syndication_accept_text_entry()}, "
-        f"{build_syndication_accept_any_entry()}"
-    )
+    return f"{build_syndication_accept_json_mime()}, {build_syndication_accept_text_entry()}, {build_syndication_accept_any_entry()}"
 
 
 def build_syndication_accept_primary_mimes() -> str:
@@ -1600,9 +1564,7 @@ def build_syndication_fetch_params_variants_list(
 
 def build_syndication_fetch_params_variant_entries(
     tweet_id: str,
-) -> Tuple[
-    Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]]
-]:
+) -> Tuple[Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]]]:
     """Return canonical syndication fetch variant tuple entries."""
     return (
         build_syndication_widgets_params_variant(tweet_id),
@@ -1745,14 +1707,8 @@ def build_syndication_oembed_url_key() -> str:
 
 def build_syndication_oembed_host_for_flag(use_x_host: bool) -> str:
     """Return oEmbed host selected from use_x_host toggle."""
-    host = (
-        build_syndication_x_host() if use_x_host else build_syndication_twitter_host()
-    )
-    return (
-        build_syndication_twitter_host()
-        if is_syndication_twitter_host(host)
-        else build_syndication_x_host()
-    )
+    host = build_syndication_x_host() if use_x_host else build_syndication_twitter_host()
+    return build_syndication_twitter_host() if is_syndication_twitter_host(host) else build_syndication_x_host()
 
 
 def build_syndication_oembed_status_url(host: str, tweet_id: str) -> str:
@@ -1899,11 +1855,7 @@ def build_syndication_bool_false_value() -> str:
 
 def build_syndication_oembed_metric_endpoint(host: str) -> str:
     """Return metric endpoint label for a given oEmbed host."""
-    return (
-        build_syndication_oembed_x_metric_endpoint()
-        if is_syndication_x_host(host)
-        else build_syndication_oembed_metric_default_endpoint()
-    )
+    return build_syndication_oembed_x_metric_endpoint() if is_syndication_x_host(host) else build_syndication_oembed_metric_default_endpoint()
 
 
 def is_syndication_x_host(host: str) -> bool:
@@ -2143,9 +2095,7 @@ def classify_syndication_cache_hit(
 
 def build_syndication_cache_hit_label(cached: Any) -> str:
     """Return cache-hit label for a fresh cache payload."""
-    return syndication_cache_hit_label_for_negative_flag(
-        syndication_cache_has_negative_flag(cached)
-    )
+    return syndication_cache_hit_label_for_negative_flag(syndication_cache_has_negative_flag(cached))
 
 
 def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
@@ -2201,11 +2151,7 @@ def build_syndication_data_cache_hit_label() -> str:
 
 def syndication_cache_hit_label_for_negative_flag(is_negative: bool) -> str:
     """Resolve cache-hit label from a negative-cache boolean flag."""
-    return (
-        build_syndication_negative_cache_hit_label()
-        if is_negative
-        else build_syndication_data_cache_hit_label()
-    )
+    return build_syndication_negative_cache_hit_label() if is_negative else build_syndication_data_cache_hit_label()
 
 
 def syndication_cache_has_negative_flag(cached: Any) -> bool:
@@ -2233,9 +2179,7 @@ def build_syndication_endpoint_url(base: str, endpoint: str) -> str:
 
 def build_syndication_endpoint_suffix(endpoint: str) -> str:
     """Return endpoint path suffix preserving legacy endpoint fallback behavior."""
-    return build_syndication_endpoint_suffix_for_widgets_flag(
-        endpoint == build_syndication_widgets_endpoint()
-    )
+    return build_syndication_endpoint_suffix_for_widgets_flag(endpoint == build_syndication_widgets_endpoint())
 
 
 def compose_syndication_endpoint_url(base: str, suffix: str) -> str:
@@ -2245,11 +2189,7 @@ def compose_syndication_endpoint_url(base: str, suffix: str) -> str:
 
 def build_syndication_endpoint_suffix_for_widgets_flag(is_widgets: bool) -> str:
     """Resolve endpoint suffix from widgets-selection flag."""
-    return (
-        build_syndication_widgets_tweet_path()
-        if is_widgets
-        else build_syndication_tweet_result_path()
-    )
+    return build_syndication_widgets_tweet_path() if is_widgets else build_syndication_tweet_result_path()
 
 
 def syndication_has_usable_payload(
@@ -2527,9 +2467,7 @@ def x_syn_timeout_with_offset_and_cap(value: float, offset: float, cap: float) -
     return x_syn_timeout_cap(float(value) + offset, cap)
 
 
-def build_syndication_photo_payload(
-    text: Optional[str], image_urls: List[str]
-) -> Dict[str, Any]:
+def build_syndication_photo_payload(text: Optional[str], image_urls: List[str]) -> Dict[str, Any]:
     """Build syndication-like payload consumed by the unified VL handler."""
     return {
         "text": text,
@@ -2542,9 +2480,7 @@ def build_syndication_photo_items(image_urls: List[str]) -> List[Dict[str, str]]
     return [{"url": url} for url in image_urls]
 
 
-def format_twitter_syndication_images_log_line(
-    image_urls: List[str], *, msg_id: Optional[int] = None
-) -> str:
+def format_twitter_syndication_images_log_line(image_urls: List[str], *, msg_id: Optional[int] = None) -> str:
     """Format canonical breadcrumb line for Twitter image-route detection."""
     first_host = resolve_first_image_host(image_urls)
     suffix = format_twitter_syndication_msg_suffix(msg_id)
@@ -2878,9 +2814,7 @@ def status_url_extract_regex_result_value(regex: Any) -> Any:
 
 def status_url_extract_regex_source() -> Any:
     """Return underlying regex object used for status URL extraction."""
-    return status_url_extract_regex_source_result(
-        status_url_extract_regex_source_value()
-    )
+    return status_url_extract_regex_source_result(status_url_extract_regex_source_value())
 
 
 def status_url_extract_regex_source_result(regex: Any) -> Any:
@@ -3603,9 +3537,7 @@ def append_canonicalized_value(
     )
 
 
-def append_canonicalized_unique_value(
-    *, items: List[str], canonical_value: str
-) -> None:
+def append_canonicalized_unique_value(*, items: List[str], canonical_value: str) -> None:
     """Append canonical value with uniqueness gating."""
     append_unique_str(items, canonical_value)
 

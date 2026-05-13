@@ -193,11 +193,7 @@ async def test_replace_placeholder_when_files_present():
     orig_open = _builtins.open
     try:
         _os.path.exists = lambda p: True
-        _builtins.open = lambda p, mode="rb", *a, **k: (
-            _io.BytesIO(b"dummy-audio")
-            if p == "/nonexistent.ogg"
-            else orig_open(p, mode, *a, **k)
-        )
+        _builtins.open = lambda p, mode="rb", *a, **k: _io.BytesIO(b"dummy-audio") if p == "/nonexistent.ogg" else orig_open(p, mode, *a, **k)
         await bot._execute_action(incoming, action, target_message=placeholder)
     finally:
         _os.path.exists = orig_exists
@@ -225,9 +221,7 @@ async def test_execute_action_skips_failed_typing_and_still_replies(monkeypatch)
 
         async def __aenter__(self):
             type(self).call_count += 1
-            raise _make_discord_server_error(
-                message="upstream connect error or disconnect/reset before headers. reset reason: overflow"
-            )
+            raise _make_discord_server_error(message="upstream connect error or disconnect/reset before headers. reset reason: overflow")
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -273,22 +267,15 @@ async def test_execute_action_uses_typing_indicator(monkeypatch):
             return CountingTyping()
 
     ch = CountingChannel()
-    incoming = FakeMessage(
-        channel=ch, content="hello there, please type while you are preparing the reply"
-    )
-    action = BotAction(
-        content="typing restored because this is a longer response", embeds=[]
-    )
+    incoming = FakeMessage(channel=ch, content="hello there, please type while you are preparing the reply")
+    action = BotAction(content="typing restored because this is a longer response", embeds=[])
 
     await bot._execute_action(incoming, action)
 
     assert CountingTyping.entered == 1
     assert CountingTyping.exited == 1
     assert len(ch.sent_messages) == 1
-    assert (
-        ch.sent_messages[0].content
-        == "typing restored because this is a longer response"
-    )
+    assert ch.sent_messages[0].content == "typing restored because this is a longer response"
 
 
 @pytest.mark.asyncio
@@ -316,17 +303,11 @@ async def test_execute_action_suppresses_typing_after_429(monkeypatch):
             return RateLimitedTyping()
 
     ch = RateLimitedChannel()
-    incoming = FakeMessage(
-        channel=ch, content="this is a long enough response to try typing"
-    )
-    action = BotAction(
-        content="This response is also long enough to try typing", embeds=[]
-    )
+    incoming = FakeMessage(channel=ch, content="this is a long enough response to try typing")
+    action = BotAction(content="This response is also long enough to try typing", embeds=[])
 
     await bot._execute_action(incoming, action)
-    await bot._execute_action(
-        FakeMessage(channel=ch, content="another long request"), action
-    )
+    await bot._execute_action(FakeMessage(channel=ch, content="another long request"), action)
 
     assert RateLimitedTyping.entered == 1
     assert len(ch.sent_messages) == 2

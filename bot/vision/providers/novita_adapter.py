@@ -53,9 +53,7 @@ class NovitaAdapter(BaseVisionProvider):
     def get_provider_name(self) -> VisionProvider:
         return VisionProvider.NOVITA
 
-    def _normalize_request_for_novita(
-        self, request: VisionRequest, task_type: str
-    ) -> Dict[str, Any]:
+    def _normalize_request_for_novita(self, request: VisionRequest, task_type: str) -> Dict[str, Any]:
         """Normalize and validate request parameters for Novita.ai to prevent 400 errors [IV][CMV]"""
         # Start with clean payload - remove None/empty values
         payload = {}
@@ -65,9 +63,7 @@ class NovitaAdapter(BaseVisionProvider):
             payload["steps"] = min(max(request.steps, 1), 100)  # Clamp to Novita range
 
         if hasattr(request, "guidance_scale") and request.guidance_scale is not None:
-            payload["guidance_scale"] = min(
-                max(request.guidance_scale, 1.0), 20.0
-            )  # Clamp to Novita range
+            payload["guidance_scale"] = min(max(request.guidance_scale, 1.0), 20.0)  # Clamp to Novita range
 
         # Normalize seed if provided
         if hasattr(request, "seed") and request.seed is not None:
@@ -98,9 +94,7 @@ class NovitaAdapter(BaseVisionProvider):
         elif task_type == "text_to_video":
             # Video-specific parameters
             if hasattr(request, "duration_seconds") and request.duration_seconds:
-                payload["duration"] = (
-                    f"{min(max(request.duration_seconds, 1), 10)}s"  # Novita range 1-10s
-                )
+                payload["duration"] = f"{min(max(request.duration_seconds, 1), 10)}s"  # Novita range 1-10s
 
             if hasattr(request, "fps") and request.fps:
                 payload["fps"] = min(max(request.fps, 8), 30)  # Novita FPS range
@@ -123,10 +117,7 @@ class NovitaAdapter(BaseVisionProvider):
         payload = {k: v for k, v in payload.items() if v is not None}
 
         # Debug log normalized payload (no secrets, just keys and ranges)
-        debug_payload = {
-            k: "..." if k in ["prompt", "negative_prompt"] else v
-            for k, v in payload.items()
-        }
+        debug_payload = {k: "..." if k in ["prompt", "negative_prompt"] else v for k, v in payload.items()}
         self.logger.debug(f"Normalized Novita request for {task_type}: {debug_payload}")
 
         return payload
@@ -194,9 +185,7 @@ class NovitaAdapter(BaseVisionProvider):
         except VisionError as e:
             processing_time = time.time() - start_time
             self._log_request_error(request, e, processing_time)
-            return self._create_error_response(
-                request.idempotency_key, e, processing_time
-            )
+            return self._create_error_response(request.idempotency_key, e, processing_time)
 
         except Exception as e:
             processing_time = time.time() - start_time
@@ -207,13 +196,9 @@ class NovitaAdapter(BaseVisionProvider):
                 provider=VisionProvider.NOVITA,
             )
             self._log_request_error(request, error, processing_time)
-            return self._create_error_response(
-                request.idempotency_key, error, processing_time
-            )
+            return self._create_error_response(request.idempotency_key, error, processing_time)
 
-    async def _text_to_image(
-        self, request: VisionRequest, model: str
-    ) -> VisionResponse:
+    async def _text_to_image(self, request: VisionRequest, model: str) -> VisionResponse:
         """Generate image from text using Novita.ai Qwen Image API"""
         session = await self._get_session()
 
@@ -221,9 +206,7 @@ class NovitaAdapter(BaseVisionProvider):
         payload = self._normalize_request_for_novita(request, "text_to_image")
 
         try:
-            async with session.post(
-                f"{self.base_url}/async/qwen-image-txt2img", json=payload
-            ) as resp:
+            async with session.post(f"{self.base_url}/async/qwen-image-txt2img", json=payload) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     task_id = data.get("task_id")
@@ -241,11 +224,7 @@ class NovitaAdapter(BaseVisionProvider):
                     return await self._process_image_result(result, request)
 
                 else:
-                    error_data = (
-                        await resp.json()
-                        if resp.content_type == "application/json"
-                        else {}
-                    )
+                    error_data = await resp.json() if resp.content_type == "application/json" else {}
                     raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
@@ -256,9 +235,7 @@ class NovitaAdapter(BaseVisionProvider):
                 provider=VisionProvider.NOVITA,
             )
 
-    async def _text_to_video(
-        self, request: VisionRequest, model: str
-    ) -> VisionResponse:
+    async def _text_to_video(self, request: VisionRequest, model: str) -> VisionResponse:
         """Generate video from text using Novita.ai"""
         session = await self._get_session()
 
@@ -285,20 +262,14 @@ class NovitaAdapter(BaseVisionProvider):
             payload["resolution"] = "720p"  # Default fallback
 
         # Add seed if not already set by normalizer
-        if (
-            "seed" not in payload
-            and hasattr(request, "seed")
-            and request.seed is not None
-        ):
+        if "seed" not in payload and hasattr(request, "seed") and request.seed is not None:
             try:
                 payload["seed"] = int(request.seed)
             except (ValueError, TypeError):
                 payload["seed"] = -1  # Novita default
 
         try:
-            async with session.post(
-                f"{self.base_url}/async/txt2video", json=payload
-            ) as resp:
+            async with session.post(f"{self.base_url}/async/txt2video", json=payload) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     task_id = data.get("task_id")
@@ -312,17 +283,11 @@ class NovitaAdapter(BaseVisionProvider):
                         )
 
                     # Poll for completion (video takes much longer)
-                    result = await self._poll_for_completion(
-                        task_id, max_attempts=self.max_poll_attempts
-                    )
+                    result = await self._poll_for_completion(task_id, max_attempts=self.max_poll_attempts)
                     return await self._process_video_result(result, request)
 
                 else:
-                    error_data = (
-                        await resp.json()
-                        if resp.content_type == "application/json"
-                        else {}
-                    )
+                    error_data = await resp.json() if resp.content_type == "application/json" else {}
                     raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
@@ -333,9 +298,7 @@ class NovitaAdapter(BaseVisionProvider):
                 provider=VisionProvider.NOVITA,
             )
 
-    async def _image_to_video(
-        self, request: VisionRequest, model: str
-    ) -> VisionResponse:
+    async def _image_to_video(self, request: VisionRequest, model: str) -> VisionResponse:
         """Generate video from image using Novita.ai"""
         if not request.input_image or not request.input_image.exists():
             raise VisionError(
@@ -364,29 +327,19 @@ class NovitaAdapter(BaseVisionProvider):
         payload["image_url"] = image_url
 
         # Add seed if not already set by normalizer
-        if (
-            "seed" not in payload
-            and hasattr(request, "seed")
-            and request.seed is not None
-        ):
+        if "seed" not in payload and hasattr(request, "seed") and request.seed is not None:
             try:
                 payload["seed"] = int(request.seed)
             except (ValueError, TypeError):
                 payload["seed"] = -1  # Novita default
 
         # Handle start/end mode if end image provided
-        if (
-            request.mode == "start_end"
-            and request.end_image
-            and request.end_image.exists()
-        ):
+        if request.mode == "start_end" and request.end_image and request.end_image.exists():
             end_image_url = await self._upload_image(request.end_image)
             payload["end_image_url"] = end_image_url
 
         try:
-            async with session.post(
-                f"{self.base_url}/async/img2video", json=payload
-            ) as resp:
+            async with session.post(f"{self.base_url}/async/img2video", json=payload) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     task_id = data.get("task_id")
@@ -399,17 +352,11 @@ class NovitaAdapter(BaseVisionProvider):
                             provider=VisionProvider.NOVITA,
                         )
 
-                    result = await self._poll_for_completion(
-                        task_id, max_attempts=self.max_poll_attempts
-                    )
+                    result = await self._poll_for_completion(task_id, max_attempts=self.max_poll_attempts)
                     return await self._process_video_result(result, request)
 
                 else:
-                    error_data = (
-                        await resp.json()
-                        if resp.content_type == "application/json"
-                        else {}
-                    )
+                    error_data = await resp.json() if resp.content_type == "application/json" else {}
                     raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
@@ -446,11 +393,7 @@ class NovitaAdapter(BaseVisionProvider):
 
                     return image_url
                 else:
-                    error_data = (
-                        await resp.json()
-                        if resp.content_type == "application/json"
-                        else {}
-                    )
+                    error_data = await resp.json() if resp.content_type == "application/json" else {}
                     raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
@@ -460,17 +403,13 @@ class NovitaAdapter(BaseVisionProvider):
                 user_message="Failed to upload image. Please try again.",
             )
 
-    async def _poll_for_completion(
-        self, task_id: str, max_attempts: int = 60
-    ) -> Dict[str, Any]:
+    async def _poll_for_completion(self, task_id: str, max_attempts: int = 60) -> Dict[str, Any]:
         """Poll Novita.ai task until completion [PA]"""
         session = await self._get_session()
 
         for attempt in range(max_attempts):
             try:
-                async with session.get(
-                    f"{self.base_url}/async/task-result?task_id={task_id}"
-                ) as resp:
+                async with session.get(f"{self.base_url}/async/task-result?task_id={task_id}") as resp:
                     if resp.status == 200:
                         result = await resp.json()
 
@@ -480,9 +419,7 @@ class NovitaAdapter(BaseVisionProvider):
                             self.logger.debug(f"Task {task_id} completed successfully")
                             return result
                         elif status in ["TASK_STATUS_FAILED", "TASK_STATUS_CANCELED"]:
-                            error_msg = result.get("task", {}).get(
-                                "reason", "Task failed"
-                            )
+                            error_msg = result.get("task", {}).get("reason", "Task failed")
                             raise VisionError(
                                 error_type=VisionErrorType.PROVIDER_ERROR,
                                 message=f"Novita.ai task failed: {error_msg}",
@@ -497,16 +434,12 @@ class NovitaAdapter(BaseVisionProvider):
                         ]:
                             # Still processing, wait and retry
                             progress = result.get("task", {}).get("progress", 0)
-                            self.logger.debug(
-                                f"Task {task_id} status: {status}, progress: {progress}%"
-                            )
+                            self.logger.debug(f"Task {task_id} status: {status}, progress: {progress}%")
                             await asyncio.sleep(self.polling_interval)
                             continue
                         else:
                             # Unknown status - log for debugging and treat as processing
-                            self.logger.warning(
-                                f"Unknown Novita status '{status}' for task {task_id}, treating as processing"
-                            )
+                            self.logger.warning(f"Unknown Novita status '{status}' for task {task_id}, treating as processing")
                             await asyncio.sleep(self.polling_interval)
                             continue
 
@@ -518,11 +451,7 @@ class NovitaAdapter(BaseVisionProvider):
                             provider=VisionProvider.NOVITA,
                         )
                     else:
-                        error_data = (
-                            await resp.json()
-                            if resp.content_type == "application/json"
-                            else {}
-                        )
+                        error_data = await resp.json() if resp.content_type == "application/json" else {}
                         raise await self._map_api_error(resp.status, error_data)
 
             except aiohttp.ClientError as e:
@@ -545,9 +474,7 @@ class NovitaAdapter(BaseVisionProvider):
             provider=VisionProvider.NOVITA,
         )
 
-    async def _process_image_result(
-        self, result: Dict[str, Any], request: VisionRequest
-    ) -> VisionResponse:
+    async def _process_image_result(self, result: Dict[str, Any], request: VisionRequest) -> VisionResponse:
         """Process completed image generation result"""
         artifacts_dir = Path(self.config["VISION_ARTIFACTS_DIR"])
         artifacts_dir.mkdir(parents=True, exist_ok=True)
@@ -598,18 +525,12 @@ class NovitaAdapter(BaseVisionProvider):
             )
 
         # Calculate cost (simplified)
-        model_config = self._get_model_config(
-            "text_to_image", result.get("model_name", "")
-        )
-        base_cost = (
-            model_config.get("estimated_cost_per_image", 0.03) if model_config else 0.03
-        )
+        model_config = self._get_model_config("text_to_image", result.get("model_name", ""))
+        base_cost = model_config.get("estimated_cost_per_image", 0.03) if model_config else 0.03
         actual_cost = base_cost * len(artifacts)
 
         # Get dimensions
-        dimensions = (
-            self._extract_dimensions_from_path(artifacts[0]) if artifacts else None
-        )
+        dimensions = self._extract_dimensions_from_path(artifacts[0]) if artifacts else None
 
         return VisionResponse(
             success=True,
@@ -623,9 +544,7 @@ class NovitaAdapter(BaseVisionProvider):
             provider_job_id=result.get("task", {}).get("task_id"),
         )
 
-    async def _process_video_result(
-        self, result: Dict[str, Any], request: VisionRequest
-    ) -> VisionResponse:
+    async def _process_video_result(self, result: Dict[str, Any], request: VisionRequest) -> VisionResponse:
         """Process completed video generation result"""
         artifacts_dir = Path(self.config["VISION_ARTIFACTS_DIR"])
         artifacts_dir.mkdir(parents=True, exist_ok=True)
@@ -675,17 +594,9 @@ class NovitaAdapter(BaseVisionProvider):
                 )
 
         # Calculate cost based on duration
-        task_type = (
-            "text_to_video"
-            if request.task == VisionTask.TEXT_TO_VIDEO
-            else "image_to_video"
-        )
+        task_type = "text_to_video" if request.task == VisionTask.TEXT_TO_VIDEO else "image_to_video"
         model_config = self._get_model_config(task_type, result.get("model_name", ""))
-        base_cost_per_second = (
-            model_config.get("estimated_cost_per_second", 0.50)
-            if model_config
-            else 0.50
-        )
+        base_cost_per_second = model_config.get("estimated_cost_per_second", 0.50) if model_config else 0.50
         actual_cost = base_cost_per_second * request.duration_seconds
 
         return VisionResponse(
@@ -700,19 +611,12 @@ class NovitaAdapter(BaseVisionProvider):
             provider_job_id=result.get("task", {}).get("task_id"),
         )
 
-    async def _map_api_error(
-        self, status_code: int, error_data: Dict[str, Any]
-    ) -> VisionError:
+    async def _map_api_error(self, status_code: int, error_data: Dict[str, Any]) -> VisionError:
         """Map Novita.ai API errors to VisionError [REH]"""
-        error_message = error_data.get(
-            "msg", error_data.get("message", "Unknown API error")
-        )
+        error_message = error_data.get("msg", error_data.get("message", "Unknown API error"))
 
         if status_code == 400:
-            if (
-                "inappropriate" in error_message.lower()
-                or "violation" in error_message.lower()
-            ):
+            if "inappropriate" in error_message.lower() or "violation" in error_message.lower():
                 return VisionError(
                     error_type=VisionErrorType.CONTENT_FILTERED,
                     message=f"Content filtered: {error_message}",
@@ -737,10 +641,7 @@ class NovitaAdapter(BaseVisionProvider):
 
         elif status_code == 403:
             # Payment/balance errors - NOT retryable, should trigger immediate failover [REH]
-            if (
-                "NOT_ENOUGH_BALANCE" in str(error_data)
-                or "insufficient" in error_message.lower()
-            ):
+            if "NOT_ENOUGH_BALANCE" in str(error_data) or "insufficient" in error_message.lower():
                 return VisionError(
                     error_type=VisionErrorType.QUOTA_EXCEEDED,
                     message=f"Novita.ai out of balance: {error_message}",
@@ -785,9 +686,7 @@ class NovitaAdapter(BaseVisionProvider):
         session = await self._get_session()
 
         try:
-            async with session.get(
-                f"{self.base_url}/async/task-result?task_id={provider_job_id}"
-            ) as resp:
+            async with session.get(f"{self.base_url}/async/task-result?task_id={provider_job_id}") as resp:
                 if resp.status == 200:
                     result = await resp.json()
                     task = result.get("task", {})
@@ -799,8 +698,7 @@ class NovitaAdapter(BaseVisionProvider):
                         "status": status,
                         "progress": progress,
                         "completed": status == "TASK_STATUS_SUCCEED",
-                        "failed": status
-                        in ["TASK_STATUS_FAILED", "TASK_STATUS_CANCELED"],
+                        "failed": status in ["TASK_STATUS_FAILED", "TASK_STATUS_CANCELED"],
                         "result": result if status == "TASK_STATUS_SUCCEED" else None,
                     }
                 else:

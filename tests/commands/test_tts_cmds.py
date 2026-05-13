@@ -125,9 +125,7 @@ async def test_say_command_with_text(tts_cog, mock_ctx, mock_bot, monkeypatch):
 
     mock_bot.tts_manager.is_available.return_value = True
     # TTSManager.process should return an object with audio_path
-    mock_bot.tts_manager.process = AsyncMock(
-        return_value=SimpleNamespace(audio_path="/fake/path/audio.wav")
-    )
+    mock_bot.tts_manager.process = AsyncMock(return_value=SimpleNamespace(audio_path="/fake/path/audio.wav"))
     text_to_say = "This is a direct command."
 
     await tts_cog.say.callback(tts_cog, mock_ctx, text=text_to_say)
@@ -141,17 +139,13 @@ async def test_say_command_with_text(tts_cog, mock_ctx, mock_bot, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_say_command_timeout_meta_forwarding(
-    tts_cog, mock_ctx, mock_bot, monkeypatch
-):
+async def test_say_command_timeout_meta_forwarding(tts_cog, mock_ctx, mock_bot, monkeypatch):
     """Verify that '!say' forwards timeout meta to TTSManager.process."""
     mock_discord_file = MagicMock()
     monkeypatch.setattr("discord.File", mock_discord_file)
 
     mock_bot.tts_manager.is_available.return_value = True
-    mock_bot.tts_manager.process = AsyncMock(
-        return_value=SimpleNamespace(audio_path="/fake/path/audio.wav")
-    )
+    mock_bot.tts_manager.process = AsyncMock(return_value=SimpleNamespace(audio_path="/fake/path/audio.wav"))
 
     await tts_cog.say.callback(
         tts_cog,
@@ -203,15 +197,11 @@ async def test_tts_group_no_text(tts_cog, mock_ctx):
     """Verify that '!tts' without text sends a help message."""
     await tts_cog.tts_group.callback(tts_cog, mock_ctx, text=None)
 
-    mock_ctx.send.assert_called_once_with(
-        "Please specify 'on', 'off', or text to speak."
-    )
+    mock_ctx.send.assert_called_once_with("Please specify 'on', 'off', or text to speak.")
 
 
 @pytest.mark.asyncio
-async def test_say_disabled_on_server_short_circuits(
-    tts_cog, mock_ctx, mock_bot, monkeypatch
-):
+async def test_say_disabled_on_server_short_circuits(tts_cog, mock_ctx, mock_bot, monkeypatch):
     mock_ctx.guild = SimpleNamespace(id=321)
     monkeypatch.setattr(
         "bot.commands.tts_cmds.is_server_feature_enabled",
@@ -225,18 +215,14 @@ async def test_say_disabled_on_server_short_circuits(
 
 
 @pytest.mark.asyncio
-async def test_say_native_voice_publish_success(
-    tts_cog, mock_ctx, mock_bot, monkeypatch
-):
+async def test_say_native_voice_publish_success(tts_cog, mock_ctx, mock_bot, monkeypatch):
     """When VoiceMessagePublisher.publish succeeds, the command should return without sending a file."""
     # Patch discord.File to avoid filesystem operations if fallback were used
     monkeypatch.setattr("discord.File", MagicMock())
 
     # Ensure TTS is available and returns an audio path
     mock_bot.tts_manager.is_available.return_value = True
-    mock_bot.tts_manager.process = AsyncMock(
-        return_value=SimpleNamespace(audio_path="/fake/path/audio.wav")
-    )
+    mock_bot.tts_manager.process = AsyncMock(return_value=SimpleNamespace(audio_path="/fake/path/audio.wav"))
 
     # Mock guild and channel permission checks to allow sending in channel
     # Make isinstance(ctx.guild, discord.Guild) == True by patching the class used in the module
@@ -247,9 +233,7 @@ async def test_say_native_voice_publish_success(
     mock_ctx.guild.me = MagicMock()
     # Channel permissions: allow send + attach
     mock_ctx.channel = MagicMock()
-    mock_ctx.channel.permissions_for = MagicMock(
-        return_value=SimpleNamespace(send_messages=True, attach_files=True)
-    )
+    mock_ctx.channel.permissions_for = MagicMock(return_value=SimpleNamespace(send_messages=True, attach_files=True))
 
     # Inject a mocked voice publisher instance on the cog
     publish_res = SimpleNamespace(ok=True, message=None, ogg_path=None)
@@ -266,9 +250,7 @@ async def test_say_native_voice_publish_success(
 
 
 @pytest.mark.asyncio
-async def test_say_native_voice_publish_fallback_to_file(
-    tts_cog, mock_ctx, mock_bot, monkeypatch
-):
+async def test_say_native_voice_publish_fallback_to_file(tts_cog, mock_ctx, mock_bot, monkeypatch):
     """If native voice publish reports not ok, fall back to sending an attachment in channel."""
     # Patch discord.File to avoid filesystem and assert call
     mock_discord_file = MagicMock()
@@ -276,18 +258,14 @@ async def test_say_native_voice_publish_fallback_to_file(
 
     # Ensure TTS is available and returns an audio path
     mock_bot.tts_manager.is_available.return_value = True
-    mock_bot.tts_manager.process = AsyncMock(
-        return_value=SimpleNamespace(audio_path="/fake/path/audio.wav")
-    )
+    mock_bot.tts_manager.process = AsyncMock(return_value=SimpleNamespace(audio_path="/fake/path/audio.wav"))
 
     # Mock guild and channel permission checks to allow sending in channel
     monkeypatch.setattr("bot.commands.tts_cmds.discord.Guild", MagicMock)
     mock_ctx.guild = MagicMock()
     mock_ctx.guild.me = MagicMock()
     mock_ctx.channel = MagicMock()
-    mock_ctx.channel.permissions_for = MagicMock(
-        return_value=SimpleNamespace(send_messages=True, attach_files=True)
-    )
+    mock_ctx.channel.permissions_for = MagicMock(return_value=SimpleNamespace(send_messages=True, attach_files=True))
 
     # Inject a mocked voice publisher that returns ok=False to trigger fallback
     publish_res = SimpleNamespace(ok=False, message=None, ogg_path=None)

@@ -19,12 +19,7 @@ async def web_search(query: str, max_results: int = 5) -> List[SearchResult]:
     """
     search_url = "https://html.duckduckgo.com/html/"
     params = {"q": query, "kl": os.getenv("SEARCH_LOCALE", "us-en")}
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        )
-    }
+    headers = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")}
 
     results: List[SearchResult] = []
     async with aiohttp.ClientSession() as session:

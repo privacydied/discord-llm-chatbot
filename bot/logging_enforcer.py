@@ -136,9 +136,7 @@ class PrettyConsoleHandler(RichHandler):
     def __init__(self, console: Optional[Console] = None, **kwargs):
         """Initialize with custom console settings. [CA]"""
         if console is None:
-            console = Console(
-                stderr=True, force_terminal=True, width=120, legacy_windows=False
-            )
+            console = Console(stderr=True, force_terminal=True, width=120, legacy_windows=False)
 
         rich_tracebacks = _rich_tracebacks_supported()
         super().__init__(
@@ -224,16 +222,10 @@ class LoggingEnforcer:
         active_handlers = self.root_logger.handlers
 
         # Check for pretty handler
-        pretty_active = any(
-            isinstance(h, (RichHandler, PrettyConsoleHandler)) for h in active_handlers
-        )
+        pretty_active = any(isinstance(h, (RichHandler, PrettyConsoleHandler)) for h in active_handlers)
 
         # Check for JSON handler
-        jsonl_active = any(
-            isinstance(h, logging.FileHandler)
-            and isinstance(h.formatter, StructuredJsonFormatter)
-            for h in active_handlers
-        )
+        jsonl_active = any(isinstance(h, logging.FileHandler) and isinstance(h.formatter, StructuredJsonFormatter) for h in active_handlers)
 
         if not pretty_active:
             print(
@@ -270,12 +262,8 @@ class LoggingEnforcer:
         return {
             "total_handlers": len(handlers),
             "handler_types": [type(h).__name__ for h in handlers],
-            "pretty_handler_active": any(
-                isinstance(h, (RichHandler, PrettyConsoleHandler)) for h in handlers
-            ),
-            "jsonl_handler_active": any(
-                isinstance(h, logging.FileHandler) for h in handlers
-            ),
+            "pretty_handler_active": any(isinstance(h, (RichHandler, PrettyConsoleHandler)) for h in handlers),
+            "jsonl_handler_active": any(isinstance(h, logging.FileHandler) for h in handlers),
             "root_level": self.root_logger.level,
             "log_dir": str(self.log_dir),
             "enforcement_compliant": len(handlers) >= 2,

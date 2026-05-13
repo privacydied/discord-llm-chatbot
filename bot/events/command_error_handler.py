@@ -98,9 +98,7 @@ class CommandErrorHandler:
         self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
         self._command_usage_stats = {}  # Track command usage for analytics
 
-    async def handle_command_error(
-        self, ctx: commands.Context, error: Exception
-    ) -> None:
+    async def handle_command_error(self, ctx: commands.Context, error: Exception) -> None:
         """
         Main error handler dispatching to specific handlers.
 
@@ -143,14 +141,10 @@ class CommandErrorHandler:
 
         except Exception as handler_error:
             # [REH] Error handler must never crash
-            self.logger.critical(
-                f"🚨 Error handler failed: {handler_error}", exc_info=True
-            )
+            self.logger.critical(f"🚨 Error handler failed: {handler_error}", exc_info=True)
             await self._send_fallback_error_message(ctx)
 
-    async def _log_command_error(
-        self, ctx: commands.Context, error: Exception, error_type: str
-    ) -> None:
+    async def _log_command_error(self, ctx: commands.Context, error: Exception, error_type: str) -> None:
         """Log error with rich context information."""
         # Create structured log entry
 
@@ -173,9 +167,7 @@ class CommandErrorHandler:
         else:
             self.logger.error(error_tree.strip(), exc_info=True)
 
-    async def _handle_command_not_found(
-        self, ctx: commands.Context, error: commands.CommandNotFound
-    ) -> None:
+    async def _handle_command_not_found(self, ctx: commands.Context, error: commands.CommandNotFound) -> None:
         """
         Handle command not found with smart suggestions.
 
@@ -200,9 +192,7 @@ class CommandErrorHandler:
             template = self.ERROR_MESSAGES["command_not_found_suggestion"]
             embed = discord.Embed(
                 title=f"{template['emoji']} {template['title']}",
-                description=template["description"].format(
-                    suggestions="`, `".join(suggestions[:3])
-                ),
+                description=template["description"].format(suggestions="`, `".join(suggestions[:3])),
                 color=template["color"],
             )
         else:
@@ -232,15 +222,11 @@ class CommandErrorHandler:
             all_commands.extend(command.aliases)
 
         # Find close matches
-        suggestions = get_close_matches(
-            attempted_command, all_commands, n=3, cutoff=0.6
-        )
+        suggestions = get_close_matches(attempted_command, all_commands, n=3, cutoff=0.6)
 
         return suggestions
 
-    async def _handle_missing_permissions(
-        self, ctx: commands.Context, error: commands.MissingPermissions
-    ) -> None:
+    async def _handle_missing_permissions(self, ctx: commands.Context, error: commands.MissingPermissions) -> None:
         """Handle missing user permissions."""
         template = self.ERROR_MESSAGES["missing_permissions"]
         embed = discord.Embed(
@@ -250,9 +236,7 @@ class CommandErrorHandler:
         )
 
         # Add specific permissions info without being too technical
-        missing_perms = [
-            perm.replace("_", " ").title() for perm in error.missing_permissions
-        ]
+        missing_perms = [perm.replace("_", " ").title() for perm in error.missing_permissions]
         if len(missing_perms) <= 3:  # Don't overwhelm user
             embed.add_field(
                 name="Required Permissions",
@@ -262,9 +246,7 @@ class CommandErrorHandler:
 
         await ctx.send(embed=embed, delete_after=30)
 
-    async def _handle_bot_missing_permissions(
-        self, ctx: commands.Context, error: commands.BotMissingPermissions
-    ) -> None:
+    async def _handle_bot_missing_permissions(self, ctx: commands.Context, error: commands.BotMissingPermissions) -> None:
         """Handle missing bot permissions."""
         template = self.ERROR_MESSAGES["bot_missing_permissions"]
         embed = discord.Embed(
@@ -273,9 +255,7 @@ class CommandErrorHandler:
             color=template["color"],
         )
 
-        missing_perms = [
-            perm.replace("_", " ").title() for perm in error.missing_permissions
-        ]
+        missing_perms = [perm.replace("_", " ").title() for perm in error.missing_permissions]
         embed.add_field(
             name="Bot Needs These Permissions",
             value=", ".join(missing_perms[:3]),  # Limit to avoid embed size issues
@@ -284,9 +264,7 @@ class CommandErrorHandler:
 
         await ctx.send(embed=embed)
 
-    async def _handle_command_on_cooldown(
-        self, ctx: commands.Context, error: commands.CommandOnCooldown
-    ) -> None:
+    async def _handle_command_on_cooldown(self, ctx: commands.Context, error: commands.CommandOnCooldown) -> None:
         """Handle command cooldown with helpful timing."""
         # Log cooldown hits at WARNING level for monitoring
         self.logger.warning(
@@ -297,9 +275,7 @@ class CommandErrorHandler:
         )
 
         retry_secs = int(error.retry_after)
-        await ctx.send(
-            f"⏳ This command is on cooldown. Try again in {retry_secs} seconds."
-        )
+        await ctx.send(f"⏳ This command is on cooldown. Try again in {retry_secs} seconds.")
 
     async def _handle_bad_argument(
         self,
@@ -314,24 +290,18 @@ class CommandErrorHandler:
         template = self.ERROR_MESSAGES["bad_argument"]
         embed = discord.Embed(
             title=f"{template['emoji']} {template['title']}",
-            description=template["description"].format(
-                prefix=prefix, command=ctx.command.name if ctx.command else "unknown"
-            ),
+            description=template["description"].format(prefix=prefix, command=ctx.command.name if ctx.command else "unknown"),
             color=template["color"],
         )
 
         # Add specific error details if not too technical
         error_msg = str(error)
-        if len(error_msg) < 200 and not any(
-            x in error_msg.lower() for x in ["traceback", "exception", "error"]
-        ):
+        if len(error_msg) < 200 and not any(x in error_msg.lower() for x in ["traceback", "exception", "error"]):
             embed.add_field(name="Issue", value=error_msg, inline=False)
 
         await ctx.send(embed=embed, delete_after=30)
 
-    async def _handle_missing_required_argument(
-        self, ctx: commands.Context, error: commands.MissingRequiredArgument
-    ) -> None:
+    async def _handle_missing_required_argument(self, ctx: commands.Context, error: commands.MissingRequiredArgument) -> None:
         """Handle missing required arguments with parameter info."""
         prefix = await self.bot.get_prefix(ctx.message)
         if isinstance(prefix, list):
@@ -340,21 +310,15 @@ class CommandErrorHandler:
         template = self.ERROR_MESSAGES["missing_required_argument"]
         embed = discord.Embed(
             title=f"{template['emoji']} {template['title']}",
-            description=template["description"].format(
-                prefix=prefix, command=ctx.command.name if ctx.command else "unknown"
-            ),
+            description=template["description"].format(prefix=prefix, command=ctx.command.name if ctx.command else "unknown"),
             color=template["color"],
         )
 
-        embed.add_field(
-            name="Missing Parameter", value=f"`{error.param.name}`", inline=False
-        )
+        embed.add_field(name="Missing Parameter", value=f"`{error.param.name}`", inline=False)
 
         await ctx.send(embed=embed, delete_after=30)
 
-    async def _handle_disabled_command(
-        self, ctx: commands.Context, error: commands.DisabledCommand
-    ) -> None:
+    async def _handle_disabled_command(self, ctx: commands.Context, error: commands.DisabledCommand) -> None:
         """Handle disabled commands."""
         template = self.ERROR_MESSAGES["disabled_command"]
         embed = discord.Embed(
@@ -364,9 +328,7 @@ class CommandErrorHandler:
         )
         await ctx.send(embed=embed, delete_after=20)
 
-    async def _handle_check_failure(
-        self, ctx: commands.Context, error: commands.CheckFailure
-    ) -> None:
+    async def _handle_check_failure(self, ctx: commands.Context, error: commands.CheckFailure) -> None:
         """Handle check failures (custom permission checks)."""
         template = self.ERROR_MESSAGES["check_failure"]
         embed = discord.Embed(
@@ -376,9 +338,7 @@ class CommandErrorHandler:
         )
         await ctx.send(embed=embed, delete_after=20)
 
-    async def _handle_command_invoke_error(
-        self, ctx: commands.Context, error: commands.CommandInvokeError
-    ) -> None:
+    async def _handle_command_invoke_error(self, ctx: commands.Context, error: commands.CommandInvokeError) -> None:
         """
         Handle command invocation errors (internal command failures).
 
@@ -406,13 +366,9 @@ class CommandErrorHandler:
             exc_info=error.original,
         )
 
-    async def _handle_unknown_error(
-        self, ctx: commands.Context, error: Exception
-    ) -> None:
+    async def _handle_unknown_error(self, ctx: commands.Context, error: Exception) -> None:
         """Handle unknown/unexpected errors."""
-        template = self.ERROR_MESSAGES[
-            "command_invoke_error"
-        ]  # Use generic error template
+        template = self.ERROR_MESSAGES["command_invoke_error"]  # Use generic error template
         embed = discord.Embed(
             title=f"{template['emoji']} Unexpected Error",
             description="An unexpected error occurred. This has been logged for investigation.",
@@ -422,9 +378,7 @@ class CommandErrorHandler:
         await ctx.send(embed=embed, delete_after=30)
 
         # Log with full context for debugging
-        self.logger.error(
-            f"Unknown error in command {ctx.command}: {error}", exc_info=True
-        )
+        self.logger.error(f"Unknown error in command {ctx.command}: {error}", exc_info=True)
 
     async def _send_fallback_error_message(self, ctx: commands.Context) -> None:
         """Send ultra-simple fallback message if embed creation fails."""
@@ -442,9 +396,7 @@ class CommandErrorHandler:
 
         # Log stats periodically for monitoring
         if sum(self._command_usage_stats.values()) % 100 == 0:  # Every 100 errors
-            self.logger.info(
-                f"📊 Error stats: {dict(list(self._command_usage_stats.items())[-5:])}"
-            )
+            self.logger.info(f"📊 Error stats: {dict(list(self._command_usage_stats.items())[-5:])}")
 
     def get_error_statistics(self) -> dict:
         """Get error statistics for monitoring dashboard."""

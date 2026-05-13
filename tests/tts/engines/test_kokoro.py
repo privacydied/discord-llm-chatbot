@@ -30,9 +30,7 @@ class TestKokoroEngine(unittest.IsolatedAsyncioTestCase):
         self.engine.load()
 
         # Verify
-        mock_kokoro.assert_called_once_with(
-            model_path=self.model_path, voices_path=self.voices_path
-        )
+        mock_kokoro.assert_called_once_with(model_path=self.model_path, voices_path=self.voices_path)
         self.assertEqual(mock_instance.tokenizer, self.tokenizer)
         self.assertEqual(self.engine.engine, mock_instance)
 

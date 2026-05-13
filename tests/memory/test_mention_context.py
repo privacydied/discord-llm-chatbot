@@ -381,9 +381,7 @@ async def test_bot_filter_excludes_others_keeps_ours():
         guild,
         reference=SimpleNamespace(message_id=root.id),
     )
-    trigger = FakeMessage(
-        704, a, "ok", now, ch, guild, reference=SimpleNamespace(message_id=ours.id)
-    )
+    trigger = FakeMessage(704, a, "ok", now, ch, guild, reference=SimpleNamespace(message_id=ours.id))
     items.extend([root, bot_msg, ours, trigger])
     trigger.mentions = [our_bot_user]
 
@@ -410,9 +408,7 @@ async def test_timeout_fallback_clean():
     items = []
     ch = SlowChannel(1007, items)
     root = FakeMessage(801, a, "root", now - timedelta(minutes=3), ch, guild)
-    trigger = FakeMessage(
-        803, a, "ok", now, ch, guild, reference=SimpleNamespace(message_id=root.id)
-    )
+    trigger = FakeMessage(803, a, "ok", now, ch, guild, reference=SimpleNamespace(message_id=root.id))
     items.extend([root, trigger])
     trigger.mentions = [SimpleNamespace(id=bot.user.id)]
 
@@ -433,9 +429,7 @@ async def test_merge_dedup_within_block():
     ch = FakeChannel(1008, items, channel_type=discord.ChannelType.public_thread)
 
     m0 = FakeMessage(901, a, "m0", now - timedelta(minutes=2), ch, guild)
-    dup_m0 = FakeMessage(
-        901, a, "m0", now - timedelta(minutes=1, seconds=30), ch, guild
-    )
+    dup_m0 = FakeMessage(901, a, "m0", now - timedelta(minutes=1, seconds=30), ch, guild)
     m1 = FakeMessage(902, a, "m1", now - timedelta(minutes=1), ch, guild)
     items.extend([m0, dup_m0, m1])
     trigger = m1

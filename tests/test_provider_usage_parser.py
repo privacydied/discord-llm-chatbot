@@ -26,9 +26,7 @@ class TestProviderUsageParser:
         mock_provider = Mock()
         mock_provider.value = "openai"
 
-        result = parser.parse_usage(
-            provider=mock_provider, task=VisionTask.TEXT_TO_IMAGE, usage_data=usage_data
-        )
+        result = parser.parse_usage(provider=mock_provider, task=VisionTask.TEXT_TO_IMAGE, usage_data=usage_data)
 
         assert result.to_float() == pytest.approx(0.15, rel=1e-4)
 
@@ -40,9 +38,7 @@ class TestProviderUsageParser:
         mock_provider = Mock()
         mock_provider.value = "openai"
 
-        result = parser.parse_usage(
-            provider=mock_provider, task=VisionTask.TEXT_TO_IMAGE, usage_data=usage_data
-        )
+        result = parser.parse_usage(provider=mock_provider, task=VisionTask.TEXT_TO_IMAGE, usage_data=usage_data)
 
         # (1000/1000)*0.01 + (500/1000)*0.03 = 0.01 + 0.015 = 0.025
         assert result.to_float() == pytest.approx(0.025, rel=1e-4)
@@ -84,9 +80,7 @@ class TestProviderUsageParser:
         """Test parsing Novita usage with credits"""
         usage_data = {"credits": 5.0}
 
-        with patch.object(
-            parser.pricing_table, "normalize_provider_usage"
-        ) as mock_norm:
+        with patch.object(parser.pricing_table, "normalize_provider_usage") as mock_norm:
             mock_norm.return_value = Money(0.01)  # 5 credits * $0.002/credit
 
             result = parser.parse_usage(
@@ -97,20 +91,14 @@ class TestProviderUsageParser:
             )
 
             assert result.to_float() == pytest.approx(0.01, rel=1e-4)
-            mock_norm.assert_called_once_with(
-                provider=VisionProvider.NOVITA, usage_value=5.0, usage_unit="credits"
-            )
+            mock_norm.assert_called_once_with(provider=VisionProvider.NOVITA, usage_value=5.0, usage_unit="credits")
 
     def test_parse_novita_usage_steps_fallback(self, parser):
         """Test parsing Novita usage with steps fallback"""
         usage_data = {"steps": 100}
 
-        with patch.object(
-            parser.pricing_table, "normalize_provider_usage"
-        ) as mock_norm:
-            mock_norm.return_value = Money(
-                0.0002
-            )  # 100 steps * 0.001 credits/step * $0.002/credit
+        with patch.object(parser.pricing_table, "normalize_provider_usage") as mock_norm:
+            mock_norm.return_value = Money(0.0002)  # 100 steps * 0.001 credits/step * $0.002/credit
 
             result = parser.parse_usage(
                 provider=VisionProvider.NOVITA,
@@ -221,9 +209,7 @@ class TestProviderUsageParser:
 
         usage_data = {"cost": 0.10}
 
-        result = parser.parse_usage(
-            provider=mock_provider, task=VisionTask.TEXT_TO_IMAGE, usage_data=usage_data
-        )
+        result = parser.parse_usage(provider=mock_provider, task=VisionTask.TEXT_TO_IMAGE, usage_data=usage_data)
 
         assert result.to_float() == pytest.approx(0.0, rel=1e-4)
 
@@ -255,9 +241,7 @@ class TestProviderUsageParser:
         response = Mock()
         response.usage = {"cost": 0.15}
 
-        usage_data = parser.extract_usage_from_response(
-            provider=VisionProvider.TOGETHER, response=response
-        )
+        usage_data = parser.extract_usage_from_response(provider=VisionProvider.TOGETHER, response=response)
 
         assert usage_data["cost"] == 0.15
 
@@ -267,12 +251,8 @@ class TestProviderUsageParser:
         response.metadata = {"cost": 0.015, "credits": 5.0, "gpu_seconds": 10.2}
 
         # Mock hasattr to return False for 'usage' but True for 'metadata'
-        with patch(
-            "builtins.hasattr", side_effect=lambda obj, attr: attr == "metadata"
-        ):
-            usage_data = parser.extract_usage_from_response(
-                provider=VisionProvider.NOVITA, response=response
-            )
+        with patch("builtins.hasattr", side_effect=lambda obj, attr: attr == "metadata"):
+            usage_data = parser.extract_usage_from_response(provider=VisionProvider.NOVITA, response=response)
 
             assert usage_data["cost"] == 0.015
             assert usage_data["credits"] == 5.0
@@ -285,12 +265,8 @@ class TestProviderUsageParser:
         response.credits_consumed = 3.5
 
         # Mock hasattr to return True for 'credits_consumed'
-        with patch(
-            "builtins.hasattr", side_effect=lambda obj, attr: attr == "credits_consumed"
-        ):
-            usage_data = parser.extract_usage_from_response(
-                provider=VisionProvider.NOVITA, response=response
-            )
+        with patch("builtins.hasattr", side_effect=lambda obj, attr: attr == "credits_consumed"):
+            usage_data = parser.extract_usage_from_response(provider=VisionProvider.NOVITA, response=response)
 
             assert usage_data["credits"] == 3.5
 

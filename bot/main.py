@@ -65,9 +65,7 @@ async def main(bot_ref: Optional[Dict[str, LLMBot]] = None) -> NoReturn:
         logger.critical(f"Unhandled exception during bot startup: {e}", exc_info=True)
         shutdown_logging_and_exit(1)
     except Exception as e:
-        logger.critical(
-            f"A fatal error occurred during startup validation: {e}", exc_info=True
-        )
+        logger.critical(f"A fatal error occurred during startup validation: {e}", exc_info=True)
         shutdown_logging_and_exit(1)
 
     intents = create_bot_intents()
@@ -97,9 +95,7 @@ async def main(bot_ref: Optional[Dict[str, LLMBot]] = None) -> NoReturn:
     base_delay = 5  # seconds
     for attempt in range(max_retries):
         try:
-            logger.info(
-                f"Connecting to Discord... (Attempt {attempt + 1}/{max_retries})"
-            )
+            logger.info(f"Connecting to Discord... (Attempt {attempt + 1}/{max_retries})")
             logger.info("🚀 Bot is ready and operational!")
 
             # This call blocks until bot disconnects
@@ -117,9 +113,7 @@ async def main(bot_ref: Optional[Dict[str, LLMBot]] = None) -> NoReturn:
             logger.warning(f"Connection failed, retrying in {delay}s...")
             await asyncio.sleep(delay)
         except Exception as e:
-            logger.critical(
-                f"Unexpected error during bot execution: {e}", exc_info=True
-            )
+            logger.critical(f"Unexpected error during bot execution: {e}", exc_info=True)
             shutdown_logging_and_exit(1)
 
     # If all retries failed

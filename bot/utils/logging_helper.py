@@ -59,9 +59,7 @@ def log_commands_setup(
             status_icon = "✅" if success else "❌"
             cogs_branch.add(f"{status_icon} {cog_name}")
 
-        loaded_count = sum(
-            1 for _, success in normalized_modules + normalized_cogs if success
-        )
+        loaded_count = sum(1 for _, success in normalized_modules + normalized_cogs if success)
         failed_count = len(normalized_modules + normalized_cogs) - loaded_count
 
         summary_branch = tree.add("📊 [magenta]Summary[/magenta]")
@@ -72,16 +70,12 @@ def log_commands_setup(
 
         console.print(panel)
 
-        logger.info(
-            f"✅ Command setup visualization complete: {total_commands} commands from {len(normalized_cogs)} cogs"
-        )
+        logger.info(f"✅ Command setup visualization complete: {total_commands} commands from {len(normalized_cogs)} cogs")
 
     except Exception as e:
         logger.error(f"❌ Failed to generate command setup report: {e}")
         # Fallback to simple logging if Rich display fails
-        logger.info(
-            f"✅ Loaded {total_commands} commands from {len(command_cogs)} cogs"
-        )
+        logger.info(f"✅ Loaded {total_commands} commands from {len(command_cogs)} cogs")
 
 
 def log_startup_banner(console: Console, bot_name: str, version: str = "1.0.0") -> None:
@@ -128,15 +122,11 @@ def log_shutdown_banner(console: Console, exit_code: int = 0) -> None:
             border_style = "green"
             title = "[bold green]✅ Graceful Shutdown[/bold green]"
         else:
-            banner_text = Text(
-                f"🚨 Bot Shutdown (Exit Code: {exit_code})", style="bold red"
-            )
+            banner_text = Text(f"🚨 Bot Shutdown (Exit Code: {exit_code})", style="bold red")
             border_style = "red"
             title = "[bold red]❌ Error Shutdown[/bold red]"
 
-        panel = Panel(
-            banner_text, title=title, border_style=border_style, padding=(1, 2)
-        )
+        panel = Panel(banner_text, title=title, border_style=border_style, padding=(1, 2))
 
         console.print()
         console.print(panel)

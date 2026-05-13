@@ -38,12 +38,8 @@ class TestMemory(unittest.IsolatedAsyncioTestCase):
 
         # Create a temporary directory for test data
         self.test_dir = tempfile.TemporaryDirectory()
-        os.environ["USER_PROFILE_DIR"] = os.path.join(
-            self.test_dir.name, "user_profiles"
-        )
-        os.environ["SERVER_PROFILE_DIR"] = os.path.join(
-            self.test_dir.name, "server_profiles"
-        )
+        os.environ["USER_PROFILE_DIR"] = os.path.join(self.test_dir.name, "user_profiles")
+        os.environ["SERVER_PROFILE_DIR"] = os.path.join(self.test_dir.name, "server_profiles")
         os.environ["USER_LOGS_DIR"] = os.path.join(self.test_dir.name, "user_logs")
         os.environ["TEMP_DIR"] = os.path.join(self.test_dir.name, "temp")
 
@@ -132,9 +128,7 @@ class TestOllamaIntegration(unittest.IsolatedAsyncioTestCase):
         mock_post.return_value.__aenter__.return_value = mock_response_obj
 
         # Call the method
-        response = await self.ollama.generate(
-            prompt="Test prompt", model="llama3", max_tokens=100
-        )
+        response = await self.ollama.generate(prompt="Test prompt", model="llama3", max_tokens=100)
 
         # Verify the response
         self.assertEqual(response["text"], "This is a test response.")

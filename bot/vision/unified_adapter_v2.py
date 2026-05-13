@@ -130,9 +130,7 @@ class UnifiedVisionAdapter:
             model=request.model,
         )
 
-    def normalize_provider_cost(
-        self, provider: VisionProvider, response: VisionResponse
-    ) -> Money:
+    def normalize_provider_cost(self, provider: VisionProvider, response: VisionResponse) -> Money:
         """
         Normalize provider's actual cost to USD [REH]
 
@@ -156,9 +154,7 @@ class UnifiedVisionAdapter:
             usage_data = response.usage
 
         # Use pricing table to normalize
-        normalized_cost = self.pricing_table.normalize_provider_usage(
-            provider=provider, usage_data=usage_data
-        )
+        normalized_cost = self.pricing_table.normalize_provider_usage(provider=provider, usage_data=usage_data)
 
         # If still zero, estimate based on task
         if normalized_cost.is_zero() and response.success:
@@ -235,33 +231,25 @@ class UnifiedVisionAdapter:
                     ]
 
                 if request.task not in supported_tasks:
-                    logger.debug(
-                        f"Provider {provider_name} does not support {request.task.value}"
-                    )
+                    logger.debug(f"Provider {provider_name} does not support {request.task.value}")
                     continue
 
                 # Strict pricing gating - fail fast if no pricing exists
                 try:
                     estimated_cost = self.estimate_cost(provider_enum, request)
                     if estimated_cost.is_zero():
-                        logger.info(
-                            f"provider.select | task={request.task.value} selected=none reason=no_pricing provider={provider_name}"
-                        )
+                        logger.info(f"provider.select | task={request.task.value} selected=none reason=no_pricing provider={provider_name}")
                         selection_reason = "no_pricing"
                         continue
                 except Exception:
-                    logger.info(
-                        f"provider.select | task={request.task.value} selected=none reason=no_pricing provider={provider_name}"
-                    )
+                    logger.info(f"provider.select | task={request.task.value} selected=none reason=no_pricing provider={provider_name}")
                     selection_reason = "no_pricing"
                     continue
 
                 # Provider selected successfully
                 selected_provider = provider_name
                 selection_reason = "supports_capability"
-                logger.info(
-                    f"provider.select | task={request.task.value} selected={provider_name} reason=supports_capability"
-                )
+                logger.info(f"provider.select | task={request.task.value} selected={provider_name} reason=supports_capability")
 
                 # Update request with estimate (budget reserve only when estimate exists)
                 request.estimated_cost = estimated_cost.to_float()  # For compatibility
@@ -279,21 +267,15 @@ class UnifiedVisionAdapter:
 
                 if response.success:
                     # Normalize actual cost
-                    normalized_cost = self.normalize_provider_cost(
-                        provider_enum, response
-                    )
+                    normalized_cost = self.normalize_provider_cost(provider_enum, response)
 
                     # Update response with normalized cost
-                    response.actual_cost = (
-                        normalized_cost.to_float()
-                    )  # For compatibility
+                    response.actual_cost = normalized_cost.to_float()  # For compatibility
                     response.actual_cost_money = normalized_cost  # New Money field
 
                     # Check discrepancy
                     discrepancy_ratio = normalized_cost.ratio_to(estimated_cost)
-                    warning_threshold = (
-                        self.pricing_table.get_warning_discrepancy_ratio()
-                    )
+                    warning_threshold = self.pricing_table.get_warning_discrepancy_ratio()
 
                     if discrepancy_ratio > warning_threshold:
                         logger.warning(
@@ -315,9 +297,7 @@ class UnifiedVisionAdapter:
                     return response
                 else:
                     last_error = response.error
-                    logger.warning(
-                        f"Provider {provider_name} failed", error=str(response.error)
-                    )
+                    logger.warning(f"Provider {provider_name} failed", error=str(response.error))
 
             except Exception as e:
                 logger.error(f"Error with provider {provider_name}: {e}")
@@ -329,9 +309,7 @@ class UnifiedVisionAdapter:
 
         # Log final selection result if no provider was selected
         if not selected_provider:
-            logger.info(
-                f"provider.select | task={request.task.value} selected=none reason={selection_reason}"
-            )
+            logger.info(f"provider.select | task={request.task.value} selected=none reason={selection_reason}")
 
         # Early fail with clean user message
         if selection_reason == "no_capability":
@@ -392,9 +370,7 @@ class UnifiedVisionAdapter:
 
         # Check for model override
         if hasattr(self, "resolve_model_selection"):
-            model_selection = self.resolve_model_selection(
-                self.normalize_request(request)
-            )
+            model_selection = self.resolve_model_selection(self.normalize_request(request))
             if model_selection:
                 return [model_selection.provider]
 
@@ -413,9 +389,7 @@ class UnifiedVisionAdapter:
 
         return resolved_order
 
-    def _get_provider_order_with_health_check(
-        self, request: VisionRequest
-    ) -> List[str]:
+    def _get_provider_order_with_health_check(self, request: VisionRequest) -> List[str]:
         """Get provider order with credential and health filtering [REH][IV]"""
         # Get base provider order
         base_order = self._get_provider_order(request)
@@ -429,9 +403,7 @@ class UnifiedVisionAdapter:
 
                 # Check if provider has valid credentials
                 if not self._has_valid_credentials(provider_name):
-                    self.logger.debug(
-                        f"Provider {provider_name} filtered: missing/invalid credentials"
-                    )
+                    self.logger.debug(f"Provider {provider_name} filtered: missing/invalid credentials")
                     continue
 
                 # Check if provider is healthy (basic health check)
@@ -441,9 +413,7 @@ class UnifiedVisionAdapter:
 
                 # Provider passed all checks
                 filtered_order.append(provider_name)
-                self.logger.debug(
-                    f"Provider {provider_name} passed credential/health checks"
-                )
+                self.logger.debug(f"Provider {provider_name} passed credential/health checks")
 
             except Exception as e:
                 self.logger.warning(f"Error checking provider {provider_name}: {e}")

@@ -59,9 +59,7 @@ class VectorDocument:
         version_hash = hashlib.sha256(chunk_text.encode("utf-8")).hexdigest()
 
         # Convert embedding to list
-        embedding_list = (
-            embedding.tolist() if isinstance(embedding, np.ndarray) else embedding
-        )
+        embedding_list = embedding.tolist() if isinstance(embedding, np.ndarray) else embedding
 
         # Add standard metadata fields
         metadata.update(
@@ -110,12 +108,8 @@ class VectorDocument:
             version_hash=data["version_hash"],
             chunk_index=data["chunk_index"],
             confidence_score=data.get("confidence_score", 1.0),
-            created_at=datetime.fromisoformat(
-                data.get("created_at", datetime.utcnow().isoformat())
-            ),
-            updated_at=datetime.fromisoformat(
-                data.get("updated_at", datetime.utcnow().isoformat())
-            ),
+            created_at=datetime.fromisoformat(data.get("created_at", datetime.utcnow().isoformat())),
+            updated_at=datetime.fromisoformat(data.get("updated_at", datetime.utcnow().isoformat())),
         )
 
     def get_embedding_array(self) -> np.ndarray:
@@ -128,9 +122,7 @@ class HybridSearchConfig:
     """Configuration for hybrid vector + keyword search."""
 
     # Vector search parameters
-    vector_confidence_threshold: float = (
-        0.3  # Lowered from 0.7 to work with L2 distance conversion
-    )
+    vector_confidence_threshold: float = 0.3  # Lowered from 0.7 to work with L2 distance conversion
     max_vector_results: int = 5
     vector_weight: float = 0.7
 
@@ -162,12 +154,8 @@ class HybridSearchConfig:
     enforce_guild_scoping: bool = True
 
     # Performance & Loading [RAG]
-    eager_vector_load: bool = (
-        True  # Load vector index at startup vs lazy load on first search
-    )
-    background_indexing: bool = (
-        True  # Process new documents asynchronously vs synchronously
-    )
+    eager_vector_load: bool = True  # Load vector index at startup vs lazy load on first search
+    background_indexing: bool = True  # Process new documents asynchronously vs synchronously
 
     # Background Processing [RAG]
     indexing_queue_size: int = 1000  # Maximum items in indexing queue
@@ -236,12 +224,13 @@ class SearchResult:
         max_snippet = 200
         try:
             from ..config import load_config as _rag_snippet_config
+
             _rc = _rag_snippet_config()
             max_snippet = int(_rc.get("RAG_MAX_SNIPPET_CHARS", 200))
         except Exception:
             pass
         if len(text) > max_snippet:
-            return text[:max_snippet - 3] + "..."
+            return text[: max_snippet - 3] + "..."
         return text
 
     @property
@@ -289,9 +278,7 @@ class ChunkingResult:
         metadata = {
             "original_length": len(text),
             "num_chunks": len(chunks),
-            "avg_chunk_length": sum(len(chunk) for chunk in chunks) / len(chunks)
-            if chunks
-            else 0,
+            "avg_chunk_length": sum(len(chunk) for chunk in chunks) / len(chunks) if chunks else 0,
             **source_metadata,
         }
 

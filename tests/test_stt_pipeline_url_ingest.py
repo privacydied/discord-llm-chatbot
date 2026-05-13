@@ -101,9 +101,7 @@ async def test_ensure_manager_ready_or_raise_passes_when_ready() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ensure_manager_ready_or_raise_raises_inference_error_when_not_ready() -> (
-    None
-):
+async def test_ensure_manager_ready_or_raise_raises_inference_error_when_not_ready() -> None:
     job = _Job()
 
     async def _ensure_ready(_manager) -> bool:

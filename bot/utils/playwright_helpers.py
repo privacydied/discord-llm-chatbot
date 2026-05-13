@@ -143,23 +143,23 @@ async def connect_browser(browser_type: BrowserType) -> Optional[Browser]:
         return browser
     except Exception as exc:
         # Rate-limit repeated Playwright connection warnings [Phase 18]
-        _rate_limit_warn(
-            "Playwright remote server unreachable at %s: %s", ws_url, exc
-        )
+        _rate_limit_warn("Playwright remote server unreachable at %s: %s", ws_url, exc)
         return None
 
 
 # Phase 16: Resource blocking patterns for text-only extraction.
 # Blocks heavy/unnecessary resources to reduce bandwidth and memory.
-_PW_BLOCKED_RESOURCE_TYPES = frozenset([
-    "image",
-    "font",
-    "media",         # audio/video
-    "stylesheets",   # CSS (not needed for text extraction)
-    "websocket",
-    "manifest",
-    "other",
-])
+_PW_BLOCKED_RESOURCE_TYPES = frozenset(
+    [
+        "image",
+        "font",
+        "media",  # audio/video
+        "stylesheets",  # CSS (not needed for text extraction)
+        "websocket",
+        "manifest",
+        "other",
+    ]
+)
 
 
 async def create_text_only_context(

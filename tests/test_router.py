@@ -80,32 +80,24 @@ async def test_command_handling(
     should_delegate_to_cog,
 ):
     """Test router's handling of static, cog, and ignored commands."""
-    mock_parse_command.return_value = ParsedCommand(
-        command=command_type, cleaned_content="Hello"
-    )
+    mock_parse_command.return_value = ParsedCommand(command=command_type, cleaned_content="Hello")
 
     if command_type == Command.CHAT:
         # For a standard chat, we need to mock the full flow
         router._flows["process_text"] = AsyncMock(return_value=expected_text)
-        with patch.object(
-            router, "_get_input_modality", return_value=InputModality.TEXT_ONLY
-        ):
+        with patch.object(router, "_get_input_modality", return_value=InputModality.TEXT_ONLY):
             response = await router.dispatch_message(mock_message)
     else:
         response = await router.dispatch_message(mock_message)
 
     if should_be_none:
-        assert response is None, (
-            f"Expected None for command {command_type.name}, but got a response."
-        )
+        assert response is None, f"Expected None for command {command_type.name}, but got a response."
     elif should_delegate_to_cog:
         assert response is not None
         assert isinstance(response, BotAction)
         assert response.meta.get("delegated_to_cog") is True
     else:
-        assert response is not None, (
-            f"Expected a response for command {command_type.name}, but got None."
-        )
+        assert response is not None, f"Expected a response for command {command_type.name}, but got None."
         # HELP is handled specially: just check it returns non-empty text.
         if command_type == Command.HELP:
             assert isinstance(response.text, str)
@@ -116,9 +108,7 @@ async def test_command_handling(
 
 @pytest.mark.asyncio
 @patch("bot.router.parse_command")
-async def test_alert_delegates_without_custom_parse(
-    mock_parse_command, router, mock_message
-):
+async def test_alert_delegates_without_custom_parse(mock_parse_command, router, mock_message):
     mock_parse_command.return_value = None
 
     mock_message.guild = MagicMock(spec=discord.Guild)
@@ -165,9 +155,7 @@ async def test_router_typing_rate_limit_is_non_fatal(router, mock_message):
 
     with (
         patch.object(router, "_should_process_message", return_value=True),
-        patch.object(
-            router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)
-        ),
+        patch.object(router, "_compat_dispatch_for_tests", AsyncMock(return_value=None)),
         patch.object(
             router,
             "_resolve_scope_and_target",
@@ -191,9 +179,7 @@ async def test_router_typing_rate_limit_is_non_fatal(router, mock_message):
 
 @pytest.mark.asyncio
 @patch("bot.router.parse_command")
-async def test_alert_delegates_without_custom_parse(
-    mock_parse_command, router, mock_message
-):
+async def test_alert_delegates_without_custom_parse(mock_parse_command, router, mock_message):
     mock_parse_command.return_value = None
 
     mock_message.guild = MagicMock(spec=discord.Guild)
@@ -227,9 +213,7 @@ async def test_modality_flows(
     expected_output,
 ):
     """Verify that each input modality is routed to the correct processing flow."""
-    mock_parse_command.return_value = ParsedCommand(
-        command=Command.CHAT, cleaned_content="Test content"
-    )
+    mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test content")
 
     if modality == InputModality.GENERAL_URL:
         mock_message.content = "https://example.com"
@@ -238,9 +222,7 @@ async def test_modality_flows(
     mock_flow_method = AsyncMock(return_value=expected_output)
     router._flows[flow_key] = mock_flow_method
 
-    with patch.object(
-        router, "_get_input_modality", return_value=modality
-    ) as mock_get_modality:
+    with patch.object(router, "_get_input_modality", return_value=modality) as mock_get_modality:
         response = await router.dispatch_message(mock_message)
 
     mock_get_modality.assert_called_once_with(mock_message)
@@ -251,21 +233,13 @@ async def test_modality_flows(
 
 @pytest.mark.asyncio
 @patch("bot.router.parse_command")
-async def test_no_processed_text_returns_error(
-    mock_parse_command, router, mock_message
-):
+async def test_no_processed_text_returns_error(mock_parse_command, router, mock_message):
     """Test that if a flow returns no text, a user-friendly error is returned."""
-    mock_parse_command.return_value = ParsedCommand(
-        command=Command.CHAT, cleaned_content="Test"
-    )
+    mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
 
-    router._flows["process_text"] = AsyncMock(
-        return_value=None
-    )  # Simulate a flow failure
+    router._flows["process_text"] = AsyncMock(return_value=None)  # Simulate a flow failure
 
-    with patch.object(
-        router, "_get_input_modality", return_value=InputModality.TEXT_ONLY
-    ):
+    with patch.object(router, "_get_input_modality", return_value=InputModality.TEXT_ONLY):
         response = await router.dispatch_message(mock_message)
 
     assert response is not None
@@ -274,21 +248,13 @@ async def test_no_processed_text_returns_error(
 
 @pytest.mark.asyncio
 @patch("bot.router.parse_command")
-async def test_exception_in_flow_returns_error(
-    mock_parse_command, router, mock_message
-):
+async def test_exception_in_flow_returns_error(mock_parse_command, router, mock_message):
     """Test that an exception during processing returns a generic error message."""
-    mock_parse_command.return_value = ParsedCommand(
-        command=Command.CHAT, cleaned_content="Test"
-    )
+    mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
 
-    router._flows["process_text"] = AsyncMock(
-        side_effect=Exception("Critical failure!")
-    )
+    router._flows["process_text"] = AsyncMock(side_effect=Exception("Critical failure!"))
 
-    with patch.object(
-        router, "_get_input_modality", return_value=InputModality.TEXT_ONLY
-    ):
+    with patch.object(router, "_get_input_modality", return_value=InputModality.TEXT_ONLY):
         response = await router.dispatch_message(mock_message)
 
     assert response is not None
@@ -299,15 +265,11 @@ async def test_exception_in_flow_returns_error(
 @patch("bot.router.parse_command")
 async def test_empty_string_prevention(mock_parse_command, router, mock_message):
     """Verify empty string responses are converted to error messages."""
-    mock_parse_command.return_value = ParsedCommand(
-        command=Command.CHAT, cleaned_content="Test"
-    )
+    mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
 
     router._flows["process_text"] = AsyncMock(return_value="")  # Empty string
 
-    with patch.object(
-        router, "_get_input_modality", return_value=InputModality.TEXT_ONLY
-    ):
+    with patch.object(router, "_get_input_modality", return_value=InputModality.TEXT_ONLY):
         response = await router.dispatch_message(mock_message)
 
     assert response is not None
@@ -318,24 +280,16 @@ async def test_empty_string_prevention(mock_parse_command, router, mock_message)
 @patch("bot.router.parse_command")
 async def test_error_embed_generation(mock_parse_command, router, mock_message):
     """Verify error conditions generate proper error content."""
-    mock_parse_command.return_value = ParsedCommand(
-        command=Command.CHAT, cleaned_content="Test"
-    )
+    mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
 
     router._flows["process_text"] = AsyncMock(return_value=None)  # Simulate failure
 
-    with patch.object(
-        router, "_get_input_modality", return_value=InputModality.TEXT_ONLY
-    ):
+    with patch.object(router, "_get_input_modality", return_value=InputModality.TEXT_ONLY):
         response = await router.dispatch_message(mock_message)
 
     assert response is not None
     # Error responses may use embeds or content depending on code path
-    has_error = (
-        hasattr(response, "content")
-        and response.content
-        and "Error" in response.content
-    ) or (hasattr(response, "embeds") and response.embeds)
+    has_error = (hasattr(response, "content") and response.content and "Error" in response.content) or (hasattr(response, "embeds") and response.embeds)
     assert has_error, "Error responses should include error content or embeds"
 
 
@@ -365,9 +319,7 @@ async def test_dm_plain_text_reply():
 
 
 @pytest.mark.asyncio
-async def test_flow_process_attachments_multimodal_accepts_raw_content_arg(
-    router, mock_message
-):
+async def test_flow_process_attachments_multimodal_accepts_raw_content_arg(router, mock_message):
     mock_message.attachments = []
     res = await router._flow_process_attachments_multimodal(mock_message, "")
     assert isinstance(res, BotAction)
@@ -421,9 +373,7 @@ class TestExtractionOnlyTimeout:
     async def test_extraction_only_timeout_cancels_hung_handler(self, mock_bot):
         """If an extraction handler hangs, asyncio.wait_for cancels it and
         the item is recorded as failed (partial-success preserved)."""
-        router = Router(
-            bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test")
-        )
+        router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
 
         # Mock _handle_item_with_provider to hang forever
         async def _hang_forever(*args, **kwargs):
@@ -442,26 +392,18 @@ class TestExtractionOnlyTimeout:
 
             source = inspect.getsource(router._process_multimodal_message_internal)
             # Verify asyncio.wait_for wraps extraction-only handler calls
-            assert "asyncio.wait_for" in source, (
-                "extraction-only items must use asyncio.wait_for"
-            )
-            assert "asyncio.TimeoutError" in source, (
-                "must catch asyncio.TimeoutError for extraction items"
-            )
+            assert "asyncio.wait_for" in source, "extraction-only items must use asyncio.wait_for"
+            assert "asyncio.TimeoutError" in source, "must catch asyncio.TimeoutError for extraction items"
         finally:
             os.environ.pop("MULTIMODAL_PER_ITEM_BUDGET", None)
 
     @pytest.mark.asyncio
     async def test_extraction_only_success_within_budget(self, mock_bot):
         """Extraction-only items that complete within budget succeed normally."""
-        router = Router(
-            bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test")
-        )
+        router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
         router._handle_item_with_provider = AsyncMock(return_value="extracted text")
         import inspect
 
         source = inspect.getsource(router._process_multimodal_message_internal)
         # Verify timeout=selected_budget is passed (not hardcoded)
-        assert "timeout=selected_budget" in source, (
-            "timeout must use selected_budget per modality"
-        )
+        assert "timeout=selected_budget" in source, "timeout must use selected_budget per modality"

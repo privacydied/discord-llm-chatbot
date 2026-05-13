@@ -13,12 +13,8 @@ def parse_arguments():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Discord LLM Bot")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging.")
-    parser.add_argument(
-        "--config-check", action="store_true", help="Validate configuration and exit."
-    )
-    parser.add_argument(
-        "--version", action="store_true", help="Show version info and exit."
-    )
+    parser.add_argument("--config-check", action="store_true", help="Validate configuration and exit.")
+    parser.add_argument("--version", action="store_true", help="Show version info and exit.")
     return parser.parse_args()
 
 
@@ -49,9 +45,7 @@ def validate_configuration_only():
             # Hide sensitive values like tokens
             if "TOKEN" in key or "SECRET" in key:
                 value = "********"
-            logger.info(
-                f"  • {key}: {value}", extra={"subsys": "core", "event": "config_valid"}
-            )
+            logger.info(f"  • {key}: {value}", extra={"subsys": "core", "event": "config_valid"})
 
         logger.info(
             f"  • Log level: {config.get('LOG_LEVEL', 'INFO')}",

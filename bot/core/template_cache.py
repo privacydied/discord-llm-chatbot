@@ -56,9 +56,7 @@ class TemplateCache:
     def __init__(self, max_cache_size: int = 100):
         self.cache: Dict[str, CachedTemplate] = {}
         self.max_cache_size = max_cache_size
-        self.executor = ThreadPoolExecutor(
-            max_workers=2, thread_name_prefix="template-proc"
-        )
+        self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="template-proc")
 
         # Performance metrics
         self.stats = {
@@ -135,9 +133,7 @@ class TemplateCache:
             "optimization_ratio": len(static_lines) / len(lines) if lines else 0,
         }
 
-    async def _compile_template_async(
-        self, content: str, template_id: str, file_path: Optional[str] = None
-    ) -> CachedTemplate:
+    async def _compile_template_async(self, content: str, template_id: str, file_path: Optional[str] = None) -> CachedTemplate:
         """Compile template in thread pool for CPU-intensive work [PA]."""
         loop = asyncio.get_event_loop()
 
@@ -178,13 +174,9 @@ class TemplateCache:
             # Update stats
             self.stats["compilations"] += 1
             old_avg = self.stats["avg_compile_time_ms"]
-            self.stats["avg_compile_time_ms"] = (
-                old_avg * (self.stats["compilations"] - 1) + compile_time_ms
-            ) / self.stats["compilations"]
+            self.stats["avg_compile_time_ms"] = (old_avg * (self.stats["compilations"] - 1) + compile_time_ms) / self.stats["compilations"]
 
-            logger.debug(
-                f"✅ Template compiled: {template_id} ({compile_time_ms}ms, {len(variables)} vars)"
-            )
+            logger.debug(f"✅ Template compiled: {template_id} ({compile_time_ms}ms, {len(variables)} vars)")
 
             return cached_template
 
@@ -196,9 +188,7 @@ class TemplateCache:
             return
 
         # Sort by last_used timestamp
-        sorted_templates = sorted(
-            self.cache.items(), key=lambda x: x[1].metadata.last_used
-        )
+        sorted_templates = sorted(self.cache.items(), key=lambda x: x[1].metadata.last_used)
 
         # Remove oldest 20% of cache
         evict_count = max(1, len(self.cache) // 5)
@@ -245,9 +235,7 @@ class TemplateCache:
                     # Content changed, recompile
                     del self.cache[template_id]
                 else:
-                    logger.debug(
-                        f"✅ Template cache HIT: {template_id} ({cached_template.metadata.hit_count} hits)"
-                    )
+                    logger.debug(f"✅ Template cache HIT: {template_id} ({cached_template.metadata.hit_count} hits)")
                     return cached_template
 
         # Cache miss - compile template
@@ -258,16 +246,10 @@ class TemplateCache:
         timing_manager = get_timing_manager()
 
         if tracker:
-            async with timing_manager.track_phase(
-                tracker, "TEMPLATE_COMPILE", template_id=template_id, persona=persona
-            ):
-                cached_template = await self._compile_template_async(
-                    content, template_id, file_path
-                )
+            async with timing_manager.track_phase(tracker, "TEMPLATE_COMPILE", template_id=template_id, persona=persona):
+                cached_template = await self._compile_template_async(content, template_id, file_path)
         else:
-            cached_template = await self._compile_template_async(
-                content, template_id, file_path
-            )
+            cached_template = await self._compile_template_async(content, template_id, file_path)
 
         # Add to cache with eviction if needed
         self._evict_least_used()
@@ -275,9 +257,7 @@ class TemplateCache:
 
         return cached_template
 
-    async def preload_templates(
-        self, template_files: List[str], personas: List[str] = None
-    ):
+    async def preload_templates(self, template_files: List[str], personas: List[str] = None):
         """Preload multiple templates for better startup performance [PA]."""
         if personas is None:
             personas = ["default"]
@@ -302,9 +282,7 @@ class TemplateCache:
     def get_stats(self) -> Dict[str, Any]:
         """Get cache performance statistics."""
         total_requests = self.stats["cache_hits"] + self.stats["cache_misses"]
-        hit_rate = (
-            self.stats["cache_hits"] / total_requests if total_requests > 0 else 0
-        )
+        hit_rate = self.stats["cache_hits"] / total_requests if total_requests > 0 else 0
 
         return {
             "cache_size": len(self.cache),
@@ -326,9 +304,7 @@ class OptimizedPromptBuilder:
 
     def __init__(self, template_cache: TemplateCache):
         self.template_cache = template_cache
-        self.static_sections_cache: Dict[
-            str, str
-        ] = {}  # Cache for deterministic sections
+        self.static_sections_cache: Dict[str, str] = {}  # Cache for deterministic sections
 
     def _build_context_section(
         self,
@@ -360,11 +336,7 @@ class OptimizedPromptBuilder:
 
         if history:
             # Limit history by token budget [CMV]
-            max_tokens = (
-                PC.HISTORY_MAX_TOKENS_DM
-                if not guild_id
-                else PC.HISTORY_MAX_TOKENS_GUILD
-            )
+            max_tokens = PC.HISTORY_MAX_TOKENS_DM if not guild_id else PC.HISTORY_MAX_TOKENS_GUILD
 
             # Simple token estimation (4 chars ≈ 1 token)
             history_text = ""
@@ -398,9 +370,7 @@ class OptimizedPromptBuilder:
         """Build optimized prompt using cached templates [PA]."""
 
         # Get cached template
-        template = await self.template_cache.get_template(
-            file_path=template_file, persona=persona, tracker=tracker
-        )
+        template = await self.template_cache.get_template(file_path=template_file, persona=persona, tracker=tracker)
 
         # Build context section with caching
         context_section = self._build_context_section(
@@ -412,9 +382,7 @@ class OptimizedPromptBuilder:
         )
 
         # Use pre-compiled static sections when possible [PA]
-        if template.static_prefix and not any(
-            var in template.static_prefix for var in ["{", "$"]
-        ):
+        if template.static_prefix and not any(var in template.static_prefix for var in ["{", "$"]):
             # Pure static prefix - use as-is
             system_prompt = template.static_prefix
         else:

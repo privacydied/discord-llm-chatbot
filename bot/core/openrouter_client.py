@@ -55,14 +55,9 @@ class CircuitBreakerStats:
         self.total_failures += 1
 
         # Check if should open circuit [REH]
-        if (
-            self.state == CircuitState.CLOSED
-            and self.failure_count >= PC.OR_BREAKER_FAILURE_WINDOW
-        ):
+        if self.state == CircuitState.CLOSED and self.failure_count >= PC.OR_BREAKER_FAILURE_WINDOW:
             self.state = CircuitState.OPEN
-            logger.warning(
-                f"⚠️ Circuit breaker OPEN - {self.failure_count} consecutive failures"
-            )
+            logger.warning(f"⚠️ Circuit breaker OPEN - {self.failure_count} consecutive failures")
 
     def should_attempt_request(self) -> bool:
         """Check if request should be attempted based on circuit state."""
@@ -119,9 +114,7 @@ class OptimizedOpenRouterClient:
 
         # Model configurations [CMV]
         self.model_configs = {
-            "gpt-4": ModelConfig(
-                "gpt-4", max_tokens=1000, fallback_model="gpt-3.5-turbo"
-            ),
+            "gpt-4": ModelConfig("gpt-4", max_tokens=1000, fallback_model="gpt-3.5-turbo"),
             "gpt-3.5-turbo": ModelConfig("gpt-3.5-turbo", max_tokens=800),
             "deepseek/deepseek-chat-v3-0324:free": ModelConfig(
                 "deepseek/deepseek-chat-v3-0324:free",
@@ -180,9 +173,7 @@ class OptimizedOpenRouterClient:
         """Get configuration for model with fallback."""
         return self.model_configs.get(model, ModelConfig(model))
 
-    async def _retry_with_backoff(
-        self, model: str, request_func, max_retries: int = None
-    ):
+    async def _retry_with_backoff(self, model: str, request_func, max_retries: int = None):
         """Execute request with exponential backoff retry logic [REH]."""
         if max_retries is None:
             max_retries = PC.OR_MAX_RETRIES
@@ -207,9 +198,7 @@ class OptimizedOpenRouterClient:
                     jitter = delay * 0.1 * (0.5 - asyncio.get_event_loop().time() % 1)
                     wait_time = delay + jitter
 
-                    logger.debug(
-                        f"🔄 Retry {attempt + 1}/{max_retries} for {model} in {wait_time:.2f}s"
-                    )
+                    logger.debug(f"🔄 Retry {attempt + 1}/{max_retries} for {model} in {wait_time:.2f}s")
                     await asyncio.sleep(wait_time)
                 else:
                     logger.error(f"❌ All {max_retries} retries exhausted for {model}")
@@ -252,9 +241,7 @@ class OptimizedOpenRouterClient:
         # Default: retry on unknown errors
         return True
 
-    async def _make_request_with_fallback(
-        self, model: str, messages: list, **kwargs
-    ) -> Dict[str, Any]:
+    async def _make_request_with_fallback(self, model: str, messages: list, **kwargs) -> Dict[str, Any]:
         """Make request with automatic model fallback [REH]."""
         model_config = self._get_model_config(model)
 
@@ -268,24 +255,18 @@ class OptimizedOpenRouterClient:
             if model_config.fallback_model:
                 logger.info(f"🔄 Falling back to {model_config.fallback_model}")
                 try:
-                    result = await self._make_single_request(
-                        model_config.fallback_model, messages, **kwargs
-                    )
+                    result = await self._make_single_request(model_config.fallback_model, messages, **kwargs)
                     # Mark as fallback in response
                     result["fallback_used"] = True
                     result["original_model"] = model
                     return result
                 except Exception as fallback_error:
-                    logger.error(
-                        f"❌ Fallback model also failed: {str(fallback_error)}"
-                    )
+                    logger.error(f"❌ Fallback model also failed: {str(fallback_error)}")
                     raise
             else:
                 raise
 
-    async def _make_single_request(
-        self, model: str, messages: list, **kwargs
-    ) -> Dict[str, Any]:
+    async def _make_single_request(self, model: str, messages: list, **kwargs) -> Dict[str, Any]:
         """Make single request to OpenRouter API."""
         circuit_breaker = self._get_circuit_breaker(model)
 
@@ -302,27 +283,19 @@ class OptimizedOpenRouterClient:
             "messages": messages,
             "max_tokens": kwargs.get("max_tokens", model_config.max_tokens),
             "temperature": kwargs.get("temperature", model_config.temperature),
-            **{
-                k: v
-                for k, v in kwargs.items()
-                if k not in ["max_tokens", "temperature"]
-            },
+            **{k: v for k, v in kwargs.items() if k not in ["max_tokens", "temperature"]},
         }
 
         start_time = time.time()
 
         try:
-            async with self.session.post(
-                f"{self.base_url}/chat/completions", json=payload
-            ) as response:
+            async with self.session.post(f"{self.base_url}/chat/completions", json=payload) as response:
                 response_time_ms = int((time.time() - start_time) * 1000)
 
                 # Update pool stats [PA]
                 self.pool_stats["requests_total"] += 1
                 old_avg = self.pool_stats["avg_response_time_ms"]
-                self.pool_stats["avg_response_time_ms"] = (
-                    old_avg * (self.pool_stats["requests_total"] - 1) + response_time_ms
-                ) / self.pool_stats["requests_total"]
+                self.pool_stats["avg_response_time_ms"] = (old_avg * (self.pool_stats["requests_total"] - 1) + response_time_ms) / self.pool_stats["requests_total"]
 
                 if response.status == 200:
                     data = await response.json()
@@ -335,9 +308,7 @@ class OptimizedOpenRouterClient:
 
                     # Check for slow response warning [REH]
                     if response_time_ms > PC.OR_WARN_SLOW_MS:
-                        logger.warning(
-                            f"⚠️ Slow OpenRouter response: {response_time_ms}ms (model: {model})"
-                        )
+                        logger.warning(f"⚠️ Slow OpenRouter response: {response_time_ms}ms (model: {model})")
 
                     return data
                 else:
@@ -363,15 +334,11 @@ class OptimizedOpenRouterClient:
         timing_manager = get_timing_manager()
 
         if tracker:
-            async with timing_manager.track_phase(
-                tracker, PC.PHASE_LLM_CALL, model=model, message_count=len(messages)
-            ) as phase_metric:
+            async with timing_manager.track_phase(tracker, PC.PHASE_LLM_CALL, model=model, message_count=len(messages)) as phase_metric:
                 try:
                     result = await self._retry_with_backoff(
                         model,
-                        lambda: self._make_request_with_fallback(
-                            model, messages, **kwargs
-                        ),
+                        lambda: self._make_request_with_fallback(model, messages, **kwargs),
                     )
 
                     # Add metrics to phase

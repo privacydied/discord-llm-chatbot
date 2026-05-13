@@ -66,9 +66,7 @@ def _get_configured_admin_ids(config: Optional[dict] = None) -> Set[int]:
                 pass
 
     # ALERT_ADMIN_USER_IDS
-    alert_admin = config.get("ALERT_ADMIN_USER_IDS") or config.get(
-        "alert_admin_user_ids", ""
-    )
+    alert_admin = config.get("ALERT_ADMIN_USER_IDS") or config.get("alert_admin_user_ids", "")
     if isinstance(alert_admin, str):
         for aid in alert_admin.split(","):
             aid_str = aid.strip()
@@ -233,9 +231,7 @@ async def check_admin_async(
     if reply_channel is not None:
         if ephemeral and isinstance(reply_channel, discord.Interaction):
             try:
-                await reply_channel.response.send_message(
-                    "Permission denied.", ephemeral=True
-                )
+                await reply_channel.response.send_message("Permission denied.", ephemeral=True)
             except discord.InteractionResponded:
                 pass
         else:

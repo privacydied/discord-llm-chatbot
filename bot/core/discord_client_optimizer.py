@@ -139,13 +139,10 @@ class OptimizedDiscordSender:
 
         await asyncio.sleep(total_wait)
 
-    def _should_skip_enrichment(
-        self, content: str, options: SendOptions
-    ) -> Dict[str, bool]:
+    def _should_skip_enrichment(self, content: str, options: SendOptions) -> Dict[str, bool]:
         """Determine which enrichments to skip for performance [PA]."""
         skip_decisions = {
-            "embeds": options.skip_embeds
-            or len(content) < 50,  # Skip embeds for short messages
+            "embeds": options.skip_embeds or len(content) < 50,  # Skip embeds for short messages
             "files": options.skip_files,
             "typing": options.skip_typing or len(content) < 30,  # Very short messages
             "preview_fetch": len(content) < 100,  # Skip URL previews for short messages
@@ -157,9 +154,7 @@ class OptimizedDiscordSender:
 
         return skip_decisions
 
-    async def _send_with_typing(
-        self, channel, content: str, skip_typing: bool, **kwargs
-    ):
+    async def _send_with_typing(self, channel, content: str, skip_typing: bool, **kwargs):
         """Send message with optional typing indicator [PA]."""
         if skip_typing or len(content) < 30:
             # Direct send for short messages - no typing indicator
@@ -205,9 +200,7 @@ class OptimizedDiscordSender:
 
         try:
             # Send with or without typing
-            message = await self._send_with_typing(
-                channel, content, skip_decisions["typing"], **send_kwargs
-            )
+            message = await self._send_with_typing(channel, content, skip_decisions["typing"], **send_kwargs)
 
             # Update stats
             send_time_ms = int((time.time() - start_time) * 1000)
@@ -231,28 +224,20 @@ class OptimizedDiscordSender:
             bucket.reset_at = time.time() + retry_after
 
             # Retry once
-            return await self._send_message_direct(
-                channel, content, options, embeds, files, **kwargs
-            )
+            return await self._send_message_direct(channel, content, options, embeds, files, **kwargs)
 
         except HTTPException as e:
             # Handle other HTTP errors [REH]
             if e.status == 429:  # Additional rate limit handling
                 retry_after = float(e.response.headers.get("retry-after", 1))
                 await asyncio.sleep(retry_after + random.uniform(0.1, 0.3))
-                return await self._send_message_direct(
-                    channel, content, options, embeds, files, **kwargs
-                )
+                return await self._send_message_direct(channel, content, options, embeds, files, **kwargs)
             else:
-                self._update_send_stats(
-                    int((time.time() - start_time) * 1000), success=False
-                )
+                self._update_send_stats(int((time.time() - start_time) * 1000), success=False)
                 raise
 
         except Exception as e:
-            self._update_send_stats(
-                int((time.time() - start_time) * 1000), success=False
-            )
+            self._update_send_stats(int((time.time() - start_time) * 1000), success=False)
             logger.error(f"❌ Discord send error: {e}")
             raise
 
@@ -264,9 +249,7 @@ class OptimizedDiscordSender:
             # Update rolling average
             old_avg = self.session_stats["avg_send_time_ms"]
             msg_count = self.session_stats["messages_sent"]
-            self.session_stats["avg_send_time_ms"] = (
-                old_avg * (msg_count - 1) + send_time_ms
-            ) / msg_count
+            self.session_stats["avg_send_time_ms"] = (old_avg * (msg_count - 1) + send_time_ms) / msg_count
 
     @asynccontextmanager
     async def send_message_optimized(
@@ -302,9 +285,7 @@ class OptimizedDiscordSender:
                 try:
                     # Set timeout for phase
                     message = await asyncio.wait_for(
-                        self._send_message_direct(
-                            channel, content, options, embeds, files, **kwargs
-                        ),
+                        self._send_message_direct(channel, content, options, embeds, files, **kwargs),
                         timeout=options.timeout_ms / 1000,
                     )
 
@@ -312,13 +293,7 @@ class OptimizedDiscordSender:
                     phase_metric.metadata.update(
                         {
                             "discord_msg_id": message.id,
-                            "enrichments_skipped": sum(
-                                1
-                                for skip in self._should_skip_enrichment(
-                                    content, options
-                                ).values()
-                                if skip
-                            ),
+                            "enrichments_skipped": sum(1 for skip in self._should_skip_enrichment(content, options).values() if skip),
                             "rate_limit_bucket": self._get_route_key(channel.id),
                         }
                     )
@@ -327,9 +302,7 @@ class OptimizedDiscordSender:
 
                 except asyncio.TimeoutError:
                     phase_metric.metadata["timeout"] = True
-                    logger.error(
-                        f"❌ Discord send timeout after {options.timeout_ms}ms"
-                    )
+                    logger.error(f"❌ Discord send timeout after {options.timeout_ms}ms")
                     raise
                 except Exception as e:
                     phase_metric.metadata["error_type"] = type(e).__name__
@@ -337,22 +310,16 @@ class OptimizedDiscordSender:
         else:
             # Direct send without tracking
             message = await asyncio.wait_for(
-                self._send_message_direct(
-                    channel, content, options, embeds, files, **kwargs
-                ),
+                self._send_message_direct(channel, content, options, embeds, files, **kwargs),
                 timeout=options.timeout_ms / 1000,
             )
             yield message
 
-    async def send_simple_text(
-        self, channel, content: str, tracker: Optional[PipelineTracker] = None
-    ) -> discord.Message:
+    async def send_simple_text(self, channel, content: str, tracker: Optional[PipelineTracker] = None) -> discord.Message:
         """Optimized send for simple text messages [PA]."""
         options = SendOptions.for_simple_text(len(content))
 
-        async with self.send_message_optimized(
-            channel, content, tracker, options
-        ) as message:
+        async with self.send_message_optimized(channel, content, tracker, options) as message:
             return message
 
     async def send_multimodal_response(
@@ -366,17 +333,13 @@ class OptimizedDiscordSender:
         """Optimized send for multimodal responses [PA]."""
         options = SendOptions.for_multimodal()
 
-        async with self.send_message_optimized(
-            channel, content, tracker, options, embeds, files
-        ) as message:
+        async with self.send_message_optimized(channel, content, tracker, options, embeds, files) as message:
             return message
 
     def get_stats(self) -> Dict[str, Any]:
         """Get Discord sender performance statistics."""
         total_buckets = len(self.rate_limit_buckets)
-        active_rate_limits = sum(
-            1 for bucket in self.rate_limit_buckets.values() if bucket.is_rate_limited()
-        )
+        active_rate_limits = sum(1 for bucket in self.rate_limit_buckets.values() if bucket.is_rate_limited())
 
         return {
             "messages_sent": self.session_stats["messages_sent"],
@@ -409,9 +372,7 @@ class MessagePriorityQueue:
             while self.is_processing:
                 try:
                     # Get next message with timeout
-                    priority, timestamp, send_task = await asyncio.wait_for(
-                        self.queue.get(), timeout=1.0
-                    )
+                    priority, timestamp, send_task = await asyncio.wait_for(self.queue.get(), timeout=1.0)
 
                     # Execute send task
                     await send_task
@@ -447,9 +408,7 @@ class MessagePriorityQueue:
 
         async def send_task():
             options = SendOptions(priority=priority)
-            async with self.sender.send_message_optimized(
-                channel, content, tracker, options, **kwargs
-            ) as message:
+            async with self.sender.send_message_optimized(channel, content, tracker, options, **kwargs) as message:
                 return message
 
         await self.queue.put((priority, timestamp, send_task()))

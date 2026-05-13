@@ -3,9 +3,7 @@ import pytest
 from bot.router import BotAction, ResponseMessage
 
 
-@pytest.mark.skip(
-    reason="ResponseMessage is now a standalone class, not a BotAction alias"
-)
+@pytest.mark.skip(reason="ResponseMessage is now a standalone class, not a BotAction alias")
 class TestResponseMessageCompat(unittest.TestCase):
     def test_alias(self):
         """Test that ResponseMessage is an alias for BotAction."""

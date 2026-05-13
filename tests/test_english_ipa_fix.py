@@ -31,9 +31,7 @@ def test_english_ipa_fix():
         from bot.tts.engines.kokoro import KokoroONNXEngine
 
         # Create engine instance
-        engine = KokoroONNXEngine(
-            model_path="tts/kokoro-v1.0.onnx", voices_path="tts/voices-v1.0.bin"
-        )
+        engine = KokoroONNXEngine(model_path="tts/kokoro-v1.0.onnx", voices_path="tts/voices-v1.0.bin")
 
         test_text = "Hello world, this is a test of English speech synthesis."
 

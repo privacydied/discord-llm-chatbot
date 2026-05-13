@@ -81,14 +81,6 @@ class MissingTokeniserError(Exception):
                 "uv pip install phonemizer g2p_en"
             )
         elif self.language.startswith("ja") or self.language.startswith("zh"):
-            return (
-                "⚠ No Asian language tokeniser (misaki) detected on the server.\n"
-                "Install it and restart the bot.\n\n"
-                "# Python virtual-env\n"
-                "uv pip install misaki"
-            )
+            return "⚠ No Asian language tokeniser (misaki) detected on the server.\nInstall it and restart the bot.\n\n# Python virtual-env\nuv pip install misaki"
         else:
-            return (
-                f"⚠ No suitable tokeniser found for language '{self.language}'.\n"
-                "Please install the appropriate tokeniser for your language."
-            )
+            return f"⚠ No suitable tokeniser found for language '{self.language}'.\nPlease install the appropriate tokeniser for your language."

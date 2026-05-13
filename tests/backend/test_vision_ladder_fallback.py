@@ -11,12 +11,8 @@ from bot.enhanced_retry import EnhancedRetryManager, ProviderConfig
 
 def make_httpx_429(retry_after: float = 1.0) -> httpx.HTTPStatusError:
     request = httpx.Request("POST", "https://example.com/v1/chat/completions")
-    response = httpx.Response(
-        429, headers={"Retry-After": str(retry_after)}, request=request
-    )
-    return httpx.HTTPStatusError(
-        "429 Too Many Requests", request=request, response=response
-    )
+    response = httpx.Response(429, headers={"Retry-After": str(retry_after)}, request=request)
+    return httpx.HTTPStatusError("429 Too Many Requests", request=request, response=response)
 
 
 @pytest.mark.asyncio

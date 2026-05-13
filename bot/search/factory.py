@@ -21,9 +21,7 @@ _client: Optional[httpx.AsyncClient] = None
 
 
 def _build_client(max_connections: int) -> httpx.AsyncClient:
-    limits = httpx.Limits(
-        max_connections=max_connections, max_keepalive_connections=max_connections
-    )
+    limits = httpx.Limits(max_connections=max_connections, max_keepalive_connections=max_connections)
     return httpx.AsyncClient(limits=limits, timeout=None)
 
 

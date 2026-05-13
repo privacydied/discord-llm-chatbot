@@ -28,13 +28,9 @@ class CuratedMemoryService:
         cfg = load_config()
         self.bot = bot
         self.enabled = bool(cfg.get("PERSISTENT_MEMORY_ENABLE", True))
-        self.sqlite_path = Path(
-            cfg.get("PERSISTENT_MEMORY_SQLITE_PATH", "./data/memory.db")
-        )
+        self.sqlite_path = Path(cfg.get("PERSISTENT_MEMORY_SQLITE_PATH", "./data/memory.db"))
         self.chroma_path = Path(cfg.get("PERSISTENT_MEMORY_CHROMA_PATH", "./chroma_db"))
-        self.collection_name = str(
-            cfg.get("PERSISTENT_MEMORY_CHROMA_COLLECTION", "curated_memories")
-        )
+        self.collection_name = str(cfg.get("PERSISTENT_MEMORY_CHROMA_COLLECTION", "curated_memories"))
         self.top_k = int(cfg.get("PERSISTENT_MEMORY_TOP_K", 6))
         self.max_prompt_chars = int(cfg.get("PERSISTENT_MEMORY_MAX_PROMPT_CHARS", 1200))
         self.default_ttl_days = int(cfg.get("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS", 180))
@@ -171,16 +167,16 @@ class CuratedMemoryService:
         if owner_id is not None and record.user_id != str(owner_id):
             logger.warning(
                 "Attempted delete_memory id=%s owner_mismatch got=%s expected=%s",
-                memory_id, record.user_id, owner_id,
+                memory_id,
+                record.user_id,
+                owner_id,
             )
             return False
         await self.store.soft_delete_memory(memory_id)
         try:
             await self.semantic_store.delete(memory_id)
         except Exception:
-            logger.warning(
-                "Chroma delete failed for memory %s", memory_id, exc_info=True
-            )
+            logger.warning("Chroma delete failed for memory %s", memory_id, exc_info=True)
         return True
 
     async def wipe_user_memories(self, user_id: str) -> int:
@@ -194,9 +190,7 @@ class CuratedMemoryService:
                 logger.warning("Chroma wipe failed for user %s", user_id, exc_info=True)
         return len(ids)
 
-    async def list_user_memories(
-        self, user_id: str, limit: int = 20
-    ) -> List[MemoryRecord]:
+    async def list_user_memories(self, user_id: str, limit: int = 20) -> List[MemoryRecord]:
         if not self.enabled:
             return []
         return await self.store.list_memories(user_id=user_id, limit=limit)
@@ -257,13 +251,9 @@ class CuratedMemoryService:
         combined: dict[str, Dict[str, Any]] = {}
         for scope_name, where, boost in scope_filters:
             try:
-                results = await self.semantic_store.query(
-                    query, top_k=top_k, where=where
-                )
+                results = await self.semantic_store.query(query, top_k=top_k, where=where)
             except Exception:
-                logger.debug(
-                    "Semantic query failed for scope %s", scope_name, exc_info=True
-                )
+                logger.debug("Semantic query failed for scope %s", scope_name, exc_info=True)
                 continue
             for item in results:
                 metadata = item.get("metadata") or {}
@@ -368,6 +358,7 @@ class CuratedMemoryService:
             if not allow_sensitive:
                 # Import here to avoid circular import in module init
                 from .curator import is_public_safe
+
                 if not is_public_safe(summary):
                     sensitive_count += 1
                     continue
@@ -379,7 +370,9 @@ class CuratedMemoryService:
         try:
             logger.info(
                 "memory.recall_scope user_id=%s candidates_before=%d candidates_after=%d",
-                requester, candidates_before, candidates_after,
+                requester,
+                candidates_before,
+                candidates_after,
                 extra={
                     "subsys": "memory",
                     "event": "recall_scope",
@@ -397,10 +390,7 @@ class CuratedMemoryService:
         if not filtered:
             # If we had candidates but all were sensitive, acknowledge it
             if candidates_before > 0 and sensitive_count > 0:
-                return (
-                    "I have some personal memories saved for you, "
-                    "but I won't repeat sensitive details casually here."
-                )
+                return "I have some personal memories saved for you, but I won't repeat sensitive details casually here."
             return ""
 
         max_chars = int(max_chars or self.max_prompt_chars)
@@ -466,9 +456,7 @@ class CuratedMemoryService:
                 raise
         return {"attempted": len(candidates), "inserted": inserted, "merged": merged}
 
-    async def _dedupe_or_merge(
-        self, candidate: MemoryCandidate
-    ) -> Optional[MemoryCandidate]:
+    async def _dedupe_or_merge(self, candidate: MemoryCandidate) -> Optional[MemoryCandidate]:
         """
         Before inserting an inferred memory, check for near-duplicate.
         - If found, update that existing memory (summary/importance/confidence/timestamp).
@@ -521,10 +509,7 @@ class CuratedMemoryService:
         SIMILARITY_THRESHOLD = 0.85
         for item in results:
             metadata = item.get("metadata") or {}
-            if (
-                metadata.get("source") != "inferred_curated"
-                or float(metadata.get("confidence", 1)) < 0.4
-            ):
+            if metadata.get("source") != "inferred_curated" or float(metadata.get("confidence", 1)) < 0.4:
                 continue
 
             semantic_score = float(item.get("semantic_score", 0))
@@ -540,12 +525,7 @@ class CuratedMemoryService:
                 continue
 
             # Prefer merging only when context_type matches or is compatible.
-            if (
-                existing.context_type != candidate.context_type
-                and not self._context_types_compatible(
-                    existing.context_type, candidate.context_type
-                )
-            ):
+            if existing.context_type != candidate.context_type and not self._context_types_compatible(existing.context_type, candidate.context_type):
                 continue
 
             await self._merge_into_existing(existing, candidate)
@@ -573,9 +553,7 @@ class CuratedMemoryService:
         t = _re.sub(r"\s+", " ", t)
         return t
 
-    async def _merge_into_existing(
-        self, existing: MemoryRecord, candidate: MemoryCandidate
-    ) -> None:
+    async def _merge_into_existing(self, existing: MemoryRecord, candidate: MemoryCandidate) -> None:
         """
         Merge candidate into existing memory:
         - Update summary if candidate is longer/more specific.
@@ -585,11 +563,7 @@ class CuratedMemoryService:
         now = datetime.now(timezone.utc).isoformat()
 
         # Use candidate's summary if it's more informative (longer and meaningful)
-        new_summary = (
-            candidate.summary
-            if len(candidate.summary or "") > len(existing.summary or "")
-            else existing.summary
-        )
+        new_summary = candidate.summary if len(candidate.summary or "") > len(existing.summary or "") else existing.summary
 
         # Slightly boost importance/confidence, capped at 1.0
         new_importance = min(
@@ -670,13 +644,9 @@ class CuratedMemoryService:
                 return False
             return True
         if scope_name == "channel":
-            return channel_id is not None and str(
-                metadata.get("channel_id") or ""
-            ) == str(channel_id)
+            return channel_id is not None and str(metadata.get("channel_id") or "") == str(channel_id)
         if scope_name == "thread":
-            return thread_id is not None and str(
-                metadata.get("thread_id") or ""
-            ) == str(thread_id)
+            return thread_id is not None and str(metadata.get("thread_id") or "") == str(thread_id)
         return True
 
     def _scope_filters(

@@ -32,9 +32,7 @@ def main():
         print("Error: No voices available")
         return
 
-    print(
-        f"Available voices: {', '.join(voices[:5])}{'...' if len(voices) > 5 else ''}"
-    )
+    print(f"Available voices: {', '.join(voices[:5])}{'...' if len(voices) > 5 else ''}")
 
     # Use the first available voice
     test_voice = voices[0]

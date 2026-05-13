@@ -9,14 +9,10 @@ logger = logging.getLogger(__name__)
 
 # Global config singleton to store resolved paths
 _resolved_paths: Dict[str, Path] = {}
-_resolved_env_snapshots: Dict[
-    str, Tuple[Optional[str], Optional[str], Optional[str]]
-] = {}
+_resolved_env_snapshots: Dict[str, Tuple[Optional[str], Optional[str], Optional[str]]] = {}
 
 
-def resolve_env(
-    name_new: str, name_legacy: str, default: Optional[str] = None
-) -> Optional[str]:
+def resolve_env(name_new: str, name_legacy: str, default: Optional[str] = None) -> Optional[str]:
     """
     Resolve environment variables with preference for new names.
 
@@ -65,9 +61,7 @@ def resolve_env(
     return default
 
 
-def resolve_path(
-    name_new: str, name_legacy: str, default: Optional[str] = None
-) -> Optional[Path]:
+def resolve_path(name_new: str, name_legacy: str, default: Optional[str] = None) -> Optional[Path]:
     """
     Resolve environment variables to a Path object with preference for new names.
     Stores the result in a singleton to ensure consistent paths across the application.

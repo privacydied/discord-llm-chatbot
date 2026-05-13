@@ -107,9 +107,7 @@ def dump_environment_diagnostics() -> Dict[str, Any]:
     diagnostics["espeak_ng_binary"] = shutil.which("espeak-ng")
 
     # Check for module availability
-    diagnostics["phonemizer_module"] = (
-        importlib.util.find_spec("phonemizer") is not None
-    )
+    diagnostics["phonemizer_module"] = importlib.util.find_spec("phonemizer") is not None
     diagnostics["g2p_en_module"] = importlib.util.find_spec("g2p_en") is not None
     diagnostics["misaki_module"] = importlib.util.find_spec("misaki") is not None
 
@@ -249,9 +247,7 @@ def detect_available_tokenizers() -> Dict[str, bool]:
     AVAILABLE_TOKENIZERS = {k for k, v in available.items() if v}
 
     # Log available tokenizers
-    if AVAILABLE_TOKENIZERS - {
-        TokenizerType.GRAPHEME.value
-    }:  # Exclude grapheme from consideration
+    if AVAILABLE_TOKENIZERS - {TokenizerType.GRAPHEME.value}:  # Exclude grapheme from consideration
         logger.info(
             f"Tokenisers found: {sorted(list(AVAILABLE_TOKENIZERS))}",
             extra={
@@ -270,8 +266,7 @@ def detect_available_tokenizers() -> Dict[str, bool]:
     env_tokenizer = _get_env_tokenizer()
     if env_tokenizer and env_tokenizer not in AVAILABLE_TOKENIZERS:
         logger.error(
-            f"TTS_TOKENISER environment variable '{env_tokenizer}' is not available. "
-            f"Available tokenizers: {sorted(list(AVAILABLE_TOKENIZERS))}",
+            f"TTS_TOKENISER environment variable '{env_tokenizer}' is not available. Available tokenizers: {sorted(list(AVAILABLE_TOKENIZERS))}",
             extra={
                 "subsys": "tts",
                 "event": "tokenizer.env_override.invalid",
@@ -283,9 +278,7 @@ def detect_available_tokenizers() -> Dict[str, bool]:
     return available
 
 
-def select_tokenizer_for_language(
-    language: str, available_tokenizers: Optional[Dict[str, bool]] = None
-) -> str:
+def select_tokenizer_for_language(language: str, available_tokenizers: Optional[Dict[str, bool]] = None) -> str:
     """
     Select the best tokenizer for the given language based on TOKENISER_MAP.
 
@@ -356,9 +349,7 @@ def select_tokenizer_for_language(
             return tokenizer
 
     # For English, we require a proper phonetic tokenizer
-    if language.startswith("en") and not any(
-        t in available_set for t in ["espeak", "espeak-ng", "phonemizer", "g2p_en"]
-    ):
+    if language.startswith("en") and not any(t in available_set for t in ["espeak", "espeak-ng", "phonemizer", "g2p_en"]):
         required = ["espeak-ng", "phonemizer", "g2p_en"]
         available = list(available_set)
         logger.error(
@@ -396,9 +387,7 @@ def is_tokenizer_warning_needed() -> bool:
     # For English, we need a proper phonetic tokenizer
     if language.startswith("en"):
         english_tokenizers = {"espeak", "espeak-ng", "phonemizer", "g2p_en"}
-        has_english_tokenizer = any(
-            t in AVAILABLE_TOKENIZERS for t in english_tokenizers
-        )
+        has_english_tokenizer = any(t in AVAILABLE_TOKENIZERS for t in english_tokenizers)
         if not has_english_tokenizer:
             logger.warning(
                 "No English phonetic tokenizer found. Speech quality will be poor.",
@@ -437,20 +426,11 @@ def get_tokenizer_warning_message(language: str = "en") -> str:
     language_prefix = language.split("-")[0].lower()
 
     if language_prefix == "en":
-        return (
-            "⚠ No English phonetic tokeniser installed; speech quality degraded. "
-            "Install espeak‑ng or phonemizer for clearer output."
-        )
+        return "⚠ No English phonetic tokeniser installed; speech quality degraded. Install espeak‑ng or phonemizer for clearer output."
     elif language_prefix == "ja" or language_prefix == "zh":
-        return (
-            "⚠ No Asian language tokenizer found. Speech quality may be reduced. "
-            "Install misaki for better results."
-        )
+        return "⚠ No Asian language tokenizer found. Speech quality may be reduced. Install misaki for better results."
     else:
-        return (
-            "⚠ No phonetic tokenizer found for your language. Speech quality may be reduced. "
-            "Install phonemizer or espeak-ng for better results."
-        )
+        return "⚠ No phonetic tokenizer found for your language. Speech quality may be reduced. Install phonemizer or espeak-ng for better results."
 
 
 def validate_voice_vector(voice_vector: np.ndarray, voice_id: str = None) -> bool:
@@ -562,9 +542,7 @@ def validate_voice_vector(voice_vector: np.ndarray, voice_id: str = None) -> boo
                 "shape": voice_vector.shape,
             },
         )
-        raise ValueError(
-            f"Voice vector has incorrect shape: {voice_vector.shape}, expected (256,)"
-        )
+        raise ValueError(f"Voice vector has incorrect shape: {voice_vector.shape}, expected (256,)")
 
     # Check for non-zero norm
     norm = np.linalg.norm(voice_vector)
@@ -692,9 +670,7 @@ def detect_gibberish_audio(audio_data: np.ndarray, sample_rate: int) -> bool:
     return False
 
 
-def detect_gibberish_audio_with_metrics(
-    audio_data: np.ndarray, sample_rate: int
-) -> Tuple[bool, Dict[str, float]]:
+def detect_gibberish_audio_with_metrics(audio_data: np.ndarray, sample_rate: int) -> Tuple[bool, Dict[str, float]]:
     """Detect if the generated audio is likely gibberish or wrong language.
 
     Args:
@@ -719,9 +695,7 @@ def detect_gibberish_audio_with_metrics(
             "Audio output is all zeros (silent)",
             extra={"subsys": "tts", "event": "gibberish.silent"},
         )
-        raise TTSGibberishError(
-            "Audio output is completely silent (all zeros)", metrics
-        )
+        raise TTSGibberishError("Audio output is completely silent (all zeros)", metrics)
 
     # Calculate metrics
     avg_abs = np.mean(np.abs(audio_data))

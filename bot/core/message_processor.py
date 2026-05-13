@@ -63,11 +63,7 @@ class MessageProcessor:
         except Exception:
             author_is_bot = True
         try:
-            author_is_self = bool(
-                author
-                and getattr(author, "id", None)
-                == getattr(getattr(self.bot, "user", None), "id", None)
-            )
+            author_is_self = bool(author and getattr(author, "id", None) == getattr(getattr(self.bot, "user", None), "id", None))
         except Exception:
             author_is_self = False
         if author_is_bot or author_is_self:
@@ -76,9 +72,7 @@ class MessageProcessor:
         # Dedup guard under lock
         async with self._dispatch_lock:
             if message.id in self._processed_messages:
-                self.logger.warning(
-                    f"Duplicate dispatch prevented for msg_id: {message.id}"
-                )
+                self.logger.warning(f"Duplicate dispatch prevented for msg_id: {message.id}")
                 return
             while len(self._processed_messages) >= _DEDUP_MAX:
                 self._processed_messages.popitem(last=False)
@@ -88,9 +82,7 @@ class MessageProcessor:
         await self._archive_enqueue(message)
 
         # Skip empty messages
-        if (
-            not message.content or not message.content.strip()
-        ) and not message.attachments:
+        if (not message.content or not message.content.strip()) and not message.attachments:
             return
 
         # Alert-session suppression — early return gate
@@ -120,13 +112,8 @@ class MessageProcessor:
 
     async def _ensure_user_processor(self, user_id: str) -> None:
         """Ensure a background task drains the queue for *user_id*."""
-        if (
-            user_id not in self._user_processors
-            or self._user_processors[user_id].done()
-        ):
-            self._user_processors[user_id] = asyncio.create_task(
-                self._process_user_messages(user_id)
-            )
+        if user_id not in self._user_processors or self._user_processors[user_id].done():
+            self._user_processors[user_id] = asyncio.create_task(self._process_user_messages(user_id))
 
     async def _process_user_messages(self, user_id: str) -> None:
         """Drain the queue for one user, one message at a time."""
@@ -135,9 +122,7 @@ class MessageProcessor:
         try:
             while True:
                 try:
-                    message = await asyncio.wait_for(
-                        queue.get(), timeout=_QUEUE_TIMEOUT
-                    )
+                    message = await asyncio.wait_for(queue.get(), timeout=_QUEUE_TIMEOUT)
                 except asyncio.TimeoutError:
                     break
 
@@ -153,9 +138,7 @@ class MessageProcessor:
                     queue.task_done()
 
         except Exception:
-            self.logger.error(
-                f"User message processor for {user_id} failed", exc_info=True
-            )
+            self.logger.error(f"User message processor for {user_id} failed", exc_info=True)
         finally:
             self._user_processors.pop(user_id, None)
 
@@ -165,65 +148,45 @@ class MessageProcessor:
 
     async def _archive_enqueue(self, message: discord.Message) -> None:
         archive_service = getattr(self.bot, "archive_service", None)
-        if archive_service is None or not getattr(
-            archive_service, "enabled", True
-        ):
+        if archive_service is None or not getattr(archive_service, "enabled", True):
             return
 
         async def _enqueue() -> None:
             await archive_service.enqueue_live_message(message)
 
-        task = asyncio.create_task(
-            _enqueue(), name=f"server_archive_enqueue_{message.id}"
-        )
-        task.add_done_callback(
-            lambda t: (
-                t.exception()
-                if t.done() and not t.cancelled()
-                else None
-            )
-        )
+        task = asyncio.create_task(_enqueue(), name=f"server_archive_enqueue_{message.id}")
+        task.add_done_callback(lambda t: t.exception() if t.done() and not t.cancelled() else None)
 
     async def _alert_suppression_gate(self, message: discord.Message) -> None:
         """Suppress normal text flow while an admin alert session is active in DMs."""
         try:
             cog = self.bot.get_cog("AdminAlertCommands")
-            if cog is not None and cog.alert_manager.is_dm_channel(
-                message.channel
-            ):
-                active_session = cog.alert_manager.get_session(
-                    message.author.id
-                )
+            if cog is not None and cog.alert_manager.is_dm_channel(message.channel):
+                active_session = cog.alert_manager.get_session(message.author.id)
                 if active_session is not None:
                     await self._handle_alert_dm(message, cog)
         except Exception:
             pass
 
-    async def _handle_alert_dm(
-        self, message: discord.Message, cog
-    ) -> None:
+    async def _handle_alert_dm(self, message: discord.Message, cog) -> None:
         prefixes = await self.bot.get_prefix(message)
         if isinstance(prefixes, (list, tuple)):
             for p in prefixes:
                 if p and message.content.startswith(p):
-                    rest = (message.content[len(p):] or "").strip()
+                    rest = (message.content[len(p) :] or "").strip()
                     if rest.split(" ", 1)[0].lower() == "alert":
                         try:
-                            await message.channel.send(
-                                "⚠️ An alert session is already active."
-                            )
+                            await message.channel.send("⚠️ An alert session is already active.")
                         except Exception:
                             pass
                         return
         elif prefixes:
             p = prefixes
             if message.content.startswith(p):
-                rest = (message.content[len(p):] or "").strip()
+                rest = (message.content[len(p) :] or "").strip()
                 if rest.split(" ", 1)[0].lower() == "alert":
                     try:
-                        await message.channel.send(
-                            "⚠️ An alert session is already active."
-                        )
+                        await message.channel.send("⚠️ An alert session is already active.")
                     except Exception:
                         pass
                     return

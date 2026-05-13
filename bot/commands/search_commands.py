@@ -37,11 +37,7 @@ def _format_result_field(result: SearchResult) -> str:
     parts.append(result.url)
     if result.snippet:
         parts.append("")
-        parts.append(
-            _truncate(
-                result.snippet, DISCORD_EMBED_FIELD_VALUE_LIMIT - len(result.url) - 10
-            )
-        )
+        parts.append(_truncate(result.snippet, DISCORD_EMBED_FIELD_VALUE_LIMIT - len(result.url) - 10))
     return "\n".join(parts)
 
 
@@ -78,11 +74,7 @@ class SearchCommands(commands.Cog):
             except Exception:
                 safesearch = SafeSearch.MODERATE
 
-            timeout_ms = (
-                int(self.cfg.get("DDG_TIMEOUT_MS", 5000))
-                if provider_name == "ddg"
-                else int(self.cfg.get("CUSTOM_SEARCH_TIMEOUT_MS", 8000))
-            )
+            timeout_ms = int(self.cfg.get("DDG_TIMEOUT_MS", 5000)) if provider_name == "ddg" else int(self.cfg.get("CUSTOM_SEARCH_TIMEOUT_MS", 8000))
 
             params = SearchQueryParams(
                 query=query.strip(),
@@ -110,9 +102,7 @@ class SearchCommands(commands.Cog):
                 description=f"Query: `{_truncate(query.strip(), 256)}`",
                 color=discord.Color.green(),
             )
-            embed.set_footer(
-                text=f"Provider: {provider_name} • Safe: {safesearch.value}"
-            )
+            embed.set_footer(text=f"Provider: {provider_name} • Safe: {safesearch.value}")
 
             # Add top results as fields
             for idx, r in enumerate(results, start=1):
@@ -142,9 +132,7 @@ async def setup(bot: commands.Bot):
         logger.info("[Search Setup] Initializing SearchCommands cog...")
         existing = bot.get_cog("SearchCommands")
         if existing:
-            logger.warning(
-                "[Search Setup] SearchCommands already loaded, removing old cog"
-            )
+            logger.warning("[Search Setup] SearchCommands already loaded, removing old cog")
             await bot.remove_cog("SearchCommands")
 
         cog = SearchCommands(bot)
@@ -156,9 +144,7 @@ async def setup(bot: commands.Bot):
             names = [cmd.name for cmd in loaded.get_commands()]
             logger.info(f"[Search Setup] Registered commands: {names}")
         else:
-            logger.error(
-                "❌ SearchCommands failed to load - cog not found after adding"
-            )
+            logger.error("❌ SearchCommands failed to load - cog not found after adding")
     except Exception as e:
         logger.error(f"❌ Failed to set up SearchCommands cog: {e}", exc_info=True)
         raise

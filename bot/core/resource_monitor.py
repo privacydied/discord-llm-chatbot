@@ -204,9 +204,7 @@ class ResourceMonitor:
 
         # State tracking
         self.stats = ResourceStats()
-        self.enabled = (
-            os.getenv("OBS_ENABLE_RESOURCE_METRICS", "true").lower() == "true"
-        )
+        self.enabled = os.getenv("OBS_ENABLE_RESOURCE_METRICS", "true").lower() == "true"
         self.monitor_task: Optional[asyncio.Task] = None
         self.running = False
         self._shutdown_event = asyncio.Event()
@@ -243,9 +241,7 @@ class ResourceMonitor:
 
             # File descriptors and threads
             try:
-                snapshot.open_files = (
-                    self.process.num_fds() if hasattr(self.process, "num_fds") else 0
-                )
+                snapshot.open_files = self.process.num_fds() if hasattr(self.process, "num_fds") else 0
             except (AttributeError, psutil.AccessDenied):
                 snapshot.open_files = 0
 
@@ -255,9 +251,7 @@ class ResourceMonitor:
                 snapshot.thread_count = 0
 
             # Event loop lag measurement
-            snapshot.event_loop_lag_ms = (
-                await self.event_loop_monitor.measure_lag_averaged(3)
-            )
+            snapshot.event_loop_lag_ms = await self.event_loop_monitor.measure_lag_averaged(3)
 
         except Exception as e:
             self.logger.warning(
@@ -278,26 +272,18 @@ class ResourceMonitor:
 
         # Event loop lag checks
         if snapshot.event_loop_lag_ms > self.thresholds.event_loop_lag_critical_ms:
-            if self._should_emit_warning(
-                "event_loop_lag_critical", current_time, warning_cooldown
-            ):
+            if self._should_emit_warning("event_loop_lag_critical", current_time, warning_cooldown):
                 self.logger.critical(
-                    f"🚨 CRITICAL: Event loop lag {snapshot.event_loop_lag_ms:.1f}ms "
-                    f"(threshold: {self.thresholds.event_loop_lag_critical_ms:.1f}ms). "
-                    f"System may be severely overloaded or blocked.",
+                    f"🚨 CRITICAL: Event loop lag {snapshot.event_loop_lag_ms:.1f}ms (threshold: {self.thresholds.event_loop_lag_critical_ms:.1f}ms). System may be severely overloaded or blocked.",
                     extra={
                         "subsys": "resource_monitor",
                         "event_loop_lag_ms": snapshot.event_loop_lag_ms,
                     },
                 )
         elif snapshot.event_loop_lag_ms > self.thresholds.event_loop_lag_warning_ms:
-            if self._should_emit_warning(
-                "event_loop_lag_warning", current_time, warning_cooldown
-            ):
+            if self._should_emit_warning("event_loop_lag_warning", current_time, warning_cooldown):
                 self.logger.warning(
-                    f"⚠️  WARNING: Event loop lag {snapshot.event_loop_lag_ms:.1f}ms "
-                    f"(threshold: {self.thresholds.event_loop_lag_warning_ms:.1f}ms). "
-                    f"Consider reducing async workload.",
+                    f"⚠️  WARNING: Event loop lag {snapshot.event_loop_lag_ms:.1f}ms (threshold: {self.thresholds.event_loop_lag_warning_ms:.1f}ms). Consider reducing async workload.",
                     extra={
                         "subsys": "resource_monitor",
                         "event_loop_lag_ms": snapshot.event_loop_lag_ms,
@@ -306,33 +292,23 @@ class ResourceMonitor:
 
         # RSS memory checks
         if snapshot.rss_mb > self.thresholds.rss_critical_mb:
-            if self._should_emit_warning(
-                "rss_critical", current_time, warning_cooldown
-            ):
+            if self._should_emit_warning("rss_critical", current_time, warning_cooldown):
                 self.logger.critical(
-                    f"🚨 CRITICAL: RSS memory usage {snapshot.rss_mb:.1f}MB "
-                    f"(threshold: {self.thresholds.rss_critical_mb:.1f}MB). "
-                    f"System may be running out of memory.",
+                    f"🚨 CRITICAL: RSS memory usage {snapshot.rss_mb:.1f}MB (threshold: {self.thresholds.rss_critical_mb:.1f}MB). System may be running out of memory.",
                     extra={"subsys": "resource_monitor", "rss_mb": snapshot.rss_mb},
                 )
         elif snapshot.rss_mb > self.thresholds.rss_warning_mb:
             if self._should_emit_warning("rss_warning", current_time, warning_cooldown):
                 self.logger.warning(
-                    f"⚠️  WARNING: RSS memory usage {snapshot.rss_mb:.1f}MB "
-                    f"(threshold: {self.thresholds.rss_warning_mb:.1f}MB). "
-                    f"Monitor for memory leaks.",
+                    f"⚠️  WARNING: RSS memory usage {snapshot.rss_mb:.1f}MB (threshold: {self.thresholds.rss_warning_mb:.1f}MB). Monitor for memory leaks.",
                     extra={"subsys": "resource_monitor", "rss_mb": snapshot.rss_mb},
                 )
 
         # CPU usage checks
         if snapshot.cpu_percent > self.thresholds.cpu_critical_percent:
-            if self._should_emit_warning(
-                "cpu_critical", current_time, warning_cooldown
-            ):
+            if self._should_emit_warning("cpu_critical", current_time, warning_cooldown):
                 self.logger.critical(
-                    f"🚨 CRITICAL: CPU usage {snapshot.cpu_percent:.1f}% "
-                    f"(threshold: {self.thresholds.cpu_critical_percent:.1f}%). "
-                    f"System may be severely overloaded.",
+                    f"🚨 CRITICAL: CPU usage {snapshot.cpu_percent:.1f}% (threshold: {self.thresholds.cpu_critical_percent:.1f}%). System may be severely overloaded.",
                     extra={
                         "subsys": "resource_monitor",
                         "cpu_percent": snapshot.cpu_percent,
@@ -341,18 +317,14 @@ class ResourceMonitor:
         elif snapshot.cpu_percent > self.thresholds.cpu_warning_percent:
             if self._should_emit_warning("cpu_warning", current_time, warning_cooldown):
                 self.logger.warning(
-                    f"⚠️  WARNING: CPU usage {snapshot.cpu_percent:.1f}% "
-                    f"(threshold: {self.thresholds.cpu_warning_percent:.1f}%). "
-                    f"Consider reducing computational workload.",
+                    f"⚠️  WARNING: CPU usage {snapshot.cpu_percent:.1f}% (threshold: {self.thresholds.cpu_warning_percent:.1f}%). Consider reducing computational workload.",
                     extra={
                         "subsys": "resource_monitor",
                         "cpu_percent": snapshot.cpu_percent,
                     },
                 )
 
-    def _should_emit_warning(
-        self, warning_type: str, current_time: float, cooldown: float
-    ) -> bool:
+    def _should_emit_warning(self, warning_type: str, current_time: float, cooldown: float) -> bool:
         """Check if warning should be emitted based on cooldown period."""
         last_warning = self.stats.last_warning_time.get(warning_type, 0)
         if current_time - last_warning >= cooldown:
@@ -372,9 +344,7 @@ class ResourceMonitor:
         try:
             # Core metrics
             metrics.gauge(METRIC_PROCESS_RSS_BYTES, snapshot.rss_bytes)
-            metrics.gauge(
-                METRIC_EVENT_LOOP_LAG_SECONDS, snapshot.event_loop_lag_ms / 1000.0
-            )
+            metrics.gauge(METRIC_EVENT_LOOP_LAG_SECONDS, snapshot.event_loop_lag_ms / 1000.0)
 
             # Additional metrics (using observe for histograms)
             metrics.observe("bot_process_cpu_percent", snapshot.cpu_percent)
@@ -404,24 +374,14 @@ class ResourceMonitor:
         else:
             # Update running averages
             alpha = 1.0 / min(self.stats.sample_count, 20)  # Limit window to 20 samples
-            self.stats.avg_rss_mb = (
-                1 - alpha
-            ) * self.stats.avg_rss_mb + alpha * snapshot.rss_mb
-            self.stats.avg_cpu_percent = (
-                1 - alpha
-            ) * self.stats.avg_cpu_percent + alpha * snapshot.cpu_percent
-            self.stats.avg_event_loop_lag_ms = (
-                1 - alpha
-            ) * self.stats.avg_event_loop_lag_ms + alpha * snapshot.event_loop_lag_ms
+            self.stats.avg_rss_mb = (1 - alpha) * self.stats.avg_rss_mb + alpha * snapshot.rss_mb
+            self.stats.avg_cpu_percent = (1 - alpha) * self.stats.avg_cpu_percent + alpha * snapshot.cpu_percent
+            self.stats.avg_event_loop_lag_ms = (1 - alpha) * self.stats.avg_event_loop_lag_ms + alpha * snapshot.event_loop_lag_ms
 
         # Update maximums
         self.stats.max_rss_mb = max(self.stats.max_rss_mb, snapshot.rss_mb)
-        self.stats.max_cpu_percent = max(
-            self.stats.max_cpu_percent, snapshot.cpu_percent
-        )
-        self.stats.max_event_loop_lag_ms = max(
-            self.stats.max_event_loop_lag_ms, snapshot.event_loop_lag_ms
-        )
+        self.stats.max_cpu_percent = max(self.stats.max_cpu_percent, snapshot.cpu_percent)
+        self.stats.max_event_loop_lag_ms = max(self.stats.max_event_loop_lag_ms, snapshot.event_loop_lag_ms)
 
     async def start_monitoring(self) -> None:
         """Start continuous resource monitoring."""
@@ -440,14 +400,10 @@ class ResourceMonitor:
             return
 
         self.running = True
-        self.monitor_task = asyncio.create_task(
-            self._monitoring_loop(), name="resource_monitor"
-        )
+        self.monitor_task = asyncio.create_task(self._monitoring_loop(), name="resource_monitor")
 
         self.logger.info(
-            f"📊 Started resource monitoring (interval: {self.check_interval}s, "
-            f"event_loop_lag_warning: {self.thresholds.event_loop_lag_warning_ms}ms, "
-            f"rss_warning: {self.thresholds.rss_warning_mb}MB)",
+            f"📊 Started resource monitoring (interval: {self.check_interval}s, event_loop_lag_warning: {self.thresholds.event_loop_lag_warning_ms}ms, rss_warning: {self.thresholds.rss_warning_mb}MB)",
             extra={"subsys": "resource_monitor"},
         )
 
@@ -470,9 +426,7 @@ class ResourceMonitor:
                 # Log periodic status (every 10 checks)
                 if self.stats.sample_count % 10 == 0:
                     self.logger.info(
-                        f"📊 Resource status: RSS {snapshot.rss_mb:.1f}MB, "
-                        f"CPU {snapshot.cpu_percent:.1f}%, "
-                        f"Event loop lag {snapshot.event_loop_lag_ms:.1f}ms",
+                        f"📊 Resource status: RSS {snapshot.rss_mb:.1f}MB, CPU {snapshot.cpu_percent:.1f}%, Event loop lag {snapshot.event_loop_lag_ms:.1f}ms",
                         extra={
                             "subsys": "resource_monitor",
                             "rss_mb": snapshot.rss_mb,
@@ -483,9 +437,7 @@ class ResourceMonitor:
 
                 # Wait for next check or shutdown signal
                 try:
-                    await asyncio.wait_for(
-                        self._shutdown_event.wait(), timeout=self.check_interval
-                    )
+                    await asyncio.wait_for(self._shutdown_event.wait(), timeout=self.check_interval)
                     break  # Shutdown requested
                 except asyncio.TimeoutError:
                     continue  # Normal timeout, continue monitoring
@@ -510,9 +462,7 @@ class ResourceMonitor:
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
 
-        self.logger.info(
-            "📊 Resource monitoring stopped", extra={"subsys": "resource_monitor"}
-        )
+        self.logger.info("📊 Resource monitoring stopped", extra={"subsys": "resource_monitor"})
 
     def get_resource_stats(self) -> Dict[str, any]:
         """Get current resource statistics summary.
@@ -562,23 +512,13 @@ def get_resource_monitor() -> ResourceMonitor:
                     DEFAULT_EVENT_LOOP_LAG_CRITICAL_MS,
                 )
             ),
-            rss_warning_mb=float(
-                os.getenv("RESOURCE_RSS_WARNING_MB", DEFAULT_RSS_WARNING_MB)
-            ),
-            rss_critical_mb=float(
-                os.getenv("RESOURCE_RSS_CRITICAL_MB", DEFAULT_RSS_CRITICAL_MB)
-            ),
-            cpu_warning_percent=float(
-                os.getenv("RESOURCE_CPU_WARNING_PERCENT", DEFAULT_CPU_WARNING_PERCENT)
-            ),
-            cpu_critical_percent=float(
-                os.getenv("RESOURCE_CPU_CRITICAL_PERCENT", DEFAULT_CPU_CRITICAL_PERCENT)
-            ),
+            rss_warning_mb=float(os.getenv("RESOURCE_RSS_WARNING_MB", DEFAULT_RSS_WARNING_MB)),
+            rss_critical_mb=float(os.getenv("RESOURCE_RSS_CRITICAL_MB", DEFAULT_RSS_CRITICAL_MB)),
+            cpu_warning_percent=float(os.getenv("RESOURCE_CPU_WARNING_PERCENT", DEFAULT_CPU_WARNING_PERCENT)),
+            cpu_critical_percent=float(os.getenv("RESOURCE_CPU_CRITICAL_PERCENT", DEFAULT_CPU_CRITICAL_PERCENT)),
         )
 
-        check_interval = float(
-            os.getenv("RESOURCE_CHECK_INTERVAL", DEFAULT_RESOURCE_CHECK_INTERVAL)
-        )
+        check_interval = float(os.getenv("RESOURCE_CHECK_INTERVAL", DEFAULT_RESOURCE_CHECK_INTERVAL))
         _resource_monitor = ResourceMonitor(thresholds, check_interval)
 
     return _resource_monitor

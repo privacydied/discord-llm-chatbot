@@ -35,12 +35,8 @@ logger = get_logger(__name__)
 
 
 # Concurrency limits from environment/config
-MAX_CONCURRENT_NETWORK = int(
-    __import__("os").environ.get("ROUTER_MAX_CONCURRENCY_NETWORK", "4")
-)
-MAX_CONCURRENT_HEAVY = int(
-    __import__("os").environ.get("ROUTER_MAX_CONCURRENCY_HEAVY", "2")
-)
+MAX_CONCURRENT_NETWORK = int(__import__("os").environ.get("ROUTER_MAX_CONCURRENCY_NETWORK", "4"))
+MAX_CONCURRENT_HEAVY = int(__import__("os").environ.get("ROUTER_MAX_CONCURRENCY_HEAVY", "2"))
 
 
 @dataclass
@@ -85,12 +81,7 @@ def _normalize_url_for_dedup(url: str) -> str:
         from urllib.parse import parse_qsl, urlencode
 
         qs_list = parse_qsl(p.query)
-        filtered = [
-            (k, v)
-            for k, v in qs_list
-            if k.lower()
-            not in {"utm_source", "utm_medium", "utm_campaign", "fbclid", "gclid"}
-        ]
+        filtered = [(k, v) for k, v in qs_list if k.lower() not in {"utm_source", "utm_medium", "utm_campaign", "fbclid", "gclid"}]
         new_qs = urlencode(filtered)
         return urlunparse((p.scheme, netloc, p.path, "", new_qs, ""))
     except Exception:
@@ -157,9 +148,7 @@ async def _process_item_with_budget(
 
     except asyncio.TimeoutError:
         duration = time.time() - start_time
-        logger.warning(
-            f"process_item.timeout | modality={modality.name} timeout={timeout}s"
-        )
+        logger.warning(f"process_item.timeout | modality={modality.name} timeout={timeout}s")
         return ProcessedResult(
             item=item,
             modality=modality,
@@ -194,16 +183,12 @@ async def _process_item_with_coalescing(
 
     # Check if coalescing applies
     if not config.enable_coalescing:
-        return await _process_item_with_budget(
-            item, modality, handler_fn, timeout, message
-        )
+        return await _process_item_with_budget(item, modality, handler_fn, timeout, message)
 
     url_key = _get_url_key(item, modality)
     if url_key is None:
         # Not URL-based, process normally
-        return await _process_item_with_budget(
-            item, modality, handler_fn, timeout, message
-        )
+        return await _process_item_with_budget(item, modality, handler_fn, timeout, message)
 
     # Use coalescing for URL-based operations
     try:
@@ -212,9 +197,7 @@ async def _process_item_with_coalescing(
         coalescer = get_url_processing_coalescer()
     except ImportError:
         # Coalescer not available, process without dedup
-        return await _process_item_with_budget(
-            item, modality, handler_fn, timeout, message
-        )
+        return await _process_item_with_budget(item, modality, handler_fn, timeout, message)
 
     async def _do_process() -> str:
         return await handler_fn(item, message=message)
@@ -331,9 +314,7 @@ async def process_independent_items_concurrently(
                     pass
                 progress_logger(index + 1, len(items), desc)
 
-            result = await _process_item_with_coalescing(
-                item, modality, handler_fn, timeout, message, cfg
-            )
+            result = await _process_item_with_coalescing(item, modality, handler_fn, timeout, message, cfg)
             return index, result
 
     # Create semaphores for bounded concurrency
@@ -344,18 +325,10 @@ async def process_independent_items_concurrently(
     tasks: List[Coroutine] = []
 
     for index, (item, modality, handler) in network_items:
-        tasks.append(
-            _process_with_semaphore(
-                index, item, modality, handler, network_sem, cfg.network_timeout
-            )
-        )
+        tasks.append(_process_with_semaphore(index, item, modality, handler, network_sem, cfg.network_timeout))
 
     for index, (item, modality, handler) in heavy_items:
-        tasks.append(
-            _process_with_semaphore(
-                index, item, modality, handler, heavy_sem, cfg.heavy_timeout
-            )
-        )
+        tasks.append(_process_with_semaphore(index, item, modality, handler, heavy_sem, cfg.heavy_timeout))
 
     # Process all concurrently
     completed = await asyncio.gather(*tasks, return_exceptions=True)
@@ -391,9 +364,7 @@ async def process_items_sequential_with_timeout(
             desc = f"{modality.name}"
             progress_logger(i + 1, len(items), desc)
 
-        result = await _process_item_with_budget(
-            item, modality, handler_fn, timeout_per_item, message
-        )
+        result = await _process_item_with_budget(item, modality, handler_fn, timeout_per_item, message)
         results.append(result)
 
     return results

@@ -5,9 +5,7 @@ Test TTS error handling for zero audio and OCR soft-dependency.
 import pytest
 
 # Skip all tests — require TTS binaries (espeak-ng, tesseract, Kokoro)
-pytestmark = pytest.mark.skip(
-    reason="Requires TTS binaries (espeak-ng, tesseract, Kokoro)"
-)
+pytestmark = pytest.mark.skip(reason="Requires TTS binaries (espeak-ng, tesseract, Kokoro)")
 
 import unittest
 import tempfile
@@ -51,21 +49,15 @@ class TestTTSErrorHandling(unittest.TestCase):
         with (
             patch.object(KokoroDirect, "_load_model"),
             patch.object(KokoroDirect, "_detect_tokenization_methods"),
-            patch.object(
-                KokoroDirect, "_tokenize_text", return_value=np.array([1, 2, 3])
-            ),
-            patch.object(
-                KokoroDirect, "_get_voice_embedding", return_value=np.zeros((1, 256))
-            ),
+            patch.object(KokoroDirect, "_tokenize_text", return_value=np.array([1, 2, 3])),
+            patch.object(KokoroDirect, "_get_voice_embedding", return_value=np.zeros((1, 256))),
             patch("bot.tts.kokoro_direct.soundfile.write") as mock_write,
             patch.object(KokoroDirect, "sess") as mock_sess,
         ):
             # Mock ONNX session to return all-zero audio
             mock_sess.run.return_value = [np.zeros((1, 24000))]
 
-            kokoro = KokoroDirect(
-                model_path="dummy_model.onnx", voices_path="dummy_voices.bin"
-            )
+            kokoro = KokoroDirect(model_path="dummy_model.onnx", voices_path="dummy_voices.bin")
 
             # Test that creating audio with all zeros raises TTSSynthesisError
             output_path = self.temp_path / "output.wav"

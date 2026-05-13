@@ -38,11 +38,7 @@ class TestDirectVisionTriggers:
                     if prompt_part.lower().startswith(prefix + " "):
                         prompt_part = prompt_part[len(prefix) + 1 :].strip()
 
-                final_prompt = (
-                    prompt_part
-                    if prompt_part and len(prompt_part) > 2
-                    else content.strip()
-                )
+                final_prompt = prompt_part if prompt_part and len(prompt_part) > 2 else content.strip()
 
                 return {
                     "use_vision": True,
@@ -69,12 +65,7 @@ class TestDirectVisionTriggers:
             assert result is not None, f"Failed to detect trigger in: {content}"
             assert result["use_vision"] is True
             assert result["task"] == "text_to_image"
-            assert (
-                "puppy" in result["prompt"]
-                or "cat" in result["prompt"]
-                or "mountains" in result["prompt"]
-                or "sunset" in result["prompt"]
-            )
+            assert "puppy" in result["prompt"] or "cat" in result["prompt"] or "mountains" in result["prompt"] or "sunset" in result["prompt"]
 
     def test_create_variations(self):
         """Test 'create' trigger variations."""
@@ -189,10 +180,7 @@ class TestRoutingPrecedence:
         attachments = [attachment]
 
         # Check attachment detection
-        has_img_attachments = any(
-            (getattr(a, "content_type", "") or "").startswith("image/")
-            for a in attachments
-        )
+        has_img_attachments = any((getattr(a, "content_type", "") or "").startswith("image/") for a in attachments)
         assert has_img_attachments is True
 
         # In actual routing, this should NOT trigger vision generation
@@ -315,9 +303,7 @@ class TestDiscordPermissions:
         can_attach_files = perms.attach_files and perms.send_messages
         assert can_attach_files is True
 
-    def test_guild_permission_check_missing_attach_files(
-        self, mock_channel, mock_guild_member
-    ):
+    def test_guild_permission_check_missing_attach_files(self, mock_channel, mock_guild_member):
         """Test permission check when missing attach_files."""
         # Mock permissions missing attach_files
         perms = Mock()
@@ -401,11 +387,7 @@ class TestDebugObservability:
         extracted_prompt = "a beautiful sunset"
         original_content = "generate an image of a beautiful sunset"
 
-        debug_msg = (
-            f"VISION_TRIGGER_DEBUG | matched_pattern='{pattern}' "
-            f"extracted_prompt='{extracted_prompt[:50]}...' "
-            f"original_content='{original_content[:100]}...'"
-        )
+        debug_msg = f"VISION_TRIGGER_DEBUG | matched_pattern='{pattern}' extracted_prompt='{extracted_prompt[:50]}...' original_content='{original_content[:100]}...'"
 
         assert "VISION_TRIGGER_DEBUG" in debug_msg
         assert "matched_pattern" in debug_msg
@@ -449,9 +431,7 @@ class TestIntegrationScenarios:
 
         # Check Twitter URL detection
         url_detector = TestRoutingPrecedence()
-        has_twitter_url = url_detector._is_twitter_url(
-            "https://twitter.com/user/status/123"
-        )
+        has_twitter_url = url_detector._is_twitter_url("https://twitter.com/user/status/123")
         assert has_twitter_url is True
 
         # In actual routing, this should bypass vision generation
@@ -466,10 +446,7 @@ class TestIntegrationScenarios:
         attachments = [attachment]
 
         # Check attachment detection
-        has_img_attachments = any(
-            (getattr(a, "content_type", "") or "").startswith("image/")
-            for a in attachments
-        )
+        has_img_attachments = any((getattr(a, "content_type", "") or "").startswith("image/") for a in attachments)
         assert has_img_attachments is True
 
         # In actual routing, this should route to VL for "Thoughts?"

@@ -21,9 +21,7 @@ class TestKokoroDirect:
     def setup_method(self):
         # Load paths from environment variables
         self.model_path = os.getenv("TTS_MODEL_PATH", "tts/onnx/kokoro-v1.0.onnx")
-        self.voices_path = os.getenv(
-            "TTS_VOICES_PATH", "tts/onnx/voices/voices-v1.0.bin"
-        )
+        self.voices_path = os.getenv("TTS_VOICES_PATH", "tts/onnx/voices/voices-v1.0.bin")
 
         # Create test voice file
         self.test_voice_id = "test_voice"
@@ -37,9 +35,7 @@ class TestKokoroDirect:
         registry._available_tokenizers.add("misaki")
 
         # Initialize engine with correct paths
-        self.engine = KokoroDirect(
-            model_path=self.model_path, voices_path=self.voices_path
-        )
+        self.engine = KokoroDirect(model_path=self.model_path, voices_path=self.voices_path)
         # Prevent the engine from reloading voices (which would overwrite our change)
         self.engine._load_voices = lambda: None
         # Clear any existing voices data to force lazy loading in tests
@@ -55,9 +51,7 @@ class TestKokoroDirect:
         """Mock the kokoro_onnx tokenizer."""
         with patch("kokoro_onnx.tokenizer.Tokenizer") as mock:
             tokenizer_instance = MagicMock()
-            tokenizer_instance.tokenize.return_value = np.array(
-                [1, 2, 3, 4, 5], dtype=np.int64
-            )
+            tokenizer_instance.tokenize.return_value = np.array([1, 2, 3, 4, 5], dtype=np.int64)
             mock.return_value = tokenizer_instance
             yield mock
 
@@ -75,9 +69,7 @@ class TestKokoroDirect:
             session_instance.get_inputs.return_value = [mock_input]
 
             # Mock inference output
-            test_audio = np.random.rand(24000).astype(
-                np.float32
-            )  # 1 second of random audio
+            test_audio = np.random.rand(24000).astype(np.float32)  # 1 second of random audio
             session_instance.run.return_value = [test_audio]
 
             mock_session.return_value = session_instance
@@ -121,9 +113,7 @@ class TestKokoroDirect:
     def test_create_audio(self):
         """Test _create_audio method."""
         voice_embedding = np.random.rand(512, 256).astype(np.float32)
-        audio, sample_rate = self.engine._create_audio(
-            "This is a test.", voice_embedding
-        )
+        audio, sample_rate = self.engine._create_audio("This is a test.", voice_embedding)
 
         assert audio is not None
         assert len(audio) > 0
@@ -133,9 +123,7 @@ class TestKokoroDirect:
         """Test create method with voice ID."""
         with tempfile.TemporaryDirectory() as temp_dir:
             out_path = Path(temp_dir) / "test_output.wav"
-            result_path = self.engine.create(
-                "This is a test.", self.test_voice_id, out_path=out_path
-            )
+            result_path = self.engine.create("This is a test.", self.test_voice_id, out_path=out_path)
 
             assert result_path == out_path
             mock_soundfile.assert_called_once()
@@ -145,9 +133,7 @@ class TestKokoroDirect:
         voice_embedding = np.random.rand(512, 256).astype(np.float32)
         with tempfile.TemporaryDirectory() as temp_dir:
             out_path = Path(temp_dir) / "test_output.wav"
-            result_path = self.engine.create(
-                "This is a test.", voice_embedding, out_path=out_path
-            )
+            result_path = self.engine.create("This is a test.", voice_embedding, out_path=out_path)
 
             assert result_path == out_path
             mock_soundfile.assert_called_once()
@@ -206,9 +192,7 @@ class TestKokoroDirect:
         caplog.set_level("DEBUG")
 
         # Create KD instance - this should not log tokenizer discovery during init
-        kd = KokoroDirect(
-            model_path="tts/kokoro-v1.0.onnx", voices_path="tts/voices-v1.0.bin"
-        )
+        kd = KokoroDirect(model_path="tts/kokoro-v1.0.onnx", voices_path="tts/voices-v1.0.bin")
 
         # Call create with disable_autodiscovery=True
         kd.create(
@@ -239,9 +223,7 @@ class TestKokoroDirect:
         caplog.set_level("DEBUG")
 
         # Test plain text (should use quiet grapheme path)
-        kd = KokoroDirect(
-            model_path="tts/kokoro-v1.0.onnx", voices_path="tts/voices-v1.0.bin"
-        )
+        kd = KokoroDirect(model_path="tts/kokoro-v1.0.onnx", voices_path="tts/voices-v1.0.bin")
 
         # Clear any logs from initialization
         caplog.clear()
@@ -257,9 +239,7 @@ class TestKokoroDirect:
 
         # Should use quiet grapheme path without tokenizer noise
         assert "Using pre-tokenized tokens" in logs
-        assert (
-            "Detected IPA phonemes" not in logs
-        )  # Should not detect IPA in plain text
+        assert "Detected IPA phonemes" not in logs  # Should not detect IPA in plain text
         assert "No known tokenization methods found" not in logs
         assert "Found phonemizer package" not in logs
         assert "Found misaki package" not in logs

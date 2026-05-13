@@ -59,24 +59,16 @@ class TestEnhancedRetrySystem:
                 call_count += 1
 
                 # First provider fails twice, second succeeds
-                if (
-                    provider_config.name == "openrouter"
-                    and provider_config.model == "moonshotai/kimi-vl-a3b-thinking:free"
-                ):
+                if provider_config.name == "openrouter" and provider_config.model == "moonshotai/kimi-vl-a3b-thinking:free":
                     raise Exception("502 Bad Gateway - Provider returned error")
-                elif (
-                    provider_config.name == "openrouter"
-                    and provider_config.model == "openai/gpt-4o-mini"
-                ):
+                elif provider_config.name == "openrouter" and provider_config.model == "openai/gpt-4o-mini":
                     return "Success with fallback provider"
                 else:
                     raise Exception("Unexpected provider")
 
             return coro
 
-        result = await retry_manager.run_with_fallback(
-            modality="vision", coro_factory=create_coro_factory, per_item_budget=30.0
-        )
+        result = await retry_manager.run_with_fallback(modality="vision", coro_factory=create_coro_factory, per_item_budget=30.0)
 
         assert result.success is True
         assert result.fallback_occurred is True
@@ -122,17 +114,13 @@ class TestEnhancedRetrySystem:
             return coro
 
         # First call should exhaust all providers
-        result1 = await retry_manager.run_with_fallback(
-            modality="vision", coro_factory=create_coro_factory, per_item_budget=30.0
-        )
+        result1 = await retry_manager.run_with_fallback(modality="vision", coro_factory=create_coro_factory, per_item_budget=30.0)
 
         assert result1.success is False
         initial_failures = failure_count
 
         # Second call should skip circuit-broken providers
-        result2 = await retry_manager.run_with_fallback(
-            modality="vision", coro_factory=create_coro_factory, per_item_budget=30.0
-        )
+        result2 = await retry_manager.run_with_fallback(modality="vision", coro_factory=create_coro_factory, per_item_budget=30.0)
 
         assert result2.success is False
         # Should have fewer attempts due to circuit breaker
@@ -151,9 +139,7 @@ class TestEnhancedRetrySystem:
 
             return coro
 
-        result = await retry_manager.run_with_fallback(
-            modality="vision", coro_factory=create_coro_factory, per_item_budget=30.0
-        )
+        result = await retry_manager.run_with_fallback(modality="vision", coro_factory=create_coro_factory, per_item_budget=30.0)
 
         assert result.success is False
         # Should fail fast with minimal attempts
@@ -210,9 +196,7 @@ class TestSequentialProcessing:
 
             # Verify sequential processing (no parallelism)
             assert max(processing_active) == 1, "Images were processed in parallel!"
-            assert len(processing_times) == 2, (
-                "Expected exactly 2 image processing calls"
-            )
+            assert len(processing_times) == 2, "Expected exactly 2 image processing calls"
 
             # Verify text flow was called once with aggregated result
             router._invoke_text_flow.assert_called_once()
@@ -274,9 +258,7 @@ class TestSequentialProcessing:
 
         # Verify processing order matches message order: PDF, Image, URL
         expected_order = ["pdf", "image", "url"]
-        assert processing_order == expected_order, (
-            f"Expected {expected_order}, got {processing_order}"
-        )
+        assert processing_order == expected_order, f"Expected {expected_order}, got {processing_order}"
 
     @pytest.mark.asyncio
     async def test_never_drop_items_on_failure(self, router):
@@ -290,9 +272,7 @@ class TestSequentialProcessing:
                 raise Exception("First image processing failed")
             return "Second image processed successfully"
 
-        router._process_image_from_attachment = AsyncMock(
-            side_effect=mock_image_handler
-        )
+        router._process_image_from_attachment = AsyncMock(side_effect=mock_image_handler)
         router._invoke_text_flow = AsyncMock()
 
         # Create message with two images

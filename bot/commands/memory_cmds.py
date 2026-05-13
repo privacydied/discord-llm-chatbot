@@ -56,22 +56,12 @@ class MemoryCommands(commands.Cog):
                 user_id=str(ctx.author.id),
                 text=content,
                 guild_id=str(ctx.guild.id) if getattr(ctx, "guild", None) else None,
-                channel_id=str(ctx.channel.id)
-                if getattr(ctx, "channel", None)
-                else None,
-                thread_id=str(ctx.channel.id)
-                if isinstance(ctx.channel, discord.Thread)
-                else None,
-                source_message_id=str(getattr(ctx.message, "id", None))
-                if getattr(ctx, "message", None)
-                else None,
+                channel_id=str(ctx.channel.id) if getattr(ctx, "channel", None) else None,
+                thread_id=str(ctx.channel.id) if isinstance(ctx.channel, discord.Thread) else None,
+                source_message_id=str(getattr(ctx.message, "id", None)) if getattr(ctx, "message", None) else None,
                 context_type=context_type,
                 source="explicit_memory_command",
-                metadata={
-                    "command": ctx.command.qualified_name
-                    if getattr(ctx, "command", None)
-                    else "memory-add"
-                },
+                metadata={"command": ctx.command.qualified_name if getattr(ctx, "command", None) else "memory-add"},
             )
         except Exception as exc:
             logger.error("Failed to persist curated memory: %s", exc, exc_info=True)
@@ -84,9 +74,7 @@ class MemoryCommands(commands.Cog):
         limit = min(max(1, int(limit)), 20)
         records = await list_user_memories(str(ctx.author.id), limit=limit)
         if not records:
-            await ctx.send(
-                "You don't have any durable memories yet. Use `!memory-add <content>` to add one!"
-            )
+            await ctx.send("You don't have any durable memories yet. Use `!memory-add <content>` to add one!")
             return
 
         embed = discord.Embed(
@@ -118,9 +106,7 @@ class MemoryCommands(commands.Cog):
 
         target = matches[0]
         if await delete_memory(target.memory_id, owner_id=str(ctx.author.id)):
-            await ctx.send(
-                f"✅ Deleted memory `{target.memory_id[:8]}`: {target.summary}"
-            )
+            await ctx.send(f"✅ Deleted memory `{target.memory_id[:8]}`: {target.summary}")
         else:
             await ctx.send("❌ Failed to delete memory. Please try again.")
 
@@ -138,16 +124,12 @@ class MemoryCommands(commands.Cog):
             await ctx.send("❌ Usage: `!memory-search <query>`")
             return
 
-        records = await search_user_memories(
-            str(ctx.author.id), query, limit=min(max(1, limit), 10)
-        )
+        records = await search_user_memories(str(ctx.author.id), query, limit=min(max(1, limit), 10))
         if not records:
             await ctx.send("No matching durable memories found.")
             return
 
-        embed = discord.Embed(
-            title=f"Memory Search: {query}", color=discord.Color.gold()
-        )
+        embed = discord.Embed(title=f"Memory Search: {query}", color=discord.Color.gold())
         for idx, record in enumerate(records, 1):
             embed.add_field(
                 name=f"{idx}. {record.memory_id[:8]} · {record.context_type}",
@@ -158,9 +140,7 @@ class MemoryCommands(commands.Cog):
 
     @commands.command(name="memory-add")
     async def memory_add_direct(self, ctx, *, content: str):
-        await self._add_curated_memory(
-            ctx, content=content, context_type="user_preference"
-        )
+        await self._add_curated_memory(ctx, content=content, context_type="user_preference")
 
     @commands.command(name="memory-show")
     async def memory_show_direct(self, ctx, limit: int = 5):
@@ -197,36 +177,24 @@ class MemoryCommands(commands.Cog):
         candidate_rejected_count = max(0, rejected_count - skipped_early_count)
         embed = discord.Embed(
             title="Memory Distiller Status",
-            color=discord.Color.blue()
-            if status.get("enabled")
-            else discord.Color.dark_grey(),
+            color=discord.Color.blue() if status.get("enabled") else discord.Color.dark_grey(),
         )
         embed.add_field(name="Enabled", value=str(status.get("enabled")), inline=True)
         embed.add_field(name="Dry run", value=str(status.get("dry_run")), inline=True)
         embed.add_field(name="Started", value=str(status.get("started")), inline=True)
         embed.add_field(name="Running", value=str(running), inline=True)
         embed.add_field(name="Backlog", value=str(status.get("backlog")), inline=True)
-        embed.add_field(
-            name="Batch size", value=str(status.get("batch_size")), inline=True
-        )
-        embed.add_field(
-            name="Interval", value=f"{status.get('interval_seconds')}s", inline=True
-        )
+        embed.add_field(name="Batch size", value=str(status.get("batch_size")), inline=True)
+        embed.add_field(name="Interval", value=f"{status.get('interval_seconds')}s", inline=True)
         embed.add_field(name="Scanned", value=str(scanned_count), inline=True)
-        embed.add_field(
-            name="Skipped early", value=str(skipped_early_count), inline=True
-        )
-        embed.add_field(
-            name="Candidate rejected", value=str(candidate_rejected_count), inline=True
-        )
+        embed.add_field(name="Skipped early", value=str(skipped_early_count), inline=True)
+        embed.add_field(name="Candidate rejected", value=str(candidate_rejected_count), inline=True)
         embed.add_field(name="Accepted", value=str(accepted_count), inline=True)
         embed.add_field(name="Merged", value=str(merged_count), inline=True)
         if last_run:
             embed.add_field(
                 name="Last run",
-                value=(
-                    f"candidate_count={candidate_count} total_rejected={rejected_count}"
-                ),
+                value=(f"candidate_count={candidate_count} total_rejected={rejected_count}"),
                 inline=False,
             )
         await ctx.send(embed=embed)
@@ -280,12 +248,8 @@ class MemoryCommands(commands.Cog):
                     value=str(result.get("rejected_count", 0)),
                     inline=True,
                 )
-                done_embed.add_field(
-                    name="Merged", value=str(result.get("merged_count", 0)), inline=True
-                )
-                done_embed.add_field(
-                    name="Dry run", value=str(result.get("dry_run", True)), inline=True
-                )
+                done_embed.add_field(name="Merged", value=str(result.get("merged_count", 0)), inline=True)
+                done_embed.add_field(name="Dry run", value=str(result.get("dry_run", True)), inline=True)
                 await ctx.send(embed=done_embed)
             except Exception as exc:
                 logger.exception("Background memory distillation failed")
@@ -295,9 +259,7 @@ class MemoryCommands(commands.Cog):
                 if task is not None and task.done():
                     self._distill_once_tasks.pop(guild_id, None)
 
-        task = asyncio.create_task(
-            _run_and_report(), name=f"memory-distill-once-{guild_id}"
-        )
+        task = asyncio.create_task(_run_and_report(), name=f"memory-distill-once-{guild_id}")
         self._distill_once_tasks[guild_id] = task
 
         def _cleanup(_task: asyncio.Task) -> None:
@@ -350,9 +312,7 @@ class MemoryCommands(commands.Cog):
             # Length validation to prevent memory abuse [SFT]
             MAX_MEMORY_LENGTH = 2000  # Discord message limit is 2000 chars
             if len(content) > MAX_MEMORY_LENGTH:
-                await ctx.send(
-                    f"❌ Memory too long. Maximum length is {MAX_MEMORY_LENGTH} characters."
-                )
+                await ctx.send(f"❌ Memory too long. Maximum length is {MAX_MEMORY_LENGTH} characters.")
                 return
 
             # Content validation - basic safety checks [SFT]
@@ -379,15 +339,11 @@ class MemoryCommands(commands.Cog):
 
             # Enforce memory limit
             if len(profile["memories"]) > self.config["MAX_MEMORIES"]:
-                profile["memories"] = profile["memories"][
-                    -self.config["MAX_MEMORIES"] :
-                ]
+                profile["memories"] = profile["memories"][-self.config["MAX_MEMORIES"] :]
 
             # Save the profile
             if save_profile(profile, caller_id=str(ctx.author.id)):
-                await ctx.send(
-                    f"✅ Memory added! You now have {len(profile['memories'])} memories."
-                )
+                await ctx.send(f"✅ Memory added! You now have {len(profile['memories'])} memories.")
                 log_command(ctx, f"Added memory: {content[:50]}...")
             else:
                 await ctx.send("❌ Failed to save memory. Please try again.")
@@ -415,9 +371,7 @@ class MemoryCommands(commands.Cog):
             profile = get_profile(str(ctx.author.id))
 
             if not profile or "memories" not in profile or not profile["memories"]:
-                await ctx.send(
-                    "You don't have any memories yet. Use `!memory add <content>` to add one!"
-                )
+                await ctx.send("You don't have any memories yet. Use `!memory add <content>` to add one!")
                 return
 
             # Limit the number of memories to show
@@ -456,16 +410,10 @@ class MemoryCommands(commands.Cog):
         """Clear all your memories after confirmation."""
         try:
             # Ask for confirmation
-            confirm_msg = await ctx.send(
-                "⚠️ Are you sure you want to delete ALL your memories? This cannot be undone. Type `yes` to confirm."
-            )
+            confirm_msg = await ctx.send("⚠️ Are you sure you want to delete ALL your memories? This cannot be undone. Type `yes` to confirm.")
 
             def check(m):
-                return (
-                    m.author == ctx.author
-                    and m.channel == ctx.channel
-                    and m.content.lower() == "yes"
-                )
+                return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() == "yes"
 
             try:
                 await ctx.bot.wait_for("message", check=check, timeout=30.0)
@@ -531,9 +479,7 @@ class MemoryCommands(commands.Cog):
             # Length validation to prevent memory abuse [SFT]
             MAX_MEMORY_LENGTH = 2000
             if len(content) > MAX_MEMORY_LENGTH:
-                await ctx.send(
-                    f"❌ Memory too long. Maximum length is {MAX_MEMORY_LENGTH} characters."
-                )
+                await ctx.send(f"❌ Memory too long. Maximum length is {MAX_MEMORY_LENGTH} characters.")
                 return
 
             # Content validation - basic safety checks [SFT]
@@ -562,15 +508,11 @@ class MemoryCommands(commands.Cog):
 
             # Enforce memory limit
             if len(profile["memories"]) > self.config["MAX_SERVER_MEMORIES"]:
-                profile["memories"] = profile["memories"][
-                    -self.config["MAX_SERVER_MEMORIES"] :
-                ]
+                profile["memories"] = profile["memories"][-self.config["MAX_SERVER_MEMORIES"] :]
 
             # Save the profile
             if save_server_profile(server_id, profile):
-                await ctx.send(
-                    f"✅ Server memory added! There are now {len(profile['memories'])} server memories."
-                )
+                await ctx.send(f"✅ Server memory added! There are now {len(profile['memories'])} server memories.")
                 log_command(ctx, f"Added server memory: {content[:50]}...")
             else:
                 await ctx.send("❌ Failed to save server memory. Please try again.")
@@ -587,9 +529,7 @@ class MemoryCommands(commands.Cog):
             profile = get_server_profile(str(ctx.guild.id))
 
             if not profile or "memories" not in profile or not profile["memories"]:
-                await ctx.send(
-                    "No server memories found. Use `!server-memory add <content>` to add one!"
-                )
+                await ctx.send("No server memories found. Use `!server-memory add <content>` to add one!")
                 return
 
             # Create an embed to display memories
@@ -611,9 +551,7 @@ class MemoryCommands(commands.Cog):
 
                 # Discord has a limit of 25 fields per embed
                 if i >= 25:
-                    embed.set_footer(
-                        text=f"Showing 25 most recent of {len(profile['memories'])} memories."
-                    )
+                    embed.set_footer(text=f"Showing 25 most recent of {len(profile['memories'])} memories.")
                     break
 
             await ctx.send(embed=embed)
@@ -630,23 +568,15 @@ class MemoryCommands(commands.Cog):
         """Clear all server memories after confirmation."""
         try:
             # Ask for confirmation
-            confirm_msg = await ctx.send(
-                "⚠️ Are you sure you want to delete ALL server memories? This cannot be undone. Type `yes` to confirm."
-            )
+            confirm_msg = await ctx.send("⚠️ Are you sure you want to delete ALL server memories? This cannot be undone. Type `yes` to confirm.")
 
             def check(m):
-                return (
-                    m.author == ctx.author
-                    and m.channel == ctx.channel
-                    and m.content.lower() == "yes"
-                )
+                return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() == "yes"
 
             try:
                 await ctx.bot.wait_for("message", check=check, timeout=30.0)
             except asyncio.TimeoutError:
-                await confirm_msg.edit(
-                    content="Server memory clear cancelled due to timeout."
-                )
+                await confirm_msg.edit(content="Server memory clear cancelled due to timeout.")
                 return
 
             # Clear server memories
@@ -659,9 +589,7 @@ class MemoryCommands(commands.Cog):
             profile["memories"] = []
 
             if save_server_profile(str(ctx.guild.id), profile):
-                await ctx.send(
-                    f"✅ Successfully cleared {memory_count} server memories."
-                )
+                await ctx.send(f"✅ Successfully cleared {memory_count} server memories.")
                 log_command(ctx, f"Cleared {memory_count} server memories")
             else:
                 await ctx.send("❌ Failed to clear server memories. Please try again.")

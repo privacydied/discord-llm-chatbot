@@ -55,4 +55,3 @@ def test_enum_values():
     assert VisionJobState.RUNNING.value == "running"
     assert VisionJobState.COMPLETED.value == "completed"
     assert VisionJobState.FAILED.value == "failed"
-

@@ -133,9 +133,7 @@ def test_dispatch_empty_error_is_exception():
 
 def test_dispatch_empty_error_message():
     try:
-        raise DispatchEmptyError(
-            "Could not extract content from URL: https://example.com"
-        )
+        raise DispatchEmptyError("Could not extract content from URL: https://example.com")
     except DispatchEmptyError as e:
         assert "Could not extract content from URL" in str(e)
         assert "https://example.com" in str(e)
@@ -145,18 +143,14 @@ def test_dispatch_empty_error_message():
 
 
 def test_extraction_result_failure_message():
-    er = ExtractionResult(
-        success=False, tier_used="B", error="version mismatch server=1.59 client=1.55"
-    )
+    er = ExtractionResult(success=False, tier_used="B", error="version mismatch server=1.59 client=1.55")
     assert er.success is False
     msg = er.to_message()
     assert "failed" in msg.lower()
 
 
 def test_extraction_result_success_message():
-    er = ExtractionResult(
-        success=True, tier_used="A", canonical_url="https://example.com", text="Hello"
-    )
+    er = ExtractionResult(success=True, tier_used="A", canonical_url="https://example.com", text="Hello")
     assert er.success is True
     msg = er.to_message()
     assert "Hello" in msg

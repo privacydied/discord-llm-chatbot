@@ -58,25 +58,15 @@ class ContextManager:
         """
         self.bot = bot
         self.filepath = filepath
-        self.max_messages = int(
-            os.getenv("MAX_CONTEXT_MESSAGES", max_messages)
-        )
+        self.max_messages = int(os.getenv("MAX_CONTEXT_MESSAGES", max_messages))
         self.in_memory_only = get_bool("IN_MEMORY_CONTEXT_ONLY", False)
         # Context trimming limits
-        self.max_chars_per_message = _load_int_config(
-            "CONTEXT_MAX_CHARS_PER_MESSAGE", 2000
-        )
+        self.max_chars_per_message = _load_int_config("CONTEXT_MAX_CHARS_PER_MESSAGE", 2000)
         self.max_total_chars = _load_int_config("CONTEXT_MAX_TOTAL_CHARS", 8000)
-        self.ignore_continuation_chunks = _load_bool_config(
-            "CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS", True
-        )
+        self.ignore_continuation_chunks = _load_bool_config("CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS", True)
         self.memory: Dict[str, Any] = {}
         self._load()
-        logger.info(
-            f"ContextManager initialized. In-memory only: {self.in_memory_only}, "
-            f"Max messages: {self.max_messages}, Max chars/msg: {self.max_chars_per_message}, "
-            f"Max total chars: {self.max_total_chars}"
-        )
+        logger.info(f"ContextManager initialized. In-memory only: {self.in_memory_only}, Max messages: {self.max_messages}, Max chars/msg: {self.max_chars_per_message}, Max total chars: {self.max_total_chars}")
 
     def _get_source_keys(self, message: discord.Message) -> Tuple[str, Optional[str]]:
         """
@@ -108,13 +98,9 @@ class ContextManager:
                     self.memory = json.load(f)
                 logger.info(f"Successfully loaded context from {self.filepath}")
             else:
-                logger.info(
-                    f"Context file not found at {self.filepath}. Starting with empty context."
-                )
+                logger.info(f"Context file not found at {self.filepath}. Starting with empty context.")
         except (json.JSONDecodeError, IOError) as e:
-            logger.error(
-                f"Failed to load or parse context file at {self.filepath}. Using in-memory fallback. Error: {e}"
-            )
+            logger.error(f"Failed to load or parse context file at {self.filepath}. Using in-memory fallback. Error: {e}")
             self.memory = {}
 
     async def _save(self):
@@ -128,9 +114,7 @@ class ContextManager:
             return
 
         # Filter out DM conversations to enforce privacy
-        guild_context_only = {
-            k: v for k, v in self.memory.items() if not k.startswith("dm_")
-        }
+        guild_context_only = {k: v for k, v in self.memory.items() if not k.startswith("dm_")}
 
         try:
             from bot.atomic_json import write_json_atomic
@@ -178,12 +162,8 @@ class ContextManager:
         }
 
         if secondary_key:  # Guild message
-            self.memory.setdefault(primary_key, {}).setdefault(
-                secondary_key, []
-            ).append(entry)
-            self.memory[primary_key][secondary_key] = self.memory[primary_key][
-                secondary_key
-            ][-self.max_messages :]
+            self.memory.setdefault(primary_key, {}).setdefault(secondary_key, []).append(entry)
+            self.memory[primary_key][secondary_key] = self.memory[primary_key][secondary_key][-self.max_messages :]
         else:  # DM
             self.memory.setdefault(primary_key, []).append(entry)
             self.memory[primary_key] = self.memory[primary_key][-self.max_messages :]
@@ -193,12 +173,14 @@ class ContextManager:
             loop = asyncio.get_event_loop()
             task = loop.create_task(self._save())
             task.add_done_callback(
-                lambda t: logger.warning(
-                    f"Context save failed: {t.exception()}",
-                    exc_info=t.exception(),
+                lambda t: (
+                    logger.warning(
+                        f"Context save failed: {t.exception()}",
+                        exc_info=t.exception(),
+                    )
+                    if not t.cancelled() and t.exception()
+                    else None
                 )
-                if not t.cancelled() and t.exception()
-                else None
             )
         except RuntimeError:
             pass
@@ -244,11 +226,7 @@ class ContextManager:
 
             if not username:
                 try:
-                    user = (
-                        await message.guild.fetch_member(author_id)
-                        if message.guild
-                        else await self.bot.fetch_user(author_id)
-                    )
+                    user = await message.guild.fetch_member(author_id) if message.guild else await self.bot.fetch_user(author_id)
                     username = user.display_name
                     user_cache[author_id] = username
                 except (discord.NotFound, discord.HTTPException):

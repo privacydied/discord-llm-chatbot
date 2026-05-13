@@ -88,8 +88,7 @@ def classify_attachment(attachment: discord.Attachment) -> ClassifiedAttachment:
 
     # Log classification for observability
     logger.info(
-        f"attach.classify name={filename} size={size} mime={content_type} "
-        f"bucket={bucket.name} voice={is_voice_message}",
+        f"attach.classify name={filename} size={size} mime={content_type} bucket={bucket.name} voice={is_voice_message}",
         extra={
             "subsys": "attach",
             "event": "attach.classify",
@@ -112,9 +111,7 @@ def classify_attachment(attachment: discord.Attachment) -> ClassifiedAttachment:
     )
 
 
-def _determine_bucket(
-    filename: str, content_type: str, is_voice_message: bool
-) -> AttachmentBucket:
+def _determine_bucket(filename: str, content_type: str, is_voice_message: bool) -> AttachmentBucket:
     """
     Determine the bucket for an attachment based on filename, MIME, and flags.
 
@@ -228,9 +225,7 @@ def _determine_bucket(
     # text/plain but not .txt (might be misidentified; safer to treat as doc)
     if mime_root.startswith("text/plain") and not filename.endswith(".txt"):
         # Check if it's actually an audio/video file with wrong MIME
-        if any(
-            filename.endswith(ext) for ext in {".mp3", ".wav", ".ogg", ".mp4", ".webm"}
-        ):
+        if any(filename.endswith(ext) for ext in {".mp3", ".wav", ".ogg", ".mp4", ".webm"}):
             # Re-classify based on extension
             if any(filename.endswith(ext) for ext in {".mp3", ".wav", ".ogg"}):
                 return AttachmentBucket.AUDIO
@@ -283,8 +278,7 @@ def classify_attachments(
         bucket_counts[c.bucket.name] = bucket_counts.get(c.bucket.name, 0) + 1
 
     logger.info(
-        f"attach.summary total={len(classified)} "
-        + " ".join(f"{k.lower()}={v}" for k, v in bucket_counts.items()),
+        f"attach.summary total={len(classified)} " + " ".join(f"{k.lower()}={v}" for k, v in bucket_counts.items()),
         extra={
             "subsys": "attach",
             "event": "attach.summary",
@@ -295,9 +289,7 @@ def classify_attachments(
     return classified
 
 
-def get_by_bucket(
-    classified: List[ClassifiedAttachment], bucket: AttachmentBucket
-) -> List[ClassifiedAttachment]:
+def get_by_bucket(classified: List[ClassifiedAttachment], bucket: AttachmentBucket) -> List[ClassifiedAttachment]:
     """Filter classified attachments by bucket."""
     return [c for c in classified if c.bucket == bucket]
 
@@ -484,9 +476,7 @@ def classify_mime_and_extension(
 
     # 1. Web page detection (special case - not an "attachment" bucket but useful for routing)
     if mime_root in _WEB_PAGE_MIMES:
-        return (
-            AttachmentBucket.OTHER
-        )  # Signal to use web scraper, not attachment pipeline
+        return AttachmentBucket.OTHER  # Signal to use web scraper, not attachment pipeline
 
     # 2. Audio detection
     if mime_root in _AUDIO_MIMES or mime_root.startswith("audio/"):

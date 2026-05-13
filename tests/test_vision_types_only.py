@@ -65,6 +65,7 @@ def test_vision_enums():
     assert VisionJobState.COMPLETED.value == "completed"
     assert VisionJobState.FAILED.value == "failed"
 
+
 def test_vision_request():
     """Test VisionRequest creation"""
     from bot.vision.types import VisionRequest, VisionTask, VisionProvider
@@ -82,6 +83,7 @@ def test_vision_request():
     assert request.preferred_provider == VisionProvider.TOGETHER
     assert request.width == 1024  # Default value
     assert request.height == 1024  # Default value
+
 
 def test_vision_response():
     """Test VisionResponse creation"""
@@ -103,6 +105,7 @@ def test_vision_response():
     assert response.artifacts[0] == Path("/tmp/image.png")
     assert response.processing_time_seconds == 5.2
 
+
 def test_vision_job():
     """Test VisionJob creation and state transitions"""
     from bot.vision.types import (
@@ -113,14 +116,10 @@ def test_vision_job():
     )
 
     # Create request
-    request = VisionRequest(
-        task=VisionTask.TEXT_TO_IMAGE, prompt="Test prompt", user_id="test_user"
-    )
+    request = VisionRequest(task=VisionTask.TEXT_TO_IMAGE, prompt="Test prompt", user_id="test_user")
 
     # Create job
-    job = VisionJob(
-        job_id="test_job_123", request=request, state=VisionJobState.CREATED
-    )
+    job = VisionJob(job_id="test_job_123", request=request, state=VisionJobState.CREATED)
 
     assert job.job_id == "test_job_123"
     assert job.state == VisionJobState.CREATED
@@ -136,6 +135,7 @@ def test_vision_job():
     assert job.progress_percentage == 50
     # Progress message is logged, not stored as a field
 
+
 def test_vision_error():
     """Test VisionError handling"""
     from bot.vision.types import VisionError, VisionErrorType
@@ -149,4 +149,3 @@ def test_vision_error():
     assert error.error_type == VisionErrorType.PROVIDER_ERROR
     assert error.message == "Provider is unavailable"
     assert error.user_message == "The image generation service is temporarily unavailable."
-

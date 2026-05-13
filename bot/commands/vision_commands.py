@@ -60,7 +60,6 @@ class VisionCommands(commands.Cog):
                 pass
         self._temp_files.clear()
 
-
     @app_commands.command(name="image", description="Generate images from text prompts")
     @app_commands.describe(
         prompt="Text description of the image to generate",
@@ -83,18 +82,14 @@ class VisionCommands(commands.Cog):
         negative: Optional[str] = None,
         seed: Optional[int] = None,
         count: Optional[app_commands.Range[int, 1, 4]] = 1,
-        provider: Optional[
-            Literal["together", "novita", "openrouter", "auto"]
-        ] = "auto",
+        provider: Optional[Literal["together", "novita", "openrouter", "auto"]] = "auto",
         model: Optional[str] = None,
     ):
         """Handle /image slash command"""
 
         # Check if Vision is enabled
         if not self.config.get("VISION_ENABLED", False):
-            await interaction.response.send_message(
-                "🚫 Vision generation is currently disabled.", ephemeral=True
-            )
+            await interaction.response.send_message("🚫 Vision generation is currently disabled.", ephemeral=True)
             return
 
         # Map size parameter to dimensions
@@ -165,11 +160,7 @@ class VisionCommands(commands.Cog):
                 self._monitor_job_progress(interaction, job),
                 name=f"vision-monitor-{job.job_id}",
             )
-            _task.add_done_callback(
-                lambda t: self.logger.debug("job monitor complete", extra={"detail": {"job_id": job.job_id}})
-                if t.done() and not t.cancelled() and t.exception()
-                else None
-            )
+            _task.add_done_callback(lambda t: self.logger.debug("job monitor complete", extra={"detail": {"job_id": job.job_id}}) if t.done() and not t.cancelled() and t.exception() else None)
 
         except VisionError as e:
             self.logger.error(
@@ -202,13 +193,9 @@ class VisionCommands(commands.Cog):
                 },
             )
 
-            await interaction.response.send_message(
-                "❌ An unexpected error occurred. Please try again.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ An unexpected error occurred. Please try again.", ephemeral=True)
 
-    @app_commands.command(
-        name="imgedit", description="Edit, modify, or create variations of images"
-    )
+    @app_commands.command(name="imgedit", description="Edit, modify, or create variations of images")
     @app_commands.describe(
         image="Image to edit or modify",
         prompt="Description of desired changes",
@@ -236,22 +223,16 @@ class VisionCommands(commands.Cog):
         """Handle /imgedit slash command"""
 
         if not self.config.get("VISION_ENABLED", False):
-            await interaction.response.send_message(
-                "🚫 Vision generation is currently disabled.", ephemeral=True
-            )
+            await interaction.response.send_message("🚫 Vision generation is currently disabled.", ephemeral=True)
             return
 
         # Validate attachment
         if not image.filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-            await interaction.response.send_message(
-                "❌ Please provide a valid image file (JPG, PNG, WebP).", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Please provide a valid image file (JPG, PNG, WebP).", ephemeral=True)
             return
 
         if image.size > 25 * 1024 * 1024:  # 25MB limit
-            await interaction.response.send_message(
-                "❌ Image file too large. Maximum size: 25MB.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Image file too large. Maximum size: 25MB.", ephemeral=True)
             return
 
         try:
@@ -271,9 +252,7 @@ class VisionCommands(commands.Cog):
                 guidance_scale=guidance,
                 negative_prompt=negative or "",
                 seed=seed,
-                preferred_provider=VisionProvider(provider)
-                if provider != "auto"
-                else None,
+                preferred_provider=VisionProvider(provider) if provider != "auto" else None,
                 preferred_model=model,
             )
 
@@ -319,13 +298,15 @@ class VisionCommands(commands.Cog):
             )
             job_id = job.job_id
             _task.add_done_callback(
-                lambda t: self.logger.error(
-                    f"imgedit monitor task failed: {t.exception()}",
-                    exc_info=t.exception(),
-                    extra={"detail": {"job_id": job_id}},
+                lambda t: (
+                    self.logger.error(
+                        f"imgedit monitor task failed: {t.exception()}",
+                        exc_info=t.exception(),
+                        extra={"detail": {"job_id": job_id}},
+                    )
+                    if t.done() and not t.cancelled() and t.exception()
+                    else None
                 )
-                if t.done() and not t.cancelled() and t.exception()
-                else None
             )
 
         except Exception as e:
@@ -368,9 +349,7 @@ class VisionCommands(commands.Cog):
         """Handle /video slash command"""
 
         if not self.config.get("VISION_ENABLED", False):
-            await interaction.response.send_message(
-                "🚫 Vision generation is currently disabled.", ephemeral=True
-            )
+            await interaction.response.send_message("🚫 Vision generation is currently disabled.", ephemeral=True)
             return
 
         # Map resolution to dimensions
@@ -391,9 +370,7 @@ class VisionCommands(commands.Cog):
                 fps=fps,
                 style=style,
                 seed=seed,
-                preferred_provider=VisionProvider(provider)
-                if provider != "auto"
-                else None,
+                preferred_provider=VisionProvider(provider) if provider != "auto" else None,
                 preferred_model=model,
             )
 
@@ -433,13 +410,15 @@ class VisionCommands(commands.Cog):
             )
             job_id = job.job_id
             _task.add_done_callback(
-                lambda t: self.logger.error(
-                    f"video monitor task failed: {t.exception()}",
-                    exc_info=t.exception(),
-                    extra={"detail": {"job_id": job_id}},
+                lambda t: (
+                    self.logger.error(
+                        f"video monitor task failed: {t.exception()}",
+                        exc_info=t.exception(),
+                        extra={"detail": {"job_id": job_id}},
+                    )
+                    if t.done() and not t.cancelled() and t.exception()
+                    else None
                 )
-                if t.done() and not t.cancelled() and t.exception()
-                else None
             )
 
         except Exception as e:
@@ -451,9 +430,7 @@ class VisionCommands(commands.Cog):
                     "detail": {"error": str(e), "error_type": type(e).__name__},
                 },
             )
-            await interaction.response.send_message(
-                "❌ Failed to start video generation. Please try again.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Failed to start video generation. Please try again.", ephemeral=True)
 
     @app_commands.command(name="vidref", description="Animate images into videos")
     @app_commands.describe(
@@ -481,22 +458,16 @@ class VisionCommands(commands.Cog):
         """Handle /vidref slash command"""
 
         if not self.config.get("VISION_ENABLED", False):
-            await interaction.response.send_message(
-                "🚫 Vision generation is currently disabled.", ephemeral=True
-            )
+            await interaction.response.send_message("🚫 Vision generation is currently disabled.", ephemeral=True)
             return
 
         # Validate attachment
         if not image.filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-            await interaction.response.send_message(
-                "❌ Please provide a valid image file (JPG, PNG, WebP).", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Please provide a valid image file (JPG, PNG, WebP).", ephemeral=True)
             return
 
         if image.size > 25 * 1024 * 1024:
-            await interaction.response.send_message(
-                "❌ Image file too large. Maximum size: 25MB.", ephemeral=True
-            )
+            await interaction.response.send_message("❌ Image file too large. Maximum size: 25MB.", ephemeral=True)
             return
 
         try:
@@ -515,9 +486,7 @@ class VisionCommands(commands.Cog):
                 fps=fps,
                 mode=mode,
                 seed=seed,
-                preferred_provider=VisionProvider(provider)
-                if provider != "auto"
-                else None,
+                preferred_provider=VisionProvider(provider) if provider != "auto" else None,
                 preferred_model=model,
             )
 
@@ -559,13 +528,15 @@ class VisionCommands(commands.Cog):
             )
             job_id = job.job_id
             _task.add_done_callback(
-                lambda t: self.logger.error(
-                    f"vidref monitor task failed: {t.exception()}",
-                    exc_info=t.exception(),
-                    extra={"detail": {"job_id": job_id}},
+                lambda t: (
+                    self.logger.error(
+                        f"vidref monitor task failed: {t.exception()}",
+                        exc_info=t.exception(),
+                        extra={"detail": {"job_id": job_id}},
+                    )
+                    if t.done() and not t.cancelled() and t.exception()
+                    else None
                 )
-                if t.done() and not t.cancelled() and t.exception()
-                else None
             )
 
         except Exception as e:
@@ -625,15 +596,11 @@ class VisionCommands(commands.Cog):
                     with open(temp_path, "wb") as f:
                         f.write(data)
                 else:
-                    raise Exception(
-                        f"Failed to download attachment: HTTP {resp.status}"
-                    )
+                    raise Exception(f"Failed to download attachment: HTTP {resp.status}")
 
         return temp_path
 
-    async def _monitor_job_progress(
-        self, interaction: discord.Interaction, job, long_running: bool = False
-    ):
+    async def _monitor_job_progress(self, interaction: discord.Interaction, job, long_running: bool = False):
         """Monitor job progress and update Discord message [PA]"""
         update_interval = self.config.get("VISION_PROGRESS_UPDATE_INTERVAL_S", 10)
         max_updates = 60 if long_running else 30  # More updates for video
@@ -677,18 +644,12 @@ class VisionCommands(commands.Cog):
                 color=0xFFAA00,
             )
             embed.add_field(name="Job ID", value=f"`{job.job_id[:8]}`", inline=True)
-            embed.add_field(
-                name="Status", value=f"🟡 {job.state.value.title()}", inline=True
-            )
-            embed.add_field(
-                name="Progress", value=f"{job.progress_percentage}%", inline=True
-            )
+            embed.add_field(name="Status", value=f"🟡 {job.state.value.title()}", inline=True)
+            embed.add_field(name="Progress", value=f"{job.progress_percentage}%", inline=True)
 
             # Add provider info if available
             if job.provider_assigned:
-                embed.add_field(
-                    name="Provider", value=job.provider_assigned.value, inline=True
-                )
+                embed.add_field(name="Provider", value=job.provider_assigned.value, inline=True)
 
             embed.set_footer(text=f"Elapsed: {self._format_elapsed_time(job)}")
 
@@ -725,9 +686,7 @@ class VisionCommands(commands.Cog):
                 value=f"{response.processing_time_seconds:.1f}s",
                 inline=True,
             )
-            embed.add_field(
-                name="Actual Cost", value=f"${response.actual_cost:.3f}", inline=True
-            )
+            embed.add_field(name="Actual Cost", value=f"${response.actual_cost:.3f}", inline=True)
             embed.add_field(
                 name="File Size",
                 value=f"{response.file_size_bytes / (1024 * 1024):.1f}MB",
@@ -751,13 +710,8 @@ class VisionCommands(commands.Cog):
             # Prepare file attachments
             files = []
             for artifact_path in response.artifacts:
-                if (
-                    artifact_path.exists()
-                    and artifact_path.stat().st_size < 100 * 1024 * 1024
-                ):  # 100MB Discord limit
-                    discord_file = discord.File(
-                        artifact_path, filename=artifact_path.name
-                    )
+                if artifact_path.exists() and artifact_path.stat().st_size < 100 * 1024 * 1024:  # 100MB Discord limit
+                    discord_file = discord.File(artifact_path, filename=artifact_path.name)
                     files.append(discord_file)
 
             if files:
@@ -804,9 +758,7 @@ class VisionCommands(commands.Cog):
 
             if error:
                 embed.description = error.user_message
-                embed.add_field(
-                    name="Error Type", value=error.error_type.value, inline=True
-                )
+                embed.add_field(name="Error Type", value=error.error_type.value, inline=True)
             else:
                 embed.description = "Generation failed for an unknown reason."
 

@@ -36,9 +36,7 @@ def test_no_error_when_no_tokenizer_if_phonemes(monkeypatch, caplog):
     kd = KokoroDirect("/model.onnx", "/voices.bin", use_tokenizer=False)
     # create must not log 'No tokenizer available' nor invoke grapheme path
     caplog.clear()
-    kd._synthesize_from_ipa = lambda ipa, **k: (
-        "/tmp/ok.wav"
-    )  # monkeypatch the final call
+    kd._synthesize_from_ipa = lambda ipa, **k: "/tmp/ok.wav"  # monkeypatch the final call
     kd.create(
         phonemes="t ɹ iː",
         voice="af_heart",

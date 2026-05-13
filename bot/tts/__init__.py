@@ -30,9 +30,7 @@ async def generate_tts(text: str, user_id: str) -> Path:
 
         manager = TTSManager()
         # Ensure WAV output and handle (Path, mime) return
-        result = await manager.generate_tts(
-            text, out_path=str(out_path), output_format="wav"
-        )
+        result = await manager.generate_tts(text, out_path=str(out_path), output_format="wav")
         if isinstance(result, tuple):
             final_path, _mime = result
         else:

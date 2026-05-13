@@ -93,9 +93,7 @@ async def _ensure_file(url: str, dest: Path, force: bool) -> None:
     )
 
 
-async def ensure_kokoro_assets(
-    out_dir: Path = Path("tts"), force: bool = False
-) -> Tuple[Path, Path]:
+async def ensure_kokoro_assets(out_dir: Path = Path("tts"), force: bool = False) -> Tuple[Path, Path]:
     """Ensure Kokoro-ONNX model and voices exist under out_dir.
 
     - Deletes legacy paths under tts/onnx and tts/voices.

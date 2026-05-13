@@ -175,20 +175,14 @@ async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes
             logging.warning(f"SSRF blocked: {_ssrf_hostname}")
             return None
 
-        async with httpx.AsyncClient(
-            headers=headers, follow_redirects=True, timeout=timeout
-        ) as client:
-            logging.debug(
-                f"web.fetch request url={url[:200]} timeout_s={timeout} ua_present={bool(headers.get('User-Agent'))}"
-            )
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=timeout) as client:
+            logging.debug(f"web.fetch request url={url[:200]} timeout_s={timeout} ua_present={bool(headers.get('User-Agent'))}")
             response = await client.get(url)
             # Validate redirect target for SSRF
             validate_redirect_response(response)
             response.raise_for_status()  # Raise exception for 4xx/5xx responses
             content = await response.aread()
-            content_type = response.headers.get(
-                "Content-Type", "application/octet-stream"
-            )
+            content_type = response.headers.get("Content-Type", "application/octet-stream")
             logging.info(f"Successfully fetched {url} with httpx.")
             return content, content_type
     except httpx.HTTPStatusError as e:
@@ -203,9 +197,7 @@ async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes
         return None
 
 
-async def _fetch_url_content_detail(
-    url: str, timeout: int = 15
-) -> Tuple[Optional[Tuple[bytes, str]], Optional[str]]:
+async def _fetch_url_content_detail(url: str, timeout: int = 15) -> Tuple[Optional[Tuple[bytes, str]], Optional[str]]:
     """Fetch URL content and return (payload, error_message)."""
     try:
         payload = await fetch_url_content(url, timeout=timeout)
@@ -379,14 +371,7 @@ def strip_boilerplate(text: str) -> str:
         "allow notifications",
     ]
     # A line is considered boilerplate if it's short and contains a keyword
-    return "\n".join(
-        line
-        for line in text.splitlines()
-        if not (
-            len(line.split()) < 15
-            and any(keyword in line.lower() for keyword in BLOCKLIST)
-        )
-    )
+    return "\n".join(line for line in text.splitlines() if not (len(line.split()) < 15 and any(keyword in line.lower() for keyword in BLOCKLIST)))
 
 
 async def process_url(url: str) -> Dict[str, Any]:
@@ -397,9 +382,7 @@ async def process_url(url: str) -> Dict[str, Any]:
 
     # 1. Smart routing for Twitter/X.com URLs (detect media first)
     if smart_routing:
-        logging.info(
-            f"🧠 Smart routing enabled for {url}. Checking for media content..."
-        )
+        logging.info(f"🧠 Smart routing enabled for {url}. Checking for media content...")
 
         try:
             # Import media capability detector
@@ -409,9 +392,7 @@ async def process_url(url: str) -> Dict[str, Any]:
             probe_result = await is_twitter_video_url(url)
 
             if probe_result.is_media_capable:
-                logging.info(
-                    f"🎥 Media detected in Twitter URL {url}. Routing to yt-dlp flow."
-                )
+                logging.info(f"🎥 Media detected in Twitter URL {url}. Routing to yt-dlp flow.")
                 # Return special indicator that this should be routed to yt-dlp
                 return {
                     "url": url,
@@ -421,14 +402,10 @@ async def process_url(url: str) -> Dict[str, Any]:
                     "route_to_ytdlp": True,
                 }
             else:
-                logging.info(
-                    f"📝 No media in Twitter URL {url}. Proceeding with text extraction (no auto-screenshot)."
-                )
+                logging.info(f"📝 No media in Twitter URL {url}. Proceeding with text extraction (no auto-screenshot).")
 
         except Exception as e:
-            logging.error(
-                f"❌ Smart routing failed for {url}: {e}. Continuing with text extraction."
-            )
+            logging.error(f"❌ Smart routing failed for {url}: {e}. Continuing with text extraction.")
 
     # 2. Attempt screenshot if forced (legacy behavior for non-smart domains)
     # 'force_screenshot' is ignored; screenshots are gated by explicit command.
@@ -440,9 +417,7 @@ async def process_url(url: str) -> Dict[str, Any]:
             content, content_type = httpx_content_data
             if "text/html" in (content_type or "").lower():
                 html_string = content.decode("utf-8", errors="ignore")
-                raw_text = trafilatura.extract(
-                    html_string, url=url, config=trafilatura_config
-                )
+                raw_text = trafilatura.extract(html_string, url=url, config=trafilatura_config)
                 text_content = strip_boilerplate(raw_text or "")
 
                 # Check for placeholder content indicating a JS-heavy site
@@ -451,9 +426,7 @@ async def process_url(url: str) -> Dict[str, Any]:
                     "javascript is required",
                     "requires javascript",
                 )
-                if text_content and not any(
-                    keyword in text_content.lower() for keyword in js_required_keywords
-                ):
+                if text_content and not any(keyword in text_content.lower() for keyword in js_required_keywords):
                     return {
                         "url": url,
                         "text": text_content,

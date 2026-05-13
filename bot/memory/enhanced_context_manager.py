@@ -103,18 +103,12 @@ class EnhancedContextManager:
         self.filepath = filepath
         self.history_window = history_window or int(os.getenv("HISTORY_WINDOW", "10"))
         self.max_token_limit = max_token_limit
-        self.in_memory_only = (
-            os.getenv("IN_MEMORY_CONTEXT_ONLY", "false").lower() == "true"
-        )
+        self.in_memory_only = os.getenv("IN_MEMORY_CONTEXT_ONLY", "false").lower() == "true"
 
         # Context trimming limits — respect LOW_RESOURCE_MODE via load_config()
-        self.max_chars_per_message = _load_int_config(
-            "CONTEXT_MAX_CHARS_PER_MESSAGE", 2000
-        )
+        self.max_chars_per_message = _load_int_config("CONTEXT_MAX_CHARS_PER_MESSAGE", 2000)
         self.max_total_chars = _load_int_config("CONTEXT_MAX_TOTAL_CHARS", 8000)
-        self.ignore_continuation_chunks = _load_bool_config(
-            "CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS", True
-        )
+        self.ignore_continuation_chunks = _load_bool_config("CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS", True)
         # Override message count cap with config if available
         self.max_messages = _load_int_config("CONTEXT_MAX_MESSAGES", self.history_window)
 
@@ -144,9 +138,7 @@ class EnhancedContextManager:
         self._memory_lock = asyncio.Lock()
 
         self._load()
-        logger.info(
-            f"✔ Enhanced context manager initialized [history_window={self.history_window}, encryption=enabled]"
-        )
+        logger.info(f"✔ Enhanced context manager initialized [history_window={self.history_window}, encryption=enabled]")
 
     def _get_context_key(self, message: discord.Message) -> str:
         """Generate context key for message storage."""
@@ -159,9 +151,7 @@ class EnhancedContextManager:
             # Regular channel
             return f"guild_{message.guild.id}_channel_{message.channel.id}"
 
-    def _get_user_context_key(
-        self, user_id: str, channel_id: str, guild_id: Optional[str] = None
-    ) -> str:
+    def _get_user_context_key(self, user_id: str, channel_id: str, guild_id: Optional[str] = None) -> str:
         """Generate user-specific context key."""
         if guild_id:
             return f"guild_{guild_id}_channel_{channel_id}_user_{user_id}"
@@ -197,18 +187,14 @@ class EnhancedContextManager:
 
                 # Load message entries
                 for key, entries in data.get("messages", {}).items():
-                    self.memory[key] = [
-                        MessageEntry.from_dict(entry) for entry in entries
-                    ]
+                    self.memory[key] = [MessageEntry.from_dict(entry) for entry in entries]
 
                 # Load privacy opt-outs
                 self.privacy_opt_outs = data.get("privacy_opt_outs", {})
 
                 logger.info(f"✔ Loaded enhanced context from {self.filepath}")
             else:
-                logger.info(
-                    f"Context file not found at {self.filepath}, starting fresh"
-                )
+                logger.info(f"Context file not found at {self.filepath}, starting fresh")
         except Exception as e:
             logger.error(f"❌ Failed to load context: {e}")
             self.memory = {}
@@ -223,11 +209,7 @@ class EnhancedContextManager:
 
         try:
             # Filter out DM conversations to enforce privacy
-            filtered_messages = {
-                k: [entry.to_dict() for entry in v]
-                for k, v in self.memory.items()
-                if not k.startswith("dm_")
-            }
+            filtered_messages = {k: [entry.to_dict() for entry in v] for k, v in self.memory.items() if not k.startswith("dm_")}
 
             data = {
                 "messages": filtered_messages,
@@ -259,12 +241,14 @@ class EnhancedContextManager:
             loop = asyncio.get_event_loop()
             task = loop.create_task(self._save())
             task.add_done_callback(
-                lambda t: logger.warning(
-                    f"Enhanced context save failed: {t.exception()}",
-                    exc_info=t.exception(),
+                lambda t: (
+                    logger.warning(
+                        f"Enhanced context save failed: {t.exception()}",
+                        exc_info=t.exception(),
+                    )
+                    if not t.cancelled() and t.exception()
+                    else None
                 )
-                if not t.cancelled() and t.exception()
-                else None
             )
         except RuntimeError:
             # No event loop — skip save (should not happen in normal bot op)
@@ -284,9 +268,7 @@ class EnhancedContextManager:
             role: 'user' or 'bot'
         """
         if self.is_privacy_opted_out(str(message.author.id)):
-            logger.debug(
-                f"Skipping context storage for opted-out user {message.author.id}"
-            )
+            logger.debug(f"Skipping context storage for opted-out user {message.author.id}")
             return
 
         async with self._memory_lock:
@@ -301,9 +283,7 @@ class EnhancedContextManager:
             entry = MessageEntry(
                 user_id=str(message.author.id),
                 channel_id=str(message.channel.id),
-                thread_id=str(message.channel.id)
-                if hasattr(message.channel, "parent") and message.channel.parent
-                else None,
+                thread_id=str(message.channel.id) if hasattr(message.channel, "parent") and message.channel.parent else None,
                 timestamp=message.created_at.isoformat(),
                 role=role,
                 content=self._encrypt_content(raw_content),
@@ -318,25 +298,19 @@ class EnhancedContextManager:
 
             # Trim to history window
             if len(self.memory[context_key]) > self.history_window:
-                self.memory[context_key] = self.memory[context_key][
-                    -self.history_window :
-                ]
+                self.memory[context_key] = self.memory[context_key][-self.history_window :]
 
             # Save to disk if not in memory-only mode
             if not self.in_memory_only:
                 await self._save()
 
-            logger.debug(
-                f"✔ Message stored [context={context_key}, role={role}, user={message.author.id}]"
-            )
+            logger.debug(f"✔ Message stored [context={context_key}, role={role}, user={message.author.id}]")
 
     def _estimate_token_count(self, text: str) -> int:
         """Rough token count estimation (1 token ≈ 4 characters)."""
         return len(text) // 4
 
-    def _get_recent_participants(
-        self, context_key: str, lookback_messages: int = 20
-    ) -> Set[str]:
+    def _get_recent_participants(self, context_key: str, lookback_messages: int = 20) -> Set[str]:
         """Get users who recently participated in a conversation."""
         if context_key not in self.memory:
             return set()
@@ -344,9 +318,7 @@ class EnhancedContextManager:
         recent_messages = self.memory[context_key][-lookback_messages:]
         return {entry.user_id for entry in recent_messages}
 
-    def get_context_for_user(
-        self, message: discord.Message, include_cross_user: bool = True
-    ) -> List[MessageEntry]:
+    def get_context_for_user(self, message: discord.Message, include_cross_user: bool = True) -> List[MessageEntry]:
         """
         Get conversation context for a specific user, optionally including cross-user context.
 
@@ -367,29 +339,18 @@ class EnhancedContextManager:
 
         if not include_cross_user or isinstance(message.channel, discord.DMChannel):
             # DM or user requested no cross-user context
-            user_messages = [
-                entry
-                for entry in all_messages
-                if entry.user_id == str(message.author.id) or entry.role == "bot"
-            ]
+            user_messages = [entry for entry in all_messages if entry.user_id == str(message.author.id) or entry.role == "bot"]
             return user_messages[-self.history_window :]
 
         # For shared channels/threads, include recent cross-user context
         recent_participants = self._get_recent_participants(context_key)
 
         # Filter messages from recent participants and bot
-        relevant_messages = [
-            entry
-            for entry in all_messages
-            if (entry.user_id in recent_participants or entry.role == "bot")
-            and not self.is_privacy_opted_out(entry.user_id)
-        ]
+        relevant_messages = [entry for entry in all_messages if (entry.user_id in recent_participants or entry.role == "bot") and not self.is_privacy_opted_out(entry.user_id)]
 
         return relevant_messages[-self.history_window :]
 
-    def format_context_string(
-        self, entries: List[MessageEntry], max_tokens: Optional[int] = None
-    ) -> str:
+    def format_context_string(self, entries: List[MessageEntry], max_tokens: Optional[int] = None) -> str:
         """
         Format context entries into a conversation string.
 
@@ -431,9 +392,7 @@ class EnhancedContextManager:
                     # Try to get username, fallback to user ID
                     try:
                         user = self.bot.get_user(int(entry.user_id))
-                        username = (
-                            user.display_name if user else f"User({entry.user_id})"
-                        )
+                        username = user.display_name if user else f"User({entry.user_id})"
                     except Exception:
                         username = f"User({entry.user_id})"
 
@@ -498,27 +457,18 @@ class EnhancedContextManager:
                             "user_id": entry.user_id,
                             "role": entry.role,
                             "timestamp": entry.timestamp,
-                            "content_preview": self._decrypt_content(entry.content)[
-                                :100
-                            ]
-                            + "..."
-                            if len(self._decrypt_content(entry.content)) > 100
-                            else self._decrypt_content(entry.content),
+                            "content_preview": self._decrypt_content(entry.content)[:100] + "..." if len(self._decrypt_content(entry.content)) > 100 else self._decrypt_content(entry.content),
                         }
                         used_history.append(history_entry)
 
-                logger.debug(
-                    f"✔ Context retrieved [entries={len(context_entries)}, tokens≈{self._estimate_token_count(context_str)}]"
-                )
+                logger.debug(f"✔ Context retrieved [entries={len(context_entries)}, tokens≈{self._estimate_token_count(context_str)}]")
 
         except Exception as e:
             logger.error(f"❌ Context retrieval failed: {e}")
             fallback = True
             response_text = f"Got you — y'all wild. {response_text}"
 
-        return ContextResponse(
-            response_text=response_text, used_history=used_history, fallback=fallback
-        )
+        return ContextResponse(response_text=response_text, used_history=used_history, fallback=fallback)
 
     async def reset_context(self, message: discord.Message) -> None:
         """Reset conversation context for a channel/DM."""

@@ -28,6 +28,7 @@ from .curator_patterns import (  # noqa: F401 – re-export for external importe
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass(slots=True)
 class MemoryCandidate:
     memory_id: str
@@ -44,12 +45,8 @@ class MemoryCandidate:
     source: str
     expires_at: Optional[str]
     metadata_json: str = "{}"
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-    updated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     last_accessed_at: Optional[str] = None
     deleted_at: Optional[str] = None
     chroma_id: Optional[str] = None
@@ -122,9 +119,7 @@ class CuratedMemoryCurator:
             return None
 
         summary = self._summarize(text, context_type)
-        importance = max(
-            self.min_importance, 0.9 if source == "explicit_memory_command" else 0.75
-        )
+        importance = max(self.min_importance, 0.9 if source == "explicit_memory_command" else 0.75)
         confidence = 0.96 if source == "explicit_memory_command" else 0.9
         expires_at = self._expiration_for(context_type)
 
@@ -135,9 +130,7 @@ class CuratedMemoryCurator:
             guild_id=str(guild_id) if guild_id is not None else None,
             channel_id=str(channel_id) if channel_id is not None else None,
             thread_id=str(thread_id) if thread_id is not None else None,
-            source_message_id=str(source_message_id)
-            if source_message_id is not None
-            else None,
+            source_message_id=str(source_message_id) if source_message_id is not None else None,
             context_type=context_type,
             text=text,
             summary=summary,
@@ -271,9 +264,7 @@ class CuratedMemoryCurator:
             guild_id=str(guild_id) if guild_id is not None else None,
             channel_id=str(channel_id) if channel_id is not None else None,
             thread_id=str(thread_id) if thread_id is not None else None,
-            source_message_id=str(source_message_id)
-            if source_message_id is not None
-            else None,
+            source_message_id=str(source_message_id) if source_message_id is not None else None,
             context_type=context_type,
             text=text,
             summary=summary,
@@ -303,31 +294,26 @@ class CuratedMemoryCurator:
 
     def _normalize(self, text: str) -> str:
         from ..config import load_config as _curator_load_config
+
         _cc = _curator_load_config()
         max_chars = int(_cc.get("MEMORY_MAX_TEXT_CHARS", 500))
         if not text:
             return ""
         text = re.sub(r"\s+", " ", text.strip())
-        return text[:min(2000, max_chars)]
+        return text[: min(2000, max_chars)]
 
     def _looks_sensitive(self, text: str) -> bool:
         lower = text.lower()
-        return any(
-            re.search(pattern, lower, flags=re.I) for pattern in _SECRET_PATTERNS
-        )
+        return any(re.search(pattern, lower, flags=re.I) for pattern in _SECRET_PATTERNS)
 
     def _looks_internal(self, text: str) -> bool:
         lower = text.lower()
-        return any(
-            re.search(pattern, lower, flags=re.I) for pattern in _INTERNAL_PATTERNS
-        )
+        return any(re.search(pattern, lower, flags=re.I) for pattern in _INTERNAL_PATTERNS)
 
     @staticmethod
     def _looks_denied_inferred(lower: str) -> bool:
         """Return True when inferred content matches the denylist."""
-        return any(
-            re.search(pattern, lower, flags=re.I) for pattern in _INFERRED_DENYLIST
-        )
+        return any(re.search(pattern, lower, flags=re.I) for pattern in _INFERRED_DENYLIST)
 
     def _rejection_reason_for_inferred(self, text: str) -> Optional[str]:
         lower = text.lower()
@@ -341,15 +327,11 @@ class CuratedMemoryCurator:
 
     @staticmethod
     def _has_project_anchor(lower: str) -> bool:
-        return any(
-            re.search(pattern, lower, flags=re.I) for pattern in _PROJECT_FACT_SIGNALS
-        )
+        return any(re.search(pattern, lower, flags=re.I) for pattern in _PROJECT_FACT_SIGNALS)
 
     @staticmethod
     def _has_project_fact_cue(lower: str) -> bool:
-        return any(
-            re.search(pattern, lower, flags=re.I) for pattern in _PROJECT_FACT_CUES
-        )
+        return any(re.search(pattern, lower, flags=re.I) for pattern in _PROJECT_FACT_CUES)
 
     def _looks_project_scoped_fact(self, lower: str) -> bool:
         if not self._has_project_anchor(lower):
@@ -377,14 +359,9 @@ class CuratedMemoryCurator:
     def _looks_sensitive_generalization(self, lower: str) -> bool:
         if self._has_project_anchor(lower):
             return False
-        if not any(
-            re.search(pattern, lower, flags=re.I)
-            for pattern in _SENSITIVE_ATTRIBUTE_PATTERNS
-        ):
+        if not any(re.search(pattern, lower, flags=re.I) for pattern in _SENSITIVE_ATTRIBUTE_PATTERNS):
             return False
-        if any(
-            re.search(pattern, lower, flags=re.I) for pattern in _GENERAL_CLAIM_TERMS
-        ):
+        if any(re.search(pattern, lower, flags=re.I) for pattern in _GENERAL_CLAIM_TERMS):
             return True
         if any(
             trigger in lower
@@ -407,13 +384,9 @@ class CuratedMemoryCurator:
     def _looks_world_claim(self, lower: str) -> bool:
         if self._has_project_anchor(lower):
             return False
-        if not any(
-            re.search(pattern, lower, flags=re.I) for pattern in _WORLD_CLAIM_TERMS
-        ):
+        if not any(re.search(pattern, lower, flags=re.I) for pattern in _WORLD_CLAIM_TERMS):
             return False
-        return any(
-            re.search(pattern, lower, flags=re.I) for pattern in _GENERAL_CLAIM_TERMS
-        )
+        return any(re.search(pattern, lower, flags=re.I) for pattern in _GENERAL_CLAIM_TERMS)
 
     # ---------------- internal helpers: inferred classification ----------------
 
@@ -535,9 +508,7 @@ class CuratedMemoryCurator:
           - "do you remember this?"
         """
         # Exclude weak patterns first
-        if any(
-            p in lower for p in ["don't remember", "i don't remember", "you remember"]
-        ):
+        if any(p in lower for p in ["don't remember", "i don't remember", "you remember"]):
             return False
         if any(lower.startswith(p) for p in ["remember when", "do you remember"]):
             return False
@@ -618,10 +589,7 @@ class CuratedMemoryCurator:
             return False
         if bool(re.search(r"\b(?:the\s+)?code\b.*\b(?:wrong|broken|buggy)\b", lower)):
             return False
-        if (
-            bool(re.search(r"\b(?:annoying|frustrating|bad)\b", lower))
-            and "project" in lower
-        ):
+        if bool(re.search(r"\b(?:annoying|frustrating|bad)\b", lower)) and "project" in lower:
             return False
 
         return self._looks_project_scoped_fact(lower)
@@ -637,16 +605,12 @@ class CuratedMemoryCurator:
             return False
 
         # Patterns:
-        if bool(
-            re.search(r"\b(this server|the server)\s+(should|must|uses|is)\b", lower)
-        ):
+        if bool(re.search(r"\b(this server|the server)\s+(should|must|uses|is)\b", lower)):
             return True
         if bool(re.search(r"\b(for this server|for the server),\s+", lower)):
             return True
         # guild-specific rule:
-        if bool(
-            re.search(r"\b(this guild|the guild)\s+(should|must|uses|is)\b", lower)
-        ):
+        if bool(re.search(r"\b(this guild|the guild)\s+(should|must|uses|is)\b", lower)):
             return True
 
         return False
@@ -675,9 +639,7 @@ class CuratedMemoryCurator:
         if any(p in lower for p in ["for now", "temporarily", "this week"]):
             return True
         # 'today' only when paired with temporary-scope language:
-        if "today" in lower and any(
-            p in lower for p in ["for now", "until", "just for today", "temporarily"]
-        ):
+        if "today" in lower and any(p in lower for p in ["for now", "until", "just for today", "temporarily"]):
             return True
         return False
 

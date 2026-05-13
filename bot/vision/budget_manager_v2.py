@@ -55,12 +55,8 @@ class UserBudget:
     total_jobs: int = 0
 
     # Metadata
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-    updated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for JSON serialization"""
@@ -215,9 +211,7 @@ class VisionBudgetManager:
         This is SYNCHRONOUS to avoid AsyncTextIOWrapper.fsync errors.
         """
         # Create temp file in same directory for atomic rename
-        temp_fd, temp_path = tempfile.mkstemp(
-            dir=file_path.parent, prefix=f".{file_path.name}.", suffix=".tmp"
-        )
+        temp_fd, temp_path = tempfile.mkstemp(dir=file_path.parent, prefix=f".{file_path.name}.", suffix=".tmp")
 
         try:
             # Write JSON to temp file
@@ -323,18 +317,10 @@ class VisionBudgetManager:
             reset_time = datetime.fromisoformat(budget.daily_reset_time)
             if now >= reset_time:
                 budget.set_daily_spent(Money.zero())
-                budget.daily_reset_time = (
-                    (now + timedelta(days=1))
-                    .replace(hour=0, minute=0, second=0, microsecond=0)
-                    .isoformat()
-                )
+                budget.daily_reset_time = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
         else:
             # Initialize reset time
-            budget.daily_reset_time = (
-                (now + timedelta(days=1))
-                .replace(hour=0, minute=0, second=0, microsecond=0)
-                .isoformat()
-            )
+            budget.daily_reset_time = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
         # Check weekly reset
         if budget.weekly_reset_time:
@@ -343,19 +329,11 @@ class VisionBudgetManager:
                 budget.set_weekly_spent(Money.zero())
                 # Next Monday at midnight
                 days_until_monday = (7 - now.weekday()) % 7 or 7
-                budget.weekly_reset_time = (
-                    (now + timedelta(days=days_until_monday))
-                    .replace(hour=0, minute=0, second=0, microsecond=0)
-                    .isoformat()
-                )
+                budget.weekly_reset_time = (now + timedelta(days=days_until_monday)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
         else:
             # Initialize to next Monday
             days_until_monday = (7 - now.weekday()) % 7 or 7
-            budget.weekly_reset_time = (
-                (now + timedelta(days=days_until_monday))
-                .replace(hour=0, minute=0, second=0, microsecond=0)
-                .isoformat()
-            )
+            budget.weekly_reset_time = (now + timedelta(days=days_until_monday)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
         # Check monthly reset
         if budget.monthly_reset_time:
@@ -367,18 +345,14 @@ class VisionBudgetManager:
                     next_month = now.replace(year=now.year + 1, month=1, day=1)
                 else:
                     next_month = now.replace(month=now.month + 1, day=1)
-                budget.monthly_reset_time = next_month.replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                ).isoformat()
+                budget.monthly_reset_time = next_month.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
         else:
             # Initialize to first of next month
             if now.month == 12:
                 next_month = now.replace(year=now.year + 1, month=1, day=1)
             else:
                 next_month = now.replace(month=now.month + 1, day=1)
-            budget.monthly_reset_time = next_month.replace(
-                hour=0, minute=0, second=0, microsecond=0
-            ).isoformat()
+            budget.monthly_reset_time = next_month.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
     async def check_budget(self, request: VisionRequest) -> BudgetResult:
         """
@@ -431,42 +405,21 @@ class VisionBudgetManager:
                 if daily_remaining < estimated_cost:
                     reason = "daily_limit_exceeded"
                     reset_time = datetime.fromisoformat(budget.daily_reset_time)
-                    user_message = (
-                        f"Daily budget limit reached. "
-                        f"Remaining: {daily_remaining.to_display_string()}, "
-                        f"Required: {estimated_cost.to_display_string()}. "
-                        f"Resets in {self._format_time_until(reset_time)}."
-                    )
+                    user_message = f"Daily budget limit reached. Remaining: {daily_remaining.to_display_string()}, Required: {estimated_cost.to_display_string()}. Resets in {self._format_time_until(reset_time)}."
                 elif weekly_remaining < estimated_cost:
                     reason = "weekly_limit_exceeded"
                     reset_time = datetime.fromisoformat(budget.weekly_reset_time)
-                    user_message = (
-                        f"Weekly budget limit reached. "
-                        f"Remaining: {weekly_remaining.to_display_string()}, "
-                        f"Required: {estimated_cost.to_display_string()}. "
-                        f"Resets in {self._format_time_until(reset_time)}."
-                    )
+                    user_message = f"Weekly budget limit reached. Remaining: {weekly_remaining.to_display_string()}, Required: {estimated_cost.to_display_string()}. Resets in {self._format_time_until(reset_time)}."
                 else:
                     reason = "monthly_limit_exceeded"
                     reset_time = datetime.fromisoformat(budget.monthly_reset_time)
-                    user_message = (
-                        f"Monthly budget limit reached. "
-                        f"Remaining: {monthly_remaining.to_display_string()}, "
-                        f"Required: {estimated_cost.to_display_string()}. "
-                        f"Resets in {self._format_time_until(reset_time)}."
-                    )
+                    user_message = f"Monthly budget limit reached. Remaining: {monthly_remaining.to_display_string()}, Required: {estimated_cost.to_display_string()}. Resets in {self._format_time_until(reset_time)}."
             else:
                 reason = "approved"
                 reset_time = None
                 user_message = ""
 
-            logger.info(
-                f"Budget check - user: {request.user_id}, "
-                f"estimated: {estimated_cost}, "
-                f"daily_remaining: {daily_remaining}, "
-                f"reserved: {daily_reserved}, "
-                f"approved: {approved}"
-            )
+            logger.info(f"Budget check - user: {request.user_id}, estimated: {estimated_cost}, daily_remaining: {daily_remaining}, reserved: {daily_reserved}, approved: {approved}")
 
             return BudgetResult(
                 approved=approved,
@@ -502,11 +455,7 @@ class VisionBudgetManager:
                 ),
             )
 
-            logger.info(
-                f"Reserved budget - user: {user_id}, "
-                f"amount: {amount}, "
-                f"total_reserved: {new_reserved}"
-            )
+            logger.info(f"Reserved budget - user: {user_id}, amount: {amount}, total_reserved: {new_reserved}")
 
     async def release_reservation(self, user_id: str, amount: Money) -> None:
         """Release reserved budget (job cancelled/failed) [REH]"""
@@ -537,11 +486,7 @@ class VisionBudgetManager:
                 ),
             )
 
-            logger.info(
-                f"Released reservation - user: {user_id}, "
-                f"amount: {amount}, "
-                f"total_reserved: {new_reserved}"
-            )
+            logger.info(f"Released reservation - user: {user_id}, amount: {amount}, total_reserved: {new_reserved}")
 
     async def record_actual_cost(
         self,
@@ -571,21 +516,10 @@ class VisionBudgetManager:
             notes = None
             if discrepancy_ratio > max_ratio:
                 capped_cost = reserved_amount * float(max_ratio)
-                logger.error(
-                    f"Cost discrepancy too high - user: {user_id}, "
-                    f"estimated: {reserved_amount}, "
-                    f"actual: {actual_cost}, "
-                    f"ratio: {discrepancy_ratio}, "
-                    f"capped_to: {capped_cost}"
-                )
+                logger.error(f"Cost discrepancy too high - user: {user_id}, estimated: {reserved_amount}, actual: {actual_cost}, ratio: {discrepancy_ratio}, capped_to: {capped_cost}")
                 notes = "capped"
             elif discrepancy_ratio > warning_ratio:
-                logger.warning(
-                    f"Cost discrepancy warning - user: {user_id}, "
-                    f"estimated: {reserved_amount}, "
-                    f"actual: {actual_cost}, "
-                    f"ratio: {discrepancy_ratio}"
-                )
+                logger.warning(f"Cost discrepancy warning - user: {user_id}, estimated: {reserved_amount}, actual: {actual_cost}, ratio: {discrepancy_ratio}")
 
             # Release reservation and add actual spend
             current_reserved = budget.get_reserved_amount()
@@ -696,25 +630,13 @@ class VisionBudgetManager:
             budget = await self._load_user_budget(user_id)
             if period == "daily":
                 budget.set_daily_spent(Money.zero())
-                budget.daily_reset_time = (
-                    (datetime.now(timezone.utc) + timedelta(days=1))
-                    .replace(hour=0, minute=0, second=0, microsecond=0)
-                    .isoformat()
-                )
+                budget.daily_reset_time = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
             elif period == "weekly":
                 budget.set_weekly_spent(Money.zero())
-                budget.weekly_reset_time = (
-                    (datetime.now(timezone.utc) + timedelta(days=7))
-                    .replace(hour=0, minute=0, second=0, microsecond=0)
-                    .isoformat()
-                )
+                budget.weekly_reset_time = (datetime.now(timezone.utc) + timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
             elif period == "monthly":
                 budget.set_monthly_spent(Money.zero())
-                budget.monthly_reset_time = (
-                    (datetime.now(timezone.utc) + timedelta(days=30))
-                    .replace(hour=0, minute=0, second=0, microsecond=0)
-                    .isoformat()
-                )
+                budget.monthly_reset_time = (datetime.now(timezone.utc) + timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
             else:
                 raise ValueError("Invalid period")
 
@@ -758,21 +680,15 @@ class VisionBudgetManager:
             daily_limit = Money(budget.daily_limit)
             daily_spent = budget.get_daily_spent()
             daily_reserved = budget.get_reserved_amount()
-            daily_remaining = (
-                daily_limit - daily_spent - daily_reserved
-            ).clamp_minimum(0)
+            daily_remaining = (daily_limit - daily_spent - daily_reserved).clamp_minimum(0)
 
             weekly_limit = Money(budget.weekly_limit)
             weekly_spent = budget.get_weekly_spent()
-            weekly_remaining = (
-                weekly_limit - weekly_spent - daily_reserved
-            ).clamp_minimum(0)
+            weekly_remaining = (weekly_limit - weekly_spent - daily_reserved).clamp_minimum(0)
 
             monthly_limit = Money(budget.monthly_limit)
             monthly_spent = budget.get_monthly_spent()
-            monthly_remaining = (
-                monthly_limit - monthly_spent - daily_reserved
-            ).clamp_minimum(0)
+            monthly_remaining = (monthly_limit - monthly_spent - daily_reserved).clamp_minimum(0)
 
             return {
                 "user_id": user_id,

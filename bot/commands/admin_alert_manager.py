@@ -30,9 +30,7 @@ class AdminAlertManager:
 
         self.logger.info(f"Admin alert system initialized: enabled={self.enabled}")
 
-    async def _queue_reaction_operation(
-        self, message, emoji: str, operation: str, user
-    ):
+    async def _queue_reaction_operation(self, message, emoji: str, operation: str, user):
         """Queue reaction add/remove operations with spacing to prevent rate limits."""
         message_id = message.id
         if message_id not in self.reaction_queues:
@@ -43,13 +41,9 @@ class AdminAlertManager:
             if queued_op["emoji"] == emoji and queued_op["operation"] == operation:
                 return
 
-        queue.append(
-            {"emoji": emoji, "operation": operation, "user": user, "message": message}
-        )
+        queue.append({"emoji": emoji, "operation": operation, "user": user, "message": message})
         if len(queue) == 1:
-            self.logger.debug(
-                f"Starting reaction queue processing for message {message_id}"
-            )
+            self.logger.debug(f"Starting reaction queue processing for message {message_id}")
             await self._process_reaction_queue(message_id)
 
     async def _process_reaction_queue(self, message_id: int) -> None:
@@ -113,9 +107,7 @@ class AdminAlertManager:
         except Exception:
             pass
         try:
-            self.session_timeout = int(
-                self.config.get("ALERT_SESSION_TIMEOUT_S", "1800")
-            )
+            self.session_timeout = int(self.config.get("ALERT_SESSION_TIMEOUT_S", "1800"))
         except Exception:
             pass
 
@@ -179,9 +171,7 @@ class AdminAlertManager:
             self.logger.warning(f"Embed exceeds 6000 chars ({total}), may cause errors")
         return embed
 
-    def _discover_available_destinations(
-        self, invoking_user_id: int
-    ) -> List[AlertDestination]:
+    def _discover_available_destinations(self, invoking_user_id: int) -> List[AlertDestination]:
         """Cache-based, permission-aware discovery of available guilds/channels."""
         destinations: List[AlertDestination] = []
         guilds_shown = 0
@@ -208,16 +198,17 @@ class AdminAlertManager:
                 if eligible:
                     guilds_shown += 1
                     for ch in eligible:
-                        destinations.append(AlertDestination(
-                            guild_id=guild.id, channel_id=ch.id,
-                            channel_name=ch.name, guild_name=guild.name,
-                        ))
+                        destinations.append(
+                            AlertDestination(
+                                guild_id=guild.id,
+                                channel_id=ch.id,
+                                channel_name=ch.name,
+                                guild_name=guild.name,
+                            )
+                        )
             total_guilds = len(self.bot.guilds)
             total_channels = sum(len(g.text_channels) for g in self.bot.guilds)
-            self.logger.info(
-                f"alert:discovery guilds={total_guilds} channels={total_channels} "
-                f"shown_guilds={guilds_shown} shown_channels={channels_shown}"
-            )
+            self.logger.info(f"alert:discovery guilds={total_guilds} channels={total_channels} shown_guilds={guilds_shown} shown_channels={channels_shown}")
             return destinations
         except Exception as e:
             self.logger.error(f"Discovery failed: {e}")
@@ -225,7 +216,9 @@ class AdminAlertManager:
 
     async def build_composer_embed(self, session: AlertSession) -> discord.Embed:
         embed = discord.Embed(
-            title="Admin Alert Composer", color=0x1F8B4C, timestamp=discord.utils.utcnow(),
+            title="Admin Alert Composer",
+            color=0x1F8B4C,
+            timestamp=discord.utils.utcnow(),
         )
         step_map = {
             "select_channels": "1. Select Channels",
@@ -244,7 +237,8 @@ class AdminAlertManager:
                 parts.append(f"... and {len(session.destinations) - 5} more")
             embed.add_field(
                 name=f"Destinations ({len(session.destinations)})",
-                value="\n".join(parts), inline=True,
+                value="\n".join(parts),
+                inline=True,
             )
         if session.content or session.embed_title:
             preview = session.content[:100] if session.content else ""
@@ -287,16 +281,16 @@ class AdminAlertManager:
         capped = len(session.destinations) > MAX_CAP
         destinations = session.destinations[:MAX_CAP] if capped else session.destinations
         if capped:
-            self.logger.warning(
-                f"alert:send_alert:recipient_cap total={len(session.destinations)} cap={MAX_CAP}"
-            )
+            self.logger.warning(f"alert:send_alert:recipient_cap total={len(session.destinations)} cap={MAX_CAP}")
         results = {"total_destinations": len(session.destinations), "successful_sends": 0, "failed_sends": 0, "send_results": []}
         alert_content = session.content
         embed = None
         if session.embed_title or session.embed_description:
             embed = discord.Embed(
-                title=session.embed_title, description=session.embed_description,
-                color=0x1F8B4C, timestamp=discord.utils.utcnow(),
+                title=session.embed_title,
+                description=session.embed_description,
+                color=0x1F8B4C,
+                timestamp=discord.utils.utcnow(),
             )
             embed.set_footer(text="Admin Alert")
         for dest in destinations:

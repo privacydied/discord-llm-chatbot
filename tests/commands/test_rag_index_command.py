@@ -55,9 +55,7 @@ async def test_rag_cog_registers_index_command(rag_cog):
 
 
 @pytest.mark.asyncio
-async def test_index_message_content_indexes_direct_text(
-    rag_cog, fake_bot, fake_search, ctx
-):
+async def test_index_message_content_indexes_direct_text(rag_cog, fake_bot, fake_search, ctx):
     fake_bot.hybrid_search = fake_search
     await rag_cog.index_message_content.callback(rag_cog, ctx, text="hello world")
 
@@ -70,9 +68,7 @@ async def test_index_message_content_indexes_direct_text(
 
 
 @pytest.mark.asyncio
-async def test_index_message_content_honors_rag_disable(
-    rag_cog, fake_bot, fake_search, ctx, monkeypatch
-):
+async def test_index_message_content_honors_rag_disable(rag_cog, fake_bot, fake_search, ctx, monkeypatch):
     fake_bot.hybrid_search = fake_search
     monkeypatch.setattr(
         "bot.commands.rag_commands.is_server_feature_enabled",
@@ -87,9 +83,7 @@ async def test_index_message_content_honors_rag_disable(
 
 
 @pytest.mark.asyncio
-async def test_index_message_content_indexes_url_and_attachment(
-    rag_cog, fake_bot, fake_search, ctx, monkeypatch
-):
+async def test_index_message_content_indexes_url_and_attachment(rag_cog, fake_bot, fake_search, ctx, monkeypatch):
     fake_bot.hybrid_search = fake_search
     ctx.message.attachments = [SimpleNamespace(filename="notes.pdf")]
 
@@ -109,17 +103,8 @@ async def test_index_message_content_indexes_url_and_attachment(
     )
 
     assert fake_search.add_document.await_count == 3
-    assert any(
-        call.kwargs["metadata"]["source_type"] == "url"
-        for call in fake_search.add_document.await_args_list
-    )
-    assert any(
-        call.kwargs["metadata"]["source_type"] == "attachment"
-        for call in fake_search.add_document.await_args_list
-    )
-    assert any(
-        call.kwargs["metadata"]["source_type"] == "text"
-        for call in fake_search.add_document.await_args_list
-    )
+    assert any(call.kwargs["metadata"]["source_type"] == "url" for call in fake_search.add_document.await_args_list)
+    assert any(call.kwargs["metadata"]["source_type"] == "attachment" for call in fake_search.add_document.await_args_list)
+    assert any(call.kwargs["metadata"]["source_type"] == "text" for call in fake_search.add_document.await_args_list)
     ctx.send.assert_awaited_once()
     assert "Indexed 3 items" in ctx.send.await_args.args[0]

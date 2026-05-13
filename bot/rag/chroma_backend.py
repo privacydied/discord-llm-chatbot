@@ -33,27 +33,15 @@ class ChromaRAGBackend:
         # Initialize embedding model
         if embedding_model is None:
             model_type = os.getenv("RAG_EMBEDDING_MODEL_TYPE", "sentence-transformers")
-            model_name = os.getenv(
-                "RAG_EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"
-            )
-            self.embedding_model = create_embedding_model(
-                model_type, model_name=model_name
-            )
+            model_name = os.getenv("RAG_EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
+            self.embedding_model = create_embedding_model(model_type, model_name=model_name)
         else:
             self.embedding_model = embedding_model
 
         # Validate embedding model is available and usable
-        if self.embedding_model is None or not (
-            hasattr(self.embedding_model, "encode")
-            and hasattr(self.embedding_model, "encode_single")
-        ):
-            logger.error(
-                "[RAG] Embedding model is not initialized or missing required methods. "
-                "Check RAG_EMBEDDING_MODEL_TYPE and RAG_EMBEDDING_MODEL_NAME environment variables."
-            )
-            raise ValueError(
-                "Embedding model initialization failed: missing encode/encode_single"
-            )
+        if self.embedding_model is None or not (hasattr(self.embedding_model, "encode") and hasattr(self.embedding_model, "encode_single")):
+            logger.error("[RAG] Embedding model is not initialized or missing required methods. Check RAG_EMBEDDING_MODEL_TYPE and RAG_EMBEDDING_MODEL_NAME environment variables.")
+            raise ValueError("Embedding model initialization failed: missing encode/encode_single")
 
         # ChromaDB components (lazy initialization)
         self.client = None
@@ -76,9 +64,7 @@ class ChromaRAGBackend:
             self.db_path.mkdir(parents=True, exist_ok=True)
 
             # Initialize ChromaDB client
-            self.client = chromadb.PersistentClient(
-                path=str(self.db_path), settings=Settings(anonymized_telemetry=False)
-            )
+            self.client = chromadb.PersistentClient(path=str(self.db_path), settings=Settings(anonymized_telemetry=False))
 
             # Get or create collection
             self.collection = self.client.get_or_create_collection(
@@ -87,9 +73,7 @@ class ChromaRAGBackend:
             )
 
             self._initialized = True
-            logger.info(
-                f"✔ ChromaDB initialized [path={self.db_path}, collection={self.collection_name}]"
-            )
+            logger.info(f"✔ ChromaDB initialized [path={self.db_path}, collection={self.collection_name}]")
 
         except ImportError:
             logger.error("chromadb not installed. Install with: pip install chromadb")
@@ -241,11 +225,7 @@ class ChromaRAGBackend:
             where_clause = self._build_where_clause(user_id, guild_id, filters)
 
             # Determine effective number of results to request
-            effective_n = (
-                max_results
-                if isinstance(max_results, int) and max_results > 0
-                else n_results
-            )
+            effective_n = max_results if isinstance(max_results, int) and max_results > 0 else n_results
             try:
                 effective_n = min(effective_n, self.config.max_vector_results)
             except Exception:
@@ -254,6 +234,7 @@ class ChromaRAGBackend:
             # Additional low-resource cap [Phase 6-9]
             try:
                 from ..config import load_config as _chroma_load_config
+
                 _cc = _chroma_load_config()
                 chroma_max = int(_cc.get("CHROMADB_MAX_RESULTS", 5))
                 effective_n = min(effective_n, chroma_max)
@@ -275,23 +256,13 @@ class ChromaRAGBackend:
             # Convert to SearchResult objects
             search_results = []
             # Check if we have valid results and all required arrays are present
-            if (
-                results
-                and results.get("ids")
-                and results["ids"]
-                and results["ids"][0]
-                and results.get("metadatas")
-                and results.get("documents")
-                and results.get("distances")
-            ):
+            if results and results.get("ids") and results["ids"] and results["ids"][0] and results.get("metadatas") and results.get("documents") and results.get("distances"):
                 ids = results["ids"][0] or []
                 metadatas = results["metadatas"][0] or []
                 documents = results["documents"][0] or []
                 distances = results["distances"][0] or []
 
-                for i, (doc_id, metadata, document_text, distance) in enumerate(
-                    zip(ids, metadatas, documents, distances)
-                ):
+                for i, (doc_id, metadata, document_text, distance) in enumerate(zip(ids, metadatas, documents, distances)):
                     # Ensure metadata is a dict to avoid NoneType errors
                     metadata = metadata or {}
                     # Convert distance to similarity score (ChromaDB uses L2 distance)
@@ -302,17 +273,13 @@ class ChromaRAGBackend:
                     # Skip results below confidence threshold
                     if similarity_score < self.config.vector_confidence_threshold:
                         if self.config.log_confidence_scores:
-                            logger.debug(
-                                f"[RAG] Skipping low confidence result: {similarity_score:.3f}"
-                            )
+                            logger.debug(f"[RAG] Skipping low confidence result: {similarity_score:.3f}")
                         continue
 
                     # Create VectorDocument from ChromaDB data
                     vector_doc = VectorDocument(
                         id=doc_id,
-                        source_id=metadata.get(
-                            "filepath", metadata.get("filename", "unknown")
-                        ),
+                        source_id=metadata.get("filepath", metadata.get("filename", "unknown")),
                         chunk_text=document_text,
                         embedding=[],  # Empty embedding for search results
                         metadata=metadata,
@@ -331,9 +298,7 @@ class ChromaRAGBackend:
                     search_results.append(search_result)
 
             if self.config.log_retrieval_paths:
-                logger.debug(
-                    f"[RAG] Vector search: '{query}' → {len(search_results)} results"
-                )
+                logger.debug(f"[RAG] Vector search: '{query}' → {len(search_results)} results")
 
             return search_results
 
@@ -341,9 +306,7 @@ class ChromaRAGBackend:
             logger.error(f"[RAG] Vector search failed: {e}")
             if self.config.fallback_to_keyword_on_failure:
                 logger.warning("[RAG] Falling back to keyword search")
-                return await self._keyword_search_fallback(
-                    query, n_results, user_id, guild_id
-                )
+                return await self._keyword_search_fallback(query, n_results, user_id, guild_id)
             raise
 
     async def _keyword_search_fallback(
@@ -362,9 +325,7 @@ class ChromaRAGBackend:
             loop = asyncio.get_event_loop()
             all_results = await loop.run_in_executor(
                 None,
-                lambda: self.collection.get(
-                    where=where_clause, include=["metadatas", "documents"]
-                ),
+                lambda: self.collection.get(where=where_clause, include=["metadatas", "documents"]),
             )
 
             # Simple keyword matching
@@ -375,9 +336,7 @@ class ChromaRAGBackend:
             metadatas_list = all_results.get("metadatas") or []
             documents_list = all_results.get("documents") or []
             if ids_list:
-                for i, (doc_id, metadata, document_text) in enumerate(
-                    zip(ids_list, metadatas_list, documents_list)
-                ):
+                for i, (doc_id, metadata, document_text) in enumerate(zip(ids_list, metadatas_list, documents_list)):
                     # Ensure metadata is a dict
                     metadata = metadata or {}
                     if not document_text:
@@ -390,9 +349,7 @@ class ChromaRAGBackend:
                         # Construct a VectorDocument safely from available fields
                         vector_doc = VectorDocument(
                             id=doc_id if isinstance(doc_id, str) else str(doc_id),
-                            source_id=metadata.get(
-                                "filepath", metadata.get("filename", "unknown")
-                            ),
+                            source_id=metadata.get("filepath", metadata.get("filename", "unknown")),
                             chunk_text=document_text,
                             embedding=[],
                             metadata=metadata,
@@ -498,20 +455,14 @@ class ChromaRAGBackend:
             loop = asyncio.get_event_loop()
             existing = await loop.run_in_executor(
                 None,
-                lambda: self.collection.get(
-                    where={"source_id": {"$eq": source_id}}, include=["metadatas"]
-                ),
+                lambda: self.collection.get(where={"source_id": {"$eq": source_id}}, include=["metadatas"]),
             )
 
             if existing["ids"]:
                 # Delete the chunks
-                await loop.run_in_executor(
-                    None, lambda: self.collection.delete(ids=existing["ids"])
-                )
+                await loop.run_in_executor(None, lambda: self.collection.delete(ids=existing["ids"]))
 
-                logger.info(
-                    f"[RAG] Removed {len(existing['ids'])} chunks for document: {source_id}"
-                )
+                logger.info(f"[RAG] Removed {len(existing['ids'])} chunks for document: {source_id}")
                 return len(existing["ids"])
 
             return 0
@@ -531,11 +482,7 @@ class ChromaRAGBackend:
             # Safely handle cases where embedding_model may be absent/misconfigured
             model_name = getattr(self.embedding_model, "model_name", "unknown")
             try:
-                embedding_dim = (
-                    await self.embedding_model.get_embedding_dimension()
-                    if self.embedding_model is not None
-                    else None
-                )
+                embedding_dim = await self.embedding_model.get_embedding_dimension() if self.embedding_model is not None else None
             except Exception as dim_err:
                 logger.warning(f"[RAG] Could not get embedding dimension: {dim_err}")
                 embedding_dim = None
@@ -593,14 +540,10 @@ class ChromaRAGBackend:
                 timeout=30.0,
             )
 
-            logger.info(
-                f"[RAG] Successfully wiped collection '{self.collection_name}' ({count_before} chunks removed)"
-            )
+            logger.info(f"[RAG] Successfully wiped collection '{self.collection_name}' ({count_before} chunks removed)")
 
         except asyncio.TimeoutError:
-            logger.error(
-                f"[RAG] Wipe operation timed out for collection '{self.collection_name}'"
-            )
+            logger.error(f"[RAG] Wipe operation timed out for collection '{self.collection_name}'")
             raise
         except Exception as e:
             logger.error(f"[RAG] Failed to wipe collection: {e}")

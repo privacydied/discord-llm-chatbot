@@ -44,20 +44,12 @@ def resolve_scope(trigger: object) -> ScopeResult:
     case = "plain"
     scope_id: Optional[str] = None
     try:
-        if (
-            getattr(trigger, "channel", None)
-            and getattr(getattr(trigger, "channel", None), "id", None)
-            and getattr(trigger, "channel", None).__class__.__name__ == "Thread"
-        ):
+        if getattr(trigger, "channel", None) and getattr(getattr(trigger, "channel", None), "id", None) and getattr(trigger, "channel", None).__class__.__name__ == "Thread":
             case = "thread"
             scope_id = str(getattr(getattr(trigger, "channel", None), "id", None))
-        elif getattr(trigger, "reference", None) and getattr(
-            getattr(trigger, "reference", None), "message_id", None
-        ):
+        elif getattr(trigger, "reference", None) and getattr(getattr(trigger, "reference", None), "message_id", None):
             case = "reply"
-            scope_id = str(
-                getattr(getattr(trigger, "reference", None), "message_id", None)
-            )
+            scope_id = str(getattr(getattr(trigger, "reference", None), "message_id", None))
         else:
             scope_id = str(getattr(trigger, "id", None))
     except Exception:
@@ -130,9 +122,7 @@ def harvest_in_scope_io(
     return {"urls": urls, "attachments": attachments}
 
 
-def choose_route(
-    has_text: bool, media_intent: bool, harvested: Dict[str, List[str]]
-) -> str:
+def choose_route(has_text: bool, media_intent: bool, harvested: Dict[str, List[str]]) -> str:
     """Select a route: ``text``, ``media`` or ``nag``."""
 
     route = "text"
@@ -150,9 +140,7 @@ def choose_route(
     return route
 
 
-def select_reply_target(
-    case: str, scope_id: Optional[str], now: float | None = None
-) -> Optional[str]:
+def select_reply_target(case: str, scope_id: Optional[str], now: float | None = None) -> Optional[str]:
     """Decide final reply target based on case and scope id."""
 
     if now is None:

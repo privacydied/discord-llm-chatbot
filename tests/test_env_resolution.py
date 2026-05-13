@@ -36,9 +36,7 @@ class TestEnvResolution(unittest.TestCase):
 
     def test_resolve_env_both_set(self):
         """Test resolving environment variable with both variables set."""
-        with patch.dict(
-            os.environ, {"TEST_NEW": "new_value", "TEST_LEGACY": "legacy_value"}
-        ):
+        with patch.dict(os.environ, {"TEST_NEW": "new_value", "TEST_LEGACY": "legacy_value"}):
             result = resolve_env("TEST_NEW", "TEST_LEGACY", "default_value")
             self.assertEqual(result, "new_value")  # New value should take precedence
 
@@ -66,9 +64,7 @@ class TestEnvResolution(unittest.TestCase):
             {"TEST_PATH_NEW": "/path/to/new", "TEST_PATH_LEGACY": "/path/to/legacy"},
         ):
             result = resolve_path("TEST_PATH_NEW", "TEST_PATH_LEGACY", "/default/path")
-            self.assertEqual(
-                result, Path("/path/to/new")
-            )  # New path should take precedence
+            self.assertEqual(result, Path("/path/to/new"))  # New path should take precedence
 
     def test_resolve_path_none_set(self):
         """Test resolving path with no variables set."""
@@ -87,9 +83,7 @@ class TestEnvResolution(unittest.TestCase):
             # Check that the resolved path is in the config
             self.assertIn("paths", config)
             self.assertIn("TEST_PATH_NEW|TEST_PATH_LEGACY", config["paths"])
-            self.assertEqual(
-                config["paths"]["TEST_PATH_NEW|TEST_PATH_LEGACY"], "/path/to/new"
-            )
+            self.assertEqual(config["paths"]["TEST_PATH_NEW|TEST_PATH_LEGACY"], "/path/to/new")
 
 
 if __name__ == "__main__":

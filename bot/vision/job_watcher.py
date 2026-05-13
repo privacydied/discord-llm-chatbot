@@ -60,11 +60,7 @@ class JobWatcherRegistry:
                 del self._watchers[job_id]
 
         # Create new watcher task
-        watcher_task = asyncio.create_task(
-            self._watch_job_impl(
-                job_id, orchestrator, progress_msg, original_msg, timeout_seconds
-            )
-        )
+        watcher_task = asyncio.create_task(self._watch_job_impl(job_id, orchestrator, progress_msg, original_msg, timeout_seconds))
         self._watchers[job_id] = watcher_task
 
         try:
@@ -99,9 +95,7 @@ class JobWatcherRegistry:
 
                 # Check timeout
                 if elapsed_time > timeout_seconds:
-                    logger.warning(
-                        f"Job watcher timeout - job_id: {job_id[:8]}, elapsed: {elapsed_time:.1f}s"
-                    )
+                    logger.warning(f"Job watcher timeout - job_id: {job_id[:8]}, elapsed: {elapsed_time:.1f}s")
                     return None
 
                 # Get current job status ONCE per iteration
@@ -113,43 +107,31 @@ class JobWatcherRegistry:
                     continue
 
                 if not updated_job:
-                    logger.warning(
-                        f"Job not found during monitoring - job_id: {job_id[:8]}"
-                    )
+                    logger.warning(f"Job not found during monitoring - job_id: {job_id[:8]}")
                     return None
 
                 current_state = updated_job.state.value
 
                 # Log only on state changes or every 10th poll for heartbeat
                 if current_state != last_state:
-                    logger.info(
-                        f"Job state change - job_id: {job_id[:8]}, {last_state or 'init'} -> {current_state}"
-                    )
+                    logger.info(f"Job state change - job_id: {job_id[:8]}, {last_state or 'init'} -> {current_state}")
                     last_state = current_state
                     self._last_states[job_id] = current_state
                 elif poll_count % 10 == 0:
-                    logger.debug(
-                        f"Job heartbeat - job_id: {job_id[:8]}, state: {current_state}, poll: {poll_count}"
-                    )
+                    logger.debug(f"Job heartbeat - job_id: {job_id[:8]}, state: {current_state}, poll: {poll_count}")
 
                 # Check if job reached terminal state
                 if updated_job.is_terminal_state():
-                    logger.info(
-                        f"Job reached terminal state - job_id: {job_id[:8]}, state: {current_state}, polls: {poll_count}"
-                    )
+                    logger.info(f"Job reached terminal state - job_id: {job_id[:8]}, state: {current_state}, polls: {poll_count}")
 
                     # Finalize once and exit immediately
-                    await self._finalize_job_once(
-                        job_id, updated_job, progress_msg, original_msg
-                    )
+                    await self._finalize_job_once(job_id, updated_job, progress_msg, original_msg)
                     return updated_job  # CRITICAL: Exit immediately, no more polling
 
                 # Update progress if message provided and state changed
                 if progress_msg and current_state != self._last_states.get(job_id):
                     try:
-                        await self._update_progress_message(
-                            progress_msg, updated_job, original_msg, elapsed_time
-                        )
+                        await self._update_progress_message(progress_msg, updated_job, original_msg, elapsed_time)
                     except Exception as e:
                         logger.debug(f"Could not update progress message: {e}")
 
@@ -165,9 +147,7 @@ class JobWatcherRegistry:
             logger.debug(f"Job watcher cancelled - job_id: {job_id[:8]}")
             raise
         except Exception as e:
-            logger.error(
-                f"Job watcher error - job_id: {job_id[:8]}: {e}", exc_info=True
-            )
+            logger.error(f"Job watcher error - job_id: {job_id[:8]}: {e}", exc_info=True)
             return None
 
     async def _finalize_job_once(self, job_id: str, job, progress_msg, original_msg):
@@ -192,9 +172,7 @@ class JobWatcherRegistry:
                             # This would need router instance - simplified for now
                             pass
                 else:
-                    logger.info(
-                        f"Finalizing failed job - job_id: {job_id[:8]}, state: {job.state.value}"
-                    )
+                    logger.info(f"Finalizing failed job - job_id: {job_id[:8]}, state: {job.state.value}")
                     # Handle failure
                     pass
 
@@ -206,9 +184,7 @@ class JobWatcherRegistry:
                 exc_info=True,
             )
 
-    async def _update_progress_message(
-        self, progress_msg, job, original_msg, elapsed_time
-    ):
+    async def _update_progress_message(self, progress_msg, job, original_msg, elapsed_time):
         """Update Discord progress message"""
         try:
             # Import here to avoid circular imports
@@ -221,9 +197,7 @@ class JobWatcherRegistry:
                     description=f"Processing... ({elapsed_time:.0f}s elapsed)",
                 )
                 embed.add_field(name="Job ID", value=f"`{job.job_id[:8]}`", inline=True)
-                embed.add_field(
-                    name="Status", value=f"🟡 {job.state.value.title()}", inline=True
-                )
+                embed.add_field(name="Status", value=f"🟡 {job.state.value.title()}", inline=True)
                 embed.add_field(
                     name="Progress",
                     value=f"{job.progress_percentage or 0}%",

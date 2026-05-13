@@ -63,12 +63,8 @@ class TestUpgradePbsToOrig:
 
     def test_upgrade_pbs_complex_params(self):
         """Handle pbs URLs with multiple params, preserving all except name."""
-        input_url = (
-            "https://pbs.twimg.com/media/ABC123?format=webp&name=240x240&other=value"
-        )
-        expected = (
-            "https://pbs.twimg.com/media/ABC123?format=webp&name=orig&other=value"
-        )
+        input_url = "https://pbs.twimg.com/media/ABC123?format=webp&name=240x240&other=value"
+        expected = "https://pbs.twimg.com/media/ABC123?format=webp&name=orig&other=value"
         result = upgrade_pbs_to_orig(input_url)
         assert result == expected
 

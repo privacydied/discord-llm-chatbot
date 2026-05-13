@@ -61,24 +61,16 @@ class TestObservabilityIntegration:
     @pytest.mark.asyncio
     async def test_initialize_observability_stack_success(self):
         """Test successful observability stack initialization."""
-        with patch(
-            "bot.core.config_validation.validate_config_or_exit"
-        ) as mock_validate:
+        with patch("bot.core.config_validation.validate_config_or_exit") as mock_validate:
             mock_validate.return_value = None
 
-            with patch.object(
-                self.obs_manager.resource_monitor, "start_monitoring"
-            ) as mock_start:
+            with patch.object(self.obs_manager.resource_monitor, "start_monitoring") as mock_start:
                 mock_start.return_value = None
 
-                with patch.object(
-                    self.obs_manager.task_monitor, "start_watchdog"
-                ) as mock_watchdog:
+                with patch.object(self.obs_manager.task_monitor, "start_watchdog") as mock_watchdog:
                     mock_watchdog.return_value = None
 
-                    with patch.object(
-                        self.obs_manager.task_monitor, "start_task"
-                    ) as mock_start_task:
+                    with patch.object(self.obs_manager.task_monitor, "start_task") as mock_start_task:
                         mock_start_task.return_value = None
 
                         result = await self.obs_manager.initialize_observability_stack()
@@ -92,9 +84,7 @@ class TestObservabilityIntegration:
     @pytest.mark.asyncio
     async def test_initialize_observability_stack_failure(self):
         """Test observability stack initialization failure handling."""
-        with patch(
-            "bot.core.config_validation.validate_config_or_exit"
-        ) as mock_validate:
+        with patch("bot.core.config_validation.validate_config_or_exit") as mock_validate:
             mock_validate.side_effect = Exception("Config validation failed")
 
             result = await self.obs_manager.initialize_observability_stack()
@@ -104,18 +94,14 @@ class TestObservabilityIntegration:
 
     def test_register_health_components(self):
         """Test health component registration."""
-        with patch.object(
-            self.obs_manager.health_monitor, "register_component"
-        ) as mock_register:
+        with patch.object(self.obs_manager.health_monitor, "register_component") as mock_register:
             self.obs_manager._register_health_components()
 
             # Should register at least core components
             assert mock_register.call_count >= 6
 
             # Verify core components were registered
-            registered_components = [
-                call[0][0] for call in mock_register.call_args_list
-            ]
+            registered_components = [call[0][0] for call in mock_register.call_args_list]
             assert "discord_connection" in registered_components
             assert "message_router" in registered_components
             assert "metrics_system" in registered_components
@@ -123,15 +109,9 @@ class TestObservabilityIntegration:
     @pytest.mark.asyncio
     async def test_setup_background_task_monitoring(self):
         """Test background task monitoring setup."""
-        with patch.object(
-            self.obs_manager.task_monitor, "register_task"
-        ) as mock_register:
-            with patch.object(
-                self.obs_manager.task_monitor, "start_watchdog"
-            ) as mock_watchdog:
-                with patch.object(
-                    self.obs_manager.task_monitor, "start_task"
-                ) as mock_start:
+        with patch.object(self.obs_manager.task_monitor, "register_task") as mock_register:
+            with patch.object(self.obs_manager.task_monitor, "start_watchdog") as mock_watchdog:
+                with patch.object(self.obs_manager.task_monitor, "start_task") as mock_start:
                     mock_watchdog.return_value = None
                     mock_start.return_value = None
 
@@ -145,9 +125,7 @@ class TestObservabilityIntegration:
     @patch.dict(os.environ, {"OBS_PARALLEL_STARTUP": "true"})
     def test_configure_parallel_startup_enabled(self):
         """Test parallel startup configuration when enabled."""
-        with patch.object(
-            self.obs_manager.startup_orchestrator, "add_component"
-        ) as mock_add:
+        with patch.object(self.obs_manager.startup_orchestrator, "add_component") as mock_add:
             self.obs_manager._configure_parallel_startup()
 
             # Should add multiple components
@@ -194,15 +172,9 @@ class TestObservabilityIntegration:
             ],
         }
 
-        with patch.object(
-            self.obs_manager.startup_orchestrator, "execute"
-        ) as mock_execute:
-            with patch.object(
-                self.obs_manager.startup_orchestrator, "get_startup_summary"
-            ) as mock_summary_method:
-                with patch.object(
-                    self.obs_manager.health_monitor, "update_component_health"
-                ):
+        with patch.object(self.obs_manager.startup_orchestrator, "execute") as mock_execute:
+            with patch.object(self.obs_manager.startup_orchestrator, "get_startup_summary") as mock_summary_method:
+                with patch.object(self.obs_manager.health_monitor, "update_component_health"):
                     mock_execute.return_value = mock_results
                     mock_summary_method.return_value = mock_summary
 
@@ -223,18 +195,10 @@ class TestObservabilityIntegration:
         mock_task_statuses = {"test_task": {"status": "running"}}
         mock_resource_stats = {"memory_mb": 256, "cpu_percent": 15.5}
 
-        with patch.object(
-            self.obs_manager.health_monitor, "get_health_status"
-        ) as mock_health:
-            with patch.object(
-                self.obs_manager.task_monitor, "get_all_task_statuses"
-            ) as mock_tasks:
-                with patch.object(
-                    self.obs_manager.resource_monitor, "get_resource_stats"
-                ) as mock_resources:
-                    with patch.object(
-                        self.obs_manager.health_monitor, "get_health_summary_json"
-                    ) as mock_summary:
+        with patch.object(self.obs_manager.health_monitor, "get_health_status") as mock_health:
+            with patch.object(self.obs_manager.task_monitor, "get_all_task_statuses") as mock_tasks:
+                with patch.object(self.obs_manager.resource_monitor, "get_resource_stats") as mock_resources:
+                    with patch.object(self.obs_manager.health_monitor, "get_health_summary_json") as mock_summary:
                         mock_health.return_value = mock_system_health
                         mock_tasks.return_value = mock_task_statuses
                         mock_resources.return_value = mock_resource_stats
@@ -245,9 +209,7 @@ class TestObservabilityIntegration:
 
                         self.obs_manager.initialized = True
 
-                        result = (
-                            await self.obs_manager.get_comprehensive_health_status()
-                        )
+                        result = await self.obs_manager.get_comprehensive_health_status()
 
                         assert "observability_initialized" in result
                         assert result["observability_initialized"] is True
@@ -259,12 +221,8 @@ class TestObservabilityIntegration:
     @pytest.mark.asyncio
     async def test_shutdown_observability_stack(self):
         """Test observability stack shutdown."""
-        with patch.object(
-            self.obs_manager.resource_monitor, "stop_monitoring"
-        ) as mock_stop_resources:
-            with patch.object(
-                self.obs_manager.task_monitor, "stop_all_tasks"
-            ) as mock_stop_tasks:
+        with patch.object(self.obs_manager.resource_monitor, "stop_monitoring") as mock_stop_resources:
+            with patch.object(self.obs_manager.task_monitor, "stop_all_tasks") as mock_stop_tasks:
                 mock_stop_resources.return_value = None
                 mock_stop_tasks.return_value = None
 
@@ -402,9 +360,7 @@ class TestResourceMonitoringIntegration:
         monitor = ResourceMonitor()
 
         with patch("psutil.Process") as mock_process:
-            mock_process.return_value.memory_info.return_value.rss = (
-                1024 * 1024 * 100
-            )  # 100MB
+            mock_process.return_value.memory_info.return_value.rss = 1024 * 1024 * 100  # 100MB
             mock_process.return_value.cpu_percent.return_value = 25.0
 
             await monitor.start_monitoring()
@@ -440,9 +396,7 @@ class TestHealthMonitoringIntegration:
 
         # Register some components
         monitor.register_component("test_component1", HealthStatus.READY)
-        monitor.register_component(
-            "test_component2", HealthStatus.DEGRADED, "Minor issue"
-        )
+        monitor.register_component("test_component2", HealthStatus.DEGRADED, "Minor issue")
 
         health = await monitor.get_health_status()
 
@@ -477,9 +431,7 @@ class TestConfigValidationIntegration:
             }
 
             # Mock environment
-            with patch.dict(
-                os.environ, {"TEST_KEY": "test_value", "TEST_NUMBER": "42"}
-            ):
+            with patch.dict(os.environ, {"TEST_KEY": "test_value", "TEST_NUMBER": "42"}):
                 errors = validator.validate_config(rules)
                 assert len(errors) == 0
 
@@ -500,10 +452,7 @@ class TestConfigValidationIntegration:
             errors = validator.validate_config(rules)
             assert len(errors) > 0
             assert any("REQUIRED_KEY" in error for error in errors)
-            assert any(
-                "NUMERIC_KEY" in error and "minimum" in error.lower()
-                for error in errors
-            )
+            assert any("NUMERIC_KEY" in error and "minimum" in error.lower() for error in errors)
 
 
 # Integration test fixtures
@@ -541,9 +490,7 @@ class TestEndToEndIntegration:
     """End-to-end integration tests."""
 
     @pytest.mark.asyncio
-    async def test_complete_observability_lifecycle(
-        self, initialized_observability_manager
-    ):
+    async def test_complete_observability_lifecycle(self, initialized_observability_manager):
         """Test complete observability lifecycle."""
         manager = initialized_observability_manager
 

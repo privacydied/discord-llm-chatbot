@@ -99,14 +99,9 @@ async def test_vl_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch, tm
     assert result["text"] == "OK NVIDIA VISION"
     assert result["model"] == "nvidia-vl-b"
     assert client_calls[0]["api_key"] == "openrouter-key"
-    assert (
-        str(client_calls[0]["base_url"]).rstrip("/") == "https://openrouter.ai/api/v1"
-    )
+    assert str(client_calls[0]["base_url"]).rstrip("/") == "https://openrouter.ai/api/v1"
     assert client_calls[1]["api_key"] == "nvidia-test-key"
-    assert (
-        str(client_calls[1]["base_url"]).rstrip("/")
-        == "https://integrate.api.nvidia.com/v1"
-    )
+    assert str(client_calls[1]["base_url"]).rstrip("/") == "https://integrate.api.nvidia.com/v1"
 
 
 @pytest.mark.asyncio
@@ -195,17 +190,12 @@ async def test_nvidia_image_submit_uses_nvidia_endpoint_and_returns_fetchable_re
 
     provider.session = FakeSession()
 
-    response = await adapter.submit(
-        VisionRequest(task=VisionTask.TEXT_TO_IMAGE, prompt="a robot", user_id="u1")
-    )
+    response = await adapter.submit(VisionRequest(task=VisionTask.TEXT_TO_IMAGE, prompt="a robot", user_id="u1"))
     result = await adapter.fetch_result(response.job_id)
 
     assert response.provider == VisionProvider.NVIDIA
     assert response.model_used == "black-forest-labs/flux.1-dev"
-    assert (
-        captured["url"]
-        == "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-dev"
-    )
+    assert captured["url"] == "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-dev"
     assert captured["json"] == {"prompt": "a robot"}
     assert captured["headers"]["Authorization"] == "Bearer nvidia-test-key"
     assert result.provider_used == "nvidia"

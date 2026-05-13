@@ -33,9 +33,7 @@ def format_x_tweet_with_transcription(
     try:
         caption = ""
         if tweet_data and isinstance(tweet_data, dict):
-            caption = (
-                tweet_data.get("full_text") or tweet_data.get("text") or ""
-            ).strip()
+            caption = (tweet_data.get("full_text") or tweet_data.get("text") or "").strip()
         if not caption and base_text:
             try:
                 base_str = str(base_text)
@@ -56,9 +54,7 @@ def format_x_tweet_with_transcription(
                         continue
                     if ln.startswith("— "):
                         continue
-                    if ln.lower().startswith("http://") or ln.lower().startswith(
-                        "https://"
-                    ):
+                    if ln.lower().startswith("http://") or ln.lower().startswith("https://"):
                         continue
                     caption = ln
                     break
@@ -110,9 +106,7 @@ def format_x_tweet_with_transcription(
     # Concatenate caption + transcript for video tweets before text flow [REH]
     try:
         if bundle.caption_text and bundle.media_transcript:
-            combined = (
-                f"{bundle.caption_text.strip()}\n\n{bundle.media_transcript.strip()}"
-            )
+            combined = f"{bundle.caption_text.strip()}\n\n{bundle.media_transcript.strip()}"
             bundle.add_section(
                 kind="caption_transcript",
                 title="Tweet Caption + Audio Transcript",
@@ -126,9 +120,7 @@ def format_x_tweet_with_transcription(
 
     # Add STT grounding instructions to prevent "I can't process audio" responses [REH]
     # This ensures the model knows STT succeeded and uses the transcript
-    if bundle.media_transcript or any(
-        s.kind == "caption_transcript" for s in bundle.extra_sections
-    ):
+    if bundle.media_transcript or any(s.kind == "caption_transcript" for s in bundle.extra_sections):
         grounding = (
             "\n\n[STT GROUNDING]\n"
             "- The audio/video was transcribed by STT. Use the transcript above as the source.\n"
@@ -157,16 +149,10 @@ def format_x_tweet_result(
     """Format X API tweet response into concise text."""
     try:
         payload = api_data or {}
-        tweet = (
-            payload.get("data") if isinstance(payload.get("data"), dict) else payload
-        )
+        tweet = payload.get("data") if isinstance(payload.get("data"), dict) else payload
         tweet = tweet or {}
-        includes = (
-            payload.get("includes") if isinstance(payload.get("includes"), dict) else {}
-        )
-        media_list = (
-            includes.get("media") if isinstance(includes.get("media"), list) else []
-        )
+        includes = payload.get("includes") if isinstance(payload.get("includes"), dict) else {}
+        media_list = includes.get("media") if isinstance(includes.get("media"), list) else []
 
         text = (tweet.get("full_text") or tweet.get("text") or "").strip()
 
@@ -178,17 +164,9 @@ def format_x_tweet_result(
                 for user_item in users:
                     if not isinstance(user_item, dict):
                         continue
-                    if (
-                        author_id
-                        and str(user_item.get("id") or "").strip() != author_id
-                    ):
+                    if author_id and str(user_item.get("id") or "").strip() != author_id:
                         continue
-                    user = (
-                        user_item.get("name")
-                        or user_item.get("username")
-                        or user_item.get("screen_name")
-                        or ""
-                    ).strip()
+                    user = (user_item.get("name") or user_item.get("username") or user_item.get("screen_name") or "").strip()
                     if user:
                         break
         except Exception:
@@ -200,11 +178,7 @@ def format_x_tweet_result(
 
         photo_count = 0
         try:
-            photo_count = sum(
-                1
-                for media in media_list
-                if isinstance(media, dict) and media.get("type") == "photo"
-            )
+            photo_count = sum(1 for media in media_list if isinstance(media, dict) and media.get("type") == "photo")
         except Exception:
             photo_count = 0
 

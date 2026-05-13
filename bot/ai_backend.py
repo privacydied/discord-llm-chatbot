@@ -38,9 +38,7 @@ async def generate_response(
         backend = config.get("TEXT_BACKEND", "openai")
 
         logger.info(f"🤖 Using AI backend: {backend}")
-        logger.debug(
-            f"🤖 Temperature: {temperature}, Max tokens: {max_tokens}, Stream: {stream}"
-        )
+        logger.debug(f"🤖 Temperature: {temperature}, Max tokens: {max_tokens}, Stream: {stream}")
 
         if backend in ("openai", "openrouter"):
             # Use OpenAI/OpenRouter backend
@@ -107,16 +105,7 @@ async def generate_response(
             ("404" in err_str and ("endpoint" in err_str or "no endpoints" in err_str))
             or "providers unavailable" in err_str
             or "all text providers exhausted" in err_str
-            or (
-                ("401" in err_str or "403" in err_str)
-                and (
-                    "authentication" in err_str
-                    or "unauthorized" in err_str
-                    or "forbidden" in err_str
-                    or "user not found" in err_str
-                    or "invalid api key" in err_str
-                )
-            )
+            or (("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str))
         )
 
         if is_expected_failure:
@@ -144,12 +133,8 @@ async def generate_vl_response(
     try:
         logger.info("🎨 === VL BACKEND ROUTING STARTED ===")
         image_url_str = str(image_url)
-        logger.debug(
-            f"🎨 Image URL: {image_url_str[:100]}{'...' if len(image_url_str) > 100 else ''}"
-        )
-        logger.debug(
-            f"🎨 User prompt: '{user_prompt[:100]}{'...' if len(user_prompt) > 100 else ''}'"
-        )
+        logger.debug(f"🎨 Image URL: {image_url_str[:100]}{'...' if len(image_url_str) > 100 else ''}")
+        logger.debug(f"🎨 User prompt: '{user_prompt[:100]}{'...' if len(user_prompt) > 100 else ''}'")
         logger.debug(f"🎨 User ID: {user_id}, Guild ID: {guild_id}")
 
         config = load_config()
@@ -175,22 +160,13 @@ async def generate_vl_response(
                 **kwargs,
             )
             # Only log success when the result does not carry failure metadata [REH]
-            _vl_ok = not (
-                isinstance(result, dict)
-                and (
-                    result.get("ladder_exhausted")
-                    or result.get("status") == "error"
-                    or (result.get("text") or "").strip() == ""
-                )
-            )
+            _vl_ok = not (isinstance(result, dict) and (result.get("ladder_exhausted") or result.get("status") == "error" or (result.get("text") or "").strip() == ""))
             if _vl_ok:
                 logger.info("✅ OpenAI VL backend completed successfully")
             return result
         else:
             # For now, Ollama VL is not implemented, fallback to OpenAI
-            logger.warning(
-                f"⚠️ VL not supported for backend {backend}, falling back to OpenAI"
-            )
+            logger.warning(f"⚠️ VL not supported for backend {backend}, falling back to OpenAI")
             from .openai_backend import (
                 generate_vl_response as openai_generate_vl_response,
             )
@@ -204,14 +180,7 @@ async def generate_vl_response(
                 max_tokens=max_tokens,
                 **kwargs,
             )
-            _vl_ok = not (
-                isinstance(result, dict)
-                and (
-                    result.get("ladder_exhausted")
-                    or result.get("status") == "error"
-                    or (result.get("text") or "").strip() == ""
-                )
-            )
+            _vl_ok = not (isinstance(result, dict) and (result.get("ladder_exhausted") or result.get("status") == "error" or (result.get("text") or "").strip() == ""))
             if _vl_ok:
                 logger.info("✅ OpenAI VL fallback completed successfully")
             return result
@@ -223,16 +192,7 @@ async def generate_vl_response(
             ("404" in err_str and ("endpoint" in err_str or "no endpoints" in err_str))
             or "providers unavailable" in err_str
             or "all vision providers exhausted" in err_str
-            or (
-                ("401" in err_str or "403" in err_str)
-                and (
-                    "authentication" in err_str
-                    or "unauthorized" in err_str
-                    or "forbidden" in err_str
-                    or "user not found" in err_str
-                    or "invalid api key" in err_str
-                )
-            )
+            or (("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str))
         )
 
         if is_expected_failure:
@@ -243,11 +203,7 @@ async def generate_vl_response(
         # Provide more user-friendly error messages for common issues
         if is_retryable_error(e, VISION_RETRY_CONFIG):
             logger.warning("⚠️ Detected transient provider error in AI backend")
-            raise APIError(
-                "The vision service is temporarily unavailable. "
-                "This appears to be a provider issue that should resolve shortly. "
-                "Please try again in a few minutes."
-            ) from e
+            raise APIError("The vision service is temporarily unavailable. This appears to be a provider issue that should resolve shortly. Please try again in a few minutes.") from e
         # For other errors, raise an inference-specific error
         err = InferenceError(f"Vision processing failed: {str(e)}")
         err.vl_exhausted = True

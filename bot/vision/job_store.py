@@ -57,9 +57,7 @@ class VisionJobStore:
         self._locks: Dict[str, asyncio.Lock] = {}
         self._ledger_lock = asyncio.Lock()
 
-        self.logger.info(
-            f"Vision Job Store initialized - jobs_dir: {self.jobs_dir}, ledger_path: {self.ledger_path}"
-        )
+        self.logger.info(f"Vision Job Store initialized - jobs_dir: {self.jobs_dir}, ledger_path: {self.ledger_path}")
 
     async def save_job(self, job: VisionJob) -> None:
         """
@@ -94,9 +92,7 @@ class VisionJobStore:
                 # Append progress log entry (JSONL format)
                 await self._append_progress_log(job)
 
-                self.logger.debug(
-                    f"Job state saved - job_id: {job_id[:8]}, state: {job.state.value}, progress: {getattr(job, 'progress_percentage', 0)}"
-                )
+                self.logger.debug(f"Job state saved - job_id: {job_id[:8]}, state: {job.state.value}, progress: {getattr(job, 'progress_percentage', 0)}")
 
         except Exception as e:
             self.logger.error(f"Failed to save job {job_id[:8]}: {str(e)}")
@@ -139,21 +135,14 @@ class VisionJobStore:
                     self._last_loaded_states = {}
 
                 current_state = job.state.value
-                if (
-                    job_id not in self._last_loaded_states
-                    or self._last_loaded_states[job_id] != current_state
-                ):
-                    self.logger.debug(
-                        f"Job loaded - job_id: {job_id[:8]}, state: {current_state}"
-                    )
+                if job_id not in self._last_loaded_states or self._last_loaded_states[job_id] != current_state:
+                    self.logger.debug(f"Job loaded - job_id: {job_id[:8]}, state: {current_state}")
                     self._last_loaded_states[job_id] = current_state
 
                 return job
 
         except json.JSONDecodeError as e:
-            self.logger.error(
-                f"Job file corrupted - job_id: {job_id[:8]}, error: {str(e)}"
-            )
+            self.logger.error(f"Job file corrupted - job_id: {job_id[:8]}, error: {str(e)}")
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Job file corrupted: {str(e)}",
@@ -161,9 +150,7 @@ class VisionJobStore:
             )
 
         except Exception as e:
-            self.logger.error(
-                f"Failed to load job - job_id: {job_id[:8]}, error: {str(e)}"
-            )
+            self.logger.error(f"Failed to load job - job_id: {job_id[:8]}, error: {str(e)}")
             return None  # Treat as not found for robustness
 
     async def list_jobs(
@@ -188,9 +175,7 @@ class VisionJobStore:
         try:
             # Iterate through job files
             job_files = list(self.jobs_dir.glob("*.json"))
-            job_files.sort(
-                key=lambda p: p.stat().st_mtime, reverse=True
-            )  # Newest first
+            job_files.sort(key=lambda p: p.stat().st_mtime, reverse=True)  # Newest first
 
             for job_file in job_files[: limit * 2]:  # Load extra in case of filtering
                 if len(jobs) >= limit:
@@ -215,9 +200,7 @@ class VisionJobStore:
                     self.logger.warning(f"Failed to load job {job_file.stem}: {e}")
                     continue
 
-            self.logger.debug(
-                f"Jobs listed - count: {len(jobs)}, user_filter: {user_id is not None}, state_filter: {state.value if state else None}"
-            )
+            self.logger.debug(f"Jobs listed - count: {len(jobs)}, user_filter: {user_id is not None}, state_filter: {state.value if state else None}")
 
             return jobs
 
@@ -322,9 +305,7 @@ class VisionJobStore:
                         cleaned_count += 1
 
                     except Exception as e:
-                        self.logger.warning(
-                            f"Failed to cleanup job {job_file.name}: {e}"
-                        )
+                        self.logger.warning(f"Failed to cleanup job {job_file.name}: {e}")
                         continue
 
             if cleaned_count > 0:
@@ -414,9 +395,7 @@ class VisionJobStore:
 
             # Count by state (sample recent jobs for performance)
             state_counts = {}
-            recent_files = sorted(
-                job_files, key=lambda p: p.stat().st_mtime, reverse=True
-            )[:200]
+            recent_files = sorted(job_files, key=lambda p: p.stat().st_mtime, reverse=True)[:200]
 
             for job_file in recent_files:
                 try:
@@ -431,9 +410,7 @@ class VisionJobStore:
                 "total_jobs": total_jobs,
                 "state_counts": state_counts,
                 "storage_path": str(self.jobs_dir),
-                "ledger_size": self.ledger_path.stat().st_size
-                if self.ledger_path.exists()
-                else 0,
+                "ledger_size": self.ledger_path.stat().st_size if self.ledger_path.exists() else 0,
             }
 
         except Exception as e:

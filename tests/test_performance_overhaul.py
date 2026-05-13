@@ -35,9 +35,7 @@ class TestPhaseTimingSystem:
         """Test pipeline tracker creation and correlation IDs."""
         timing_manager = get_timing_manager()
 
-        tracker = timing_manager.create_pipeline_tracker(
-            msg_id="test_msg_123", user_id="test_user_456", guild_id="test_guild_789"
-        )
+        tracker = timing_manager.create_pipeline_tracker(msg_id="test_msg_123", user_id="test_user_456", guild_id="test_guild_789")
 
         assert tracker.msg_id == "test_msg_123"
         assert tracker.user_id == "test_user_456"
@@ -53,9 +51,7 @@ class TestPhaseTimingSystem:
         tracker = timing_manager.create_pipeline_tracker("msg_123", "user_456")
 
         # Test successful phase
-        async with timing_manager.track_phase(
-            tracker, PC.PHASE_ROUTER_DISPATCH, test_metadata="value"
-        ) as phase_metric:
+        async with timing_manager.track_phase(tracker, PC.PHASE_ROUTER_DISPATCH, test_metadata="value") as phase_metric:
             await asyncio.sleep(0.01)  # Simulate work
             assert phase_metric.phase == PC.PHASE_ROUTER_DISPATCH
 
@@ -115,9 +111,7 @@ class TestOpenRouterClientOptimizations:
 
         # Force circuit open
         circuit_breaker.state = CircuitState.OPEN
-        circuit_breaker.last_failure_time = time.time() - (
-            PC.OR_BREAKER_OPEN_MS / 1000 + 1
-        )
+        circuit_breaker.last_failure_time = time.time() - (PC.OR_BREAKER_OPEN_MS / 1000 + 1)
 
         # Should attempt recovery
         with patch("random.random", return_value=0.4):  # Below half-open probability
@@ -137,9 +131,7 @@ class TestOpenRouterClientOptimizations:
             return {"success": True}
 
         start_time = time.time()
-        result = await mock_client._retry_with_backoff(
-            "test_model", failing_request, max_retries=2
-        )
+        result = await mock_client._retry_with_backoff("test_model", failing_request, max_retries=2)
         elapsed = time.time() - start_time
 
         assert call_count == 3  # Initial + 2 retries
@@ -169,9 +161,7 @@ class TestTemplateCaching:
         cache = get_template_cache()
 
         # First access - cache miss
-        template1 = await cache.get_template(
-            content="Hello {name}, welcome to {server}!", persona="test"
-        )
+        template1 = await cache.get_template(content="Hello {name}, welcome to {server}!", persona="test")
 
         assert cache.stats["cache_misses"] > 0
         assert template1.metadata.template_id.startswith("tpl_test_")
@@ -180,9 +170,7 @@ class TestTemplateCaching:
 
         # Second access - cache hit
         cache.stats["cache_hits"] = 0  # Reset for test
-        template2 = await cache.get_template(
-            content="Hello {name}, welcome to {server}!", persona="test"
-        )
+        template2 = await cache.get_template(content="Hello {name}, welcome to {server}!", persona="test")
 
         assert cache.stats["cache_hits"] == 1
         assert template1.metadata.template_id == template2.metadata.template_id
@@ -235,9 +223,7 @@ class TestTemplateCaching:
         import os
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write(
-                "System: You are a helpful assistant.\nUser: {user_prompt}\nHistory: {history}"
-            )
+            f.write("System: You are a helpful assistant.\nUser: {user_prompt}\nHistory: {history}")
             temp_file = f.name
 
         try:
@@ -365,9 +351,7 @@ class TestSessionCache:
             profile.add_message("user", long_message)
 
         # History should be trimmed
-        total_chars = sum(
-            len(msg.get("content", "")) for msg in profile.conversation_history
-        )
+        total_chars = sum(len(msg.get("content", "")) for msg in profile.conversation_history)
         estimated_tokens = total_chars // 4
 
         assert estimated_tokens <= PC.HISTORY_MAX_TOKENS_DM * 1.1  # Allow 10% overhead
@@ -376,9 +360,7 @@ class TestSessionCache:
     async def test_lru_eviction(self):
         """Test LRU eviction when cache is full."""
         cache = get_session_cache()
-        cache.max_entries = (
-            15  # Small cache for testing (user_profiles gets max_entries//3 = 5)
-        )
+        cache.max_entries = 15  # Small cache for testing (user_profiles gets max_entries//3 = 5)
 
         from bot.core.session_cache import UserProfile
 
@@ -450,9 +432,7 @@ class TestDiscordSendOptimization:
         sender = get_discord_sender(mock_bot)
 
         # Simulate rate limit
-        bucket = sender._get_rate_limit_bucket(
-            f"POST:channels/{mock_channel.id}/messages"
-        )
+        bucket = sender._get_rate_limit_bucket(f"POST:channels/{mock_channel.id}/messages")
         bucket.remaining = 0
         bucket.reset_after = 0.1  # 100ms
         bucket.reset_at = time.time() + 0.1
@@ -479,9 +459,7 @@ class TestSLOMonitoring:
         async def alert_callback(alert):
             alerts_fired.append(alert)
 
-        monitor.register_alert_callback(
-            AlertLevel.CRITICAL, alert_callback
-        )  # Fixed: register for CRITICAL level
+        monitor.register_alert_callback(AlertLevel.CRITICAL, alert_callback)  # Fixed: register for CRITICAL level
 
         # Trigger SLO breach
         phase = PC.PHASE_ROUTER_DISPATCH
@@ -545,9 +523,7 @@ class TestSLOMonitoring:
 
         assert isinstance(dashboard, Panel)
         # Dashboard should contain performance data
-        dashboard_content = (
-            dashboard.renderable if hasattr(dashboard, "renderable") else str(dashboard)
-        )
+        dashboard_content = dashboard.renderable if hasattr(dashboard, "renderable") else str(dashboard)
         assert len(str(dashboard_content)) > 0  # Non-empty dashboard
 
 
@@ -595,9 +571,7 @@ class TestIntegrationAndSoak:
 
         async def simulate_pipeline(pipeline_id: int):
             """Simulate single pipeline execution."""
-            tracker = timing_manager.create_pipeline_tracker(
-                f"soak_{pipeline_id}", f"user_{pipeline_id}"
-            )
+            tracker = timing_manager.create_pipeline_tracker(f"soak_{pipeline_id}", f"user_{pipeline_id}")
 
             # Random phase durations
             for phase in PC.get_all_phases()[:4]:  # First 4 phases
@@ -712,9 +686,7 @@ class PerformanceBenchmark:
     """Utility for measuring performance improvements [PA]."""
 
     @staticmethod
-    async def measure_phase_performance(
-        phase_func, iterations: int = 100
-    ) -> Dict[str, float]:
+    async def measure_phase_performance(phase_func, iterations: int = 100) -> Dict[str, float]:
         """Measure phase performance statistics."""
         measurements = []
 

@@ -48,9 +48,7 @@ async def speak_infer(text: str) -> Path:
             logger.error(f"TTS output file is empty: {out_path}")
             raise TTSAudioError("Speech synthesis failed: Output file is empty")
 
-        logger.debug(
-            f"TTS synthesis successful: {out_path}, size: {out_path.stat().st_size} bytes, type: {content_type}"
-        )
+        logger.debug(f"TTS synthesis successful: {out_path}, size: {out_path.stat().st_size} bytes, type: {content_type}")
         return out_path
     except SynthesisError as exc:
         status = manager.get_status()

@@ -22,12 +22,15 @@ if TYPE_CHECKING:
 
 # ---------- Lazy accessor to defer heavy numpy / onnxruntime import ----------
 
+
 def _kokoro_direct():
     """Lazy accessor — deferred KokoroDirect load (carries numpy)."""
     if "_kokoro_cls" not in globals():
         from .kokoro_direct import KokoroDirect as _kd
+
         globals()["_kokoro_cls"] = _kd
     return globals()["_kokoro_cls"]
+
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +62,8 @@ class TTSManager:
         self.config: Dict[str, Any] = config or {}
 
         # Public attributes expected by tests/scripts
-        self.backend: str = str(
-            self.config.get("TTS_BACKEND") or os.getenv("TTS_BACKEND") or "kokoro-onnx"
-        )
-        self.voice: str = str(
-            self.config.get("TTS_VOICE") or os.getenv("TTS_VOICE") or "default"
-        )
+        self.backend: str = str(self.config.get("TTS_BACKEND") or os.getenv("TTS_BACKEND") or "kokoro-onnx")
+        self.voice: str = str(self.config.get("TTS_VOICE") or os.getenv("TTS_VOICE") or "default")
         self.available: bool = False
 
         # Internal state
@@ -129,13 +128,9 @@ class TTSManager:
 
         # 4) Config flat fallbacks
         if not model_path:
-            model_path = self.config.get("TTS_MODEL_PATH") or self.config.get(
-                "TTS_MODEL_FILE"
-            )
+            model_path = self.config.get("TTS_MODEL_PATH") or self.config.get("TTS_MODEL_FILE")
         if not voices_path:
-            voices_path = self.config.get("TTS_VOICES_PATH") or self.config.get(
-                "TTS_VOICE_FILE"
-            )
+            voices_path = self.config.get("TTS_VOICES_PATH") or self.config.get("TTS_VOICE_FILE")
 
         # 5) Defaults
         model_path = str(model_path or DEFAULT_MODEL_PATH)
@@ -221,7 +216,9 @@ class TTSManager:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
                     fut = ex.submit(
                         lambda p=warmup_path: self.kokoro.create(  # type: ignore[union-attr]
-                            "ready", self.voice, out_path=p,
+                            "ready",
+                            self.voice,
+                            out_path=p,
                         ),
                     )
                     fut.result(timeout=_WARMUP_TIMEOUT)
@@ -243,16 +240,14 @@ class TTSManager:
                 logger.warning(
                     "TTS warmup timed out after %ds",
                     _WARMUP_TIMEOUT,
-                    extra={"subsys": "tts", "event": "manager.warmup.timeout",
-                           "timeout_s": _WARMUP_TIMEOUT},
+                    extra={"subsys": "tts", "event": "manager.warmup.timeout", "timeout_s": _WARMUP_TIMEOUT},
                 )
             except Exception as exc:
                 self._warmup_status = "failed"
                 logger.warning(
                     "TTS warmup failed: %s",
                     exc,
-                    extra={"subsys": "tts", "event": "manager.warmup.fail",
-                           "error": str(exc)},
+                    extra={"subsys": "tts", "event": "manager.warmup.fail", "error": str(exc)},
                 )
                 # Non-fatal: do not re-raise
 
@@ -271,9 +266,7 @@ class TTSManager:
             extra={"subsys": "tts", "event": "manager.available"},
         )
 
-    def generate_speech(
-        self, text: str, voice: Optional[str] = None, *, out_path: Optional[Path] = None
-    ) -> Path:
+    def generate_speech(self, text: str, voice: Optional[str] = None, *, out_path: Optional[Path] = None) -> Path:
         """
         Generate speech synchronously using KokoroDirect.create.
 
@@ -298,9 +291,7 @@ class TTSManager:
                     len(text),
                     _TTS_MAX_CHARS,
                 )
-                raise RuntimeError(
-                    f"TTS text exceeds {_TTS_MAX_CHARS} chars; skipped (TTS_SKIP_LONG_RESPONSES=True)"
-                )
+                raise RuntimeError(f"TTS text exceeds {_TTS_MAX_CHARS} chars; skipped (TTS_SKIP_LONG_RESPONSES=True)")
             else:
                 logger.warning(
                     "tts:trim_text len=%d max=%d",

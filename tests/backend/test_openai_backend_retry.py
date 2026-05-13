@@ -15,12 +15,8 @@ from bot.enhanced_retry import (
 
 def make_httpx_429(retry_after: float) -> httpx.HTTPStatusError:
     request = httpx.Request("POST", "https://example.com/v1/chat/completions")
-    response = httpx.Response(
-        429, headers={"Retry-After": str(retry_after)}, request=request
-    )
-    return httpx.HTTPStatusError(
-        "429 Too Many Requests", request=request, response=response
-    )
+    response = httpx.Response(429, headers={"Retry-After": str(retry_after)}, request=request)
+    return httpx.HTTPStatusError("429 Too Many Requests", request=request, response=response)
 
 
 class FakeChatCompletions:
@@ -50,9 +46,7 @@ async def test_text_backend_openrouter_alias_routes_to_openai_backend(monkeypatc
         return {"text": "ok", "backend": "openai"}
 
     monkeypatch.setattr("bot.ai_backend.load_config", fake_load_config)
-    monkeypatch.setattr(
-        "bot.openai_backend.generate_openai_response", fake_generate_openai_response
-    )
+    monkeypatch.setattr("bot.openai_backend.generate_openai_response", fake_generate_openai_response)
 
     from bot.ai_backend import generate_response
 
@@ -71,10 +65,7 @@ def test_text_ladder_env_can_force_single_attempt_per_model(monkeypatch):
 
     mgr = EnhancedRetryManager()
 
-    assert [
-        (p.name, p.model, p.timeout, p.max_attempts)
-        for p in mgr.provider_configs["text"]
-    ] == [
+    assert [(p.name, p.model, p.timeout, p.max_attempts) for p in mgr.provider_configs["text"]] == [
         ("nvidia", "deepseek-ai/deepseek-v4-pro", 35.0, 1),
         ("nvidia", "qwen/qwen3.5-397b-a17b", 35.0, 1),
     ]
@@ -99,11 +90,7 @@ def test_text_ladder_env_dedupes_exact_duplicate_entries(monkeypatch):
 def test_empty_text_response_is_retryable_for_ladder():
     mgr = EnhancedRetryManager()
 
-    assert mgr._is_retryable_error(
-        APIError(
-            "Response normalization failed: APIError: Empty text response from model tencent/hy3-preview:free"
-        )
-    )
+    assert mgr._is_retryable_error(APIError("Response normalization failed: APIError: Empty text response from model tencent/hy3-preview:free"))
 
 
 @pytest.mark.asyncio
@@ -124,9 +111,7 @@ async def test_nvidia_backend_preserves_actual_ladder_model(monkeypatch):
         return {"text": "ok", "model": "deepseek-ai/deepseek-v4-pro"}
 
     monkeypatch.setattr("bot.nvidia_backend.load_config", fake_load_config)
-    monkeypatch.setattr(
-        "bot.openai_backend.generate_openai_response", fake_generate_openai_response
-    )
+    monkeypatch.setattr("bot.openai_backend.generate_openai_response", fake_generate_openai_response)
 
     result = await generate_nvidia_response("hello", stream=False, system_prompt="test")
 
@@ -193,9 +178,7 @@ async def test_retry_after_affects_backoff_delay(monkeypatch):
     )
 
     # Execute
-    result = await generate_openai_response(
-        "hello", stream=False, system_prompt="test-system"
-    )
+    result = await generate_openai_response("hello", stream=False, system_prompt="test-system")
 
     assert result["text"] == "OK"
     # Ensure delay respected Retry-After (max(delay, retry_after))
@@ -228,9 +211,7 @@ async def test_rate_limit_apierror_carries_retry_after_seconds_when_no_retry(
     )
 
     with pytest.raises(APIError) as ei:
-        await generate_openai_response(
-            "hello", stream=False, system_prompt="test-system"
-        )
+        await generate_openai_response("hello", stream=False, system_prompt="test-system")
 
     e = ei.value
     assert hasattr(e, "retry_after_seconds")
@@ -292,15 +273,10 @@ async def test_nvidia_base_uses_text_fallback_ladder_and_nvidia_key(monkeypatch)
 
     monkeypatch.setattr("bot.openai_backend.openai.AsyncOpenAI", fake_client_ctor)
 
-    result = await generate_openai_response(
-        "hello", stream=False, system_prompt="test-system"
-    )
+    result = await generate_openai_response("hello", stream=False, system_prompt="test-system")
 
     assert captured_client_kwargs["api_key"] == "nvapi-test-key"
-    assert (
-        str(captured_client_kwargs["base_url"]).rstrip("/")
-        == "https://integrate.api.nvidia.com/v1"
-    )
+    assert str(captured_client_kwargs["base_url"]).rstrip("/") == "https://integrate.api.nvidia.com/v1"
     assert result["text"] == "OK-NVIDIA-B"
     assert result["model"] == "model-b"
 
@@ -359,22 +335,15 @@ async def test_text_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch):
 
     monkeypatch.setattr("bot.openai_backend.openai.AsyncOpenAI", fake_client_ctor)
 
-    result = await generate_openai_response(
-        "hello", stream=False, system_prompt="test-system"
-    )
+    result = await generate_openai_response("hello", stream=False, system_prompt="test-system")
 
     assert result["text"] == "OK-MIXED-NVIDIA"
     assert result["model"] == "nvidia-model-b"
     ladder_calls = client_calls[-2:]
     assert ladder_calls[0]["api_key"] == "dedicated-openrouter-key"
-    assert (
-        str(ladder_calls[0]["base_url"]).rstrip("/") == "https://openrouter.ai/api/v1"
-    )
+    assert str(ladder_calls[0]["base_url"]).rstrip("/") == "https://openrouter.ai/api/v1"
     assert ladder_calls[1]["api_key"] == "nvidia-key"
-    assert (
-        str(ladder_calls[1]["base_url"]).rstrip("/")
-        == "https://integrate.api.nvidia.com/v1"
-    )
+    assert str(ladder_calls[1]["base_url"]).rstrip("/") == "https://integrate.api.nvidia.com/v1"
 
 
 @pytest.mark.asyncio
@@ -426,9 +395,7 @@ async def test_text_ladder_falls_back_after_empty_model_response(monkeypatch):
         lambda **kwargs: FakeOpenAIClient(fake_create),
     )
 
-    result = await generate_openai_response(
-        "hello", stream=False, system_prompt="test-system"
-    )
+    result = await generate_openai_response("hello", stream=False, system_prompt="test-system")
 
     assert calls[-2:] == ["model-empty", "model-good"]
     assert result["text"] == "OK-GOOD"
@@ -485,9 +452,7 @@ async def test_openrouter_fallback_ladder_selects_second_model(monkeypatch):
         lambda **kwargs: FakeOpenAIClient(fake_create),
     )
 
-    result = await generate_openai_response(
-        "hello", stream=False, system_prompt="test-system"
-    )
+    result = await generate_openai_response("hello", stream=False, system_prompt="test-system")
 
     assert result["text"] == "OK-B"
     assert result["model"] == "text-model-b"
@@ -556,9 +521,7 @@ async def test_streaming_bypasses_fallback_and_streams_chunks(monkeypatch):
         lambda **kwargs: FakeOpenAIClient(fake_create),
     )
 
-    gen = await generate_openai_response(
-        "hello", stream=True, system_prompt="test-system"
-    )
+    gen = await generate_openai_response("hello", stream=True, system_prompt="test-system")
     outs = []
     async for item in gen:
         outs.append(item)
@@ -597,9 +560,7 @@ async def test_404_no_endpoints_opens_long_cooldown_and_skips_next_call(monkeypa
         async def run():
             if pc.model == "dead-model":
                 calls["dead"] += 1
-                raise Exception(
-                    "NotFoundError: Error code: 404 - {'error': {'message': 'No endpoints found for dead-model.'}}"
-                )
+                raise Exception("NotFoundError: Error code: 404 - {'error': {'message': 'No endpoints found for dead-model.'}}")
             calls["ok"] += 1
             return "OK"
 
@@ -675,9 +636,7 @@ async def test_auth_401_aborts_ladder_and_sets_provider_used():
         async def run():
             if pc.model == "auth-fail-model":
                 calls["auth"] += 1
-                raise Exception(
-                    "AuthenticationError: Error code: 401 - {'error': {'message': 'User not found.', 'code': 401}}"
-                )
+                raise Exception("AuthenticationError: Error code: 401 - {'error': {'message': 'User not found.', 'code': 401}}")
             calls["next"] += 1
             return "OK"
 

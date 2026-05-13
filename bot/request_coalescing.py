@@ -79,18 +79,14 @@ class RequestCoalescer(Generic[T]):
         for key in expired:
             del self._completed[key]
 
-        expired_errors = [
-            key for key, (_, ts) in self._completed_errors.items() if ts < cutoff
-        ]
+        expired_errors = [key for key, (_, ts) in self._completed_errors.items() if ts < cutoff]
         for key in expired_errors:
             del self._completed_errors[key]
 
         self._last_cleanup = now
 
         if expired or expired_errors:
-            logger.debug(
-                f"{self.name}.cleanup | removed={len(expired)} results, {len(expired_errors)} errors"
-            )
+            logger.debug(f"{self.name}.cleanup | removed={len(expired)} results, {len(expired_errors)} errors")
 
     async def execute(
         self,
@@ -148,9 +144,7 @@ class RequestCoalescer(Generic[T]):
         if waiter_future is not None:
             try:
                 if timeout:
-                    result = await asyncio.wait_for(
-                        asyncio.shield(waiter_future), timeout=timeout
-                    )
+                    result = await asyncio.wait_for(asyncio.shield(waiter_future), timeout=timeout)
                 else:
                     result = await asyncio.shield(waiter_future)
                 return result
@@ -160,9 +154,7 @@ class RequestCoalescer(Generic[T]):
 
         # We are the leader - execute the coroutine
         async with self._lock:
-            entry = _CoalescedEntry(
-                key=key, future=asyncio.get_event_loop().create_future()
-            )
+            entry = _CoalescedEntry(key=key, future=asyncio.get_event_loop().create_future())
             self._inflight[key] = entry
 
         try:

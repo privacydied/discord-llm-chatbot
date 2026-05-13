@@ -354,9 +354,7 @@ def _lang_rank(lang: str, preferred: List[str]) -> int:
     return len(preferred)
 
 
-def _sort_tracks(
-    tracks: List[Dict[str, Any]], preferred: List[str]
-) -> List[Dict[str, Any]]:
+def _sort_tracks(tracks: List[Dict[str, Any]], preferred: List[str]) -> List[Dict[str, Any]]:
     def _score(track: Dict[str, Any]) -> tuple:
         lang = str(track.get("languageCode") or "")
         asr = 1 if _track_is_asr(track) else 0
@@ -458,9 +456,7 @@ async def _run_ytdlp_probe(url: str, timeout_s: float) -> Optional[Dict[str, Any
         return None
 
     try:
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout_s
-        )
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
     except asyncio.TimeoutError:
         try:
             proc.kill()
@@ -498,9 +494,7 @@ def _entry_ext_rank(ext: str) -> int:
     return 4
 
 
-def _collect_ytdlp_caption_entries(
-    payload: Dict[str, Any], source_label: str
-) -> List[Dict[str, str]]:
+def _collect_ytdlp_caption_entries(payload: Dict[str, Any], source_label: str) -> List[Dict[str, str]]:
     source = payload.get(source_label)
     if not isinstance(source, dict):
         return []
@@ -526,9 +520,7 @@ def _collect_ytdlp_caption_entries(
     return out
 
 
-def _sort_ytdlp_caption_entries(
-    entries: List[Dict[str, str]], preferred: List[str]
-) -> List[Dict[str, str]]:
+def _sort_ytdlp_caption_entries(entries: List[Dict[str, str]], preferred: List[str]) -> List[Dict[str, str]]:
     def _score(entry: Dict[str, str]) -> tuple:
         source_rank = 0 if entry.get("source") == "subtitles" else 1
         lang_rank = _lang_rank(entry.get("lang", ""), preferred)
@@ -566,9 +558,7 @@ async def _resolve_from_caption_url(
         # Handle caption playlists from yt-dlp automatic_captions URLs.
         if depth >= 2:
             return ""
-        segment_urls = _parse_m3u8_lines(
-            body, base_url=caption_url, max_segments=max_segments
-        )
+        segment_urls = _parse_m3u8_lines(body, base_url=caption_url, max_segments=max_segments)
         if not segment_urls:
             return ""
         parts: List[str] = []
@@ -618,9 +608,7 @@ async def _resolve_via_ytdlp_captions(
 
     vid = str(payload.get("id") or "").strip() or video_id
     title = str(payload.get("title") or title or "Unknown Title")
-    uploader = str(
-        payload.get("uploader") or payload.get("channel") or uploader or "Unknown"
-    )
+    uploader = str(payload.get("uploader") or payload.get("channel") or uploader or "Unknown")
     try:
         duration_s = float(payload.get("duration") or duration_s or 0.0)
     except Exception:
@@ -642,11 +630,7 @@ async def _resolve_via_ytdlp_captions(
         )
         if not transcript:
             continue
-        source_tag = (
-            "ytdlp_subtitles"
-            if entry.get("source") == "subtitles"
-            else "ytdlp_automatic_captions"
-        )
+        source_tag = "ytdlp_subtitles" if entry.get("source") == "subtitles" else "ytdlp_automatic_captions"
         return YouTubeTranscriptResult(
             video_id=vid,
             url=url,
@@ -713,9 +697,7 @@ def _store_cache(result: YouTubeTranscriptResult) -> None:
         logger.debug("Failed to write YouTube transcript cache", exc_info=True)
 
 
-async def resolve_youtube_transcript(
-    url: str, force_refresh: bool = False
-) -> Optional[YouTubeTranscriptResult]:
+async def resolve_youtube_transcript(url: str, force_refresh: bool = False) -> Optional[YouTubeTranscriptResult]:
     """
     Resolve YouTube transcript from caption tracks (without yt-dlp/audio decode).
     Returns None when unavailable or on non-YouTube URLs.
@@ -754,11 +736,7 @@ async def resolve_youtube_transcript(
             except Exception:
                 duration_s = float(duration_s or 0.0)
 
-            caps = (
-                (player.get("captions") or {})
-                .get("playerCaptionsTracklistRenderer", {})
-                .get("captionTracks", [])
-            )
+            caps = (player.get("captions") or {}).get("playerCaptionsTracklistRenderer", {}).get("captionTracks", [])
             if isinstance(caps, list) and caps:
                 tracks = [track for track in caps if isinstance(track, dict)]
                 tracks = _sort_tracks(tracks, preferred=preferred_langs)
@@ -768,9 +746,7 @@ async def resolve_youtube_transcript(
                     if asr and not allow_asr:
                         continue
 
-                    base_url = html_lib.unescape(
-                        str(track.get("baseUrl") or "")
-                    ).strip()
+                    base_url = html_lib.unescape(str(track.get("baseUrl") or "")).strip()
                     if not base_url:
                         continue
 
@@ -780,9 +756,7 @@ async def resolve_youtube_transcript(
                             caption_url=caption_url,
                             timeout_s=timeout_s,
                             max_chars=max_chars,
-                            max_segments=_env_int(
-                                "YOUTUBE_TRANSCRIPT_MAX_SEGMENTS", 80
-                            ),
+                            max_segments=_env_int("YOUTUBE_TRANSCRIPT_MAX_SEGMENTS", 80),
                         )
                         if not transcript:
                             continue

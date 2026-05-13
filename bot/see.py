@@ -53,7 +53,11 @@ def _downsample_image(image_path: str, max_dimension: int) -> str:
             img.convert("RGB").save(str(tmp_path), "JPEG", quality=85)
             logger.info(
                 "vl.downsample original=%dx%d resized=%dx%d path=%s",
-                w, h, new_w, new_h, tmp_path,
+                w,
+                h,
+                new_w,
+                new_h,
+                tmp_path,
             )
             return str(tmp_path)
     except Exception:
@@ -61,9 +65,7 @@ def _downsample_image(image_path: str, max_dimension: int) -> str:
         return image_path
 
 
-async def see_infer(
-    image_path: str, prompt: str = None, model_override: str | None = None
-) -> BotAction:
+async def see_infer(image_path: str, prompt: str = None, model_override: str | None = None) -> BotAction:
     """Generate response from image path and prompt"""
     logger.debug(f"Processing image at path: {image_path}")
 
@@ -77,9 +79,7 @@ async def see_infer(
             "vl.final status=error exhausted=true reason=file_missing path=%s",
             image_path,
         )
-        return BotAction(
-            content="📁 The uploaded image could not be found. Please try uploading the image again."
-        )
+        return BotAction(content="📁 The uploaded image could not be found. Please try uploading the image again.")
 
     # Phase 15: Check file size before processing
     try:
@@ -87,15 +87,15 @@ async def see_infer(
         if file_size > max_total_bytes:
             logger.warning(
                 "vl.reject reason=too_large size=%d max=%d path=%s",
-                file_size, max_total_bytes, image_path,
+                file_size,
+                max_total_bytes,
+                image_path,
             )
             logger.info(
                 "vl.final status=error exhausted=true reason=too_large path=%s",
                 image_path,
             )
-            return BotAction(
-                content="📏 The image is too large. Please try uploading a smaller image."
-            )
+            return BotAction(content="📏 The image is too large. Please try uploading a smaller image.")
     except OSError:
         pass
 
@@ -104,13 +104,7 @@ async def see_infer(
     image_path_str = _downsample_image(image_path_str, max_dimension)
 
     mime_type = (
-        "image/jpeg"
-        if image_path_str.lower().endswith((".jpg", ".jpeg"))
-        else "image/png"
-        if image_path_str.lower().endswith(".png")
-        else "image/webp"
-        if image_path_str.lower().endswith(".webp")
-        else "image/unknown"
+        "image/jpeg" if image_path_str.lower().endswith((".jpg", ".jpeg")) else "image/png" if image_path_str.lower().endswith(".png") else "image/webp" if image_path_str.lower().endswith(".webp") else "image/unknown"
     )
     logger.debug(f"Detected MIME type: {mime_type}")
 
@@ -132,9 +126,7 @@ async def see_infer(
                 prompt = "What's in this image? Describe it in detail."
 
     try:
-        logger.debug(
-            f"Calling VL backend with prompt length: {len(prompt)} chars and image: {image_path_str}"
-        )
+        logger.debug(f"Calling VL backend with prompt length: {len(prompt)} chars and image: {image_path_str}")
         response = await generate_vl_response(
             image_url=image_path_str,
             user_prompt=prompt,
@@ -154,9 +146,7 @@ async def see_infer(
                     attempts,
                     provider_base,
                 )
-                friendly_text = response.get("text") or (
-                    "🔧 The vision service is temporarily unavailable. Please try again in a few minutes."
-                )
+                friendly_text = response.get("text") or ("🔧 The vision service is temporarily unavailable. Please try again in a few minutes.")
                 return BotAction(content=friendly_text, error=True)
 
             # Check for non-empty text content [REH][CA]
@@ -177,36 +167,22 @@ async def see_infer(
                 response.get("model"),
                 telemetry.get("ladder_attempts"),
             )
-            return BotAction(
-                content=(
-                    "🔧 The vision model returned an empty response. "
-                    "Please try again with a clearer image or different prompt."
-                )
-            )
+            return BotAction(content=("🔧 The vision model returned an empty response. Please try again with a clearer image or different prompt."))
 
         if isinstance(response, str):
             # String response is typically an error message from the backend
             if response.strip():
                 logger.info("vl.final status=ok type=string_response scope=see")
                 return BotAction(content=response)
-            logger.info(
-                "vl.final status=error exhausted=true ladder=na attempts=na provider_base=na scope=see"
-            )
-            return BotAction(
-                content="🔧 Vision processing returned an empty result. Please try again."
-            )
+            logger.info("vl.final status=error exhausted=true ladder=na attempts=na provider_base=na scope=see")
+            return BotAction(content="🔧 Vision processing returned an empty result. Please try again.")
 
         # Truly unexpected format - log for debugging but don't expose internals to user [REH]
         logger.error(
             "vl.final status=error reason=unexpected_format type=%s scope=see",
             type(response).__name__,
         )
-        return BotAction(
-            content=(
-                "❌ Vision processing failed. This could be due to a temporary service issue. "
-                "Please try again, and if the problem persists, the image may not be processable."
-            )
-        )
+        return BotAction(content=("❌ Vision processing failed. This could be due to a temporary service issue. Please try again, and if the problem persists, the image may not be processable."))
 
     except Exception as exc:
         logger.error(f"👁️ Vision inference failed: {str(exc)}", exc_info=True)
@@ -216,10 +192,7 @@ async def see_infer(
 
         if is_retryable_error(exc, VISION_RETRY_CONFIG):
             logger.warning("⚠️ Detected transient provider error in vision inference")
-            user_message = (
-                "🔧 The vision service is temporarily unavailable due to provider issues. "
-                "This typically resolves within a few minutes. Please try uploading the image again shortly."
-            )
+            user_message = "🔧 The vision service is temporarily unavailable due to provider issues. This typically resolves within a few minutes. Please try uploading the image again shortly."
             reason = "transient"
         elif "file not found" in error_str or "no such file" in error_str:
             user_message = "📁 The uploaded image could not be found. Please try uploading the image again."
@@ -231,10 +204,7 @@ async def see_infer(
             user_message = "📏 The image is too large. Please try uploading a smaller image (under 10MB)."
             reason = "too_large"
         else:
-            user_message = (
-                "❌ Vision processing failed. This could be due to a temporary service issue. "
-                "Please try again, and if the problem persists, the image may not be processable."
-            )
+            user_message = "❌ Vision processing failed. This could be due to a temporary service issue. Please try again, and if the problem persists, the image may not be processable."
 
         logger.info(
             "vl.final status=error exhausted=true reason=%s scope=see",

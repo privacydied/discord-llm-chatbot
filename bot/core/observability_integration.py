@@ -88,9 +88,7 @@ class ObservabilityManager:
             await self.resource_monitor.start_monitoring()
 
             # Step 5: Configure startup orchestrator if parallel startup enabled
-            parallel_startup = (
-                os.getenv("OBS_PARALLEL_STARTUP", "false").lower() == "true"
-            )
+            parallel_startup = os.getenv("OBS_PARALLEL_STARTUP", "false").lower() == "true"
             if parallel_startup:
                 self._configure_parallel_startup()
 
@@ -180,9 +178,7 @@ class ObservabilityManager:
         # Start critical tasks
         await self.task_monitor.start_task("health_check_task")
 
-        self.logger.info(
-            "🐕 Background task monitoring started", extra={"subsys": "observability"}
-        )
+        self.logger.info("🐕 Background task monitoring started", extra={"subsys": "observability"})
 
     def _configure_parallel_startup(self) -> None:
         """Configure parallel startup orchestration for 3-5s performance improvement."""
@@ -270,12 +266,7 @@ class ObservabilityManager:
         ]
 
         # Register all components
-        all_specs = (
-            foundation_specs
-            + core_services_specs
-            + external_services_specs
-            + discord_specs
-        )
+        all_specs = foundation_specs + core_services_specs + external_services_specs + discord_specs
         for spec in all_specs:
             self.startup_orchestrator.add_component(spec)
 
@@ -316,17 +307,11 @@ class ObservabilityManager:
             # Update health status based on startup results
             for name, result in results.items():
                 if result.status == ComponentStatus.SUCCESS:
-                    self.health_monitor.update_component_health(
-                        name, HealthStatus.READY
-                    )
+                    self.health_monitor.update_component_health(name, HealthStatus.READY)
                 elif result.status == ComponentStatus.DEGRADED:
-                    self.health_monitor.update_component_health(
-                        name, HealthStatus.DEGRADED, result.error_message
-                    )
+                    self.health_monitor.update_component_health(name, HealthStatus.DEGRADED, result.error_message)
                 else:
-                    self.health_monitor.update_component_health(
-                        name, HealthStatus.NOT_READY, result.error_message
-                    )
+                    self.health_monitor.update_component_health(name, HealthStatus.NOT_READY, result.error_message)
 
             # Log startup summary
             self._log_startup_summary(summary, total_duration)
@@ -370,9 +355,7 @@ class ObservabilityManager:
                 status_display = f"{status_icons.get(status, '?')} {status.title()}"
                 duration_display = f"{duration_ms:.1f}ms"
 
-                table.add_row(
-                    name, status_display, duration_display, str(attempts), fallback
-                )
+                table.add_row(name, status_display, duration_display, str(attempts), fallback)
 
             # Create summary panel
             (
@@ -384,9 +367,7 @@ class ObservabilityManager:
                 f"Status: {summary.get('status', 'unknown').title()}"
             )
 
-            panel = Panel(
-                table, title="Startup Orchestration Summary", border_style="green"
-            )
+            panel = Panel(table, title="Startup Orchestration Summary", border_style="green")
             console.print(panel)
 
             # Also log as structured JSON for log aggregation
@@ -445,9 +426,7 @@ class ObservabilityManager:
 
     async def shutdown_observability_stack(self) -> None:
         """Graceful shutdown of all observability components."""
-        self.logger.info(
-            "🛑 Shutting down observability stack", extra={"subsys": "observability"}
-        )
+        self.logger.info("🛑 Shutting down observability stack", extra={"subsys": "observability"})
 
         try:
             # Stop resource monitoring
@@ -483,9 +462,7 @@ class ObservabilityManager:
 
     async def _metrics_fallback(self) -> None:
         """Fallback for metrics system failure."""
-        self.logger.warning(
-            "⚠️ Metrics system using fallback (NoopMetrics)", extra={"subsys": "startup"}
-        )
+        self.logger.warning("⚠️ Metrics system using fallback (NoopMetrics)", extra={"subsys": "startup"})
 
     async def _init_config_validation(self) -> None:
         """Initialize config validation."""
@@ -496,9 +473,7 @@ class ObservabilityManager:
         """Initialize system prompts."""
         try:
             prompts = load_system_prompts()
-            self.logger.info(
-                f"✅ Loaded {len(prompts)} system prompts", extra={"subsys": "startup"}
-            )
+            self.logger.info(f"✅ Loaded {len(prompts)} system prompts", extra={"subsys": "startup"})
         except Exception as e:
             raise RuntimeError(f"Failed to load system prompts: {e}")
 
@@ -515,9 +490,7 @@ class ObservabilityManager:
 
     async def _tts_fallback(self) -> None:
         """Fallback for TTS system."""
-        self.logger.info(
-            "⚠️ TTS system disabled (fallback)", extra={"subsys": "startup"}
-        )
+        self.logger.info("⚠️ TTS system disabled (fallback)", extra={"subsys": "startup"})
 
     async def _init_rag_system(self) -> None:
         """Initialize RAG system."""
@@ -528,9 +501,7 @@ class ObservabilityManager:
 
     async def _rag_fallback(self) -> None:
         """Fallback for RAG system."""
-        self.logger.info(
-            "⚠️ RAG system using lazy loading (fallback)", extra={"subsys": "startup"}
-        )
+        self.logger.info("⚠️ RAG system using lazy loading (fallback)", extra={"subsys": "startup"})
 
     async def _init_ai_backends(self) -> None:
         """Initialize AI backends."""

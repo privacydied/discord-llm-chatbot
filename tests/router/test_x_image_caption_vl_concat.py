@@ -42,8 +42,6 @@ def test_x_image_route_uses_caption_placeholder_when_missing():
 def test_x_image_route_passthrough_when_no_caption_or_vl_notes():
     router = Router(DummyBot())
 
-    result = router._compose_x_tweet_with_visual_facts(
-        user_text="  just user text  ", tweet_caption="", vl_notes=""
-    )
+    result = router._compose_x_tweet_with_visual_facts(user_text="  just user text  ", tweet_caption="", vl_notes="")
 
     assert result == "just user text"

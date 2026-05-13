@@ -113,9 +113,7 @@ class TogetherAdapter(BaseVisionProvider):
         except VisionError as e:
             processing_time = time.time() - start_time
             self._log_request_error(request, e, processing_time)
-            return self._create_error_response(
-                request.idempotency_key, e, processing_time
-            )
+            return self._create_error_response(request.idempotency_key, e, processing_time)
 
         except Exception as e:
             processing_time = time.time() - start_time
@@ -126,13 +124,9 @@ class TogetherAdapter(BaseVisionProvider):
                 provider=VisionProvider.TOGETHER,
             )
             self._log_request_error(request, error, processing_time)
-            return self._create_error_response(
-                request.idempotency_key, error, processing_time
-            )
+            return self._create_error_response(request.idempotency_key, error, processing_time)
 
-    async def _text_to_image(
-        self, request: VisionRequest, model: str
-    ) -> VisionResponse:
+    async def _text_to_image(self, request: VisionRequest, model: str) -> VisionResponse:
         """Generate image from text prompt"""
         session = await self._get_session()
 
@@ -159,18 +153,12 @@ class TogetherAdapter(BaseVisionProvider):
 
         # Make API request
         try:
-            async with session.post(
-                f"{self.base_url}/images/generations", json=payload
-            ) as resp:
+            async with session.post(f"{self.base_url}/images/generations", json=payload) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     return await self._process_image_response(data, request)
                 else:
-                    error_data = (
-                        await resp.json()
-                        if resp.content_type == "application/json"
-                        else {}
-                    )
+                    error_data = await resp.json() if resp.content_type == "application/json" else {}
                     raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
@@ -181,9 +169,7 @@ class TogetherAdapter(BaseVisionProvider):
                 provider=VisionProvider.TOGETHER,
             )
 
-    async def _image_to_image(
-        self, request: VisionRequest, model: str
-    ) -> VisionResponse:
+    async def _image_to_image(self, request: VisionRequest, model: str) -> VisionResponse:
         """Edit image using image-to-image pipeline"""
         if not request.input_image or not request.input_image.exists():
             raise VisionError(
@@ -228,18 +214,12 @@ class TogetherAdapter(BaseVisionProvider):
             payload["mask"] = mask_b64
 
         try:
-            async with session.post(
-                f"{self.base_url}/images/edits", json=payload
-            ) as resp:
+            async with session.post(f"{self.base_url}/images/edits", json=payload) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     return await self._process_image_response(data, request)
                 else:
-                    error_data = (
-                        await resp.json()
-                        if resp.content_type == "application/json"
-                        else {}
-                    )
+                    error_data = await resp.json() if resp.content_type == "application/json" else {}
                     raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
@@ -250,9 +230,7 @@ class TogetherAdapter(BaseVisionProvider):
                 provider=VisionProvider.TOGETHER,
             )
 
-    async def _process_image_response(
-        self, data: Dict[str, Any], request: VisionRequest
-    ) -> VisionResponse:
+    async def _process_image_response(self, data: Dict[str, Any], request: VisionRequest) -> VisionResponse:
         """Process API response and save generated images"""
         artifacts_dir = Path(self.config["VISION_ARTIFACTS_DIR"])
         artifacts_dir.mkdir(parents=True, exist_ok=True)
@@ -291,12 +269,8 @@ class TogetherAdapter(BaseVisionProvider):
             self.logger.debug(f"Saved generated image: {file_path}")
 
         # Calculate actual cost (simplified estimation)
-        model_config = self._get_model_config(
-            "text_to_image", data.get("model", "unknown")
-        )
-        base_cost = (
-            model_config.get("estimated_cost_per_image", 0.04) if model_config else 0.04
-        )
+        model_config = self._get_model_config("text_to_image", data.get("model", "unknown"))
+        base_cost = model_config.get("estimated_cost_per_image", 0.04) if model_config else 0.04
         actual_cost = base_cost * len(artifacts)
 
         # Extract dimensions from first image
@@ -328,19 +302,14 @@ class TogetherAdapter(BaseVisionProvider):
                 user_message="Could not read the input image. Please try uploading again.",
             )
 
-    async def _map_api_error(
-        self, status_code: int, error_data: Dict[str, Any]
-    ) -> VisionError:
+    async def _map_api_error(self, status_code: int, error_data: Dict[str, Any]) -> VisionError:
         """Map Together.ai API errors to VisionError [REH]"""
         error_message = error_data.get("error", {}).get("message", "Unknown API error")
         error_data.get("error", {}).get("type", "")
 
         # Map specific error types
         if status_code == 400:
-            if (
-                "content policy" in error_message.lower()
-                or "safety" in error_message.lower()
-            ):
+            if "content policy" in error_message.lower() or "safety" in error_message.lower():
                 return VisionError(
                     error_type=VisionErrorType.CONTENT_FILTERED,
                     message=f"Content filtered: {error_message}",

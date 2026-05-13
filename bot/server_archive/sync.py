@@ -58,9 +58,7 @@ def _iso(value: Any) -> str | None:
         return str(value)
 
 
-def build_bundle_from_message(
-    message: Any, *, max_message_chars: int = 8000, include_bot_messages: bool = False
-) -> ArchiveMessageBundle | None:
+def build_bundle_from_message(message: Any, *, max_message_chars: int = 8000, include_bot_messages: bool = False) -> ArchiveMessageBundle | None:
     guild = getattr(message, "guild", None)
     channel = getattr(message, "channel", None)
     author = getattr(message, "author", None)
@@ -75,10 +73,7 @@ def build_bundle_from_message(
     if not guild_id or not channel_id or not author_id:
         return None
 
-    is_thread = (
-        hasattr(channel, "parent_id")
-        and getattr(channel, "parent_id", None) is not None
-    )
+    is_thread = hasattr(channel, "parent_id") and getattr(channel, "parent_id", None) is not None
     thread_id = _id(getattr(channel, "id", None)) if is_thread else None
     thread = (
         ArchiveThread(
@@ -103,10 +98,7 @@ def build_bundle_from_message(
 
     attachments = []
     for index, attachment in enumerate(getattr(message, "attachments", []) or []):
-        attachment_id = (
-            _id(getattr(attachment, "id", None))
-            or f"{getattr(message, 'id', 'msg')}:{index}"
-        )
+        attachment_id = _id(getattr(attachment, "id", None)) or f"{getattr(message, 'id', 'msg')}:{index}"
         attachments.append(
             ArchiveAttachment(
                 attachment_id=attachment_id,
@@ -138,9 +130,7 @@ def build_bundle_from_message(
         "has_embeds": int(bool(getattr(message, "embeds", []) or [])),
     }
     reference = getattr(message, "reference", None)
-    reply_to_message_id = (
-        _id(getattr(reference, "message_id", None)) if reference is not None else None
-    )
+    reply_to_message_id = _id(getattr(reference, "message_id", None)) if reference is not None else None
 
     return ArchiveMessageBundle(
         guild=ArchiveGuild(
@@ -161,11 +151,7 @@ def build_bundle_from_message(
         thread=thread,
         author=ArchiveUser(
             user_id=author_id,
-            username=str(
-                getattr(author, "name", None)
-                or getattr(author, "global_name", None)
-                or author_id
-            ),
+            username=str(getattr(author, "name", None) or getattr(author, "global_name", None) or author_id),
             global_name=getattr(author, "global_name", None),
             display_name=getattr(author, "display_name", None),
             bot=int(bool(getattr(author, "bot", False))),
@@ -203,17 +189,11 @@ async def _sync_history_scope(
     max_message_chars: int = 8000,
     include_bot_messages: bool = False,
 ) -> int:
-    state = await store.get_sync_state(
-        guild_id=guild_id, channel_id=channel_id, thread_id=thread_id
-    )
+    state = await store.get_sync_state(guild_id=guild_id, channel_id=channel_id, thread_id=thread_id)
     if state and state.status == "running" and not force:
         return 0
     if state and state.last_message_id and not force:
-        after = (
-            getattr(discord, "Object", lambda id: None)(id=int(state.last_message_id))
-            if discord
-            else None
-        )
+        after = getattr(discord, "Object", lambda id: None)(id=int(state.last_message_id)) if discord else None
         history_kwargs: dict[str, Any] = {
             "after": after,
             "oldest_first": True,
@@ -333,9 +313,7 @@ async def _sync_history_scope(
         return processed
 
 
-async def sync_channel_archive(
-    store: ServerArchiveStore, channel: Any, *, force: bool = False
-) -> int:
+async def sync_channel_archive(store: ServerArchiveStore, channel: Any, *, force: bool = False) -> int:
     guild = getattr(channel, "guild", None)
     if guild is None:
         return 0
@@ -354,9 +332,7 @@ async def sync_channel_archive(
     )
 
 
-async def sync_thread_archive(
-    store: ServerArchiveStore, thread: Any, *, force: bool = False
-) -> int:
+async def sync_thread_archive(store: ServerArchiveStore, thread: Any, *, force: bool = False) -> int:
     guild = getattr(thread, "guild", None)
     if guild is None:
         return 0
@@ -396,9 +372,7 @@ def _guild_sync_targets(guild: Any) -> list[Any]:
     return targets
 
 
-async def sync_guild_archive(
-    store: ServerArchiveStore, guild: Any, *, force: bool = False
-) -> int:
+async def sync_guild_archive(store: ServerArchiveStore, guild: Any, *, force: bool = False) -> int:
     guild_id = _id(getattr(guild, "id", None))
     if not guild_id:
         return 0
@@ -455,13 +429,9 @@ async def sync_guild_archive(
         target_state = await store.get_sync_state(
             guild_id=guild_id,
             channel_id=target_id,
-            thread_id=target_id
-            if getattr(target, "parent_id", None) is not None
-            else None,
+            thread_id=target_id if getattr(target, "parent_id", None) is not None else None,
         )
-        if count < 0 or (
-            target_state is not None and target_state.status not in {"complete", "idle"}
-        ):
+        if count < 0 or (target_state is not None and target_state.status not in {"complete", "idle"}):
             had_errors = True
 
     await store.set_sync_state(

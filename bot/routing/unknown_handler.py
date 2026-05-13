@@ -33,7 +33,5 @@ class UnknownHandler(RouteHandler):
                 payload_type,
             )
 
-        text = (
-            f"Unsupported input type detected: {source}. Unable to process this item."
-        )
+        text = f"Unsupported input type detected: {source}. Unable to process this item."
         return RouteResult.text_only(text)

@@ -116,32 +116,20 @@ class TestTokenizerSelection(unittest.TestCase):
 
         # Mock external dependencies
         mock_which.return_value = "/usr/bin/espeak"  # espeak is available
-        mock_find_spec.side_effect = lambda name: (
-            MagicMock() if name == "phonemizer" else None
-        )
+        mock_find_spec.side_effect = lambda name: MagicMock() if name == "phonemizer" else None
 
         # Create KokoroDirect with mocked tokenizer
         with patch.object(KokoroDirect, "_load_model"):
-            kokoro = KokoroDirect(
-                model_path="dummy_model.onnx", voices_path="dummy_voices.bin"
-            )
+            kokoro = KokoroDirect(model_path="dummy_model.onnx", voices_path="dummy_voices.bin")
             kokoro.tokenizer = mock_tokenizer
             kokoro._detect_tokenization_methods()
 
         # Check that the correct methods were detected
-        self.assertIn(
-            TokenizationMethod.PHONEME_ENCODE, kokoro.available_tokenization_methods
-        )
-        self.assertIn(
-            TokenizationMethod.PHONEME_TO_ID, kokoro.available_tokenization_methods
-        )
+        self.assertIn(TokenizationMethod.PHONEME_ENCODE, kokoro.available_tokenization_methods)
+        self.assertIn(TokenizationMethod.PHONEME_TO_ID, kokoro.available_tokenization_methods)
         self.assertIn(TokenizationMethod.ESPEAK, kokoro.available_tokenization_methods)
-        self.assertIn(
-            TokenizationMethod.PHONEMIZER, kokoro.available_tokenization_methods
-        )
-        self.assertNotIn(
-            TokenizationMethod.MISAKI, kokoro.available_tokenization_methods
-        )
+        self.assertIn(TokenizationMethod.PHONEMIZER, kokoro.available_tokenization_methods)
+        self.assertNotIn(TokenizationMethod.MISAKI, kokoro.available_tokenization_methods)
 
     def test_phonemizer_selection_english(self):
         """Test that the correct phonemizer is selected for English."""
@@ -150,9 +138,7 @@ class TestTokenizerSelection(unittest.TestCase):
             patch.object(KokoroDirect, "_load_model"),
             patch.object(KokoroDirect, "_detect_tokenization_methods"),
         ):
-            kokoro = KokoroDirect(
-                model_path="dummy_model.onnx", voices_path="dummy_voices.bin"
-            )
+            kokoro = KokoroDirect(model_path="dummy_model.onnx", voices_path="dummy_voices.bin")
 
             # Test English language
             phonemizer = kokoro._select_phonemiser("en")
@@ -165,9 +151,7 @@ class TestTokenizerSelection(unittest.TestCase):
             patch.object(KokoroDirect, "_load_model"),
             patch.object(KokoroDirect, "_detect_tokenization_methods"),
         ):
-            kokoro = KokoroDirect(
-                model_path="dummy_model.onnx", voices_path="dummy_voices.bin"
-            )
+            kokoro = KokoroDirect(model_path="dummy_model.onnx", voices_path="dummy_voices.bin")
 
             # Test Japanese language
             phonemizer = kokoro._select_phonemiser("ja")
@@ -184,9 +168,7 @@ class TestTokenizerSelection(unittest.TestCase):
                 patch.object(KokoroDirect, "_load_model"),
                 patch.object(KokoroDirect, "_detect_tokenization_methods"),
             ):
-                kokoro = KokoroDirect(
-                    model_path="dummy_model.onnx", voices_path="dummy_voices.bin"
-                )
+                kokoro = KokoroDirect(model_path="dummy_model.onnx", voices_path="dummy_voices.bin")
 
                 # Test that environment variable overrides language-based selection
                 phonemizer = kokoro._select_phonemiser("en")

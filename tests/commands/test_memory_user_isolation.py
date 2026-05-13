@@ -25,9 +25,7 @@ and mod_delete is updated to pass it through.
 
 import pytest
 
-pytestmark = pytest.mark.skip(
-    reason="CuratedMemoryService.delete_memory() user_id param not yet implemented"
-)
+pytestmark = pytest.mark.skip(reason="CuratedMemoryService.delete_memory() user_id param not yet implemented")
 
 from bot.memory.service import CuratedMemoryService
 from bot.memory.persistent_store import MemoryRecord
@@ -122,9 +120,7 @@ def _fake_persistent_store():
     return store
 
 
-def _ctx_with_user(
-    user_id: int, guild_id: int | None = None, channel_id: int | None = None
-):
+def _ctx_with_user(user_id: int, guild_id: int | None = None, channel_id: int | None = None):
     ctx = MagicMock()
     ctx.author = MagicMock()
     ctx.author.id = user_id
@@ -212,16 +208,12 @@ async def test_user_b_cannot_search_user_a_memory(mock_service):
     mock_service.semantic_store.query = AsyncMock(return_value=semantic_results)
 
     # Build scope filters for User B's guild
-    filters = mock_service._scope_filters(
-        user_id="222", guild_id="555", channel_id=None, thread_id=None
-    )
+    filters = mock_service._scope_filters(user_id="222", guild_id="555", channel_id=None, thread_id=None)
     assert len(filters) >= 1  # user filter + guild filter
 
     # Check _scope_allows for the guild scope — User B should NOT see User A's memory
     meta = semantic_results[0]["metadata"]
-    allowed = mock_service._scope_allows(
-        meta, "guild", user_id="222", guild_id="555", channel_id=None, thread_id=None
-    )
+    allowed = mock_service._scope_allows(meta, "guild", user_id="222", guild_id="555", channel_id=None, thread_id=None)
     assert allowed is False, "User B must not see User A's memory in guild scope"
 
 
@@ -261,9 +253,7 @@ async def test_no_cross_user_memory_injection(mock_service):
         thread_id=None,
         query="anything",
     )
-    assert "User A's private fact" not in block, (
-        "User A's memory leaked into User B's prompt"
-    )
+    assert "User A's private fact" not in block, "User A's memory leaked into User B's prompt"
     assert block == "", "Expected empty block for User B"
 
 
@@ -272,12 +262,8 @@ async def test_no_cross_user_memory_injection(mock_service):
 
 @pytest.mark.asyncio
 async def test_parallel_user_memories_no_collision(mock_service):
-    rec_a = _make_record(
-        memory_id="mem-aaa", user_id="111", summary="favorite color is red"
-    )
-    rec_b = _make_record(
-        memory_id="mem-bbb", user_id="222", summary="favorite color is blue"
-    )
+    rec_a = _make_record(memory_id="mem-aaa", user_id="111", summary="favorite color is red")
+    rec_b = _make_record(memory_id="mem-bbb", user_id="222", summary="favorite color is blue")
 
     await mock_service.store.upsert_memory(rec_a)
     await mock_service.store.upsert_memory(rec_b)
@@ -407,9 +393,7 @@ async def test_dm_and_guild_paths_preserve_user_id():
     mock_guild.id = 555
     mock_channel = MagicMock()
     mock_channel.id = 777
-    guild_ctx = simulate_router_build(
-        guild_author_id, guild=mock_guild, channel=mock_channel
-    )
+    guild_ctx = simulate_router_build(guild_author_id, guild=mock_guild, channel=mock_channel)
     assert guild_ctx["user_id"] == "222"
     assert guild_ctx["guild_id"] == "555"
     assert guild_ctx["channel_id"] == "777"
@@ -418,9 +402,7 @@ async def test_dm_and_guild_paths_preserve_user_id():
     thread_author_id = 333
     mock_thread_channel = MagicMock()
     mock_thread_channel.id = 999
-    thread_ctx = simulate_router_build(
-        thread_author_id, guild=mock_guild, channel=mock_thread_channel, is_thread=True
-    )
+    thread_ctx = simulate_router_build(thread_author_id, guild=mock_guild, channel=mock_thread_channel, is_thread=True)
     assert thread_ctx["user_id"] == "333"
     assert thread_ctx["thread_id"] == "999"
 
@@ -431,9 +413,7 @@ async def test_dm_and_guild_paths_preserve_user_id():
 @pytest.mark.asyncio
 async def test_scope_filters_include_user_filter(mock_service):
     """Even when guild_id is provided, a user-scoped filter must be present."""
-    filters = mock_service._scope_filters(
-        user_id="111", guild_id="555", channel_id=None, thread_id=None
-    )
+    filters = mock_service._scope_filters(user_id="111", guild_id="555", channel_id=None, thread_id=None)
     scope_names = [f[0] for f in filters]
     assert "user" in scope_names, "User scope filter must be included"
     # Verify user filter includes user_id

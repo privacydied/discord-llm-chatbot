@@ -45,17 +45,13 @@ async def run_with_retries(
 
     for attempt in range(retries):
         try:
-            logger.debug(
-                f"🔄 Retry attempt {attempt + 1}/{retries} for {coro_func.__name__}"
-            )
+            logger.debug(f"🔄 Retry attempt {attempt + 1}/{retries} for {coro_func.__name__}")
 
             # Apply timeout to each attempt
             result = await asyncio.wait_for(coro_func(item), timeout=timeout)
 
             if attempt > 0:
-                logger.info(
-                    f"✅ Function {coro_func.__name__} succeeded on attempt {attempt + 1}"
-                )
+                logger.info(f"✅ Function {coro_func.__name__} succeeded on attempt {attempt + 1}")
 
             return result
 
@@ -68,16 +64,11 @@ async def run_with_retries(
                 break
 
             if attempt == retries - 1:
-                logger.error(
-                    f"❌ All {retries} retry attempts failed for {coro_func.__name__}"
-                )
+                logger.error(f"❌ All {retries} retry attempts failed for {coro_func.__name__}")
                 break
 
             delay = _calculate_delay(attempt, base_delay, max_delay, jitter)
-            logger.warning(
-                f"⚠️ Attempt {attempt + 1} failed for {coro_func.__name__}: {e}. "
-                f"Retrying in {delay:.2f}s..."
-            )
+            logger.warning(f"⚠️ Attempt {attempt + 1} failed for {coro_func.__name__}: {e}. Retrying in {delay:.2f}s...")
 
             await asyncio.sleep(delay)
 
@@ -117,9 +108,7 @@ def _is_retryable_error(error: Exception) -> bool:
     return any(pattern in error_str for pattern in retryable_patterns)
 
 
-def _calculate_delay(
-    attempt: int, base_delay: float, max_delay: float, jitter: bool
-) -> float:
+def _calculate_delay(attempt: int, base_delay: float, max_delay: float, jitter: bool) -> float:
     """Calculate delay for exponential backoff with jitter."""
     delay = base_delay * (2**attempt)
     delay = min(delay, max_delay)

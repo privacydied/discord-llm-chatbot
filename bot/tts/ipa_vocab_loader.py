@@ -82,15 +82,11 @@ def load_vocab(session: Optional[InferenceSession]) -> Vocab:
 
     # Validate expected size if specified
     if EXPECTED_VOCAB_SIZE is not None and len(p2i) != EXPECTED_VOCAB_SIZE:
-        raise RuntimeError(
-            f"Embedded IPA vocab size ({len(p2i)}) != EXPECTED_VOCAB_SIZE ({EXPECTED_VOCAB_SIZE})."
-        )
+        raise RuntimeError(f"Embedded IPA vocab size ({len(p2i)}) != EXPECTED_VOCAB_SIZE ({EXPECTED_VOCAB_SIZE}).")
 
     # Hard fail if vocab doesn't match model - prevents gibberish
     if len(p2i) != rows:
-        raise RuntimeError(
-            f"Kokoro IPA vocab size ({len(p2i)}) != model embedding rows ({rows})."
-        )
+        raise RuntimeError(f"Kokoro IPA vocab size ({len(p2i)}) != model embedding rows ({rows}).")
 
     # Build reverse mapping
     id_to_phoneme = [""] * (max(p2i.values()) + 1)

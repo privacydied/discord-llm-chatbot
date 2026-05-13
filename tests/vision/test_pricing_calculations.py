@@ -82,13 +82,9 @@ class TestPricingCalculations(unittest.TestCase):
         # Create simple pricing loader mock for testing
         self.pricing_loader = Mock()
         self.pricing_loader.pricing_data = self.mock_pricing_data
-        self.pricing_loader._task_to_pricing_key = lambda task: (
-            task.value if hasattr(task, "value") else str(task)
-        )
+        self.pricing_loader._task_to_pricing_key = lambda task: task.value if hasattr(task, "value") else str(task)
         self.pricing_loader._get_size_key = lambda w, h: f"{w}x{h}"
-        self.pricing_loader._normalize_model_name = lambda m: (
-            m.lower().replace("-", "_") if m else None
-        )
+        self.pricing_loader._normalize_model_name = lambda m: m.lower().replace("-", "_") if m else None
 
         # Mock estimate_cost method with realistic implementation
         def mock_estimate_cost(
@@ -311,8 +307,7 @@ class TestGatewayActualCostCalculation(unittest.TestCase):
                     height=getattr(request, "height", 1024),
                     num_images=getattr(request, "batch_size", 1) or 1,
                     duration_seconds=getattr(request, "duration_seconds", 4.0) or 4.0,
-                    model=getattr(request, "preferred_model", None)
-                    or getattr(request, "model", None),
+                    model=getattr(request, "preferred_model", None) or getattr(request, "model", None),
                 )
             except Exception:
                 return Money("0.006")

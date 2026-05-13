@@ -75,9 +75,7 @@ def sanitize_model_output(text: str) -> str:
         sentence_endings = [".", "!", "?"]
 
         # Look backward from position 1000 to find sentence ending
-        for i in range(
-            min(1000, len(cleaned) - 1), 500, -1
-        ):  # Don't go below 500 chars
+        for i in range(min(1000, len(cleaned) - 1), 500, -1):  # Don't go below 500 chars
             if cleaned[i] in sentence_endings and i < len(cleaned) - 1:
                 # Make sure next char is whitespace or end of string
                 if i + 1 >= len(cleaned) or cleaned[i + 1].isspace():
@@ -124,9 +122,7 @@ def has_reasoning_content(text: str) -> bool:
     return any(indicator in text_lower for indicator in rule_indicators)
 
 
-def sanitize_vl_reply_text(
-    text: str, max_chars: Optional[int] = None, strip_reasoning: Optional[bool] = None
-) -> str:
+def sanitize_vl_reply_text(text: str, max_chars: Optional[int] = None, strip_reasoning: Optional[bool] = None) -> str:
     """
     Sanitize VL text for reply-image flow to a concise, natural message.
     - Optionally strip chain-of-thought / planning text (default: on)

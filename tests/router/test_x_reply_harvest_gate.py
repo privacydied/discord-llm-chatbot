@@ -50,9 +50,7 @@ async def test_harvested_reply_x_url_skips_reply_perception_gate(monkeypatch):
             return [ImageRef(url="https://pbs.twimg.com/media/test.jpg")]
         return []
 
-    monkeypatch.setattr(
-        router_mod, "collect_image_urls_from_message", _fake_collect_images
-    )
+    monkeypatch.setattr(router_mod, "collect_image_urls_from_message", _fake_collect_images)
 
     async def _fake_map_item_to_modality(item):
         payload = str(getattr(item, "payload", ""))

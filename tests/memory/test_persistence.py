@@ -197,9 +197,7 @@ class TestLoadJsonWithRecovery:
         target = tmp_path / "profile.json"
         target.write_text("not json")
 
-        result = load_json_with_recovery(
-            target, attempt_recovery=False, default_data={}
-        )
+        result = load_json_with_recovery(target, attempt_recovery=False, default_data={})
         assert result == {}
 
 

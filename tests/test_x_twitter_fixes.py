@@ -21,13 +21,7 @@ class TestTwitterMediaSelection:
         """Primary native photos should be chosen over card images."""
         tw_data = {
             "photos": [{"url": "https://pbs.twimg.com/media/test1.jpg:large"}],
-            "card": {
-                "binding_values": {
-                    "photo_image_full_size_large": {
-                        "image_value": {"url": "https://pbs.twimg.com/card/card.jpg"}
-                    }
-                }
-            },
+            "card": {"binding_values": {"photo_image_full_size_large": {"image_value": {"url": "https://pbs.twimg.com/card/card.jpg"}}}},
             "full_text": "Test tweet with native photo",
         }
 
@@ -42,9 +36,7 @@ class TestTwitterMediaSelection:
         """Quoted tweet photos should be used when primary has no native media."""
         tw_data = {
             "photos": [],  # No primary photos
-            "quoted_tweet": {
-                "photos": [{"url": "https://pbs.twimg.com/media/quoted1.jpg:large"}]
-            },
+            "quoted_tweet": {"photos": [{"url": "https://pbs.twimg.com/media/quoted1.jpg:large"}]},
             "full_text": "RT with comment",
         }
 
@@ -59,15 +51,7 @@ class TestTwitterMediaSelection:
         tw_data = {
             "photos": [],  # No primary photos
             "quoted_tweet": {"photos": []},  # No quoted photos
-            "card": {
-                "binding_values": {
-                    "photo_image_full_size_large": {
-                        "image_value": {
-                            "url": "https://pbs.twimg.com/card/fallback.jpg"
-                        }
-                    }
-                }
-            },
+            "card": {"binding_values": {"photo_image_full_size_large": {"image_value": {"url": "https://pbs.twimg.com/card/fallback.jpg"}}}},
             "full_text": "Text-only tweet with link card",
         }
 
@@ -140,23 +124,17 @@ class TestNakedImageHandling:
 
         mock_message.content = ""
         mention_pattern = rf"^<@!?{mock_bot.user.id}>\s*"
-        clean_content = re.sub(
-            mention_pattern, "", (mock_message.content or "").strip()
-        )
+        clean_content = re.sub(mention_pattern, "", (mock_message.content or "").strip())
 
         assert not clean_content  # Should be empty, triggering naked image logic
 
-    def test_mention_only_content_triggers_ack_thoughts_format(
-        self, mock_message, mock_bot
-    ):
+    def test_mention_only_content_triggers_ack_thoughts_format(self, mock_message, mock_bot):
         """Content with only bot mention should use ack+thoughts format."""
         import re
 
         mock_message.content = f"<@!{mock_bot.user.id}>"
         mention_pattern = rf"^<@!?{mock_bot.user.id}>\s*"
-        clean_content = re.sub(
-            mention_pattern, "", (mock_message.content or "").strip()
-        )
+        clean_content = re.sub(mention_pattern, "", (mock_message.content or "").strip())
 
         assert not clean_content  # Should be empty after mention removal
 
@@ -166,9 +144,7 @@ class TestNakedImageHandling:
 
         mock_message.content = f"<@!{mock_bot.user.id}> What do you think about this?"
         mention_pattern = rf"^<@!?{mock_bot.user.id}>\s*"
-        clean_content = re.sub(
-            mention_pattern, "", (mock_message.content or "").strip()
-        )
+        clean_content = re.sub(mention_pattern, "", (mock_message.content or "").strip())
 
         assert clean_content == "What do you think about this?"  # Has actual text
 
@@ -179,9 +155,7 @@ class TestReplyFormatting:
     @pytest.mark.asyncio
     async def test_ack_thoughts_format(self):
         """Test ack+thoughts reply format for concise responses."""
-        mock_vl_handler = AsyncMock(
-            return_value="This is a cat sitting on a windowsill."
-        )
+        mock_vl_handler = AsyncMock(return_value="This is a cat sitting on a windowsill.")
 
         tweet_json = {
             "full_text": "Check out this adorable photo I took today! #cats #photography",
@@ -200,20 +174,12 @@ class TestReplyFormatting:
         assert "here's what the images show" in result
         assert "This is a cat sitting on a windowsill" in result
         # Should truncate long tweet text
-        assert len(
-            [
-                line
-                for line in result.split("\n")
-                if "Check out this adorable" in line and len(line) < 150
-            ]
-        )
+        assert len([line for line in result.split("\n") if "Check out this adorable" in line and len(line) < 150])
 
     @pytest.mark.asyncio
     async def test_verbatim_thoughts_format(self):
         """Test verbatim+thoughts reply format for detailed responses."""
-        mock_vl_handler = AsyncMock(
-            return_value="This is a cat sitting on a windowsill."
-        )
+        mock_vl_handler = AsyncMock(return_value="This is a cat sitting on a windowsill.")
 
         tweet_json = {
             "full_text": "Check out this adorable photo I took today! #cats #photography",
@@ -228,9 +194,7 @@ class TestReplyFormatting:
         )
 
         # Should include full tweet text and detailed analysis
-        assert (
-            "Check out this adorable photo I took today! #cats #photography" in result
-        )
+        assert "Check out this adorable photo I took today! #cats #photography" in result
         assert "Photos analyzed:" in result
         assert "This is a cat sitting on a windowsill" in result
 

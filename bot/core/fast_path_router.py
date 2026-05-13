@@ -84,9 +84,7 @@ class FastPathClassifier:
     def __init__(self):
         # Pre-compiled regex patterns for performance [PA]
         self.url_pattern = re.compile(r"https?://[^\s]+")
-        self.question_pattern = re.compile(
-            r"\?|\bhow\b|\bwhat\b|\bwhy\b|\bwhen\b|\bwhere\b", re.IGNORECASE
-        )
+        self.question_pattern = re.compile(r"\?|\bhow\b|\bwhat\b|\bwhy\b|\bwhen\b|\bwhere\b", re.IGNORECASE)
         self.code_pattern = re.compile(r"```|`[^`]+`")
         self.special_char_pattern = re.compile(r'[^\w\s\.\?\!,;:\'"()-]')
         self.command_pattern = re.compile(r"^[!\./]")
@@ -98,9 +96,7 @@ class FastPathClassifier:
             r"\b(code|programming|debug|error)\b",  # Technical content
             r"\b(help me with|assistance with|can you)\b",  # Help requests
         ]
-        self.complexity_pattern = re.compile(
-            "|".join(self.complexity_indicators), re.IGNORECASE
-        )
+        self.complexity_pattern = re.compile("|".join(self.complexity_indicators), re.IGNORECASE)
 
         logger.debug("✅ FastPathClassifier initialized")
 
@@ -201,18 +197,12 @@ class FastPathRouter:
             "fast_path_decisions": 0,
             "budget_exceeded": 0,
             "avg_decision_time_ms": 0,
-            "complexity_distribution": {
-                complexity.value: 0 for complexity in MessageComplexity
-            },
+            "complexity_distribution": {complexity.value: 0 for complexity in MessageComplexity},
         }
 
-        logger.info(
-            f"🚀 FastPathRouter initialized (budget: {self.decision_budget_ms}ms)"
-        )
+        logger.info(f"🚀 FastPathRouter initialized (budget: {self.decision_budget_ms}ms)")
 
-    async def analyze_message_route(
-        self, message: Message, tracker: Optional[PipelineTracker] = None
-    ) -> RouteAnalysis:
+    async def analyze_message_route(self, message: Message, tracker: Optional[PipelineTracker] = None) -> RouteAnalysis:
         """Analyze message and determine optimal routing path [PA]."""
         start_time = time.time()
 
@@ -244,18 +234,14 @@ class FastPathRouter:
 
                 # Make routing decision with budget enforcement [REH]
                 decision_start = time.time()
-                decision, optimizations = await self._make_routing_decision(
-                    features, complexity, self.decision_budget_ms
-                )
+                decision, optimizations = await self._make_routing_decision(features, complexity, self.decision_budget_ms)
                 decision_time_ms = int((time.time() - decision_start) * 1000)
 
                 # Check budget exceeded [REH]
                 total_time_ms = int((time.time() - start_time) * 1000)
                 if total_time_ms > self.decision_budget_ms:
                     self.stats["budget_exceeded"] += 1
-                    logger.warning(
-                        f"⚠️ Router decision budget exceeded: {total_time_ms}ms > {self.decision_budget_ms}ms"
-                    )
+                    logger.warning(f"⚠️ Router decision budget exceeded: {total_time_ms}ms > {self.decision_budget_ms}ms")
 
                     # Force fast-path if budget exceeded
                     if complexity == MessageComplexity.SIMPLE_TEXT:
@@ -267,9 +253,7 @@ class FastPathRouter:
                     complexity=complexity,
                     decision=decision,
                     decision_time_ms=total_time_ms,
-                    confidence=self._calculate_confidence(
-                        features, complexity, decision
-                    ),
+                    confidence=self._calculate_confidence(features, complexity, decision),
                     reasoning=self._generate_reasoning(features, complexity, decision),
                     metadata={
                         "features": {
@@ -294,17 +278,11 @@ class FastPathRouter:
 
         except asyncio.TimeoutError:
             # Emergency fallback on timeout [REH]
-            logger.error(
-                f"❌ Router decision timeout after {self.decision_budget_ms}ms"
-            )
+            logger.error(f"❌ Router decision timeout after {self.decision_budget_ms}ms")
             self.stats["budget_exceeded"] += 1
 
             # Default to safe fast-path for DMs, standard for guild
-            emergency_decision = (
-                RouteDecision.FAST_PATH_TEXT
-                if isinstance(message.channel, DMChannel)
-                else RouteDecision.STANDARD_PIPELINE
-            )
+            emergency_decision = RouteDecision.FAST_PATH_TEXT if isinstance(message.channel, DMChannel) else RouteDecision.STANDARD_PIPELINE
 
             return RouteAnalysis(
                 complexity=MessageComplexity.UNKNOWN,
@@ -353,11 +331,7 @@ class FastPathRouter:
         # Text routing with fast-path detection
         if complexity == MessageComplexity.SIMPLE_TEXT:
             # DM fast-path conditions [PA]
-            if (
-                features.is_dm
-                and features.char_count < 100
-                and not features.has_mentions
-            ):
+            if features.is_dm and features.char_count < 100 and not features.has_mentions:
                 optimizations.update(
                     {
                         "skip_context_heavy": True,
@@ -400,10 +374,7 @@ class FastPathRouter:
             confidence = 0.5
 
         # High confidence for clear cases
-        if (
-            decision == RouteDecision.FAST_PATH_TEXT
-            and complexity == MessageComplexity.SIMPLE_TEXT
-        ):
+        if decision == RouteDecision.FAST_PATH_TEXT and complexity == MessageComplexity.SIMPLE_TEXT:
             confidence = 0.95
 
         if features.has_command_prefix and decision == RouteDecision.COMMAND_HANDLER:
@@ -427,10 +398,7 @@ class FastPathRouter:
             if not features.has_questions:
                 reasons.append("no questions")
 
-        elif (
-            decision == RouteDecision.STANDARD_PIPELINE
-            and complexity == MessageComplexity.MULTIMODAL
-        ):
+        elif decision == RouteDecision.STANDARD_PIPELINE and complexity == MessageComplexity.MULTIMODAL:
             if features.has_attachments:
                 reasons.append("has attachments")
             if features.has_urls:
@@ -503,25 +471,17 @@ class FastPathRouter:
 
         # Update average decision time
         old_avg = self.stats["avg_decision_time_ms"]
-        self.stats["avg_decision_time_ms"] = (
-            old_avg * (self.stats["total_decisions"] - 1) + analysis.decision_time_ms
-        ) / self.stats["total_decisions"]
+        self.stats["avg_decision_time_ms"] = (old_avg * (self.stats["total_decisions"] - 1) + analysis.decision_time_ms) / self.stats["total_decisions"]
 
     def get_stats(self) -> Dict[str, Any]:
         """Get router performance statistics."""
         total_decisions = self.stats["total_decisions"]
-        fast_path_rate = (
-            self.stats["fast_path_decisions"] / total_decisions
-            if total_decisions > 0
-            else 0
-        )
+        fast_path_rate = self.stats["fast_path_decisions"] / total_decisions if total_decisions > 0 else 0
 
         return {
             "total_decisions": total_decisions,
             "fast_path_rate": fast_path_rate,
-            "budget_exceeded_rate": self.stats["budget_exceeded"] / total_decisions
-            if total_decisions > 0
-            else 0,
+            "budget_exceeded_rate": self.stats["budget_exceeded"] / total_decisions if total_decisions > 0 else 0,
             "avg_decision_time_ms": self.stats["avg_decision_time_ms"],
             "complexity_distribution": self.stats["complexity_distribution"].copy(),
             "decision_budget_ms": self.decision_budget_ms,

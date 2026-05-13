@@ -19,7 +19,5 @@ class SearchProvider(Protocol):
 
 class AbstractSearchProvider(abc.ABC):
     @abc.abstractmethod
-    async def search(
-        self, params: SearchQueryParams
-    ) -> SearchResults:  # pragma: no cover
+    async def search(self, params: SearchQueryParams) -> SearchResults:  # pragma: no cover
         raise NotImplementedError

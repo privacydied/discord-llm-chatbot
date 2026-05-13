@@ -226,9 +226,7 @@ class TokenizerRegistry:
         diagnostics["espeak_ng_binary"] = shutil.which("espeak-ng")
 
         # Check for module availability
-        diagnostics["phonemizer_module"] = (
-            importlib.util.find_spec("phonemizer") is not None
-        )
+        diagnostics["phonemizer_module"] = importlib.util.find_spec("phonemizer") is not None
         diagnostics["g2p_en_module"] = importlib.util.find_spec("g2p_en") is not None
         diagnostics["misaki_module"] = importlib.util.find_spec("misaki") is not None
 
@@ -286,16 +284,10 @@ class TokenizerRegistry:
             if FORCE_IPA:
                 from .tts.errors import UnsupportedIPASymbolError
 
-                raise UnsupportedIPASymbolError(
-                    "IPA required: no phoneme tokenizers available and grapheme fallback disabled"
-                )
+                raise UnsupportedIPASymbolError("IPA required: no phoneme tokenizers available and grapheme fallback disabled")
             if not ALLOW_GRAPHEME:
-                logger.warning(
-                    "No phoneme tokenizers available for English, but grapheme fallback disabled"
-                )
-                raise MissingTokeniserError(
-                    f"No suitable phoneme tokenizer found for {language}"
-                )
+                logger.warning("No phoneme tokenizers available for English, but grapheme fallback disabled")
+                raise MissingTokeniserError(f"No suitable phoneme tokenizer found for {language}")
             return "grapheme"
 
         # Find the first available tokenizer in the preference list for non-English
@@ -323,16 +315,12 @@ class TokenizerRegistry:
         Looks for env TTS_LEXICON or TTS_LEXICON_PATH. Defaults to `bot/tts/lexicon_<lang>.json`.
         Returns a dict mapping lowercased words to phoneme strings.
         """
-        lang = self._canonicalize_language(
-            language or os.environ.get("TTS_LANGUAGE", "en")
-        )
+        lang = self._canonicalize_language(language or os.environ.get("TTS_LANGUAGE", "en"))
         if lang in self._lexicons:
             return self._lexicons[lang]
         lex: Dict[str, str] = {}
         try:
-            env_path = os.environ.get("TTS_LEXICON") or os.environ.get(
-                "TTS_LEXICON_PATH"
-            )
+            env_path = os.environ.get("TTS_LEXICON") or os.environ.get("TTS_LEXICON_PATH")
             if env_path:
                 p = Path(env_path)
                 if p.exists():
@@ -349,9 +337,7 @@ class TokenizerRegistry:
                         },
                     )
             else:
-                default = (
-                    Path(__file__).resolve().parent / "tts" / f"lexicon_{lang}.json"
-                )
+                default = Path(__file__).resolve().parent / "tts" / f"lexicon_{lang}.json"
                 if default.exists():
                     with default.open("r", encoding="utf-8") as f:
                         data = json.load(f)
@@ -377,9 +363,7 @@ class TokenizerRegistry:
         """
         if not text:
             return text, False
-        lang = self._canonicalize_language(
-            language or os.environ.get("TTS_LANGUAGE", "en")
-        )
+        lang = self._canonicalize_language(language or os.environ.get("TTS_LANGUAGE", "en"))
         lex = self._load_lexicon(lang)
         if not lex:
             return text, False
@@ -491,12 +475,7 @@ class TokenizerRegistry:
                 "Without these, English speech will sound robotic and unnatural."
             )
         elif language in ("ja", "zh"):
-            return (
-                f"⚠️ **Asian language tokenizer missing**\n\n"
-                f"For better {language} speech quality, please install:\n"
-                f"- `misaki`: `pip install misaki`\n\n"
-                f"Without this, {language} speech will sound incorrect."
-            )
+            return f"⚠️ **Asian language tokenizer missing**\n\nFor better {language} speech quality, please install:\n- `misaki`: `pip install misaki`\n\nWithout this, {language} speech will sound incorrect."
         else:
             return (
                 f"⚠️ **Phonetic tokeniser missing for {language}**\n\n"
@@ -552,9 +531,7 @@ class TokenizerRegistry:
         # If tests have mocked _select_tokenizer_with_fallback, the return may be a MagicMock.
         # In that case, still record the mock call but resolve the real selection logic here.
         if not isinstance(tokenizer, str):
-            tokenizer = TokenizerRegistry._select_tokenizer_with_fallback(
-                self, language
-            )
+            tokenizer = TokenizerRegistry._select_tokenizer_with_fallback(self, language)
 
         # Handle tokenization based on tokenizer type
         if tokenizer in ("phonemizer", "espeak", "espeak-ng", "g2p_en"):
@@ -685,9 +662,7 @@ class TokenizerRegistry:
             try:
                 # Use subprocess to get phonemes from espeak
                 cmd = [tokenizer, "--ipa", "-q", "--stdin"]
-                result = subprocess.run(
-                    cmd, input=text, text=True, capture_output=True, timeout=10
-                )
+                result = subprocess.run(cmd, input=text, text=True, capture_output=True, timeout=10)
                 if result.returncode == 0:
                     return result.stdout.strip()
                 else:

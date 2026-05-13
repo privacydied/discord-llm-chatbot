@@ -58,22 +58,14 @@ class TestInferredDenylist:
         result = curator.curate_inferred_candidate(user_id="123", text=text)
         assert result is None, f"Expected None (blocked) for: {text!r}"
         # The bad memory from the bug report must be blocked
-        bad_memory = (
-            "also my friends got the xanny munchies (i never did) "
-            "but 4mg of ativan might do that"
-        )
+        bad_memory = "also my friends got the xanny munchies (i never did) but 4mg of ativan might do that"
         result = curator.curate_inferred_candidate(user_id="123", text=bad_memory)
         assert result is None
 
     def test_xanny_not_recurring_instruction(self, curator):
         """The exact bad memory from the bug report must not be classified as recurring_instruction."""
-        bad = (
-            "also my friends got the xanny munchies (i never did) "
-            "but 4mg of ativan might do that"
-        )
-        assert (
-            curator._is_recurring_instruction(bad.lower()) is False
-        ), "Should not match as recurring_instruction"
+        bad = "also my friends got the xanny munchies (i never did) but 4mg of ativan might do that"
+        assert curator._is_recurring_instruction(bad.lower()) is False, "Should not match as recurring_instruction"
 
 
 class TestInferredAllowed:
@@ -98,9 +90,7 @@ class TestInferredAllowed:
     def test_explicit_instruction_saved(self, curator, text, expected_type):
         result = curator.curate_inferred_candidate(user_id="123", text=text)
         assert result is not None, f"Expected accepted for: {text!r}"
-        assert result.context_type == expected_type, (
-            f"Expected {expected_type}, got {result.context_type}"
-        )
+        assert result.context_type == expected_type, f"Expected {expected_type}, got {result.context_type}"
 
 
 class TestExplicitMemoryAlwaysWorks:

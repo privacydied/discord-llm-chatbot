@@ -36,9 +36,7 @@ def sanitize_metadata(
 
         value = metadata[field]
         if isinstance(value, str):
-            cleaned = "".join(
-                char for char in value if ord(char) >= 32 or char in "\n\t\r"
-            )
+            cleaned = "".join(char for char in value if ord(char) >= 32 or char in "\n\t\r")
             if max_length and len(cleaned) > max_length:
                 cleaned = cleaned[:max_length] + "..."
             sanitized[field] = cleaned
@@ -49,9 +47,7 @@ def sanitize_metadata(
             continue
 
         str_value = str(value)
-        cleaned = "".join(
-            char for char in str_value if ord(char) >= 32 or char in "\n\t\r"
-        )
+        cleaned = "".join(char for char in str_value if ord(char) >= 32 or char in "\n\t\r")
         if max_length and len(cleaned) > max_length:
             cleaned = cleaned[:max_length] + "..."
         sanitized[field] = cleaned

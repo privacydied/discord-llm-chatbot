@@ -28,9 +28,7 @@ def is_reply_to_bot(message: Any, bot_user_id: int | None) -> bool:
         reference = getattr(message, "reference", None)
         if not reference or not getattr(reference, "message_id", None):
             return False
-        ref_msg = getattr(reference, "resolved", None) or getattr(
-            reference, "cached_message", None
-        )
+        ref_msg = getattr(reference, "resolved", None) or getattr(reference, "cached_message", None)
         if not ref_msg:
             return False
         author_id = getattr(getattr(ref_msg, "author", None), "id", None)

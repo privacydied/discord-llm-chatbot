@@ -10,9 +10,7 @@ class FakeProvider:
     async def search(self, params):
         # Return deterministic results for testing
         return [
-            SearchResult(
-                title="Result One", url="https://example.com/1", snippet="First snippet"
-            ),
+            SearchResult(title="Result One", url="https://example.com/1", snippet="First snippet"),
             SearchResult(
                 title="Result Two",
                 url="https://example.com/2",
@@ -41,9 +39,7 @@ class CapturingProvider:
     def __init__(self, results=None):
         self.calls = []
         self._results = results or [
-            SearchResult(
-                title="Result One", url="https://example.com/1", snippet="First snippet"
-            ),
+            SearchResult(title="Result One", url="https://example.com/1", snippet="First snippet"),
             SearchResult(
                 title="Result Two",
                 url="https://example.com/2",
@@ -111,12 +107,7 @@ async def test_resolve_inline_searches_replaces_with_results(monkeypatch):
 async def test_extract_inline_search_queries_with_category_and_commas():
     bot = FakeBot()
     r = Router(bot)
-    text = (
-        "A [search(what, is, love, images)] "
-        "B [search(latest ai, NEWS)] "
-        "C [search(simple, video)] "
-        "D [search(a, b, unknowncat)]"
-    )
+    text = "A [search(what, is, love, images)] B [search(latest ai, NEWS)] C [search(simple, video)] D [search(a, b, unknowncat)]"
     matches = r._extract_inline_search_queries(text)
     assert len(matches) == 4
 
@@ -185,12 +176,8 @@ async def test_inline_search_metrics_labels_include_category_success(monkeypatch
     assert "inline_search.success" in names
 
     # Find labels for start and success
-    start_labels = next(
-        lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.start"
-    )
-    success_labels = next(
-        lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.success"
-    )
+    start_labels = next(lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.start")
+    success_labels = next(lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.success")
 
     assert start_labels.get("category") == "videos"
     assert success_labels.get("category") == "videos"
@@ -220,9 +207,7 @@ async def test_inline_search_metrics_labels_include_category_error(monkeypatch):
     assert "inline_search.start" in names
     assert "inline_search.error" in names
 
-    error_labels = next(
-        lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.error"
-    )
+    error_labels = next(lbl for (kind, n, lbl, _v) in metrics.calls if n == "inline_search.error")
     assert error_labels.get("category") == "images"
     assert error_labels.get("provider") == bot.config["SEARCH_PROVIDER"]
 

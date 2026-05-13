@@ -49,9 +49,7 @@ class TestSanitizeEmbeds:
     def test_embeds_list(self):
         with patch("bot.core.output.sanitize_embed_collection_for_public") as mock_col:
             mock_col.return_value = [MagicMock()]
-            sanitized_embed, sanitized_embeds = _sanitize_embeds(
-                None, [MagicMock()]
-            )
+            sanitized_embed, sanitized_embeds = _sanitize_embeds(None, [MagicMock()])
         assert sanitized_embed is None
         assert sanitized_embeds is not None
         assert len(sanitized_embeds) == 1
@@ -65,9 +63,7 @@ class TestSanitizeEmbeds:
         ):
             mock_one.return_value = mock_embed
             mock_col.return_value = [mock_embed2]
-            sanitized_embed, sanitized_embeds = _sanitize_embeds(
-                mock_embed, [mock_embed2]
-            )
+            sanitized_embed, sanitized_embeds = _sanitize_embeds(mock_embed, [mock_embed2])
         assert sanitized_embed is None
         assert sanitized_embeds == [mock_embed, mock_embed2]
 

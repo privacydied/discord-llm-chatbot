@@ -67,7 +67,7 @@ class TestCheckpointWAL:
         # Create a minimal database
         conn = sqlite3.connect(db_path)
         try:
-            conn.execute('CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY)')
+            conn.execute("CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY)")
             conn.execute("INSERT INTO t DEFAULT VALUES")
             conn.commit()
         finally:

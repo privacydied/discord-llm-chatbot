@@ -39,12 +39,8 @@ class TestVLImageCapabilityFilter:
         from bot.enhanced_retry import _is_image_capable_model
 
         # This model caused the VL regression - it doesn't support images
-        assert not _is_image_capable_model(
-            "mistralai/mistral-small-3.2-24b-instruct:free"
-        )
-        assert not _is_image_capable_model(
-            "mistralai/mistral-small-3.1-24b-instruct:free"
-        )
+        assert not _is_image_capable_model("mistralai/mistral-small-3.2-24b-instruct:free")
+        assert not _is_image_capable_model("mistralai/mistral-small-3.1-24b-instruct:free")
 
     def test_text_only_model_deepseek(self):
         """DeepSeek text models should NOT be detected as image-capable."""
@@ -157,9 +153,7 @@ class TestSTTUrlIdentity:
 
         # With metadata, should use extractor:id format
         metadata = {"extractor_key": "youtube", "id": "dQw4w9WgXcQ"}
-        identity = mgr._canonicalize_video_identity(
-            "https://youtube.com/watch?v=dQw4w9WgXcQ", metadata
-        )
+        identity = mgr._canonicalize_video_identity("https://youtube.com/watch?v=dQw4w9WgXcQ", metadata)
 
         assert identity == "youtube:dQw4w9WgXcQ"
 

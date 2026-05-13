@@ -68,9 +68,7 @@ def is_text_file(file_path: Union[str, Path]) -> bool:
                 return False
 
             # Count non-printable ASCII bytes
-            non_printable = sum(
-                1 for byte in chunk if byte < 32 and byte not in {9, 10, 13}
-            )
+            non_printable = sum(1 for byte in chunk if byte < 32 and byte not in {9, 10, 13})
             if non_printable > len(chunk) * 0.3:  # More than 30% non-printable
                 return False
 
@@ -79,9 +77,7 @@ def is_text_file(file_path: Union[str, Path]) -> bool:
         return False
 
 
-async def send_in_chunks(
-    channel, text: str, reference=None, chunk_size: int = 2000
-) -> List[Any]:
+async def send_in_chunks(channel, text: str, reference=None, chunk_size: int = 2000) -> List[Any]:
     """
     Send a long message in chunks to avoid Discord's 2000 character limit.
 
@@ -132,10 +128,7 @@ async def send_in_chunks(
         current_line_chunk = ""
 
         for line in lines:
-            if (
-                len(current_line_chunk) + len(line) + 1 > chunk_size
-                and current_line_chunk
-            ):
+            if len(current_line_chunk) + len(line) + 1 > chunk_size and current_line_chunk:
                 new_chunks.append(current_line_chunk)
                 current_line_chunk = ""
 
@@ -169,9 +162,7 @@ async def send_in_chunks(
                 msg = await channel.send(chunk)
             sent_messages.append(msg)
         except Exception as e:
-            logging.error(
-                f"Error sending message chunk {i + 1}/{len(final_chunks)}: {e}"
-            )
+            logging.error(f"Error sending message chunk {i + 1}/{len(final_chunks)}: {e}")
 
     return sent_messages
 
@@ -194,9 +185,7 @@ def extract_mentions(text: str) -> List[Tuple[str, str]]:
     role_mentions = re.findall(r"<@&(\d+)>", text)
 
     # Format as (type, id) tuples
-    mentions = [("user", uid) for uid in user_mentions] + [
-        ("role", rid) for rid in role_mentions
-    ]
+    mentions = [("user", uid) for uid in user_mentions] + [("role", rid) for rid in role_mentions]
 
     return mentions
 
@@ -264,9 +253,7 @@ def is_document_file(filename: str) -> bool:
     return get_file_extension(filename) in doc_extensions
 
 
-async def download_file(
-    url: str, save_path: Path, session: Optional[aiohttp.ClientSession] = None
-) -> bool:
+async def download_file(url: str, save_path: Path, session: Optional[aiohttp.ClientSession] = None) -> bool:
     """
     Download a file from a URL and save it to the specified path.
 

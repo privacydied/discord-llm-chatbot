@@ -49,14 +49,8 @@ URL_DOWNLOAD_TIMEOUT_S = 60.0
 # Conservative browser-like headers to reduce 403 blocks across sites. [IV]
 # NOTE: No env vars; keep universal/minimal.
 URL_HTTP_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
-    ),
-    "Accept": (
-        "text/html,application/xhtml+xml,application/xml;q=0.9,"
-        "application/pdf;q=0.9,*/*;q=0.8"
-    ),
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"),
+    "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.9,*/*;q=0.8"),
     "Accept-Language": "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate, br",
     "DNT": "1",
@@ -105,9 +99,7 @@ async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int
     try:
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
-            logger.debug(
-                f"url.probe skip non-http scheme={parsed.scheme} url={url[:80]}"
-            )
+            logger.debug(f"url.probe skip non-http scheme={parsed.scheme} url={url[:80]}")
             return None, None
     except Exception:
         return None, None
@@ -147,8 +139,7 @@ async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int
             status = int(getattr(response, "status_code", 0) or 0)
             if 200 <= status < 400:
                 logger.info(
-                    f"url.probe ok url={url[:80]} content_type={content_type} "
-                    f"content_length={content_length}",
+                    f"url.probe ok url={url[:80]} content_type={content_type} content_length={content_length}",
                     extra={
                         "subsys": "url",
                         "event": "url.probe.ok",

@@ -70,9 +70,7 @@ class VisionOrchestratorV2:
 
         # Concurrency control
         self.max_concurrent_jobs = self.config.get("VISION_MAX_CONCURRENT_JOBS", 10)
-        self.max_user_concurrent_jobs = self.config.get(
-            "VISION_MAX_USER_CONCURRENT_JOBS", 2
-        )
+        self.max_user_concurrent_jobs = self.config.get("VISION_MAX_USER_CONCURRENT_JOBS", 2)
 
         # Active job tracking
         self.active_jobs: Dict[str, asyncio.Task] = {}
@@ -82,11 +80,7 @@ class VisionOrchestratorV2:
         self._cleanup_task: Optional[asyncio.Task] = None
         self._background_tasks_started = False
 
-        self.logger.info(
-            f"Vision Orchestrator V2 initialized - "
-            f"max_concurrent: {self.max_concurrent_jobs}, "
-            f"max_per_user: {self.max_user_concurrent_jobs}"
-        )
+        self.logger.info(f"Vision Orchestrator V2 initialized - max_concurrent: {self.max_concurrent_jobs}, max_per_user: {self.max_user_concurrent_jobs}")
 
     async def submit_job(self, request: VisionRequest) -> VisionJob:
         """
@@ -106,15 +100,9 @@ class VisionOrchestratorV2:
 
         # Estimate cost using Money type
         estimated_cost = self._estimate_job_cost_money(request)
-        request.estimated_cost = (
-            estimated_cost.to_float()
-        )  # Store as float for compatibility
+        request.estimated_cost = estimated_cost.to_float()  # Store as float for compatibility
 
-        self.logger.info(
-            f"Submitting vision job - task: {request.task.value}, "
-            f"user_id: {request.user_id}, "
-            f"estimated_cost: {estimated_cost.to_display_string()}"
-        )
+        self.logger.info(f"Submitting vision job - task: {request.task.value}, user_id: {request.user_id}, estimated_cost: {estimated_cost.to_display_string()}")
 
         try:
             # Safety validation (content filtering)
@@ -189,15 +177,11 @@ class VisionOrchestratorV2:
             return False
 
         if job.request.user_id != user_id:
-            self.logger.warning(
-                f"Cancel denied - user {user_id} doesn't own job {job_id[:8]}"
-            )
+            self.logger.warning(f"Cancel denied - user {user_id} doesn't own job {job_id[:8]}")
             return False
 
         if job.is_terminal_state():
-            self.logger.info(
-                f"Cancel ignored - job already in terminal state: {job_id[:8]}"
-            )
+            self.logger.info(f"Cancel ignored - job already in terminal state: {job_id[:8]}")
             return False
 
         # Cancel the async task if running
@@ -276,23 +260,19 @@ class VisionOrchestratorV2:
             if response.success:
                 # Success - update job with results
                 job.response = response
-                job.transition_to(
-                    VisionJobState.COMPLETED, "Generation completed successfully"
-                )
+                job.transition_to(VisionJobState.COMPLETED, "Generation completed successfully")
 
                 # Parse actual usage from response
                 actual_cost = Money.zero()
                 try:
                     usage_data = self.usage_parser.extract_usage_from_response(
-                        provider=job.request.preferred_provider
-                        or VisionProvider.TOGETHER,
+                        provider=job.request.preferred_provider or VisionProvider.TOGETHER,
                         response=response,
                     )
 
                     if usage_data:
                         actual_cost = self.usage_parser.parse_usage(
-                            provider=job.request.preferred_provider
-                            or VisionProvider.TOGETHER,
+                            provider=job.request.preferred_provider or VisionProvider.TOGETHER,
                             task=job.request.task,
                             usage_data=usage_data,
                             model=getattr(job.request, "preferred_model", None),
@@ -301,8 +281,7 @@ class VisionOrchestratorV2:
                         # Validate actual cost against estimate
                         estimated_cost = Money(job.request.estimated_cost)
                         is_valid, error_msg = self.usage_parser.validate_usage_cost(
-                            provider=job.request.preferred_provider
-                            or VisionProvider.TOGETHER,
+                            provider=job.request.preferred_provider or VisionProvider.TOGETHER,
                             task=job.request.task,
                             estimated_cost=estimated_cost,
                             actual_cost=actual_cost,
@@ -318,33 +297,17 @@ class VisionOrchestratorV2:
                 estimated_cost = Money(job.request.estimated_cost)
                 # Some tests call _execute_job directly without going through submit_job,
                 # which means estimated_cost may be 0. Use sensible fallback.
-                reserved_amount = (
-                    estimated_cost
-                    if estimated_cost > Money.zero()
-                    else (
-                        actual_cost
-                        if actual_cost > Money.zero()
-                        else self._estimate_job_cost_money(job.request)
-                    )
-                )
+                reserved_amount = estimated_cost if estimated_cost > Money.zero() else (actual_cost if actual_cost > Money.zero() else self._estimate_job_cost_money(job.request))
                 await self.budget_manager.finalize_reservation(
                     user_id=job.request.user_id,
                     reserved_amount=reserved_amount,
-                    actual_cost=actual_cost
-                    if actual_cost > Money.zero()
-                    else reserved_amount,
+                    actual_cost=actual_cost if actual_cost > Money.zero() else reserved_amount,
                     job_id=job_id,
-                    provider=str(
-                        job.request.preferred_provider or VisionProvider.TOGETHER
-                    ),
+                    provider=str(job.request.preferred_provider or VisionProvider.TOGETHER),
                     task=str(job.request.task),
                 )
 
-                self.logger.info(
-                    f"Job completed successfully - job_id: {job_id[:8]}, "
-                    f"estimated: {estimated_cost.to_display_string()}, "
-                    f"actual: {actual_cost.to_display_string()}"
-                )
+                self.logger.info(f"Job completed successfully - job_id: {job_id[:8]}, estimated: {estimated_cost.to_display_string()}, actual: {actual_cost.to_display_string()}")
 
             else:
                 # Failure - update job with error
@@ -359,22 +322,15 @@ class VisionOrchestratorV2:
 
                 # Release reserved budget on failure
                 estimated_cost = Money(job.request.estimated_cost)
-                await self.budget_manager.release_reservation(
-                    job.request.user_id, estimated_cost
-                )
+                await self.budget_manager.release_reservation(job.request.user_id, estimated_cost)
 
-                self.logger.error(
-                    f"Job failed at provider - job_id: {job_id[:8]}, "
-                    f"error: {response.error.message if response.error else 'Unknown error'}"
-                )
+                self.logger.error(f"Job failed at provider - job_id: {job_id[:8]}, error: {response.error.message if response.error else 'Unknown error'}")
 
         except asyncio.CancelledError:
             # Job was cancelled
             job.transition_to(VisionJobState.CANCELLED, "Job cancelled")
             estimated_cost = Money(job.request.estimated_cost)
-            await self.budget_manager.release_reservation(
-                job.request.user_id, estimated_cost
-            )
+            await self.budget_manager.release_reservation(job.request.user_id, estimated_cost)
             self.logger.info(f"Job cancelled: {job_id[:8]}")
 
         except VisionError as e:
@@ -383,14 +339,9 @@ class VisionOrchestratorV2:
             job.transition_to(VisionJobState.FAILED, f"Error: {e.message}")
 
             estimated_cost = Money(job.request.estimated_cost)
-            await self.budget_manager.release_reservation(
-                job.request.user_id, estimated_cost
-            )
+            await self.budget_manager.release_reservation(job.request.user_id, estimated_cost)
 
-            self.logger.error(
-                f"Job failed with VisionError - job_id: {job_id[:8]}, "
-                f"error_type: {e.error_type.value}, message: {e.message}"
-            )
+            self.logger.error(f"Job failed with VisionError - job_id: {job_id[:8]}, error_type: {e.error_type.value}, message: {e.message}")
 
         except Exception as e:
             # Handle unexpected errors
@@ -403,9 +354,7 @@ class VisionOrchestratorV2:
             job.transition_to(VisionJobState.FAILED, f"Unexpected error: {str(e)}")
 
             estimated_cost = Money(job.request.estimated_cost)
-            await self.budget_manager.release_reservation(
-                job.request.user_id, estimated_cost
-            )
+            await self.budget_manager.release_reservation(job.request.user_id, estimated_cost)
 
             self.logger.error(
                 f"Job failed with unexpected error - job_id: {job_id[:8]}, error: {str(e)}",
@@ -423,9 +372,7 @@ class VisionOrchestratorV2:
             # Decrement user job count
             user_id = job.request.user_id
             if user_id in self.user_job_counts:
-                self.user_job_counts[user_id] = max(
-                    0, self.user_job_counts[user_id] - 1
-                )
+                self.user_job_counts[user_id] = max(0, self.user_job_counts[user_id] - 1)
                 if self.user_job_counts[user_id] == 0:
                     del self.user_job_counts[user_id]
 
@@ -472,26 +419,18 @@ class VisionOrchestratorV2:
         for job_id in active_job_ids:
             try:
                 job = await self.job_store.load_job(job_id)
-                if (
-                    job
-                    and not job.is_terminal_state()
-                    and job.is_expired(timeout_seconds)
-                ):
+                if job and not job.is_terminal_state() and job.is_expired(timeout_seconds):
                     # Cancel expired job
                     if job_id in self.active_jobs:
                         self.active_jobs[job_id].cancel()
 
                     # Mark as expired
-                    job.transition_to(
-                        VisionJobState.EXPIRED, f"Job expired after {timeout_seconds}s"
-                    )
+                    job.transition_to(VisionJobState.EXPIRED, f"Job expired after {timeout_seconds}s")
                     await self.job_store.save_job(job)
 
                     # Release budget reservation
                     estimated_cost = Money(job.request.estimated_cost)
-                    await self.budget_manager.release_reservation(
-                        job.request.user_id, estimated_cost
-                    )
+                    await self.budget_manager.release_reservation(job.request.user_id, estimated_cost)
 
                     self.logger.warning(f"Job expired: {job_id[:8]}")
 
@@ -500,9 +439,7 @@ class VisionOrchestratorV2:
 
     async def _cleanup_old_artifacts(self) -> None:
         """Remove old artifact files based on TTL [RM]"""
-        artifacts_dir = Path(
-            self.config.get("VISION_ARTIFACTS_DIR", "data/vision/artifacts")
-        )
+        artifacts_dir = Path(self.config.get("VISION_ARTIFACTS_DIR", "data/vision/artifacts"))
         if not artifacts_dir.exists():
             return
 
@@ -547,11 +484,7 @@ class VisionOrchestratorV2:
         # Cancel all active jobs (only real asyncio Tasks/Futures)
         awaitables = []
         for job_id, task in list(self.active_jobs.items()):
-            if (
-                isinstance(task, asyncio.Task)
-                or asyncio.isfuture(task)
-                or inspect.isawaitable(task)
-            ):
+            if isinstance(task, asyncio.Task) or asyncio.isfuture(task) or inspect.isawaitable(task):
                 try:
                     task.cancel()
                 except Exception:
@@ -560,16 +493,12 @@ class VisionOrchestratorV2:
                 self.logger.debug(f"Cancelled job during shutdown: {job_id[:8]}")
             else:
                 # Non-awaitable mock or placeholder; just drop it
-                self.logger.debug(
-                    f"Skipping non-awaitable job handle during shutdown: {job_id[:8]}"
-                )
+                self.logger.debug(f"Skipping non-awaitable job handle during shutdown: {job_id[:8]}")
 
         # Wait for tasks to complete with timeout
         if awaitables:
             try:
-                await asyncio.wait_for(
-                    asyncio.gather(*awaitables, return_exceptions=True), timeout=30.0
-                )
+                await asyncio.wait_for(asyncio.gather(*awaitables, return_exceptions=True), timeout=30.0)
             except asyncio.TimeoutError:
                 self.logger.warning("Some jobs did not complete during shutdown")
 

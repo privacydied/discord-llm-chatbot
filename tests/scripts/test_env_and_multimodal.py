@@ -40,9 +40,7 @@ class TestEnvironmentVariables:
 
         # Test OpenAI/OpenRouter variables
         assert config.get("OPENAI_API_KEY") is not None, "OPENAI_API_KEY must be set"
-        assert config.get("OPENAI_TEXT_MODEL") is not None, (
-            "OPENAI_TEXT_MODEL must be set"
-        )
+        assert config.get("OPENAI_TEXT_MODEL") is not None, "OPENAI_TEXT_MODEL must be set"
         assert config.get("VL_MODEL") is not None, "VL_MODEL must be set"
 
         print("✅ All essential environment variables are loaded")
@@ -125,9 +123,7 @@ class TestImageDetection:
         mock_message = MagicMock()
         mock_attachment = MagicMock()
         mock_attachment.filename = "test_image.jpg"
-        mock_attachment.url = (
-            "https://cdn.discordapp.com/attachments/123/456/test_image.jpg"
-        )
+        mock_attachment.url = "https://cdn.discordapp.com/attachments/123/456/test_image.jpg"
         mock_attachment.content_type = "image/jpeg"
         mock_message.attachments = [mock_attachment]
 
@@ -150,17 +146,13 @@ class TestMultimodalLogic:
         # Mock response
         mock_response = MagicMock()
         mock_choice = MagicMock()
-        mock_choice.message.content = (
-            "This is a test image showing a cat sitting on a windowsill."
-        )
+        mock_choice.message.content = "This is a test image showing a cat sitting on a windowsill."
         mock_response.choices = [mock_choice]
         mock_response.usage.prompt_tokens = 50
         mock_response.usage.completion_tokens = 25
         mock_response.usage.total_tokens = 75
 
-        mock_client_instance.chat.completions.create = AsyncMock(
-            return_value=mock_response
-        )
+        mock_client_instance.chat.completions.create = AsyncMock(return_value=mock_response)
 
         # Test VL response generation
         result = await openai_vl_response(
@@ -169,10 +161,7 @@ class TestMultimodalLogic:
             user_id="test_user_123",
         )
 
-        assert (
-            result["text"]
-            == "This is a test image showing a cat sitting on a windowsill."
-        )
+        assert result["text"] == "This is a test image showing a cat sitting on a windowsill."
         assert result["backend"] == "openai_vl"
         assert result["usage"]["total_tokens"] == 75
 
@@ -180,9 +169,7 @@ class TestMultimodalLogic:
 
     @patch("bot.ai_backend.generate_vl_response")
     @patch("bot.ai_backend.generate_response")
-    async def test_hybrid_multimodal_routing(
-        self, mock_generate_response, mock_generate_vl_response
-    ):
+    async def test_hybrid_multimodal_routing(self, mock_generate_response, mock_generate_vl_response):
         """Test that the AI backend correctly routes to VL when needed."""
         # Setup mocks
         mock_generate_vl_response.return_value = {
@@ -204,9 +191,7 @@ class TestMultimodalLogic:
         )
 
         # Test text routing
-        text_result = await generate_response(
-            prompt="Tell me about sunsets", context="Previous conversation context"
-        )
+        text_result = await generate_response(prompt="Tell me about sunsets", context="Previous conversation context")
 
         assert "VL analysis" in vl_result["text"]
         assert vl_result["backend"] == "openai_vl"

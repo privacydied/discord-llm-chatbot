@@ -12,10 +12,7 @@ from .utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-IMPLICIT_ACK_THOUGHTS_PROMPT = (
-    "The user provided a file or media item without explicit text. Acknowledge the content, then "
-    "share thoughtful observations grounded in the processed evidence below."
-)
+IMPLICIT_ACK_THOUGHTS_PROMPT = "The user provided a file or media item without explicit text. Acknowledge the content, then share thoughtful observations grounded in the processed evidence below."
 
 
 @dataclass
@@ -61,9 +58,7 @@ class ResultAggregator:
         )
 
         self.results.append(result)
-        logger.debug(
-            f"Added result {item_index}: {modality.name} - {item_name} ({'success' if success else 'failed'})"
-        )
+        logger.debug(f"Added result {item_index}: {modality.name} - {item_name} ({'success' if success else 'failed'})")
 
     def get_aggregated_prompt(self, original_text: str = "") -> str:
         """
@@ -108,47 +103,24 @@ class ResultAggregator:
             for r in self.results
         )
 
-        has_document_modality = any(
-            r.success
-            and r.modality in (InputModality.PDF_DOCUMENT, InputModality.PDF_OCR)
-            for r in self.results
-        )
+        has_document_modality = any(r.success and r.modality in (InputModality.PDF_DOCUMENT, InputModality.PDF_OCR) for r in self.results)
 
         # Heuristic: treat GENERAL_URL results that start with a [DOCUMENT: header
         # as document-like content (used by URL-based document ingestion). [CA]
-        has_document_like_url = any(
-            r.modality == InputModality.GENERAL_URL
-            and r.result_text.lstrip().startswith("[DOCUMENT:")
-            for r in self.results
-        )
+        has_document_like_url = any(r.modality == InputModality.GENERAL_URL and r.result_text.lstrip().startswith("[DOCUMENT:") for r in self.results)
 
         has_document = has_document_modality or has_document_like_url
 
-        has_stt_text = any(
-            r.modality in (InputModality.AUDIO_VIDEO_FILE, InputModality.VIDEO_URL)
-            and r.success
-            and bool(r.result_text.strip())
-            for r in self.results
-        )
+        has_stt_text = any(r.modality in (InputModality.AUDIO_VIDEO_FILE, InputModality.VIDEO_URL) and r.success and bool(r.result_text.strip()) for r in self.results)
 
         # Treat successful GENERAL_URL text as an additional text source so that
         # scraped link/tweet/document text prevents media-only ack injection. [CA][REH]
-        has_scraped_text = any(
-            r.success
-            and r.modality == InputModality.GENERAL_URL
-            and bool(r.result_text.strip())
-            for r in self.results
-        )
+        has_scraped_text = any(r.success and r.modality == InputModality.GENERAL_URL and bool(r.result_text.strip()) for r in self.results)
 
-        has_text_sources = (
-            has_original_text or has_document or has_stt_text or has_scraped_text
-        )
+        has_text_sources = has_original_text or has_document or has_stt_text or has_scraped_text
 
         # Media items include visual media plus audio/video sources for logging. [RAT]
-        has_media_items = has_visual_media or any(
-            r.modality in (InputModality.AUDIO_VIDEO_FILE, InputModality.VIDEO_URL)
-            for r in self.results
-        )
+        has_media_items = has_visual_media or any(r.modality in (InputModality.AUDIO_VIDEO_FILE, InputModality.VIDEO_URL) for r in self.results)
 
         # Low-noise debug snapshot for multimodal aggregation state. [RAT]
         # Filter prompt-construction to only successful results with real content [REH][PA]
@@ -211,19 +183,12 @@ class ResultAggregator:
         except Exception:
             pass
 
-        include_ack_prompt = (
-            not has_text_sources
-            and has_visual_media
-            and not has_document
-            and not has_stt_text
-        )
+        include_ack_prompt = not has_text_sources and has_visual_media and not has_document and not has_stt_text
 
         if include_ack_prompt:
             parts.append(IMPLICIT_ACK_THOUGHTS_PROMPT)
             parts.append("")
-            logger.debug(
-                "Implicit ack+thoughts prompt injected for media-only aggregation."
-            )
+            logger.debug("Implicit ack+thoughts prompt injected for media-only aggregation.")
 
         # Add header with summary
         total_items = len(self.results)
@@ -231,18 +196,14 @@ class ResultAggregator:
         failed_items = total_items - successful_items
 
         # Only count as successful those with actually successful flag AND non-empty content
-        truly_successful = [
-            r for r in self.results if r.success and r.result_text.strip()
-        ]
+        truly_successful = [r for r in self.results if r.success and r.result_text.strip()]
 
         # All-item failure gate: when every item failed AND there is no original text,
         # the aggregation produced zero routable content. Return empty to prevent
         # downstream text-flow generation from the summary header alone. [REH][PA]
         has_original = bool(original_text and original_text.strip())
         if len(truly_successful) == 0 and failed_items > 0 and not has_original:
-            logger.debug(
-                "ResultAggregator: all items failed, no original_text — returning empty prompt"
-            )
+            logger.debug("ResultAggregator: all items failed, no original_text — returning empty prompt")
             return ""
 
         if total_items == 1:
@@ -251,9 +212,7 @@ class ResultAggregator:
             if failed_items == 0:
                 parts.append(f"I processed {total_items} inputs from your message:")
             else:
-                parts.append(
-                    f"I processed {total_items} inputs from your message ({successful_items} successful, {failed_items} failed):"
-                )
+                parts.append(f"I processed {total_items} inputs from your message ({successful_items} successful, {failed_items} failed):")
 
         parts.append("")  # Empty line
 
@@ -296,9 +255,7 @@ class ResultAggregator:
         # Join all parts
         aggregated = "\n".join(parts).strip()
 
-        logger.info(
-            f"📋 Aggregated {total_items} results into {len(aggregated)} character prompt"
-        )
+        logger.info(f"📋 Aggregated {total_items} results into {len(aggregated)} character prompt")
         return aggregated
 
     def get_summary_stats(self) -> dict:
@@ -311,14 +268,8 @@ class ResultAggregator:
         failed_items = total_items - successful_items
 
         # Calculate average duration for successful items
-        successful_durations = [
-            r.duration for r in self.results if r.success and r.duration is not None
-        ]
-        avg_duration = (
-            sum(successful_durations) / len(successful_durations)
-            if successful_durations
-            else None
-        )
+        successful_durations = [r.duration for r in self.results if r.success and r.duration is not None]
+        avg_duration = sum(successful_durations) / len(successful_durations) if successful_durations else None
 
         # Count modalities
         modality_counts = {}
@@ -357,9 +308,7 @@ class ResultAggregator:
             if hasattr(item.payload, "title") and item.payload.title:
                 return item.payload.title
             elif hasattr(item.payload, "url") and item.payload.url:
-                return self._get_item_display_name(
-                    InputItem("url", item.payload.url, 0)
-                )
+                return self._get_item_display_name(InputItem("url", item.payload.url, 0))
             return "embed"
 
         return f"{item.source_type}_item"

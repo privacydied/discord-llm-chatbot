@@ -86,10 +86,7 @@ class TestRetryManagerLadderRefresh:
 
             # Check logger.info was called with ladder info
             info_calls = [call for call in mock_logger.info.call_args_list]
-            any(
-                "config.reload.ladders" in str(call) or "ladders" in str(call).lower()
-                for call in info_calls
-            )
+            any("config.reload.ladders" in str(call) or "ladders" in str(call).lower() for call in info_calls)
             # The call should have happened
             assert mock_retry_mgr.refresh_from_env.called
 

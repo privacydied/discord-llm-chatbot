@@ -78,11 +78,7 @@ _env_loaded_values_by_path: Dict[Path, Dict[str, str]] = {}
 def _read_dotenv_values(path: Path) -> Dict[str, str]:
     """Read dotenv key/value pairs without mutating process env."""
     try:
-        return {
-            str(key): str(value)
-            for key, value in dotenv_values(path).items()
-            if key and value is not None
-        }
+        return {str(key): str(value) for key, value in dotenv_values(path).items() if key and value is not None}
     except Exception:
         return {}
 
@@ -91,9 +87,7 @@ def _snapshot_known_env_files() -> None:
     """Track values loaded from existing env files so deletion hot-reloads work."""
     for candidate in _candidate_env_paths():
         if candidate.exists():
-            _env_loaded_values_by_path[candidate.resolve()] = _read_dotenv_values(
-                candidate
-            )
+            _env_loaded_values_by_path[candidate.resolve()] = _read_dotenv_values(candidate)
 
 
 def _sync_dotenv_file(path: Path) -> None:
@@ -167,9 +161,7 @@ def _redact_sensitive_values(config: Dict[str, Any]) -> Dict[str, Any]:
     return redacted
 
 
-def _compare_configs(
-    old_config: Dict[str, Any], new_config: Dict[str, Any]
-) -> Dict[str, Any]:
+def _compare_configs(old_config: Dict[str, Any], new_config: Dict[str, Any]) -> Dict[str, Any]:
     """Compare two configurations and return the differences."""
     changes = {"added": {}, "removed": {}, "modified": {}, "unchanged_count": 0}
 
@@ -204,11 +196,7 @@ def _infer_subsystems(changes: Dict[str, Any]) -> Set[str]:
 
     for k in keys:
         ku = k.upper()
-        if (
-            ku.startswith("OPENAI_")
-            or ku.startswith("OLLAMA_")
-            or ku.startswith("TEXT_")
-        ):
+        if ku.startswith("OPENAI_") or ku.startswith("OLLAMA_") or ku.startswith("TEXT_"):
             impacted.add("text")
         if ku.startswith("VL_") or ku.startswith("VISION_"):
             impacted.add("vision")
@@ -279,9 +267,7 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
             required_vars = ["DISCORD_TOKEN", "PROMPT_FILE", "VL_PROMPT_FILE"]
             missing_vars = [var for var in required_vars if not new_config.get(var)]
             if missing_vars:
-                logger.error(
-                    f"❌ Critical variables missing after reload: {missing_vars}"
-                )
+                logger.error(f"❌ Critical variables missing after reload: {missing_vars}")
                 return {
                     "success": False,
                     "error": f"Missing required variables: {missing_vars}",
@@ -303,14 +289,7 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
             try:
                 redacted_added = _redact_sensitive_values(changes.get("added", {}))
                 redacted_removed = _redact_sensitive_values(changes.get("removed", {}))
-                redacted_modified = {
-                    k: (
-                        "[REDACTED]"
-                        if any(s in k.upper() for s in SENSITIVE_KEYS)
-                        else v
-                    )
-                    for k, v in changes.get("modified", {}).items()
-                }
+                redacted_modified = {k: ("[REDACTED]" if any(s in k.upper() for s in SENSITIVE_KEYS) else v) for k, v in changes.get("modified", {}).items()}
                 logger.info(
                     "config.reload.diff",
                     extra={
@@ -339,18 +318,12 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
 
                 if changes["modified"]:
                     for key, change in changes["modified"].items():
-                        if any(
-                            sensitive in key.upper() for sensitive in SENSITIVE_KEYS
-                        ):
+                        if any(sensitive in key.upper() for sensitive in SENSITIVE_KEYS):
                             logger.info(f"  🔄 Modified: {key} = [REDACTED]")
                         else:
-                            logger.info(
-                                f"  🔄 Modified: {key} = {change['old']} → {change['new']}"
-                            )
+                            logger.info(f"  🔄 Modified: {key} = {change['old']} → {change['new']}")
 
-                logger.info(
-                    f"  📈 Total: +{len(changes['added'])} -{len(changes['removed'])} ~{len(changes['modified'])} ={changes['unchanged_count']}"
-                )
+                logger.info(f"  📈 Total: +{len(changes['added'])} -{len(changes['removed'])} ~{len(changes['modified'])} ={changes['unchanged_count']}")
             else:
                 logger.info("📊 No configuration changes detected")
 
@@ -398,9 +371,7 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                     },
                 )
             except Exception as e:
-                logger.warning(
-                    f"⚠️ Failed to refresh retry ladders on config reload: {e}"
-                )
+                logger.warning(f"⚠️ Failed to refresh retry ladders on config reload: {e}")
 
             # Restart janitor to pick up new config
             if _janitor_imported and restart_janitor is not None:
@@ -410,15 +381,7 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
                         _task = asyncio.create_task(restart_janitor())
-                        _task.add_done_callback(
-                            lambda t: (
-                                logger.error(
-                                    f"Janitor restart task failed: {t.exception()}"
-                                )
-                                if t.exception()
-                                else None
-                            )
-                        )
+                        _task.add_done_callback(lambda t: logger.error(f"Janitor restart task failed: {t.exception()}") if t.exception() else None)
                     else:
                         loop.run_until_complete(restart_janitor())
                 except Exception as e:
@@ -489,9 +452,7 @@ def _sighup_handler(signum: int, frame) -> None:
         if result["success"]:
             logger.info("✅ SIGHUP configuration reload completed successfully")
         else:
-            logger.error(
-                f"❌ SIGHUP configuration reload failed: {result.get('error')}"
-            )
+            logger.error(f"❌ SIGHUP configuration reload failed: {result.get('error')}")
     except Exception as e:
         logger.error(f"❌ SIGHUP handler error: {e}", exc_info=True)
 
@@ -538,10 +499,7 @@ async def _file_watcher_loop() -> None:
                             last_mtime[p] = cur_mtime
                         except OSError:
                             pass
-                        if (
-                            dig != prev
-                            and current_time - last_reload_time >= debounce_delay
-                        ):
+                        if dig != prev and current_time - last_reload_time >= debounce_delay:
                             reload_env(p)
                             last_reload_time = current_time
                         last_digests[p] = dig
@@ -588,9 +546,7 @@ def setup_config_reload() -> None:
     except (AttributeError, OSError) as e:
         logger.warning(f"⚠️ Could not install SIGHUP handler (likely Windows): {e}")
 
-    logger.info(
-        f"🔧 Configuration reload system initialized [version: {_config_version}]"
-    )
+    logger.info(f"🔧 Configuration reload system initialized [version: {_config_version}]")
 
 
 async def start_file_watcher() -> None:
@@ -635,16 +591,16 @@ async def start_file_watcher() -> None:
         except Exception:
             pass
 
-        _file_watcher_task = asyncio.create_task(
-            _file_watcher_loop(), name="config_file_watcher"
-        )
+        _file_watcher_task = asyncio.create_task(_file_watcher_loop(), name="config_file_watcher")
         _file_watcher_task.add_done_callback(
-            lambda t: logger.error(
-                f"config file watcher task failed: {t.exception()}",
-                exc_info=t.exception(),
+            lambda t: (
+                logger.error(
+                    f"config file watcher task failed: {t.exception()}",
+                    exc_info=t.exception(),
+                )
+                if t.done() and not t.cancelled() and t.exception()
+                else None
             )
-            if t.done() and not t.cancelled() and t.exception()
-            else None
         )
         logger.info(
             "config.watcher.started",

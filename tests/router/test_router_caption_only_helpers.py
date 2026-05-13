@@ -29,14 +29,8 @@ class CaptureLogger:
 def test_extract_x_api_primary_text_handles_dict_and_list_payloads() -> None:
     router = Router(DummyBot())
 
-    assert (
-        router._extract_x_api_primary_text({"data": {"text": "dict text"}})
-        == "dict text"
-    )
-    assert (
-        router._extract_x_api_primary_text({"data": [{"text": "list text"}]})
-        == "list text"
-    )
+    assert router._extract_x_api_primary_text({"data": {"text": "dict text"}}) == "dict text"
+    assert router._extract_x_api_primary_text({"data": [{"text": "list text"}]}) == "list text"
     assert router._extract_x_api_primary_text({"data": []}) == ""
     assert router._extract_x_api_primary_text(None) == ""
 
@@ -235,16 +229,12 @@ def test_format_x_video_stt_probe_result_returns_formatted_when_transcription_pr
     monkeypatch.setattr(
         Router,
         "_emit_stt_fail_event",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("emit should not be called on success")
-        ),
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("emit should not be called on success")),
     )
     monkeypatch.setattr(
         Router,
         "_format_x_video_stt_error_result",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("error formatter should not be called on success")
-        ),
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("error formatter should not be called on success")),
     )
 
     out = router._format_x_video_stt_probe_result(
@@ -382,9 +372,7 @@ async def test_format_x_with_resolved_base_text_if_available_returns_none_when_m
     monkeypatch.setattr(
         Router,
         "_format_x_tweet_with_transcription",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("formatter should not be called when base text is empty")
-        ),
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("formatter should not be called when base text is empty")),
     )
 
     out = await router._format_x_with_resolved_base_text_if_available(
@@ -618,10 +606,7 @@ def test_log_twitter_syndication_images_with_and_without_msg_id() -> None:
     )
     router._log_twitter_syndication_images(["not a url"])
 
-    assert (
-        router.logger.info_lines[0]
-        == "route.twitter.syndication | images=1 | pbs.twimg.com | msg_id=123"
-    )
+    assert router.logger.info_lines[0] == "route.twitter.syndication | images=1 | pbs.twimg.com | msg_id=123"
     assert router.logger.info_lines[1] == "route.twitter.syndication | images=1 | n/a"
 
 
@@ -681,9 +666,7 @@ def test_resolve_twitter_status_id_prefers_explicit_hint(monkeypatch) -> None:
     monkeypatch.setattr(
         Router,
         "_parse_twitter_status_id",
-        lambda _self, _url: (_ for _ in ()).throw(
-            AssertionError("parser should not be called when tweet_id is provided")
-        ),
+        lambda _self, _url: (_ for _ in ()).throw(AssertionError("parser should not be called when tweet_id is provided")),
     )
 
     assert (
@@ -741,9 +724,7 @@ def test_stt_result_has_transcription_matches_existing_truthiness() -> None:
 def test_extract_sparse_media_resolution_defaults_and_sanitizes() -> None:
     router = Router(DummyBot())
 
-    assert router._extract_sparse_media_resolution(
-        None, default_url="https://x.com/a"
-    ) == (
+    assert router._extract_sparse_media_resolution(None, default_url="https://x.com/a") == (
         "unknown",
         [],
         "https://x.com/a",
@@ -794,9 +775,7 @@ def test_format_x_transcription_if_present_returns_none_without_transcription(
     monkeypatch.setattr(
         Router,
         "_format_x_tweet_with_transcription",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("formatter should not be called")
-        ),
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("formatter should not be called")),
     )
 
     out = router._format_x_transcription_if_present(
@@ -867,9 +846,7 @@ async def test_resolve_syndication_caption_from_payload_hydrates_and_extracts(
         return {"text": "hydrated"}
 
     monkeypatch.setattr(Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate)
-    monkeypatch.setattr(
-        Router, "_extract_syndication_text", lambda _s, n: n.get("text", "")
-    )
+    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
 
     out = await router._resolve_syndication_caption_from_payload(
         "123",
@@ -899,9 +876,7 @@ async def test_resolve_syndication_caption_from_payload_returns_fallback_on_miss
     async def _maybe_hydrate_raises(self, _tweet_id, _payload, allow_tco_pointer=False):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(
-        Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate_raises
-    )
+    monkeypatch.setattr(Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate_raises)
 
     out_error = await router._resolve_syndication_caption_from_payload(
         "123",
@@ -928,14 +903,10 @@ async def test_resolve_twitter_caption_text_prefers_syndication(monkeypatch) -> 
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
     monkeypatch.setattr(Router, "_hydrate_syndication_article_if_needed", _hydrate)
-    monkeypatch.setattr(
-        Router, "_extract_syndication_text", lambda _s, n: n.get("text", "")
-    )
+    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
     monkeypatch.setattr(
         "bot.router.get_http_client",
-        lambda: (_ for _ in ()).throw(
-            AssertionError("http fallback should not be used")
-        ),
+        lambda: (_ for _ in ()).throw(AssertionError("http fallback should not be used")),
     )
 
     out = await router._resolve_twitter_caption_text("123")
@@ -972,9 +943,7 @@ async def test_resolve_twitter_caption_text_falls_back_to_fx(monkeypatch) -> Non
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
     monkeypatch.setattr(Router, "_hydrate_syndication_article_if_needed", _hydrate)
-    monkeypatch.setattr(
-        Router, "_extract_syndication_text", lambda _s, n: n.get("text", "")
-    )
+    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
     monkeypatch.setattr("bot.router.get_http_client", _get_http)
 
     out = await router._resolve_twitter_caption_text("123")
@@ -1008,9 +977,7 @@ async def test_resolve_twitter_caption_from_syndication_prefers_hydrated_text(
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
     monkeypatch.setattr(Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate)
-    monkeypatch.setattr(
-        Router, "_extract_syndication_text", lambda _s, n: n.get("text", "")
-    )
+    monkeypatch.setattr(Router, "_extract_syndication_text", lambda _s, n: n.get("text", ""))
 
     out = await router._resolve_twitter_caption_from_syndication(
         "123",

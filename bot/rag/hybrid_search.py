@@ -66,9 +66,7 @@ class HybridRAGSearch:
         self.kb_path = kb_path
         self.db_path = db_path
         self.config = config or HybridSearchConfig()
-        self.enable_rag = (
-            enable_rag and os.getenv("ENABLE_RAG", "true").lower() == "true"
-        )
+        self.enable_rag = enable_rag and os.getenv("ENABLE_RAG", "true").lower() == "true"
 
         # RAG components (lazy initialization)
         self.rag_backend: Optional[ChromaRAGBackend] = None
@@ -97,11 +95,7 @@ class HybridRAGSearch:
         }
 
         # Log configuration at startup [RAG]
-        logger.info(
-            f"[RAG] Hybrid search configured: eager_vector_load={self.config.eager_vector_load}, "
-            f"background_indexing={self.config.background_indexing}, "
-            f"indexing_workers={self.config.indexing_workers}"
-        )
+        logger.info(f"[RAG] Hybrid search configured: eager_vector_load={self.config.eager_vector_load}, background_indexing={self.config.background_indexing}, indexing_workers={self.config.indexing_workers}")
 
     async def initialize(self) -> bool:
         """
@@ -125,15 +119,11 @@ class HybridRAGSearch:
 
             if self.config.eager_vector_load:
                 # Eager mode: load vector index at startup [RAG]
-                logger.info(
-                    "[RAG] Eager vector loading enabled, initializing full RAG system..."
-                )
+                logger.info("[RAG] Eager vector loading enabled, initializing full RAG system...")
                 await self._load_vector_index()
             else:
                 # Lazy mode: defer vector index loading [RAG]
-                logger.info(
-                    "[RAG] Lazy vector loading enabled, deferring index load until first search"
-                )
+                logger.info("[RAG] Lazy vector loading enabled, deferring index load until first search")
                 self._index_state = IndexState.NOT_LOADED
 
                 # Still create basic RAG backend for reranker, but don't load vector index
@@ -148,9 +138,7 @@ class HybridRAGSearch:
 
             # Initialize background indexing queue [RAG]
             if self.config.background_indexing:
-                logger.info(
-                    f"[RAG] Initializing background indexing with {self.config.indexing_workers} workers"
-                )
+                logger.info(f"[RAG] Initializing background indexing with {self.config.indexing_workers} workers")
                 self._indexing_queue = IndexingQueue(
                     rag_backend=self.rag_backend,
                     max_queue_size=self.config.indexing_queue_size,
@@ -160,12 +148,8 @@ class HybridRAGSearch:
                 )
                 await self._indexing_queue.start_workers()
             else:
-                logger.info(
-                    "[RAG] Background indexing disabled, using synchronous processing"
-                )
-                self._indexing_queue = IndexingQueue(
-                    rag_backend=self.rag_backend, enabled=False
-                )
+                logger.info("[RAG] Background indexing disabled, using synchronous processing")
+                self._indexing_queue = IndexingQueue(rag_backend=self.rag_backend, enabled=False)
 
             self._initialized = True
 
@@ -206,9 +190,7 @@ class HybridRAGSearch:
 
             if self._index_state == IndexState.LOADING:
                 # Another task is already loading. We'll wait OUTSIDE the lock.
-                logger.debug(
-                    "[RAG] Vector index already loading, waiting for completion..."
-                )
+                logger.debug("[RAG] Vector index already loading, waiting for completion...")
                 already_loading = True
             else:
                 # We're the first to attempt loading
@@ -220,10 +202,7 @@ class HybridRAGSearch:
         # If another task is loading, wait without holding the lock to avoid deadlock
         if "already_loading" in locals() and already_loading:
             start_wait = time.time()
-            while (
-                self._index_state == IndexState.LOADING
-                and time.time() - start_wait < self.config.lazy_load_timeout
-            ):
+            while self._index_state == IndexState.LOADING and time.time() - start_wait < self.config.lazy_load_timeout:
                 await asyncio.sleep(0.1)
             return self._index_state == IndexState.LOADED
 
@@ -232,24 +211,16 @@ class HybridRAGSearch:
             vector_load_start = time.time()
 
             # Create RAG system with full vector index loading
-            self.rag_backend, self.bootstrap = await create_rag_system(
-                kb_path=self.kb_path, db_path=self.db_path, config=self.config
-            )
+            self.rag_backend, self.bootstrap = await create_rag_system(kb_path=self.kb_path, db_path=self.db_path, config=self.config)
 
             # Check collection status (for informational purposes only)
             stats = await self.rag_backend.get_collection_stats()
             total_chunks = stats.get("total_chunks", 0)
             if total_chunks == 0:
-                logger.info(
-                    "[RAG] ⚠️ Vector index loaded but collection is empty - no documents indexed yet"
-                )
-                logger.info(
-                    "[RAG] 💡 To populate the knowledge base, run: !rag bootstrap"
-                )
+                logger.info("[RAG] ⚠️ Vector index loaded but collection is empty - no documents indexed yet")
+                logger.info("[RAG] 💡 To populate the knowledge base, run: !rag bootstrap")
             else:
-                logger.info(
-                    f"[RAG] ✅ Vector index loaded successfully with {total_chunks:,} chunks"
-                )
+                logger.info(f"[RAG] ✅ Vector index loaded successfully with {total_chunks:,} chunks")
 
             self._vector_load_time = (time.time() - vector_load_start) * 1000
 
@@ -261,11 +232,7 @@ class HybridRAGSearch:
             self.search_stats["first_query_lazy_loads"] += 1
             self.search_stats["lazy_load_time_ms"] = self._vector_load_time
 
-            logger.info(
-                f"[RAG] ✔ Lazy vector index load completed: "
-                f"load_time={self._vector_load_time:.1f}ms, "
-                f"total_chunks={stats.get('total_chunks', 0)}"
-            )
+            logger.info(f"[RAG] ✔ Lazy vector index load completed: load_time={self._vector_load_time:.1f}ms, total_chunks={stats.get('total_chunks', 0)}")
 
             return True
 
@@ -317,15 +284,9 @@ class HybridRAGSearch:
             return False
 
         # Non-blocking lazy load trigger for first search
-        logger.info(
-            "[RAG] Vector index not loaded, triggering background lazy load for first search..."
-        )
+        logger.info("[RAG] Vector index not loaded, triggering background lazy load for first search...")
         _task = asyncio.create_task(self._load_vector_index(), name="rag-vector-index-lazy-load")
-        _task.add_done_callback(
-            lambda t: logger.error(f"vector index load failed: {t.exception()}", exc_info=t.exception())
-            if t.done() and not t.cancelled() and t.exception()
-            else None
-        )
+        _task.add_done_callback(lambda t: logger.error(f"vector index load failed: {t.exception()}", exc_info=t.exception()) if t.done() and not t.cancelled() and t.exception() else None)
         return False
 
     async def search(
@@ -363,39 +324,26 @@ class HybridRAGSearch:
         try:
             if search_type == "hybrid":
                 self.search_stats["hybrid_searches"] += 1
-                results = await self._hybrid_search(
-                    query, user_id, guild_id, max_results
-                )
+                results = await self._hybrid_search(query, user_id, guild_id, max_results)
             elif search_type == "vector":
                 self.search_stats["vector_searches"] += 1
-                results = await self._vector_search(
-                    query, user_id, guild_id, max_results
-                )
+                results = await self._vector_search(query, user_id, guild_id, max_results)
             elif search_type == "keyword":
                 self.search_stats["keyword_searches"] += 1
-                results = await self._keyword_search(
-                    query, user_id, guild_id, max_results
-                )
+                results = await self._keyword_search(query, user_id, guild_id, max_results)
             else:
                 raise ValueError(f"Invalid search_type: {search_type}")
 
             search_time = (time.time() - search_start) * 1000
 
             # Log search completion with metrics [RAG]
-            logger.debug(
-                f"[RAG] Search completed: type={search_type}, "
-                f"results={len(results)}, time={search_time:.1f}ms, "
-                f"index_state={self._index_state.value}"
-            )
+            logger.debug(f"[RAG] Search completed: type={search_type}, results={len(results)}, time={search_time:.1f}ms, index_state={self._index_state.value}")
 
             return results
 
         except Exception as e:
             search_time = (time.time() - search_start) * 1000
-            logger.error(
-                f"[RAG] Search failed: type={search_type}, "
-                f"time={search_time:.1f}ms, error={e}"
-            )
+            logger.error(f"[RAG] Search failed: type={search_type}, time={search_time:.1f}ms, error={e}")
 
             # Fallback to keyword search on error
             if search_type != "keyword":
@@ -416,16 +364,12 @@ class HybridRAGSearch:
         """Perform hybrid vector + keyword search with lazy loading."""
 
         # Try vector search first (with lazy loading)
-        vector_results = await self._vector_search(
-            query, user_id, guild_id, self.config.max_vector_results
-        )
+        vector_results = await self._vector_search(query, user_id, guild_id, self.config.max_vector_results)
         if vector_results is None:
             vector_results = []
 
         # Get keyword results
-        keyword_results = await self._keyword_search(
-            query, user_id, guild_id, self.config.max_keyword_results
-        )
+        keyword_results = await self._keyword_search(query, user_id, guild_id, self.config.max_keyword_results)
         if keyword_results is None:
             keyword_results = []
 
@@ -449,9 +393,7 @@ class HybridRAGSearch:
             result.search_type = "hybrid"
 
         if self.config.log_retrieval_paths:
-            logger.info(
-                f"[RAG] Hybrid search: {len(vector_results)} vector + {len(keyword_results)} keyword = {len(final_results)} final"
-            )
+            logger.info(f"[RAG] Hybrid search: {len(vector_results)} vector + {len(keyword_results)} keyword = {len(final_results)} final")
 
         return final_results
 
@@ -465,32 +407,22 @@ class HybridRAGSearch:
         """Perform vector similarity search with lazy loading."""
         # Ensure vector index is loaded before search [RAG]
         if not await self._ensure_vector_index_loaded():
-            logger.warning(
-                "[RAG] Vector search requested but index not available, falling back to keyword"
-            )
+            logger.warning("[RAG] Vector search requested but index not available, falling back to keyword")
             return await self._keyword_search(query, user_id, guild_id, max_results)
 
         if not self.rag_backend:
-            logger.warning(
-                "[RAG] Vector search requested but RAG backend not available"
-            )
+            logger.warning("[RAG] Vector search requested but RAG backend not available")
             return []
 
         try:
             # Perform vector search
-            vector_results = await self.rag_backend.search(
-                query=query, max_results=max_results, user_id=user_id, guild_id=guild_id
-            )
+            vector_results = await self.rag_backend.search(query=query, max_results=max_results, user_id=user_id, guild_id=guild_id)
 
             # Check for None results
             if vector_results is None:
-                logger.warning(
-                    "[RAG] Vector search returned None, falling back to keyword"
-                )
+                logger.warning("[RAG] Vector search returned None, falling back to keyword")
                 if self.config.fallback_to_keyword_on_failure:
-                    return await self._keyword_search(
-                        query, user_id, guild_id, max_results
-                    )
+                    return await self._keyword_search(query, user_id, guild_id, max_results)
                 return []
 
             # Convert to hybrid results
@@ -508,9 +440,7 @@ class HybridRAGSearch:
                 hybrid_results.append(hybrid_result)
 
             if self.config.log_retrieval_paths:
-                logger.info(
-                    f"[RAG] Vector search returned {len(hybrid_results)} results"
-                )
+                logger.info(f"[RAG] Vector search returned {len(hybrid_results)} results")
 
             return hybrid_results
 
@@ -537,11 +467,7 @@ class HybridRAGSearch:
 
             # Resolve SafeSearch from env (default: moderate)
             safe_env = os.getenv("SEARCH_SAFE", SafeSearch.MODERATE.value).lower()
-            safe_level = (
-                SafeSearch(safe_env)
-                if safe_env in {s.value for s in SafeSearch}
-                else SafeSearch.MODERATE
-            )
+            safe_level = SafeSearch(safe_env) if safe_env in {s.value for s in SafeSearch} else SafeSearch.MODERATE
 
             # Build query params
             try:
@@ -605,9 +531,7 @@ class HybridRAGSearch:
 
         return combined
 
-    def _deduplicate_results(
-        self, results: List[HybridSearchResult]
-    ) -> List[HybridSearchResult]:
+    def _deduplicate_results(self, results: List[HybridSearchResult]) -> List[HybridSearchResult]:
         """Remove duplicate results based on content similarity."""
         if not results:
             return results
@@ -624,9 +548,7 @@ class HybridRAGSearch:
                 if similarity > self.config.deduplication_threshold:
                     is_duplicate = True
                     if self.config.log_retrieval_paths:
-                        logger.debug(
-                            f"[RAG] Deduplicating similar result: {similarity:.3f}"
-                        )
+                        logger.debug(f"[RAG] Deduplicating similar result: {similarity:.3f}")
                     break
 
             if not is_duplicate:
@@ -685,14 +607,10 @@ class HybridRAGSearch:
                 )
                 enq_ok = await self._indexing_queue.enqueue_task(task)
                 if enq_ok:
-                    logger.info(
-                        f"[RAG] Enqueued document for background indexing: {source_id}"
-                    )
+                    logger.info(f"[RAG] Enqueued document for background indexing: {source_id}")
                     return True
                 else:
-                    logger.warning(
-                        f"[RAG] Indexing queue full, processing document synchronously: {source_id}"
-                    )
+                    logger.warning(f"[RAG] Indexing queue full, processing document synchronously: {source_id}")
                     # Fall through to synchronous path
 
             # Synchronous processing (background disabled or enqueue failed)

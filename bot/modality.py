@@ -74,9 +74,7 @@ class InputItem:
     def __post_init__(self):
         """Validate input item data [IV]."""
         if self.source_type not in ("attachment", "url", "embed"):
-            logger.warning(
-                f"Invalid source_type: {self.source_type}, treating as unknown"
-            )
+            logger.warning(f"Invalid source_type: {self.source_type}, treating as unknown")
         if self.order_index < 0:
             raise ValueError(f"Invalid order_index: {self.order_index}")
 
@@ -109,11 +107,7 @@ def collect_input_items(message: Message) -> List[InputItem]:
 
     # Add attachments (they appear after text content)
     for attachment in message.attachments:
-        items.append(
-            InputItem(
-                source_type="attachment", payload=attachment, order_index=order_index
-            )
-        )
+        items.append(InputItem(source_type="attachment", payload=attachment, order_index=order_index))
         order_index += 1
 
     # Add embeds (they appear last)
@@ -143,17 +137,13 @@ def collect_input_items(message: Message) -> List[InputItem]:
                     return any(h in u for h in video_hosts)
 
                 if _host_match(embed_url) and any(_host_match(u) for u in urls):
-                    logger.info(
-                        "🧹 Skipping video preview embed; corresponding video URL present in message"
-                    )
+                    logger.info("🧹 Skipping video preview embed; corresponding video URL present in message")
                     continue
         except Exception as _e:
             # Non-fatal: proceed to include the embed if dedupe check fails [REH]
             logger.debug(f"Embed dedupe check failed: {_e}")
 
-        items.append(
-            InputItem(source_type="embed", payload=embed, order_index=order_index)
-        )
+        items.append(InputItem(source_type="embed", payload=embed, order_index=order_index))
         order_index += 1
 
     logger.info(f"📋 Collected {len(items)} input items from message {message.id}")
@@ -200,10 +190,7 @@ def collect_image_urls_from_message(message: Message) -> List[ImageRef]:
                     candidates.append(attachment.proxy_url)
 
                 # Add 4096 variant for media.discordapp.net
-                if (
-                    "media.discordapp.net" in attachment.url
-                    and "?format=" not in attachment.url
-                ):
+                if "media.discordapp.net" in attachment.url and "?format=" not in attachment.url:
                     candidates.append(f"{attachment.url}?format=png&size=4096")
 
                 images.append(
@@ -292,9 +279,7 @@ async def _map_attachment_to_modality(attachment: discord.Attachment) -> InputMo
     filename_lower = attachment.filename.lower()
 
     # Check for Discord voice message flag [IV]
-    is_voice_message = getattr(attachment, "voice_message", False) or getattr(
-        attachment, "is_voice_message", False
-    )
+    is_voice_message = getattr(attachment, "voice_message", False) or getattr(attachment, "is_voice_message", False)
 
     # Image attachments
     if content_type.startswith("image/"):
@@ -426,9 +411,7 @@ async def _map_url_to_modality(url: str) -> InputModality:
         r"https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com/.+/status/\d+",
         url,
     ):
-        logger.info(
-            f"➡️ Routing Twitter/X status URL to GENERAL_URL for API-first: {url}"
-        )
+        logger.info(f"➡️ Routing Twitter/X status URL to GENERAL_URL for API-first: {url}")
         return InputModality.GENERAL_URL
 
     # News/article site guards - prefer web scraping over STT [REH]
@@ -446,9 +429,7 @@ async def _map_url_to_modality(url: str) -> InputModality:
         "arxiv.org",
         "www.arxiv.org",
     }
-    if host in article_domains or any(
-        host.endswith(f".{d}") for d in ("substack.com",)
-    ):
+    if host in article_domains or any(host.endswith(f".{d}") for d in ("substack.com",)):
         logger.debug(f"url.classify type=GENERAL_URL (article_domain) url={url[:80]}")
         return InputModality.GENERAL_URL
 
@@ -461,13 +442,9 @@ async def _map_url_to_modality(url: str) -> InputModality:
 
             # Pre-compile patterns for performance
             _VIDEO_PATTERNS = [re.compile(pattern) for pattern in SUPPORTED_PATTERNS]
-            logger.debug(
-                f"🎥 Loaded and compiled {len(_VIDEO_PATTERNS)} video patterns"
-            )
+            logger.debug(f"🎥 Loaded and compiled {len(_VIDEO_PATTERNS)} video patterns")
         except ImportError as e:
-            logger.warning(
-                f"Could not import SUPPORTED_PATTERNS from video_ingest: {e}, using fallback patterns"
-            )
+            logger.warning(f"Could not import SUPPORTED_PATTERNS from video_ingest: {e}, using fallback patterns")
             _VIDEO_PATTERNS = _FALLBACK_PATTERNS
 
     # Test video patterns with compiled regex

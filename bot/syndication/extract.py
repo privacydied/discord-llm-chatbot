@@ -77,22 +77,12 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
 
     # Prefer long-form note tweets when present, then legacy/full_text, then text/article
     note = tw.get("note_tweet") or {}
-    base_text = (
-        (note.get("text") if isinstance(note, dict) else None)
-        or (tw.get("legacy", {}) or {}).get("full_text")
-        or tw.get("full_text")
-        or tw.get("text")
-        or ""
-    )
+    base_text = (note.get("text") if isinstance(note, dict) else None) or (tw.get("legacy", {}) or {}).get("full_text") or tw.get("full_text") or tw.get("text") or ""
     base_text = (base_text or "").strip()
     article_text = _extract_article_text(tw.get("article") or {})
     if article_text:
         if base_text and not re.search(r"https?://t\.co/[A-Za-z0-9]+", base_text):
-            text = (
-                base_text
-                if article_text in base_text
-                else f"{base_text}\n\n[Linked X Article]\n{article_text}"
-            )
+            text = base_text if article_text in base_text else f"{base_text}\n\n[Linked X Article]\n{article_text}"
         else:
             text = article_text
     else:
@@ -122,12 +112,7 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
                     raw = m.get("media_url_https") or m.get("url")
                 elif mtype in ("video", "animated_gif"):
                     # Prefer poster/thumbnail; fallback to media_url_https/url if present
-                    raw = (
-                        m.get("thumbnail_url")
-                        or m.get("poster")
-                        or m.get("media_url_https")
-                        or m.get("url")
-                    )
+                    raw = m.get("thumbnail_url") or m.get("poster") or m.get("media_url_https") or m.get("url")
                 if raw:
                     urls.append(upgrade_pbs_to_orig(raw))
             except Exception:
@@ -165,10 +150,7 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
             if not c:
                 continue
             lc = c.lower()
-            if any(
-                tok in lc
-                for tok in ("favicon", "apple-touch", "android-chrome", "icon-")
-            ):
+            if any(tok in lc for tok in ("favicon", "apple-touch", "android-chrome", "icon-")):
                 continue
             filtered.append(c)
         if filtered:
@@ -233,9 +215,7 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
     try:
         from bot.metrics import METRICS  # type: ignore
 
-        METRICS.counter("x.syndication.photos_extracted").inc(
-            len(tw.get("photos") or [])
-        )
+        METRICS.counter("x.syndication.photos_extracted").inc(len(tw.get("photos") or []))
         METRICS.counter("x.syndication.photos_highres").inc(len(image_urls))
     except Exception:
         pass
@@ -305,14 +285,9 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
             has_video_info = bool(media.get("video_info"))
             has_variants = bool(media.get("video_variants") or media.get("video_urls"))
             has_duration = bool(media.get("duration_ms") or media.get("media_duration"))
-            has_poster = bool(
-                media.get("poster")
-                or media.get("thumbnail_url")
-                or media.get("media_url_https")
-            )
+            has_poster = bool(media.get("poster") or media.get("thumbnail_url") or media.get("media_url_https"))
             log.info(
-                "syndication_has_video: media_check node=%s source=%s idx=%d type=%s "
-                "has_video_info=%s has_variants=%s has_duration=%s has_poster=%s",
+                "syndication_has_video: media_check node=%s source=%s idx=%d type=%s has_video_info=%s has_variants=%s has_duration=%s has_poster=%s",
                 node_name,
                 source,
                 idx,

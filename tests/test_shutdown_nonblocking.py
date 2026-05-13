@@ -29,9 +29,7 @@ async def test_save_all_data_runs_profile_flush_off_event_loop(monkeypatch):
         return func(*args, **kwargs)
 
     monkeypatch.setattr(shutdown_mod, "save_all_profiles", fake_save_all_profiles)
-    monkeypatch.setattr(
-        shutdown_mod, "save_all_server_profiles", fake_save_all_server_profiles
-    )
+    monkeypatch.setattr(shutdown_mod, "save_all_server_profiles", fake_save_all_server_profiles)
     monkeypatch.setattr(shutdown_mod.asyncio, "to_thread", fake_to_thread)
 
     await shutdown._save_all_data()

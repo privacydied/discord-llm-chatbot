@@ -53,9 +53,7 @@ async def demo_chat():
 
         try:
             # Generate a response
-            response = await generate_response(
-                prompt=message, user_id=user_id, max_tokens=200, temperature=0.7
-            )
+            response = await generate_response(prompt=message, user_id=user_id, max_tokens=200, temperature=0.7)
 
             print(f"\nBot: {response['text'].strip()}")
 
@@ -83,9 +81,7 @@ async def demo_memory():
         user_profile["memories"] = []
 
     memory = "User prefers to be called 'Demo User'"
-    user_profile["memories"].append(
-        {"content": memory, "timestamp": str(asyncio.get_event_loop().time())}
-    )
+    user_profile["memories"].append({"content": memory, "timestamp": str(asyncio.get_event_loop().time())})
 
     # Save the profile
     save_profile(user_profile, force=True)

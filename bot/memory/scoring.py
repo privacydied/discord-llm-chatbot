@@ -58,9 +58,7 @@ def combined_score(
 
     sem = max(0.0, min(1.0, float(semantic_score)))
     imp = max(0.0, min(1.0, float(importance)))
-    rec = recency_score(
-        created_at, last_accessed_at=last_accessed_at, expires_at=expires_at, now=now
-    )
+    rec = recency_score(created_at, last_accessed_at=last_accessed_at, expires_at=expires_at, now=now)
 
     final_score = sem * 0.65 + imp * 0.20 + rec * 0.15 + max(0.0, scope_boost)
     return max(0.0, min(1.0, final_score))

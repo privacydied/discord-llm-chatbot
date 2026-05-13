@@ -39,23 +39,17 @@ class BotAction:
 
         # First layer: check for new reasoning leak patterns
         if has_reasoning_leakage(content):
-            logger.warning(
-                "Final safety net triggered - sanitizing content with reasoning leakage"
-            )
+            logger.warning("Final safety net triggered - sanitizing content with reasoning leakage")
             return extract_public_reply_text(content)
 
         # Second layer: legacy VL postprocess
         vl_handled = False
         if has_reasoning_content(content):
-            logger.warning(
-                "VL safety net triggered - sanitizing content with reasoning patterns"
-            )
+            logger.warning("VL safety net triggered - sanitizing content with reasoning patterns")
             try:
                 sanitized = sanitize_model_output(content)
                 if len(sanitized) < len(content) * 0.8:
-                    logger.info(
-                        "VL safety net removed %d chars", len(content) - len(sanitized)
-                    )
+                    logger.info("VL safety net removed %d chars", len(content) - len(sanitized))
                     vl_handled = True
                     content = sanitized
             except Exception as e:

@@ -36,9 +36,7 @@ def test_parse_dm_chat_message(mock_bot):
     msg.content = "just a regular message"
     msg.channel = MagicMock(spec=discord.DMChannel)
     result = parse_command(msg, mock_bot)
-    assert result == ParsedCommand(
-        command=Command.CHAT, cleaned_content="just a regular message"
-    )
+    assert result == ParsedCommand(command=Command.CHAT, cleaned_content="just a regular message")
 
 
 # --- Guild Scenarios ---

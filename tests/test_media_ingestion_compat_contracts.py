@@ -44,12 +44,8 @@ async def test_fallback_nonawaitable_router_path_uses_brain_fallback() -> None:
     message.id = 1
     expected = BotAction(content="brain fallback response")
 
-    with patch(
-        "bot.media_ingestion.brain_infer", new=AsyncMock(return_value=expected)
-    ) as brain_mock:
-        result = await manager._create_bot_action_from_fallback(
-            fallback_result, message
-        )
+    with patch("bot.media_ingestion.brain_infer", new=AsyncMock(return_value=expected)) as brain_mock:
+        result = await manager._create_bot_action_from_fallback(fallback_result, message)
 
     assert result == expected
     brain_mock.assert_awaited_once()

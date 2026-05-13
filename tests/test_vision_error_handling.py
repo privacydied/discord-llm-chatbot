@@ -6,9 +6,7 @@ Tests robust error handling patterns for external API calls.
 import pytest
 
 # Skip all tests — many require live vision API or depend on see_infer internals
-pytestmark = pytest.mark.skip(
-    reason="Requires live vision API integration; see_infer internals need refactoring"
-)
+pytestmark = pytest.mark.skip(reason="Requires live vision API integration; see_infer internals need refactoring")
 
 from unittest.mock import AsyncMock, MagicMock, patch, mock_open
 from openai import InternalServerError
@@ -54,9 +52,7 @@ class TestRetryUtils:
         config = RetryConfig()
 
         # Test 502 error (should be retryable)
-        error_502 = APIError(
-            "Error code: 502 - {'error': {'message': 'Provider returned error'}}"
-        )
+        error_502 = APIError("Error code: 502 - {'error': {'message': 'Provider returned error'}}")
         assert is_retryable_error(error_502, config) is True
 
         # Test 500 error (should be retryable)
@@ -89,9 +85,7 @@ class TestRetryUtils:
 
     def test_calculate_delay(self):
         """Test delay calculation with exponential backoff."""
-        config = RetryConfig(
-            base_delay=1.0, exponential_base=2.0, max_delay=10.0, jitter=False
-        )
+        config = RetryConfig(base_delay=1.0, exponential_base=2.0, max_delay=10.0, jitter=False)
 
         # Test exponential backoff
         assert calculate_delay(0, config) == 1.0  # 1.0 * 2^0
@@ -263,9 +257,7 @@ class TestVisionErrorHandling:
                 )
             return MagicMock(
                 choices=[MagicMock(message=MagicMock(content="Success after retries"))],
-                usage=MagicMock(
-                    prompt_tokens=10, completion_tokens=20, total_tokens=30
-                ),
+                usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30),
             )
 
         with (
@@ -282,9 +274,7 @@ class TestVisionErrorHandling:
             }
 
             # Mock the image processing to return a valid data URL
-            mock_get_image.return_value = (
-                "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD//gA7Q1JFQVR"
-            )
+            mock_get_image.return_value = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD//gA7Q1JFQVR"
 
             with patch("bot.openai_backend.openai.AsyncOpenAI") as mock_client_class:
                 mock_client = AsyncMock()
@@ -292,9 +282,7 @@ class TestVisionErrorHandling:
                 mock_client_class.return_value = mock_client
 
                 # This should succeed after retries
-                result = await openai_generate_vl_response(
-                    "/fake/path.jpg", "test prompt"
-                )
+                result = await openai_generate_vl_response("/fake/path.jpg", "test prompt")
 
                 assert result["text"] == "Success after retries"
                 assert call_count == 3  # Should have retried twice
@@ -329,9 +317,7 @@ class TestRouterErrorHandling:
             elif "format is not supported" in error_str:
                 response = "🖼️ This image format is not supported. Please try uploading a JPEG, PNG, or WebP image."
             elif "too large" in error_str:
-                response = (
-                    "📏 This image is too large. Please try uploading a smaller image."
-                )
+                response = "📏 This image is too large. Please try uploading a smaller image."
             elif "could not be processed" in error_str:
                 response = "📁 The image could not be processed. Please try uploading it again."
             else:

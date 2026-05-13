@@ -174,6 +174,7 @@ def _build_service(store, semantic):
 
 # ---- Part A: resolve_memory_subject_user_id --------------------------------
 
+
 def test_resolve_memory_subject_is_author_id():
     """'me/myself' always resolves to message.author.id."""
     msg = MagicMock()
@@ -201,6 +202,7 @@ def test_self_recall_intent_patterns():
 
 
 # ---- Part B / D: owner-scope filtering + safe disclosure -------------------
+
 
 class TestOwnerScopeAndSafeDisclosure:
     """Tests that build_prompt_block is strictly owner-scoped with safe disclosure."""
@@ -329,8 +331,8 @@ class TestOwnerScopeAndSafeDisclosure:
 
 # ---- Sensitive memory filtering ---------------------------------------------
 
-class TestSensitiveMemoryDisclosure:
 
+class TestSensitiveMemoryDisclosure:
     @pytest.fixture
     def svc_with_sensitive(self):
         store = _fake_persistent_store()
@@ -417,8 +419,8 @@ class TestSensitiveMemoryDisclosure:
 
 # ---- Orphan memories (missing user_id) --------------------------------------
 
-class TestOrphanMemories:
 
+class TestOrphanMemories:
     @pytest.fixture
     def svc_with_orphan(self):
         store = _fake_persistent_store()
@@ -485,6 +487,7 @@ class TestOrphanMemories:
 
 # ---- inferred memory blocking -----------------------------------------------
 
+
 class TestInferredMemorySensitiveBlocking:
     """Inferred memories must not include sexual, body, drug, medical, identity, or slur content."""
 
@@ -500,15 +503,11 @@ class TestInferredMemorySensitiveBlocking:
             "I like to be nude",
         ]
         for t in texts:
-            result = curator.curate_inferred_candidate(
-                user_id="111", text=t, guild_id="g1"
-            )
+            result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should be blocked: {t!r}"
 
     def test_body_size_claims_blocked(self, curator):
-        result = curator.curate_inferred_candidate(
-            user_id="111", text="I am overweight and my weight is 200kg", guild_id="g1"
-        )
+        result = curator.curate_inferred_candidate(user_id="111", text="I am overweight and my weight is 200kg", guild_id="g1")
         assert result is None
 
     def test_drug_references_blocked(self, curator):
@@ -518,9 +517,7 @@ class TestInferredMemorySensitiveBlocking:
             "I use xanax for sleep",
             "I bought meth from someone",
         ]:
-            result = curator.curate_inferred_candidate(
-                user_id="111", text=t, guild_id="g1"
-            )
+            result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should block drugs: {t!r}"
 
     def test_medical_claims_blocked(self, curator):
@@ -530,9 +527,7 @@ class TestInferredMemorySensitiveBlocking:
             "I see my therapist every week",
             "I have adhd and bipolar disorder",
         ]:
-            result = curator.curate_inferred_candidate(
-                user_id="111", text=t, guild_id="g1"
-            )
+            result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should block medical: {t!r}"
 
     def test_protected_identity_blocked(self, curator):
@@ -542,16 +537,12 @@ class TestInferredMemorySensitiveBlocking:
             "I am transgender",
             "I am bisexual",
         ]:
-            result = curator.curate_inferred_candidate(
-                user_id="111", text=t, guild_id="g1"
-            )
+            result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should block identity: {t!r}"
 
     def test_slurs_blocked(self, curator):
         for t in ["that guy is a faggot", "retard moment"]:
-            result = curator.curate_inferred_candidate(
-                user_id="111", text=t, guild_id="g1"
-            )
+            result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should block slurs: {t!r}"
 
     def test_third_party_anecdote_blocked(self, curator):
@@ -560,9 +551,7 @@ class TestInferredMemorySensitiveBlocking:
             "someone said the movie was terrible",
             "my bro did something crazy at the bar",
         ]:
-            result = curator.curate_inferred_candidate(
-                user_id="111", text=t, guild_id="g1"
-            )
+            result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should block third party: {t!r}"
 
     def test_safe_preference_accepted(self, curator):
@@ -577,8 +566,8 @@ class TestInferredMemorySensitiveBlocking:
 
 # ---- explicit memory-add still saves for requesting user --------------------
 
-class TestExplicitMemoryAddStillWorks:
 
+class TestExplicitMemoryAddStillWorks:
     @pytest.fixture
     def svc(self):
         store = _fake_persistent_store()
@@ -642,8 +631,8 @@ class TestExplicitMemoryAddStillWorks:
 
 # ---- delete_memory requires owner_id ----------------------------------------
 
-class TestDeleteMemoryOwnership:
 
+class TestDeleteMemoryOwnership:
     @pytest.fixture
     def svc(self):
         store = _fake_persistent_store()
@@ -673,6 +662,7 @@ class TestDeleteMemoryOwnership:
 
 
 # ---- is_public_safe helper -------------------------------------------------
+
 
 class TestPublicSafeHelper:
     """Safe disclosure filter correctness."""

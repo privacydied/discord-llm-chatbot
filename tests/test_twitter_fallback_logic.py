@@ -45,9 +45,7 @@ async def test_twitter_fallback_behavior():
     print("\n📋 Step 1: Testing initial modality detection")
     for case in test_cases:
         url = case["url"]
-        modality = await map_item_to_modality(
-            InputItem(source_type="url", payload=url, order_index=0)
-        )
+        modality = await map_item_to_modality(InputItem(source_type="url", payload=url, order_index=0))
         print(f"   {case['description']}: {modality}")
 
         if modality != InputModality.VIDEO_URL:
@@ -81,21 +79,15 @@ async def test_twitter_fallback_behavior():
 
             # Mock hear_infer_from_url to simulate "No video found" error
             with patch("bot.router.hear_infer_from_url") as mock_hear:
-                mock_hear.side_effect = VideoIngestError(
-                    "yt-dlp metadata extraction failed: ERROR: [twitter] 1953657907964477640: No video could be found in this tweet"
-                )
+                mock_hear.side_effect = VideoIngestError("yt-dlp metadata extraction failed: ERROR: [twitter] 1953657907964477640: No video could be found in this tweet")
 
                 # Mock _handle_image to simulate successful screenshot processing
-                with patch.object(
-                    router, "_handle_image", new_callable=AsyncMock
-                ) as mock_handle_image:
+                with patch.object(router, "_handle_image", new_callable=AsyncMock) as mock_handle_image:
                     mock_handle_image.return_value = "Image analysis of tweet: This appears to be a text/image tweet with no video content."
 
                     try:
                         result = await router._handle_video_url(item)
-                        print(
-                            f"   ✅ PASS: Fallback successful, result: {result[:100]}..."
-                        )
+                        print(f"   ✅ PASS: Fallback successful, result: {result[:100]}...")
 
                         # Verify that _handle_image was called (fallback happened)
                         mock_handle_image.assert_called_once_with(item)
@@ -115,9 +107,7 @@ async def test_twitter_fallback_behavior():
 
                 try:
                     result = await router._handle_video_url(item)
-                    print(
-                        f"   ✅ PASS: Video processing successful, result: {result[:100]}..."
-                    )
+                    print(f"   ✅ PASS: Video processing successful, result: {result[:100]}...")
 
                 except Exception as e:
                     print(f"   ❌ FAIL: Video processing failed: {e}")
@@ -158,11 +148,7 @@ async def test_error_patterns():
 
     for error_msg in fallback_triggers:
         error_str = error_msg.lower()
-        no_video_found = (
-            "no video could be found" in error_str
-            or "no video" in error_str
-            or "video extraction failed" in error_str
-        )
+        no_video_found = "no video could be found" in error_str or "no video" in error_str or "video extraction failed" in error_str
 
         if no_video_found:
             print(f"   ✅ PASS: '{error_msg[:50]}...' correctly triggers fallback")
@@ -172,11 +158,7 @@ async def test_error_patterns():
 
     for error_msg in non_fallback_errors:
         error_str = error_msg.lower()
-        no_video_found = (
-            "no video could be found" in error_str
-            or "no video" in error_str
-            or "video extraction failed" in error_str
-        )
+        no_video_found = "no video could be found" in error_str or "no video" in error_str or "video extraction failed" in error_str
 
         if not no_video_found:
             print(f"   ✅ PASS: '{error_msg}' correctly does NOT trigger fallback")
@@ -199,9 +181,7 @@ if __name__ == "__main__":
             print("\n🚀 The bot will now:")
             print("   • Try video extraction first on ALL tweet URLs")
             print("   • Fall back to screenshot + VL for tweets without video")
-            print(
-                "   • Preserve full video processing for tweets with actual video content"
-            )
+            print("   • Preserve full video processing for tweets with actual video content")
         else:
             print("\n❌ Some fallback tests failed. Please check the implementation.")
 

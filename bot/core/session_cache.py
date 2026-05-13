@@ -90,9 +90,7 @@ class UserProfile:
     def _trim_history(self):
         """Trim conversation history to fit token budget [PA]."""
         max_tokens = PC.HISTORY_MAX_TOKENS_DM
-        current_chars = sum(
-            len(msg.get("content", "")) for msg in self.conversation_history
-        )
+        current_chars = sum(len(msg.get("content", "")) for msg in self.conversation_history)
 
         # Simple token estimation: 4 chars ≈ 1 token
         estimated_tokens = current_chars // 4
@@ -145,9 +143,7 @@ class SessionCache:
             "avg_access_time_ms": 0,
         }
 
-        logger.info(
-            f"💾 SessionCache initialized (max_entries: {max_entries}, ttl: {self.default_ttl}s)"
-        )
+        logger.info(f"💾 SessionCache initialized (max_entries: {max_entries}, ttl: {self.default_ttl}s)")
 
         # Start background cleanup
         self._start_cleanup_task()
@@ -193,9 +189,7 @@ class SessionCache:
         cleanup_time_ms = int((time.time() - cleanup_start) * 1000)
 
         if removed_count > 0:
-            logger.debug(
-                f"🗑️ Cleaned {removed_count} expired cache entries ({cleanup_time_ms}ms)"
-            )
+            logger.debug(f"🗑️ Cleaned {removed_count} expired cache entries ({cleanup_time_ms}ms)")
 
     def _evict_lru(self, cache: OrderedDict, max_size: int = None):
         """Evict least recently used entries when cache is full [PA]."""
@@ -208,9 +202,7 @@ class SessionCache:
             self.stats["evictions"] += 1
             logger.debug(f"🗑️ Evicted LRU cache entry: {key}")
 
-    async def get_user_profile(
-        self, user_id: str, tracker: Optional[PipelineTracker] = None
-    ) -> Optional[UserProfile]:
+    async def get_user_profile(self, user_id: str, tracker: Optional[PipelineTracker] = None) -> Optional[UserProfile]:
         """Get user profile from cache or return None if not found [PA]."""
         start_time = time.time()
 
@@ -251,9 +243,7 @@ class SessionCache:
 
             return None
 
-    async def set_user_profile(
-        self, user_id: str, profile: UserProfile, ttl_seconds: Optional[int] = None
-    ):
+    async def set_user_profile(self, user_id: str, profile: UserProfile, ttl_seconds: Optional[int] = None):
         """Cache user profile with TTL [PA]."""
         ttl = ttl_seconds or self.default_ttl
 
@@ -268,9 +258,7 @@ class SessionCache:
 
         logger.debug(f"💾 Cached user profile: {user_id} (ttl: {ttl}s)")
 
-    async def get_server_context(
-        self, guild_id: str, tracker: Optional[PipelineTracker] = None
-    ) -> Optional[ServerContext]:
+    async def get_server_context(self, guild_id: str, tracker: Optional[PipelineTracker] = None) -> Optional[ServerContext]:
         """Get server context from cache [PA]."""
         start_time = time.time()
 
@@ -282,9 +270,7 @@ class SessionCache:
             context = entry.access()
             access_time_ms = int((time.time() - start_time) * 1000)
 
-            logger.debug(
-                f"✅ Server context cache HIT: {guild_id} ({access_time_ms}ms)"
-            )
+            logger.debug(f"✅ Server context cache HIT: {guild_id} ({access_time_ms}ms)")
             return context
         else:
             self.stats["cache_misses"] += 1
@@ -295,9 +281,7 @@ class SessionCache:
 
             return None
 
-    async def set_server_context(
-        self, guild_id: str, context: ServerContext, ttl_seconds: Optional[int] = None
-    ):
+    async def set_server_context(self, guild_id: str, context: ServerContext, ttl_seconds: Optional[int] = None):
         """Cache server context with TTL [PA]."""
         ttl = ttl_seconds or self.default_ttl
 
@@ -342,9 +326,7 @@ class SessionCache:
             del self.server_contexts[guild_id]
             logger.debug(f"🗑️ Invalidated server cache: {guild_id}")
 
-    async def update_user_interaction(
-        self, user_id: str, message_content: str, role: str = "user"
-    ):
+    async def update_user_interaction(self, user_id: str, message_content: str, role: str = "user"):
         """Update user profile with new interaction [PA]."""
         profile = await self.get_user_profile(user_id)
 
@@ -361,16 +343,10 @@ class SessionCache:
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get detailed cache performance statistics [PA]."""
         total_requests = self.stats["cache_hits"] + self.stats["cache_misses"]
-        hit_rate = (
-            self.stats["cache_hits"] / total_requests if total_requests > 0 else 0
-        )
+        hit_rate = self.stats["cache_hits"] / total_requests if total_requests > 0 else 0
 
         # Calculate total entries and estimated memory usage
-        total_entries = (
-            len(self.user_profiles)
-            + len(self.server_contexts)
-            + len(self.generic_cache)
-        )
+        total_entries = len(self.user_profiles) + len(self.server_contexts) + len(self.generic_cache)
 
         estimated_memory_kb = (
             sum(
@@ -456,13 +432,9 @@ class ContextManager:
                     context["context_summary"] = profile.context_summary
 
                     if include_history:
-                        context["conversation_history"] = profile.get_recent_context(
-                            max_history_messages
-                        )
+                        context["conversation_history"] = profile.get_recent_context(max_history_messages)
 
-                    phase_metric.metadata["profile_messages"] = len(
-                        profile.conversation_history
-                    )
+                    phase_metric.metadata["profile_messages"] = len(profile.conversation_history)
                     phase_metric.metadata["cache_hit"] = True
                 else:
                     phase_metric.metadata["cache_hit"] = False
@@ -474,9 +446,7 @@ class ContextManager:
                 context["preferences"] = profile.preferences.copy()
                 context["context_summary"] = profile.context_summary
                 if include_history:
-                    context["conversation_history"] = profile.get_recent_context(
-                        max_history_messages
-                    )
+                    context["conversation_history"] = profile.get_recent_context(max_history_messages)
 
         return context
 

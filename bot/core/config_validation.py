@@ -233,10 +233,7 @@ class ConfigValidator:
 
         # Required field validation
         if constraint.required and not value:
-            return (
-                constraint.error_message
-                or f"Required configuration '{constraint.key}' is missing"
-            )
+            return constraint.error_message or f"Required configuration '{constraint.key}' is missing"
 
         # Skip further validation if field is not set and not required
         if not value:
@@ -254,10 +251,7 @@ class ConfigValidator:
                 else:
                     typed_value = constraint.value_type(value)
             except (ValueError, TypeError):
-                return (
-                    f"Configuration '{constraint.key}' must be of type "
-                    f"{constraint.value_type.__name__}"
-                )
+                return f"Configuration '{constraint.key}' must be of type {constraint.value_type.__name__}"
         else:
             typed_value = value
 
@@ -269,20 +263,10 @@ class ConfigValidator:
         # Numeric range validation
         if constraint.min_value is not None or constraint.max_value is not None:
             try:
-                numeric_value = (
-                    float(typed_value)
-                    if constraint.value_type is not int
-                    else int(typed_value)
-                )
-                if (
-                    constraint.min_value is not None
-                    and numeric_value < constraint.min_value
-                ):
+                numeric_value = float(typed_value) if constraint.value_type is not int else int(typed_value)
+                if constraint.min_value is not None and numeric_value < constraint.min_value:
                     return f"Configuration '{constraint.key}' value {numeric_value} is below minimum {constraint.min_value}"
-                if (
-                    constraint.max_value is not None
-                    and numeric_value > constraint.max_value
-                ):
+                if constraint.max_value is not None and numeric_value > constraint.max_value:
                     return f"Configuration '{constraint.key}' value {numeric_value} is above maximum {constraint.max_value}"
             except (ValueError, TypeError):
                 return f"Configuration '{constraint.key}' must be numeric for range validation"
@@ -299,10 +283,7 @@ class ConfigValidator:
         if constraint.validator:
             try:
                 if not constraint.validator(value):
-                    return (
-                        constraint.error_message
-                        or f"Configuration '{constraint.key}' failed custom validation"
-                    )
+                    return constraint.error_message or f"Configuration '{constraint.key}' failed custom validation"
             except Exception as e:
                 return f"Configuration '{constraint.key}' custom validator error: {e}"
 
@@ -318,21 +299,15 @@ class ConfigValidator:
         ollama_host = os.getenv("OLLAMA_HOST")
 
         if not any([openai_key, anthropic_key, ollama_host]):
-            errors.append(
-                "At least one AI provider must be configured: OPENAI_API_KEY, ANTHROPIC_API_KEY, or OLLAMA_HOST"
-            )
+            errors.append("At least one AI provider must be configured: OPENAI_API_KEY, ANTHROPIC_API_KEY, or OLLAMA_HOST")
 
         # Prometheus configuration consistency
-        prometheus_enabled = (
-            os.getenv("OBS_ENABLE_PROMETHEUS", "false").lower() == "true"
-        )
+        prometheus_enabled = os.getenv("OBS_ENABLE_PROMETHEUS", "false").lower() == "true"
         prometheus_port = os.getenv("PROMETHEUS_PORT")
         prometheus_http = os.getenv("PROMETHEUS_HTTP_SERVER", "true").lower() == "true"
 
         if prometheus_enabled and prometheus_http and not prometheus_port:
-            errors.append(
-                "PROMETHEUS_PORT must be set when Prometheus HTTP server is enabled"
-            )
+            errors.append("PROMETHEUS_PORT must be set when Prometheus HTTP server is enabled")
 
         # Vision fallback ladder — warn on duplicate entries [Phase 17-23]
         self._validate_vision_fallback_ladder()
@@ -372,7 +347,6 @@ class ConfigValidator:
         except Exception:
             pass
 
-
     def _validate_vision_fallback_ladder(self) -> None:
         """Log a warning if VISION_IMAGE_FALLBACK_MODELS contains duplicates."""
         try:
@@ -404,9 +378,7 @@ class ConfigValidator:
 
             cfg = load_config()
             raw_models = cfg.get("VISION_IMAGE_FALLBACK_MODELS", "")
-            raw_timeouts = os.getenv("VISION_FALBACK_TIMEOUTS") or os.getenv(
-                "VISION_FALLBACK_TIMEOUTS"
-            )
+            raw_timeouts = os.getenv("VISION_FALBACK_TIMEOUTS") or os.getenv("VISION_FALLBACK_TIMEOUTS")
             if not raw_models or not raw_timeouts:
                 return
             model_count = len([m for m in raw_models.split(",") if m.strip()])
@@ -425,15 +397,10 @@ class ConfigValidator:
         try:
             backend = os.getenv("TTS_BACKEND", "")
             if backend == "kokoro-v8":
-                allow_experimental = os.getenv(
-                    "TTS_ALLOW_EXPERIMENTAL", "false"
-                ).lower() in ("true", "1", "yes")
+                allow_experimental = os.getenv("TTS_ALLOW_EXPERIMENTAL", "false").lower() in ("true", "1", "yes")
                 if not allow_experimental:
                     self.logger.warning(
-                        "config:tts_backend_experimental "
-                        "TTS_BACKEND=kokoro-v8 is experimental and not production-ready. "
-                        "Set TTS_ALLOW_EXPERIMENTAL=true to acknowledge this, "
-                        "or use TTS_BACKEND=kokoro-onnx (recommended)."
+                        "config:tts_backend_experimental TTS_BACKEND=kokoro-v8 is experimental and not production-ready. Set TTS_ALLOW_EXPERIMENTAL=true to acknowledge this, or use TTS_BACKEND=kokoro-onnx (recommended)."
                     )
         except Exception:
             pass
@@ -459,9 +426,7 @@ class HealthMonitor:
         self.components: Dict[str, ComponentHealth] = {}
         self._last_event_loop_check = time.time()
 
-    def register_component(
-        self, name: str, status: HealthStatus = HealthStatus.NOT_READY
-    ) -> None:
+    def register_component(self, name: str, status: HealthStatus = HealthStatus.NOT_READY) -> None:
         """Register a component for health monitoring."""
         self.components[name] = ComponentHealth(name=name, status=status)
         self.logger.debug(
@@ -469,9 +434,7 @@ class HealthMonitor:
             extra={"subsys": "health"},
         )
 
-    def update_component_health(
-        self, name: str, status: HealthStatus, error: Optional[str] = None
-    ) -> None:
+    def update_component_health(self, name: str, status: HealthStatus, error: Optional[str] = None) -> None:
         """Update the health status of a component."""
         if name not in self.components:
             self.register_component(name)
@@ -533,27 +496,21 @@ class HealthMonitor:
         try:
             for name, component in self.components.items():
                 if component.status == HealthStatus.NOT_READY:
-                    not_ready_reasons.append(
-                        f"Component '{name}' not ready: {component.last_error or 'unknown error'}"
-                    )
+                    not_ready_reasons.append(f"Component '{name}' not ready: {component.last_error or 'unknown error'}")
 
             # Check for critical system resources
             try:
                 process = psutil.Process()
                 memory_percent = process.memory_percent()
                 if memory_percent > 90.0:  # 90% memory usage threshold
-                    not_ready_reasons.append(
-                        f"High memory usage: {memory_percent:.1f}%"
-                    )
+                    not_ready_reasons.append(f"High memory usage: {memory_percent:.1f}%")
             except Exception:
                 pass  # Non-critical check
 
             return len(not_ready_reasons) == 0, not_ready_reasons
 
         except Exception as e:
-            self.logger.error(
-                f"Readiness check failed: {e}", extra={"subsys": "health"}
-            )
+            self.logger.error(f"Readiness check failed: {e}", extra={"subsys": "health"})
             return False, [f"Readiness check error: {e}"]
 
     async def measure_event_loop_lag(self) -> float:
@@ -588,9 +545,7 @@ class HealthMonitor:
                 overall_status = HealthStatus.NOT_READY
             elif not is_ready:
                 overall_status = HealthStatus.NOT_READY
-            elif any(
-                c.status == HealthStatus.DEGRADED for c in self.components.values()
-            ):
+            elif any(c.status == HealthStatus.DEGRADED for c in self.components.values()):
                 overall_status = HealthStatus.DEGRADED
             else:
                 overall_status = HealthStatus.READY
@@ -611,9 +566,7 @@ class HealthMonitor:
             degraded_reasons = get_degraded_reasons() if degraded_mode else []
 
             # Check Prometheus enablement
-            prometheus_enabled = (
-                os.getenv("OBS_ENABLE_PROMETHEUS", "false").lower() == "true"
-            )
+            prometheus_enabled = os.getenv("OBS_ENABLE_PROMETHEUS", "false").lower() == "true"
 
             return SystemHealth(
                 status=overall_status,
@@ -693,9 +646,7 @@ def validate_config_or_exit() -> None:
 
         if not is_valid:
             # Single crisp diagnostic with all errors
-            error_summary = (
-                f"Configuration validation failed with {len(errors)} error(s):"
-            )
+            error_summary = f"Configuration validation failed with {len(errors)} error(s):"
             for i, error in enumerate(errors, 1):
                 error_summary += f"\n  {i}. {error}"
 
@@ -712,9 +663,7 @@ def validate_config_or_exit() -> None:
             # Exit with error code
             sys.exit(1)
         else:
-            logger.info(
-                "✅ Configuration validation passed", extra={"subsys": "config"}
-            )
+            logger.info("✅ Configuration validation passed", extra={"subsys": "config"})
 
     except Exception as e:
         logger.critical(

@@ -21,9 +21,7 @@ def test_x_tweet_caption_and_transcript_are_concatenated():
     assert "[Tweet Caption + Audio Transcript]" in result
     assert "This is the tweet caption." in result
     assert "This is a sufficiently long audio transcript." in result
-    assert result.index("This is the tweet caption.") < result.index(
-        "This is a sufficiently long audio transcript."
-    )
+    assert result.index("This is the tweet caption.") < result.index("This is a sufficiently long audio transcript.")
     assert "[Tweet Caption]" not in result
     assert "[Audio Transcript]" not in result
 

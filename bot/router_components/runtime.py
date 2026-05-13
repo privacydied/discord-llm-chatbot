@@ -9,9 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-_X_SYNDICATION_ACCEPT_DOMAINS_DEFAULT = (
-    "pbs.twimg.com,video.twimg.com,fxtwitter.com,vxtwitter.com"
-)
+_X_SYNDICATION_ACCEPT_DOMAINS_DEFAULT = "pbs.twimg.com,video.twimg.com,fxtwitter.com,vxtwitter.com"
 _X_SYNDICATION_ACCEPT_DOMAINS_FALLBACK = {
     "pbs.twimg.com",
     "pbs-0.twimg.com",

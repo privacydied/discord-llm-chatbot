@@ -32,12 +32,7 @@ class TestCleanText:
             text = re.sub(r"(?<!\w)_([^_]+)_(?!\w)", r"\1", text)
             text = re.sub(r"~~(.+?)~~", r"\1", text)
             text = re.sub(r"\|\|(.+?)\|\|", r"\1", text)
-            text = (
-                text.replace("**", "")
-                .replace("__", "")
-                .replace("~~", "")
-                .replace("||", "")
-            )
+            text = text.replace("**", "").replace("__", "").replace("~~", "").replace("||", "")
             text = text.replace(""", '"').replace(""", '"')
             text = text.replace("'", "'").replace("'", "'")
             text = text.replace("—", ", ").replace("–", ", ")
@@ -199,20 +194,12 @@ class TestSentenceChunking:
                                     chunks.append(current_chunk.strip())
                                 current_chunk = part
                             else:
-                                current_chunk = (
-                                    (current_chunk + " " + part).strip()
-                                    if current_chunk
-                                    else part
-                                )
+                                current_chunk = (current_chunk + " " + part).strip() if current_chunk else part
                     else:
                         current_chunk = sent
                 else:
                     if len(current_chunk) + len(sent) + 1 < _MIN_CHUNK_CHARS:
-                        current_chunk = (
-                            (current_chunk + " " + sent).strip()
-                            if current_chunk
-                            else sent
-                        )
+                        current_chunk = (current_chunk + " " + sent).strip() if current_chunk else sent
                     elif current_chunk:
                         chunks.append(current_chunk.strip())
                         current_chunk = sent

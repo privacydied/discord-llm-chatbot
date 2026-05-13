@@ -15,6 +15,7 @@ logger = get_logger(__name__)
 # Size helpers
 # ---------------------------------------------------------------------------
 
+
 async def _dir_size(path: str) -> int:
     """Return total size of *path* (dir or file) using os.walk on a thread."""
     path = os.path.expandvars(os.path.expanduser(path))
@@ -59,6 +60,7 @@ def _fmt_bytes(n: int) -> str:
 # Storage status
 # ---------------------------------------------------------------------------
 
+
 async def get_storage_status() -> str:
     """Return a concise multi-line storage report suitable for Discord.
 
@@ -86,10 +88,7 @@ async def get_storage_status() -> str:
         wal_path = str(memory_db) + "-wal"
         db_bytes = await _dir_size(str(memory_db))
         wal_bytes = await _dir_size(wal_path) if os.path.exists(wal_path) else 0
-        lines.append(
-            f"memory DB: {_fmt_bytes(db_bytes)}"
-            + (f", WAL: {_fmt_bytes(wal_bytes)}" if wal_bytes else "")
-        )
+        lines.append(f"memory DB: {_fmt_bytes(db_bytes)}" + (f", WAL: {_fmt_bytes(wal_bytes)}" if wal_bytes else ""))
     else:
         lines.append("memory DB: not found")
 
@@ -150,6 +149,7 @@ async def get_storage_status() -> str:
 # WAL checkpoint
 # ---------------------------------------------------------------------------
 
+
 async def checkpoint_wal(db_path: str) -> bool:
     """Safely checkpoint and truncate the SQLite WAL at *db_path*.
 
@@ -163,6 +163,7 @@ async def checkpoint_wal(db_path: str) -> bool:
         return False
 
     try:
+
         def _do_checkpoint() -> bool:
             conn = sqlite3.connect(db_path, timeout=10)
             try:

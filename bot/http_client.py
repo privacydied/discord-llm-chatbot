@@ -109,9 +109,7 @@ class CircuitBreaker:
 
         if self.failure_count >= self.failure_threshold:
             self.state = "OPEN"
-            logger.warning(
-                f"🔴 Circuit breaker OPEN after {self.failure_count} failures"
-            )
+            logger.warning(f"🔴 Circuit breaker OPEN after {self.failure_count} failures")
 
 
 class SharedHttpClient:
@@ -134,8 +132,7 @@ class SharedHttpClient:
 
         # Default request configuration
         self.default_config = RequestConfig(
-            connect_timeout=float(self.config.get("HTTP_CONNECT_TIMEOUT_MS", 1500))
-            / 1000,
+            connect_timeout=float(self.config.get("HTTP_CONNECT_TIMEOUT_MS", 1500)) / 1000,
             read_timeout=float(self.config.get("HTTP_READ_TIMEOUT_MS", 5000)) / 1000,
             total_timeout=float(self.config.get("HTTP_TOTAL_DEADLINE_MS", 6000)) / 1000,
         )
@@ -168,9 +165,7 @@ class SharedHttpClient:
                 import h2  # type: ignore  # noqa: F401
             except Exception:
                 self.http2_enabled = False
-                logger.info(
-                    "🌐 HTTP/2 not available (h2 missing); falling back to HTTP/1.1"
-                )
+                logger.info("🌐 HTTP/2 not available (h2 missing); falling back to HTTP/1.1")
 
         limits = httpx.Limits(
             max_connections=self.max_connections,
@@ -224,9 +219,7 @@ class SharedHttpClient:
         """Get or create per-host circuit breaker. [REH]"""
         if host not in self.host_circuit_breakers:
             limits = self.host_limits.get(host, HostLimits())
-            self.host_circuit_breakers[host] = CircuitBreaker(
-                limits.circuit_breaker_failures, limits.circuit_breaker_cooldown
-            )
+            self.host_circuit_breakers[host] = CircuitBreaker(limits.circuit_breaker_failures, limits.circuit_breaker_cooldown)
         return self.host_circuit_breakers[host]
 
     async def _wait_with_jitter(self, delay: float) -> None:
@@ -236,9 +229,7 @@ class SharedHttpClient:
         jitter = random.uniform(0.1, 0.3) * delay
         await asyncio.sleep(delay + jitter)
 
-    async def request(
-        self, method: str, url: str, config: Optional[RequestConfig] = None, **kwargs
-    ) -> Response:
+    async def request(self, method: str, url: str, config: Optional[RequestConfig] = None, **kwargs) -> Response:
         """Make HTTP request with retries and circuit breaker. [REH][PA]"""
         if self.client is None:
             await self.start()
@@ -271,9 +262,7 @@ class SharedHttpClient:
                         pool=1.0,
                     )
 
-                    response = await self.client.request(
-                        method=method, url=url, timeout=timeout, **kwargs
-                    )
+                    response = await self.client.request(method=method, url=url, timeout=timeout, **kwargs)
 
                     # Record metrics
                     self.metrics.requests_total += 1
@@ -301,11 +290,7 @@ class SharedHttpClient:
 
                     # Update average response time
                     if self.metrics.requests_success > 0:
-                        self.metrics.avg_response_time_ms = (
-                            self.metrics.avg_response_time_ms
-                            * (self.metrics.requests_success - 1)
-                            + response_time
-                        ) / self.metrics.requests_success
+                        self.metrics.avg_response_time_ms = (self.metrics.avg_response_time_ms * (self.metrics.requests_success - 1) + response_time) / self.metrics.requests_success
 
                     return response
 
@@ -317,12 +302,7 @@ class SharedHttpClient:
                 # Special-case: if HTTP/2 is enabled but the optional 'h2' package is missing,
                 # transparently recreate the client with HTTP/1.1 and retry immediately. [REH]
                 msg = str(e)
-                if (
-                    self.http2_enabled
-                    and ("http2=True" in msg or "http2" in msg)
-                    and "h2" in msg
-                    and "not installed" in msg
-                ):
+                if self.http2_enabled and ("http2=True" in msg or "http2" in msg) and "h2" in msg and "not installed" in msg:
                     try:
                         # Switch to HTTP/1.1 client
                         if self.client is not None:
@@ -356,9 +336,7 @@ class SharedHttpClient:
                             follow_redirects=True,
                             max_redirects=5,
                         )
-                        logger.info(
-                            "🌐 HTTP/2 unavailable at runtime; switched to HTTP/1.1 and retrying"
-                        )
+                        logger.info("🌐 HTTP/2 unavailable at runtime; switched to HTTP/1.1 and retrying")
                         # Try again immediately without backoff for this specific condition
                         continue
                     except Exception:
@@ -376,8 +354,7 @@ class SharedHttpClient:
                 )
 
                 logger.debug(
-                    f"🔄 HTTP request failed (attempt {attempt + 1}/{config.max_retries + 1}), "
-                    f"retrying in {delay:.1f}s: {e}",
+                    f"🔄 HTTP request failed (attempt {attempt + 1}/{config.max_retries + 1}), retrying in {delay:.1f}s: {e}",
                     extra={
                         "event": "http.retry",
                         "detail": {
@@ -393,26 +370,18 @@ class SharedHttpClient:
                 await self._wait_with_jitter(delay)
 
         # All retries exhausted
-        logger.error(
-            f"❌ HTTP request failed after {config.max_retries + 1} attempts: {last_exception}"
-        )
+        logger.error(f"❌ HTTP request failed after {config.max_retries + 1} attempts: {last_exception}")
         raise last_exception
 
-    async def get(
-        self, url: str, config: Optional[RequestConfig] = None, **kwargs
-    ) -> Response:
+    async def get(self, url: str, config: Optional[RequestConfig] = None, **kwargs) -> Response:
         """Make GET request."""
         return await self.request("GET", url, config, **kwargs)
 
-    async def post(
-        self, url: str, config: Optional[RequestConfig] = None, **kwargs
-    ) -> Response:
+    async def post(self, url: str, config: Optional[RequestConfig] = None, **kwargs) -> Response:
         """Make POST request."""
         return await self.request("POST", url, config, **kwargs)
 
-    async def head(
-        self, url: str, config: Optional[RequestConfig] = None, **kwargs
-    ) -> Response:
+    async def head(self, url: str, config: Optional[RequestConfig] = None, **kwargs) -> Response:
         """Make HEAD request."""
         return await self.request("HEAD", url, config, **kwargs)
 

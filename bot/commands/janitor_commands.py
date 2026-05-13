@@ -87,17 +87,11 @@ class JanitorCommands(commands.Cog):
                     )
 
                 if files_deleted == 0 and logs_compressed == 0:
-                    embed.description = (
-                        "✨ Everything is already clean! No files needed cleanup."
-                    )
+                    embed.description = "✨ Everything is already clean! No files needed cleanup."
                 else:
-                    embed.description = (
-                        "✅ Cache and log cleanup completed successfully."
-                    )
+                    embed.description = "✅ Cache and log cleanup completed successfully."
 
-                embed.set_footer(
-                    text="Automatic cleanup runs every 60 minutes in the background"
-                )
+                embed.set_footer(text="Automatic cleanup runs every 60 minutes in the background")
 
                 await ctx.reply(embed=embed, mention_author=False)
                 logger.info(f"✅ Manual clean completed for {ctx.author.id}")
@@ -178,10 +172,7 @@ class JanitorCommands(commands.Cog):
 
             embed.add_field(
                 name="🔧 Operations",
-                value="• Compress logs older than 1 hour\n"
-                "• Prune by age and size\n"
-                "• Skip files modified in last 30 min\n"
-                "• Max 500 files per run per directory",
+                value="• Compress logs older than 1 hour\n• Prune by age and size\n• Skip files modified in last 30 min\n• Max 500 files per run per directory",
                 inline=False,
             )
 
@@ -196,9 +187,7 @@ class JanitorCommands(commands.Cog):
             )
         except Exception as e:
             logger.error(f"❌ Clean status command failed: {e}", exc_info=True)
-            await ctx.reply(
-                "❌ Failed to retrieve janitor status.", mention_author=False
-            )
+            await ctx.reply("❌ Failed to retrieve janitor status.", mention_author=False)
 
     @commands.command(name="clean-help", aliases=["cleanup-help", "janitor-help"])
     async def clean_help(self, ctx: commands.Context) -> None:
@@ -233,17 +222,11 @@ class JanitorCommands(commands.Cog):
 
         embed.add_field(
             name="🛡️ Safety Features",
-            value="• Hold-off window protects in-flight files\n"
-            "• Never deletes active log files\n"
-            "• Batch processing (max 500 files/run)\n"
-            "• Cross-platform compatible\n"
-            "• Comprehensive error handling",
+            value="• Hold-off window protects in-flight files\n• Never deletes active log files\n• Batch processing (max 500 files/run)\n• Cross-platform compatible\n• Comprehensive error handling",
             inline=False,
         )
 
-        embed.set_footer(
-            text="Janitor keeps disk usage under control for long-running bots"
-        )
+        embed.set_footer(text="Janitor keeps disk usage under control for long-running bots")
 
         await ctx.reply(embed=embed, mention_author=False)
 

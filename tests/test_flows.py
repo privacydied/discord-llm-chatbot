@@ -12,9 +12,7 @@ Ensures that:
 
 import pytest
 
-pytestmark = pytest.mark.skip(
-    reason="End-to-end flow tests requiring full bot infrastructure"
-)
+pytestmark = pytest.mark.skip(reason="End-to-end flow tests requiring full bot infrastructure")
 
 import discord
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -89,9 +87,7 @@ async def test_flow_text_to_tts(mock_brain_infer, mock_bot, mock_message):
 
     # Assert
     assert response is not None, "Router should have returned a response"
-    assert response.audio_path == "/tmp/fake_tts.mp3", (
-        "Response should have an audio path"
-    )
+    assert response.audio_path == "/tmp/fake_tts.mp3", "Response should have an audio path"
     assert response.text == "General Kenobi!", "Response text is incorrect"
     router._flows["generate_tts"].assert_called_once_with("General Kenobi!")
 
@@ -99,9 +95,7 @@ async def test_flow_text_to_tts(mock_brain_infer, mock_bot, mock_message):
 @pytest.mark.asyncio
 @patch("bot.router.brain_infer", new_callable=AsyncMock)
 @patch("bot.router.see_infer", new_callable=AsyncMock)
-async def test_flow_image_to_text(
-    mock_see_infer, mock_brain_infer, mock_bot, mock_message
-):
+async def test_flow_image_to_text(mock_see_infer, mock_brain_infer, mock_bot, mock_message):
     """3. IMAGE -> TEXT: Test an image upload returns a text description."""
     # Arrange
     mock_attachment = MagicMock(spec=discord.Attachment)
@@ -126,12 +120,8 @@ async def test_flow_image_to_text(
         prompt="User uploaded an image with the prompt: 'What is this?'",
         mime_type="image/png",
     )
-    mock_brain_infer.assert_called_once_with(
-        "User uploaded an image with the prompt: 'What is this?'. The image contains: a cat sitting on a table"
-    )
-    assert response.text == "The image shows a cat sitting on a table.", (
-        "Response text is incorrect"
-    )
+    mock_brain_infer.assert_called_once_with("User uploaded an image with the prompt: 'What is this?'. The image contains: a cat sitting on a table")
+    assert response.text == "The image shows a cat sitting on a table.", "Response text is incorrect"
     # Ensure the attachment save method was not called for images
     mock_attachment.save.assert_not_called()
     assert response.audio_path is None, "Response should not have an audio path"
@@ -141,9 +131,7 @@ async def test_flow_image_to_text(
 @patch("bot.router.os.remove")
 @patch("bot.router.brain_infer", new_callable=AsyncMock)
 @patch("bot.router.Router._process_document", new_callable=AsyncMock)
-async def test_flow_document_to_text(
-    mock_process_document, mock_brain_infer, mock_os_remove, mock_bot, mock_message
-):
+async def test_flow_document_to_text(mock_process_document, mock_brain_infer, mock_os_remove, mock_bot, mock_message):
     """4. DOCUMENT -> TEXT: Test a document upload returns a text summary."""
     # Arrange
     mock_attachment = MagicMock(spec=discord.Attachment)
@@ -169,8 +157,6 @@ async def test_flow_document_to_text(
     assert response is not None, "Router should have returned a response"
     mock_attachment.save.assert_called_once_with(Path("/tmp/fake_doc.pdf"))
     mock_process_document.assert_called_once_with("/tmp/fake_doc.pdf", ".pdf")
-    mock_brain_infer.assert_called_once_with(
-        "DOCUMENT CONTENT:\n---\nThis is the document content.\n---\n\nUSER'S PROMPT: Summarize this document."
-    )
+    mock_brain_infer.assert_called_once_with("DOCUMENT CONTENT:\n---\nThis is the document content.\n---\n\nUSER'S PROMPT: Summarize this document.")
     assert response.text == "This is a summary of the document."
     mock_os_remove.assert_called_once_with("/tmp/fake_doc.pdf")

@@ -19,9 +19,7 @@ from bot.request_coalescing import (
 class TestRequestCoalescer:
     @pytest.fixture
     def coalescer(self):
-        return RequestCoalescer[str](
-            name="test", result_ttl_s=0.1, cleanup_interval_s=0.05
-        )
+        return RequestCoalescer[str](name="test", result_ttl_s=0.1, cleanup_interval_s=0.05)
 
     @pytest.mark.asyncio
     async def test_single_request_executes(self, coalescer):
@@ -117,9 +115,7 @@ class TestRequestCoalescer:
             return operation
 
         # Execute different keys concurrently
-        tasks = [
-            coalescer.execute(f"key_{i}", await make_operation(i)) for i in range(5)
-        ]
+        tasks = [coalescer.execute(f"key_{i}", await make_operation(i)) for i in range(5)]
 
         await asyncio.gather(*tasks)
 

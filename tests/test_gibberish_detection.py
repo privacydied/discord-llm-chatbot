@@ -32,9 +32,7 @@ class TestGibberishDetection(unittest.TestCase):
     def test_low_amplitude_audio_detection(self):
         """Test detection of very low amplitude audio."""
         # Create very low amplitude audio
-        audio = np.random.normal(
-            0, 1e-5, 24000
-        )  # 1 second at 24kHz with very low amplitude
+        audio = np.random.normal(0, 1e-5, 24000)  # 1 second at 24kHz with very low amplitude
 
         # Should detect as gibberish
         self.assertTrue(detect_gibberish_audio(audio, 24000))
@@ -51,9 +49,7 @@ class TestGibberishDetection(unittest.TestCase):
         """Test that normal-looking audio passes detection."""
         # Create synthetic speech-like audio (sine wave with some noise)
         t = np.linspace(0, 1, 24000)  # 1 second at 24kHz
-        audio = 0.5 * np.sin(
-            2 * np.pi * 150 * t
-        )  # 150 Hz fundamental (typical for male voice)
+        audio = 0.5 * np.sin(2 * np.pi * 150 * t)  # 150 Hz fundamental (typical for male voice)
         audio += 0.3 * np.sin(2 * np.pi * 300 * t)  # 300 Hz harmonic
         audio += 0.1 * np.random.normal(0, 0.1, 24000)  # Add some noise
 

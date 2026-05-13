@@ -71,9 +71,7 @@ class OllamaClient:
 
         # Clean up old entries
         if user_id in user_rate_limits:
-            user_rate_limits[user_id] = [
-                t for t in user_rate_limits[user_id] if t > window_start
-            ]
+            user_rate_limits[user_id] = [t for t in user_rate_limits[user_id] if t > window_start]
         else:
             user_rate_limits[user_id] = []
 
@@ -121,16 +119,8 @@ class OllamaClient:
         max_tokens = max_tokens or DEFAULT_MAX_TOKENS
         temperature = temperature if temperature is not None else DEFAULT_TEMPERATURE
         top_p = top_p if top_p is not None else DEFAULT_TOP_P
-        frequency_penalty = (
-            frequency_penalty
-            if frequency_penalty is not None
-            else DEFAULT_FREQUENCY_PENALTY
-        )
-        presence_penalty = (
-            presence_penalty
-            if presence_penalty is not None
-            else DEFAULT_PRESENCE_PENALTY
-        )
+        frequency_penalty = frequency_penalty if frequency_penalty is not None else DEFAULT_FREQUENCY_PENALTY
+        presence_penalty = presence_penalty if presence_penalty is not None else DEFAULT_PRESENCE_PENALTY
         stop = stop or []
 
         # Check rate limit
@@ -161,9 +151,7 @@ class OllamaClient:
             async with self.session.post(url, json=payload) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    raise OllamaAPIError(
-                        f"API request failed with status {response.status}: {error_text}"
-                    )
+                    raise OllamaAPIError(f"API request failed with status {response.status}: {error_text}")
 
                 # Parse the response
                 response_data = await response.json()
@@ -178,17 +166,14 @@ class OllamaClient:
                     "usage": {
                         "prompt_tokens": response_data.get("prompt_eval_count", 0),
                         "completion_tokens": response_data.get("eval_count", 0),
-                        "total_tokens": response_data.get("prompt_eval_count", 0)
-                        + response_data.get("eval_count", 0),
+                        "total_tokens": response_data.get("prompt_eval_count", 0) + response_data.get("eval_count", 0),
                     },
                     "finish_reason": response_data.get("done_reason", "unknown"),
                     "raw_response": response_data,
                 }
 
         except asyncio.TimeoutError:
-            raise OllamaAPIError(
-                "Request timed out. The server is taking too long to respond."
-            )
+            raise OllamaAPIError("Request timed out. The server is taking too long to respond.")
         except aiohttp.ClientError as e:
             raise OllamaAPIError(f"Network error: {str(e)}")
         except Exception as e:
@@ -219,16 +204,8 @@ class OllamaClient:
         max_tokens = max_tokens or DEFAULT_MAX_TOKENS
         temperature = temperature if temperature is not None else DEFAULT_TEMPERATURE
         top_p = top_p if top_p is not None else DEFAULT_TOP_P
-        frequency_penalty = (
-            frequency_penalty
-            if frequency_penalty is not None
-            else DEFAULT_FREQUENCY_PENALTY
-        )
-        presence_penalty = (
-            presence_penalty
-            if presence_penalty is not None
-            else DEFAULT_PRESENCE_PENALTY
-        )
+        frequency_penalty = frequency_penalty if frequency_penalty is not None else DEFAULT_FREQUENCY_PENALTY
+        presence_penalty = presence_penalty if presence_penalty is not None else DEFAULT_PRESENCE_PENALTY
         stop = stop or []
 
         # Check rate limit
@@ -260,9 +237,7 @@ class OllamaClient:
             async with self.session.post(url, json=payload) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    raise OllamaAPIError(
-                        f"API request failed with status {response.status}: {error_text}"
-                    )
+                    raise OllamaAPIError(f"API request failed with status {response.status}: {error_text}")
 
                 # Process the streaming response
                 buffer = ""
@@ -298,9 +273,7 @@ class OllamaClient:
                         continue
 
         except asyncio.TimeoutError:
-            raise OllamaAPIError(
-                "Request timed out. The server is taking too long to respond."
-            )
+            raise OllamaAPIError("Request timed out. The server is taking too long to respond.")
         except aiohttp.ClientError as e:
             raise OllamaAPIError(f"Network error: {str(e)}")
         except Exception as e:
@@ -317,9 +290,7 @@ class OllamaClient:
             async with self.session.get(url) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    raise OllamaAPIError(
-                        f"API request failed with status {response.status}: {error_text}"
-                    )
+                    raise OllamaAPIError(f"API request failed with status {response.status}: {error_text}")
 
                 # Parse the response
                 response_data = await response.json()
@@ -407,18 +378,14 @@ async def generate_response(
             config = load_config()
             prompt_file_path = config.get("PROMPT_FILE")
             if not prompt_file_path:
-                raise OllamaAPIError(
-                    "PROMPT_FILE not configured in environment variables"
-                )
+                raise OllamaAPIError("PROMPT_FILE not configured in environment variables")
             try:
                 with open(prompt_file_path, "r", encoding="utf-8") as pf:
                     base_system_prompt = pf.read().strip()
             except FileNotFoundError:
                 raise OllamaAPIError(f"Prompt file not found: {prompt_file_path}")
             except Exception as e:
-                raise OllamaAPIError(
-                    f"Error reading prompt file {prompt_file_path}: {e}"
-                )
+                raise OllamaAPIError(f"Error reading prompt file {prompt_file_path}: {e}")
 
             final_system_prompt = f"""{base_system_prompt}\n\nContext: {context}\n\nServer Context: {server_context}"""
 

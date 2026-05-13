@@ -26,9 +26,7 @@ def _is_private_hostname(hostname: str) -> bool:
         return True
     try:
         # Resolve hostname to IP and check if it's private
-        addr_infos = socket.getaddrinfo(
-            hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
-        )
+        addr_infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         for family, _type, _proto, _canonname, sockaddr in addr_infos:
             ip_str = sockaddr[0]
             ip = ipaddress.ip_address(ip_str)
@@ -95,9 +93,7 @@ async def external_screenshot(url: str) -> str | None:
         parsed_for_ssrf = urlparse(url)
         ssrf_hostname = parsed_for_ssrf.hostname or ""
         if _is_private_hostname(ssrf_hostname):
-            logger.warning(
-                f"⚠️ Skipping screenshot: private/internal IP target: {ssrf_hostname}"
-            )
+            logger.warning(f"⚠️ Skipping screenshot: private/internal IP target: {ssrf_hostname}")
             return None
     except Exception:
         logger.warning("⚠️ Skipping screenshot: SSRF check failed")
@@ -117,19 +113,13 @@ async def external_screenshot(url: str) -> str | None:
         # Fallback to string coercion on any unexpected type
         normalized_url_str = str(normalized_url)
 
-    logger.debug(
-        f"🧭 URL types | original={type(url).__name__} normalized={type(normalized_url).__name__} as_str={type(normalized_url_str).__name__}"
-    )
+    logger.debug(f"🧭 URL types | original={type(url).__name__} normalized={type(normalized_url).__name__} as_str={type(normalized_url_str).__name__}")
 
     # Load configurable screenshot API parameters
     api_key = os.getenv("SCREENSHOT_API_KEY")
-    fallback_enabled = (
-        os.getenv("SCREENSHOT_FALLBACK_PLAYWRIGHT", "true").lower() == "true"
-    )
+    fallback_enabled = os.getenv("SCREENSHOT_FALLBACK_PLAYWRIGHT", "true").lower() == "true"
     if not api_key:
-        logger.warning(
-            "⚠️ SCREENSHOT_API_KEY not set. Attempting Playwright fallback..."
-        )
+        logger.warning("⚠️ SCREENSHOT_API_KEY not set. Attempting Playwright fallback...")
         if fallback_enabled:
             return await _playwright_screenshot(normalized_url_str)
         return None
@@ -145,11 +135,7 @@ async def external_screenshot(url: str) -> str | None:
     # Construct API URL in the exact format expected by screenshotmachine.com
     # Format: ?key=X&url=Y&device=Z&dimension=W&format=V&delay=U&cookies=T
     # Note: Only encode colons in URL, not forward slashes (per API spec)
-    api_url = (
-        f"{api_url_base}?key={api_key}"
-        f"&url={quote(normalized_url_str, safe='/', encoding='utf-8', errors='strict')}"
-        f"&device={device}&dimension={dimension}&format={format_type}&delay={delay}"
-    )
+    api_url = f"{api_url_base}?key={api_key}&url={quote(normalized_url_str, safe='/', encoding='utf-8', errors='strict')}&device={device}&dimension={dimension}&format={format_type}&delay={delay}"
 
     # Add cookies parameter if provided (properly URL-encoded)
     if cookies and cookies.strip():
@@ -164,9 +150,7 @@ async def external_screenshot(url: str) -> str | None:
     _redacted_url = re.sub(r"([?&]key=)[^&]+", r"\1[REDACTED]", api_url)
     logger.debug(f"🔗 Final API URL: {_redacted_url}")
 
-    logger.info(
-        f"📷 Requesting screenshot from {api_url_base} for {normalized_url} [{dimension}, {format_type}]"
-    )
+    logger.info(f"📷 Requesting screenshot from {api_url_base} for {normalized_url} [{dimension}, {format_type}]")
 
     try:
         async with httpx.AsyncClient() as client:
@@ -176,9 +160,7 @@ async def external_screenshot(url: str) -> str | None:
             # SSRF protection: validate redirect target hostname [SFT]
             redirect_hostname = urlparse(str(response.url)).hostname or ""
             if _is_private_hostname(redirect_hostname):
-                logger.warning(
-                    f"⚠️ Screenshot API redirected to private/internal IP: {redirect_hostname}"
-                )
+                logger.warning(f"⚠️ Screenshot API redirected to private/internal IP: {redirect_hostname}")
                 return None
 
         # Generate a safe filename from the original URL (use coerced string)
@@ -205,17 +187,13 @@ async def external_screenshot(url: str) -> str | None:
         return str(filepath)
 
     except httpx.HTTPStatusError as e:
-        logger.error(
-            f"❌ Screenshot Machine API error: {e.response.status_code} for URL: {original_url_str}"
-        )
+        logger.error(f"❌ Screenshot Machine API error: {e.response.status_code} for URL: {original_url_str}")
         if fallback_enabled:
             logger.info("Attempting Playwright fallback after API error...")
             return await _playwright_screenshot(normalized_url_str)
         return None
     except httpx.RequestError as e:
-        logger.error(
-            f"❌ Failed to connect to Screenshot Machine API for URL: {original_url_str}. Error: {e}"
-        )
+        logger.error(f"❌ Failed to connect to Screenshot Machine API for URL: {original_url_str}. Error: {e}")
         if fallback_enabled:
             logger.info("Attempting Playwright fallback after request error...")
             return await _playwright_screenshot(normalized_url_str)
@@ -254,6 +232,7 @@ async def _playwright_screenshot(url: str) -> str | None:
     # Phase 15: Use low-resource screenshot dimensions when in low-resource mode
     if not vp:
         from ..config import _low_resource_int
+
         default_w = _low_resource_int("SCREENSHOT_LOW_RESOURCE_WIDTH", 1280, 1280)
         default_h = _low_resource_int("SCREENSHOT_LOW_RESOURCE_HEIGHT", 1024, 720)
         vp = f"{default_w}x{default_h}"
@@ -271,9 +250,7 @@ async def _playwright_screenshot(url: str) -> str | None:
         async with async_playwright() as p:
             browser = await _pw_connect_browser(p)
             if browser is None:
-                logger.error(
-                    "No browser available for screenshot (remote and local both failed)"
-                )
+                logger.error("No browser available for screenshot (remote and local both failed)")
                 return None
             try:
                 context = await browser.new_context(

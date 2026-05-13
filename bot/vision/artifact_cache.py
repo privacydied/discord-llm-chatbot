@@ -120,15 +120,9 @@ class VisionArtifactCache:
         self._cleanup_task: Optional[asyncio.Task] = None
         self._start_cleanup_task()
 
-        self.logger.info(
-            f"Vision Artifact Cache initialized (cache_dir={self.cache_dir}, "
-            f"max_file_size_mb={self.max_file_size_mb}, max_total_gb={self.max_total_size_gb}, "
-            f"ttl_days={self.ttl_days})"
-        )
+        self.logger.info(f"Vision Artifact Cache initialized (cache_dir={self.cache_dir}, max_file_size_mb={self.max_file_size_mb}, max_total_gb={self.max_total_size_gb}, ttl_days={self.ttl_days})")
 
-    async def store_artifact(
-        self, content: bytes, filename: str, optimize_for_discord: bool = True
-    ) -> str:
+    async def store_artifact(self, content: bytes, filename: str, optimize_for_discord: bool = True) -> str:
         """
         Store artifact with optional Discord optimization
 
@@ -145,9 +139,7 @@ class VisionArtifactCache:
         """
         # Validate file size
         if len(content) > self.max_file_size_mb * 1024 * 1024:
-            raise ValueError(
-                f"File too large: {len(content) / 1024 / 1024:.1f}MB > {self.max_file_size_mb}MB"
-            )
+            raise ValueError(f"File too large: {len(content) / 1024 / 1024:.1f}MB > {self.max_file_size_mb}MB")
 
         # Generate content hash for deduplication
         content_hash = hashlib.sha256(content).hexdigest()
@@ -180,9 +172,7 @@ class VisionArtifactCache:
                     (
                         processed_content,
                         discord_optimized,
-                    ) = await self._optimize_for_discord(
-                        content, file_format, cache_file
-                    )
+                    ) = await self._optimize_for_discord(content, file_format, cache_file)
 
                 # Write processed content
                 async with aiofiles.open(cache_file, "wb") as f:
@@ -215,12 +205,8 @@ class VisionArtifactCache:
 
                 # Update compression ratio
                 if metadata.original_size > 0:
-                    compression_ratio = (
-                        metadata.compressed_size / metadata.original_size
-                    )
-                    self._stats.compression_ratio = (
-                        self._stats.compression_ratio * 0.9 + compression_ratio * 0.1
-                    )
+                    compression_ratio = metadata.compressed_size / metadata.original_size
+                    self._stats.compression_ratio = self._stats.compression_ratio * 0.9 + compression_ratio * 0.1
 
                 # Check cache size and count limits, evict if needed [Phase 12-16]
                 await self._enforce_size_limits()
@@ -240,9 +226,7 @@ class VisionArtifactCache:
                     cache_file.unlink()
                 raise
 
-    async def retrieve_artifact(
-        self, content_hash: str
-    ) -> Optional[Tuple[bytes, ArtifactMetadata]]:
+    async def retrieve_artifact(self, content_hash: str) -> Optional[Tuple[bytes, ArtifactMetadata]]:
         """
         Retrieve cached artifact
 
@@ -281,9 +265,7 @@ class VisionArtifactCache:
                 return content, metadata
 
             except Exception as e:
-                self.logger.error(
-                    f"Failed to retrieve artifact {content_hash[:8]}: {e}"
-                )
+                self.logger.error(f"Failed to retrieve artifact {content_hash[:8]}: {e}")
                 return None
 
     async def delete_artifact(self, content_hash: str) -> bool:
@@ -312,9 +294,7 @@ class VisionArtifactCache:
                 self.logger.error(f"Failed to delete artifact {content_hash[:8]}: {e}")
                 return False
 
-    async def get_discord_file_info(
-        self, content_hash: str
-    ) -> Optional[Dict[str, Any]]:
+    async def get_discord_file_info(self, content_hash: str) -> Optional[Dict[str, Any]]:
         """Get Discord upload information for artifact"""
         result = await self.retrieve_artifact(content_hash)
         if not result:
@@ -356,9 +336,7 @@ class VisionArtifactCache:
 
         return cleaned_count
 
-    async def _optimize_for_discord(
-        self, content: bytes, file_format: FileFormat, output_path: Path
-    ) -> Tuple[bytes, bool]:
+    async def _optimize_for_discord(self, content: bytes, file_format: FileFormat, output_path: Path) -> Tuple[bytes, bool]:
         """
         Optimize file for Discord upload [PA]
 
@@ -380,15 +358,11 @@ class VisionArtifactCache:
 
         # TODO: Implement actual optimization with PIL/ffmpeg
         # For now, just return original content
-        self.logger.debug(
-            f"File optimization skipped (no image processing libs): {original_size} bytes"
-        )
+        self.logger.debug(f"File optimization skipped (no image processing libs): {original_size} bytes")
 
         return content, False
 
-    def _validate_file_format(
-        self, content: bytes, filename: str
-    ) -> Tuple[FileFormat, bool]:
+    def _validate_file_format(self, content: bytes, filename: str) -> Tuple[FileFormat, bool]:
         """Validate file format and detect type [IV]"""
         # Get file extension
         suffix = Path(filename).suffix.lower()
@@ -402,9 +376,7 @@ class VisionArtifactCache:
             return FileFormat.WEBP, True
         elif content.startswith(b"GIF8"):
             return FileFormat.GIF, True
-        elif content.startswith(b"\x00\x00\x00\x18ftypmp4") or content.startswith(
-            b"\x00\x00\x00\x20ftypmp41"
-        ):
+        elif content.startswith(b"\x00\x00\x00\x18ftypmp4") or content.startswith(b"\x00\x00\x00\x20ftypmp41"):
             return FileFormat.MP4, True
         elif content.startswith(b"\x1a\x45\xdf\xa3"):
             return FileFormat.WEBM, True
@@ -425,17 +397,13 @@ class VisionArtifactCache:
 
         return FileFormat.PNG, False  # Default fallback
 
-    async def _extract_dimensions(
-        self, file_path: Path, file_format: FileFormat
-    ) -> Optional[Tuple[int, int]]:
+    async def _extract_dimensions(self, file_path: Path, file_format: FileFormat) -> Optional[Tuple[int, int]]:
         """Extract image/video dimensions [CMV]"""
         # TODO: Implement with proper image/video processing libraries
         # For now, return None since we don't have PIL/ffmpeg
         return None
 
-    async def _extract_duration(
-        self, file_path: Path, file_format: FileFormat
-    ) -> Optional[float]:
+    async def _extract_duration(self, file_path: Path, file_format: FileFormat) -> Optional[float]:
         """Extract video duration [CMV]"""
         # TODO: Implement with ffmpeg or similar
         # For now, return None for videos
@@ -447,10 +415,7 @@ class VisionArtifactCache:
         """Enforce cache size limits with LRU eviction [RM]"""
         max_total_bytes = self.max_total_size_gb * 1024 * 1024 * 1024
 
-        while (
-            self._stats.total_size_bytes > max_total_bytes
-            and len(self._access_order) > 0
-        ):
+        while self._stats.total_size_bytes > max_total_bytes and len(self._access_order) > 0:
             # Evict least recently used
             lru_hash = self._access_order[0]
             if await self.delete_artifact(lru_hash):
@@ -493,9 +458,7 @@ class VisionArtifactCache:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             # No running event loop; defer task startup until an async context exists
-            self.logger.debug(
-                "Deferring artifact cache cleanup task start (no running event loop)"
-            )
+            self.logger.debug("Deferring artifact cache cleanup task start (no running event loop)")
             self._cleanup_task = None
             return
         try:

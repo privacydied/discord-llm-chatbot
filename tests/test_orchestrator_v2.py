@@ -124,9 +124,7 @@ async def test_submit_job_with_money_estimation(orchestrator):
     )
 
     # Verify budget reservation with Money type
-    orchestrator.budget_manager.reserve_budget.assert_called_once_with(
-        "test_user", estimated_cost
-    )
+    orchestrator.budget_manager.reserve_budget.assert_called_once_with("test_user", estimated_cost)
 
 
 @pytest.mark.asyncio
@@ -258,9 +256,7 @@ async def test_job_failure_releases_reservation(orchestrator):
     await orchestrator._execute_job(job)
 
     # Verify reservation was released
-    orchestrator.budget_manager.release_reservation.assert_called_once_with(
-        "test_user", Money("1.50")
-    )
+    orchestrator.budget_manager.release_reservation.assert_called_once_with("test_user", Money("1.50"))
 
     # Verify job state
     assert job.state == VisionJobState.FAILED
@@ -308,9 +304,7 @@ async def test_job_cancellation_releases_reservation(orchestrator):
     assert job.state == VisionJobState.CANCELLED
 
     # Verify reservation was released
-    orchestrator.budget_manager.release_reservation.assert_called_with(
-        "test_user", Money("2.00")
-    )
+    orchestrator.budget_manager.release_reservation.assert_called_with("test_user", Money("2.00"))
 
 
 @pytest.mark.asyncio
@@ -344,9 +338,7 @@ async def test_cost_estimation_fallback(orchestrator):
     assert request.estimated_cost == 0.04  # Fallback for TEXT_TO_IMAGE
 
     # Verify reservation with fallback amount
-    orchestrator.budget_manager.reserve_budget.assert_called_once_with(
-        "test_user", Money("0.04")
-    )
+    orchestrator.budget_manager.reserve_budget.assert_called_once_with("test_user", Money("0.04"))
 
 
 @pytest.mark.asyncio
@@ -358,9 +350,7 @@ async def test_concurrent_job_limits(orchestrator):
     # Simulate user already has max concurrent jobs
     orchestrator.user_job_counts[user_id] = 2  # Max is 2
 
-    request = VisionRequest(
-        user_id=user_id, task=VisionTask.TEXT_TO_IMAGE, prompt="Another image"
-    )
+    request = VisionRequest(user_id=user_id, task=VisionTask.TEXT_TO_IMAGE, prompt="Another image")
 
     # Execute and expect quota error
     with pytest.raises(VisionError) as exc_info:
@@ -487,9 +477,7 @@ async def test_integration_with_provider_usage_parser(orchestrator):
     await orchestrator._execute_job(job)
 
     # Verify parser was called correctly
-    orchestrator.usage_parser.extract_usage_from_response.assert_called_once_with(
-        provider=VisionProvider.NOVITA, response=response
-    )
+    orchestrator.usage_parser.extract_usage_from_response.assert_called_once_with(provider=VisionProvider.NOVITA, response=response)
 
     orchestrator.usage_parser.parse_usage.assert_called_once_with(
         provider=VisionProvider.NOVITA,

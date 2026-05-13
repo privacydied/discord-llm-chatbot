@@ -41,9 +41,7 @@ class SearchResult:
             description=self.snippet[:2048],  # Limit description length
             color=discord.Color.blue(),
         )
-        embed.set_footer(
-            text=f"Source: {self.source} • {self.timestamp.strftime('%Y-%m-%d %H:%M')}"
-        )
+        embed.set_footer(text=f"Source: {self.source} • {self.timestamp.strftime('%Y-%m-%d %H:%M')}")
         return embed
 
 
@@ -76,18 +74,12 @@ async def web_search(query: str, max_results: int | None = None) -> List[SearchR
             "kl": "us-en",
         }
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                search_url, data=params, headers=headers
-            ) as response:
+            async with session.post(search_url, data=params, headers=headers) as response:
                 if response.status != 200:
-                    logging.error(
-                        f"Search request failed with status {response.status}"
-                    )
+                    logging.error(f"Search request failed with status {response.status}")
                     return []
 
                 html = await response.text()
@@ -98,9 +90,7 @@ async def web_search(query: str, max_results: int | None = None) -> List[SearchR
         # Extract search results (this depends on the search engine's HTML structure)
         result_elements = soup.select(".result")
         # Apply limit only if provided
-        limited = (
-            result_elements if max_results is None else result_elements[:max_results]
-        )
+        limited = result_elements if max_results is None else result_elements[:max_results]
 
         for i, result in enumerate(limited):
             try:
@@ -120,11 +110,7 @@ async def web_search(query: str, max_results: int | None = None) -> List[SearchR
                     url = urllib.parse.unquote(url)
 
                 snippet_elem = result.select_one(".result__snippet")
-                snippet = (
-                    snippet_elem.get_text(strip=True)
-                    if snippet_elem
-                    else "No description available."
-                )
+                snippet = snippet_elem.get_text(strip=True) if snippet_elem else "No description available."
 
                 results.append(SearchResult(title, url, snippet, "DuckDuckGo"))
 
@@ -146,9 +132,7 @@ async def web_search(query: str, max_results: int | None = None) -> List[SearchR
         return []
 
 
-async def search_memories(
-    query: str, user_id: str = None, guild_id: str = None
-) -> List[SearchResult]:
+async def search_memories(query: str, user_id: str = None, guild_id: str = None) -> List[SearchResult]:
     """
     Search through user and server memories.
 
@@ -168,11 +152,7 @@ async def search_memories(
             profile = get_profile(str(user_id))
             if "memories" in profile:
                 for memory in profile["memories"]:
-                    if (
-                        isinstance(memory, dict)
-                        and "content" in memory
-                        and query.lower() in memory["content"].lower()
-                    ):
+                    if isinstance(memory, dict) and "content" in memory and query.lower() in memory["content"].lower():
                         results.append(
                             SearchResult(
                                 title="Personal Memory",
@@ -187,11 +167,7 @@ async def search_memories(
             server_profile = get_server_profile(str(guild_id))
             if "memories" in server_profile:
                 for memory in server_profile["memories"]:
-                    if (
-                        isinstance(memory, dict)
-                        and "content" in memory
-                        and query.lower() in memory["content"].lower()
-                    ):
+                    if isinstance(memory, dict) and "content" in memory and query.lower() in memory["content"].lower():
                         results.append(
                             SearchResult(
                                 title="Server Memory",
@@ -208,9 +184,7 @@ async def search_memories(
         return []
 
 
-async def search_files(
-    query: str, attachments: List[discord.Attachment]
-) -> List[SearchResult]:
+async def search_files(query: str, attachments: List[discord.Attachment]) -> List[SearchResult]:
     """
     Search through message attachments.
 
@@ -323,12 +297,8 @@ async def search_all(
 
     # Process results
     web_results = results[0] if not isinstance(results[0], Exception) else []
-    memory_results = (
-        results[1] if len(results) > 1 and not isinstance(results[1], Exception) else []
-    )
-    file_results = (
-        results[2] if len(results) > 2 and not isinstance(results[2], Exception) else []
-    )
+    memory_results = results[1] if len(results) > 1 and not isinstance(results[1], Exception) else []
+    file_results = results[2] if len(results) > 2 and not isinstance(results[2], Exception) else []
 
     # Apply limits
     if max_web_results > 0 and len(web_results) > max_web_results:

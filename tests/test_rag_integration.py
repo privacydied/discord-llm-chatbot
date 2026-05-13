@@ -69,9 +69,7 @@ class TestVectorSchema:
         # Invalid weight sum
         config.vector_weight = 0.6
         config.keyword_weight = 0.6
-        with pytest.raises(
-            ValueError, match="vector_weight \\+ keyword_weight must equal 1.0"
-        ):
+        with pytest.raises(ValueError, match="vector_weight \\+ keyword_weight must equal 1.0"):
             config.validate()
 
 
@@ -158,9 +156,7 @@ class TestEmbeddingInterface:
         """Test L2 normalization of embeddings."""
         with patch("sentence_transformers.SentenceTransformer") as mock_st:
             # Create unnormalized embeddings
-            unnormalized = np.array(
-                [[3.0, 4.0, 0.0], [1.0, 1.0, 1.0]], dtype=np.float32
-            )
+            unnormalized = np.array([[3.0, 4.0, 0.0], [1.0, 1.0, 1.0]], dtype=np.float32)
 
             mock_model = MagicMock()
             mock_model.encode.return_value = unnormalized
@@ -188,12 +184,8 @@ class TestEmbeddingInterface:
             seen["kwargs"] = kwargs
             return func(*args, **kwargs)
 
-        monkeypatch.setattr(
-            "bot.rag.embedding_interface.asyncio.to_thread", fake_to_thread
-        )
-        monkeypatch.setattr(
-            embedding_model, "_load_sentence_transformer_sync", fake_loader
-        )
+        monkeypatch.setattr("bot.rag.embedding_interface.asyncio.to_thread", fake_to_thread)
+        monkeypatch.setattr(embedding_model, "_load_sentence_transformer_sync", fake_loader)
 
         await embedding_model._load_sentence_transformer()
 
@@ -230,13 +222,9 @@ class TestChromaBackend:
                 # Mock embedding model
                 mock_embedding = AsyncMock()
                 mock_embedding.get_embedding_dimension.return_value = 384
-                mock_embedding.encode.return_value = np.random.rand(1, 384).astype(
-                    np.float32
-                )
+                mock_embedding.encode.return_value = np.random.rand(1, 384).astype(np.float32)
 
-                backend = ChromaRAGBackend(
-                    db_path=temp_dir, embedding_model=mock_embedding
-                )
+                backend = ChromaRAGBackend(db_path=temp_dir, embedding_model=mock_embedding)
 
                 await backend.initialize()
 
@@ -256,13 +244,9 @@ class TestChromaBackend:
 
                 mock_embedding = AsyncMock()
                 mock_embedding.get_embedding_dimension.return_value = 384
-                mock_embedding.encode.return_value = np.random.rand(2, 384).astype(
-                    np.float32
-                )
+                mock_embedding.encode.return_value = np.random.rand(2, 384).astype(np.float32)
 
-                backend = ChromaRAGBackend(
-                    db_path=temp_dir, embedding_model=mock_embedding
-                )
+                backend = ChromaRAGBackend(db_path=temp_dir, embedding_model=mock_embedding)
 
                 await backend.initialize()
 
@@ -291,15 +275,11 @@ class TestRAGBootstrap:
 
             # Create test files
             (kb_path / "test1.txt").write_text("This is test file 1 content.")
-            (kb_path / "test2.md").write_text(
-                "# Test File 2\n\nThis is markdown content."
-            )
+            (kb_path / "test2.md").write_text("# Test File 2\n\nThis is markdown content.")
 
             # Mock RAG backend
             mock_backend = AsyncMock()
-            mock_backend.add_document.return_value = [
-                VectorDocument.create("test", "chunk", np.random.rand(384), 0)
-            ]
+            mock_backend.add_document.return_value = [VectorDocument.create("test", "chunk", np.random.rand(384), 0)]
 
             bootstrap = RAGBootstrap(mock_backend, str(kb_path))
 
@@ -324,9 +304,7 @@ class TestRAGBootstrap:
             test_file.write_text("Initial content")
 
             mock_backend = AsyncMock()
-            mock_backend.add_document.return_value = [
-                VectorDocument.create("test", "chunk", np.random.rand(384), 0)
-            ]
+            mock_backend.add_document.return_value = [VectorDocument.create("test", "chunk", np.random.rand(384), 0)]
 
             bootstrap = RAGBootstrap(mock_backend, str(kb_path))
 
@@ -357,9 +335,7 @@ class TestHybridSearch:
             (kb_path / "test.txt").write_text("Test knowledge base content.")
 
             with patch("chromadb.PersistentClient"):
-                search_system = HybridRAGSearch(
-                    kb_path=str(kb_path), db_path=temp_dir, enable_rag=True
-                )
+                search_system = HybridRAGSearch(kb_path=str(kb_path), db_path=temp_dir, enable_rag=True)
 
                 # Mock the embedding model to avoid actual model loading
                 with patch.object(search_system, "rag_backend") as mock_backend:

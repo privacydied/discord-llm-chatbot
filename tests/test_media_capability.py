@@ -85,9 +85,7 @@ class TestMediaCapabilityDetector:
         assert detector._is_cache_valid(valid_entry)
 
         # Invalid cache entry (old)
-        invalid_entry = {
-            "timestamp": current_time - 400
-        }  # 400 seconds ago (> 300s TTL)
+        invalid_entry = {"timestamp": current_time - 400}  # 400 seconds ago (> 300s TTL)
         assert not detector._is_cache_valid(invalid_entry)
 
         # Entry without timestamp
@@ -200,9 +198,7 @@ class TestMediaCapabilityDetector:
         }
 
         # Mock fresh probe
-        with patch.object(
-            detector, "_probe_url_lightweight", return_value=(True, "media available")
-        ):
+        with patch.object(detector, "_probe_url_lightweight", return_value=(True, "media available")):
             result = await detector.is_media_capable(url)
 
         assert result.is_media_capable is True
@@ -215,9 +211,7 @@ class TestMediaCapabilityDetector:
         """Test capability check with fresh probe."""
         url = "https://youtube.com/watch?v=test123"
 
-        with patch.object(
-            detector, "_probe_url_lightweight", return_value=(True, "media available")
-        ):
+        with patch.object(detector, "_probe_url_lightweight", return_value=(True, "media available")):
             result = await detector.is_media_capable(url)
 
         assert result.is_media_capable is True
@@ -338,9 +332,7 @@ class TestConvenienceFunctions:
         url = "https://youtube.com/watch?v=test123"
 
         with patch("bot.media_capability.media_detector") as mock_detector:
-            mock_detector.is_media_capable.return_value = ProbeResult(
-                is_media_capable=True, reason="media available"
-            )
+            mock_detector.is_media_capable.return_value = ProbeResult(is_media_capable=True, reason="media available")
 
             result = await is_media_capable_url(url)
 
@@ -354,9 +346,7 @@ class TestConvenienceFunctions:
         url = "https://twitter.com/user/status/123"
 
         with patch("bot.media_capability.media_detector") as mock_detector:
-            mock_detector.is_twitter_video_present.return_value = ProbeResult(
-                is_media_capable=True, reason="twitter video detected"
-            )
+            mock_detector.is_twitter_video_present.return_value = ProbeResult(is_media_capable=True, reason="twitter video detected")
 
             result = await is_twitter_video_url(url)
 

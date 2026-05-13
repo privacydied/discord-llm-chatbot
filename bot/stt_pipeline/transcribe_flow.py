@@ -39,7 +39,5 @@ async def preprocess_and_transcribe(
         downgrade_threshold_s=downgrade_threshold_s,
         logger=logger,
     )
-    transcript = await run_whisper_with_fallback(
-        pre, spans, spec, ram_guard, job=job, language=language
-    )
+    transcript = await run_whisper_with_fallback(pre, spans, spec, ram_guard, job=job, language=language)
     return pre, transcript

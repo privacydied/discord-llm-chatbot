@@ -117,16 +117,11 @@ class BotEventHandler(commands.Cog):
                     else:
                         audio_path = gen_res
 
-
                     if audio_path and Path(audio_path).exists():
                         # Send only voice response when TTS is active
-                        await ctx.send(
-                            file=discord.File(str(audio_path), filename="tts.ogg")
-                        )
+                        await ctx.send(file=discord.File(str(audio_path), filename="tts.ogg"))
                     else:
-                        logger.error(
-                            f"TTS synthesis produced no file for: {text_response}"
-                        )
+                        logger.error(f"TTS synthesis produced no file for: {text_response}")
                         # Fall back to text on TTS failure
                         await ctx.send(text_response)
                 except Exception as e:
@@ -154,33 +149,23 @@ class BotEventHandler(commands.Cog):
 # Background task for cache maintenance
 async def cache_maintenance_task(bot: commands.Bot):
     """Background task to clean up old cache files."""
-    logger.info(
-        "Starting TTS cache maintenance task [subsys: tts_cache, event: task_start]"
-    )
+    logger.info("Starting TTS cache maintenance task [subsys: tts_cache, event: task_start]")
     while True:
         try:
-            logger.debug(
-                "Running TTS cache maintenance... [subsys: tts_cache, event: task_run]"
-            )
+            logger.debug("Running TTS cache maintenance... [subsys: tts_cache, event: task_run]")
             # Get stats before cleanup
             stats_before = bot.tts_manager.get_cache_stats()
-            logger.debug(
-                f"Cache stats before cleanup: {stats_before} [subsys: tts_cache, event: stats_before]"
-            )
+            logger.debug(f"Cache stats before cleanup: {stats_before} [subsys: tts_cache, event: stats_before]")
 
             # Run the cleanup
             bot.tts_manager.purge_old_cache()  # This is a synchronous method
 
             # Get stats after cleanup
             stats_after = bot.tts_manager.get_cache_stats()
-            logger.info(
-                f"TTS cache maintenance completed. Stats before: {stats_before}, after: {stats_after} [subsys: tts_cache, event: task_success]"
-            )
+            logger.info(f"TTS cache maintenance completed. Stats before: {stats_before}, after: {stats_after} [subsys: tts_cache, event: task_success]")
 
             # Wait for 24 hours before next run
-            logger.debug(
-                "Next TTS cache maintenance in 24 hours... [subsys: tts_cache, event: task_sleep]"
-            )
+            logger.debug("Next TTS cache maintenance in 24 hours... [subsys: tts_cache, event: task_sleep]")
             await asyncio.sleep(86400)  # Run daily
 
         except Exception as e:
@@ -188,9 +173,7 @@ async def cache_maintenance_task(bot: commands.Bot):
                 f"TTS cache maintenance failed: {str(e)} [subsys: tts_cache, event: task_fail]",
                 exc_info=True,
             )
-            logger.info(
-                "Retrying TTS cache maintenance in 1 hour... [subsys: tts_cache, event: task_retry]"
-            )
+            logger.info("Retrying TTS cache maintenance in 1 hour... [subsys: tts_cache, event: task_retry]")
             await asyncio.sleep(3600)  # Retry in 1 hour
 
 
@@ -198,8 +181,6 @@ async def setup(bot) -> None:
     """Set up event handlers."""
     if "BotEventHandler" not in bot.cogs:
         await bot.add_cog(BotEventHandler(bot))
-        logger.info(
-            f"Event handlers loaded. [subsys: core, event: cog_load_success, cog: {__name__}]"
-        )
+        logger.info(f"Event handlers loaded. [subsys: core, event: cog_load_success, cog: {__name__}]")
     else:
         logger.debug("BotEventHandler already loaded.")

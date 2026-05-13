@@ -27,13 +27,9 @@ class ImageUpgradeManager:
 
         # Parse enabled upgrade reactions from config
         reactions_str = self.config.get("IMAGE_UPGRADE_REACTIONS", "🖼️,🔎,🏷️,🧠,↩️")
-        self.enabled_reactions = [
-            r.strip() for r in reactions_str.split(",") if r.strip()
-        ]
+        self.enabled_reactions = [r.strip() for r in reactions_str.split(",") if r.strip()]
 
-        logger.info(
-            f"✅ ImageUpgradeManager initialized with reactions: {self.enabled_reactions}"
-        )
+        logger.info(f"✅ ImageUpgradeManager initialized with reactions: {self.enabled_reactions}")
 
     def store_upgrade_context(
         self,
@@ -70,9 +66,7 @@ class ImageUpgradeManager:
             "upgraded": set(),  # Track which upgrades were already applied
         }
 
-        logger.info(
-            f"📝 Stored upgrade context for message {message_id}: {len(original_analysis)} images"
-        )
+        logger.info(f"📝 Stored upgrade context for message {message_id}: {len(original_analysis)} images")
 
         # Return an awaitable-friendly object so tests can optionally await the call
         fut = asyncio.get_event_loop().create_future()
@@ -99,18 +93,12 @@ class ImageUpgradeManager:
                 await message.add_reaction(emoji)
                 await asyncio.sleep(0.2)  # Rate limit protection
 
-            logger.info(
-                f"✅ Added {len(self.enabled_reactions)} upgrade reactions to message {message.id}"
-            )
+            logger.info(f"✅ Added {len(self.enabled_reactions)} upgrade reactions to message {message.id}")
 
         except Exception as e:
-            logger.error(
-                f"❌ Failed to add upgrade reactions to message {message.id}: {e}"
-            )
+            logger.error(f"❌ Failed to add upgrade reactions to message {message.id}: {e}")
 
-    async def handle_upgrade_reaction(
-        self, payload: discord.RawReactionActionEvent
-    ) -> Optional[str]:
+    async def handle_upgrade_reaction(self, payload: discord.RawReactionActionEvent) -> Optional[str]:
         """
         Handle upgrade reaction and return expanded content.
 
@@ -141,9 +129,7 @@ class ImageUpgradeManager:
 
             upgrade_key = f"{emoji}_{user_id}"
             if upgrade_key in context["upgraded"]:
-                logger.debug(
-                    f"🔄 Upgrade {emoji} already applied by user {user_id} for message {message_id}"
-                )
+                logger.debug(f"🔄 Upgrade {emoji} already applied by user {user_id} for message {message_id}")
                 return None
 
             # Process the upgrade
@@ -152,9 +138,7 @@ class ImageUpgradeManager:
             if expanded_content:
                 # Mark this upgrade as applied
                 context["upgraded"].add(upgrade_key)
-                logger.info(
-                    f"✅ Applied upgrade {emoji} for user {user_id} on message {message_id}"
-                )
+                logger.info(f"✅ Applied upgrade {emoji} for user {user_id} on message {message_id}")
                 return expanded_content
 
             return None
@@ -163,9 +147,7 @@ class ImageUpgradeManager:
             logger.error(f"❌ Error handling upgrade reaction: {e}", exc_info=True)
             return None
 
-    async def _process_upgrade(
-        self, emoji: str, context: Dict[str, Any]
-    ) -> Optional[str]:
+    async def _process_upgrade(self, emoji: str, context: Dict[str, Any]) -> Optional[str]:
         """
         Process a specific upgrade request and return expanded content.
 
@@ -184,9 +166,7 @@ class ImageUpgradeManager:
             photos = syn_data.get("photos") or []
 
             if emoji == "🖼️":  # Detailed caption
-                return await self._generate_detailed_caption(
-                    photos, original_analysis, url
-                )
+                return await self._generate_detailed_caption(photos, original_analysis, url)
 
             elif emoji == "🔎":  # OCR details
                 return await self._generate_ocr_details(photos, url)
@@ -195,9 +175,7 @@ class ImageUpgradeManager:
                 return await self._generate_tags(original_analysis, url)
 
             elif emoji == "🧠":  # Explain
-                return await self._generate_explanation(
-                    syn_data, original_analysis, url
-                )
+                return await self._generate_explanation(syn_data, original_analysis, url)
 
             elif emoji == "↩️":  # Thread context
                 return await self._generate_thread_context(syn_data, url)
@@ -210,39 +188,27 @@ class ImageUpgradeManager:
             logger.error(f"❌ Error processing upgrade {emoji}: {e}", exc_info=True)
             return None
 
-    async def _get_detailed_vision_analysis(
-        self, photo: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def _get_detailed_vision_analysis(self, photo: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Stub for detailed vision analysis; can be patched in tests."""
         return None
 
-    async def _get_ocr_analysis(
-        self, photo: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    async def _get_ocr_analysis(self, photo: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Stub for OCR extraction; can be patched in tests."""
         return None
 
-    async def _get_thread_context(
-        self, syn_data: Dict[str, Any], url: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _get_thread_context(self, syn_data: Dict[str, Any], url: str) -> Optional[Dict[str, Any]]:
         """Stub for thread context retrieval; can be patched in tests."""
         return None
 
-    async def _generate_detailed_caption(
-        self, photos: List[Dict[str, Any]], original_analysis: List[str], url: str
-    ) -> str:
+    async def _generate_detailed_caption(self, photos: List[Dict[str, Any]], original_analysis: List[str], url: str) -> str:
         """Generate detailed image captions with composition and attributes. [CA]"""
         try:
             detailed_parts = ["🖼️ **Detailed Caption**"]
 
             for idx, photo in enumerate(photos, start=1):
                 analysis_list = original_analysis or []
-                analysis = (
-                    analysis_list[idx - 1] if idx - 1 < len(analysis_list) else ""
-                )
-                photo_url = (
-                    photo.get("url") or photo.get("image_url") or photo.get("src")
-                )
+                analysis = analysis_list[idx - 1] if idx - 1 < len(analysis_list) else ""
+                photo_url = photo.get("url") or photo.get("image_url") or photo.get("src")
                 if not photo_url:
                     continue
 
@@ -250,9 +216,7 @@ class ImageUpgradeManager:
                 if detailed_analysis is None:
                     router = self.bot.router if hasattr(self.bot, "router") else None
                     if router and hasattr(router, "_vl_describe_image_from_url"):
-                        detailed_analysis = await router._vl_describe_image_from_url(
-                            photo_url, prompt="Provide a detailed description"
-                        )
+                        detailed_analysis = await router._vl_describe_image_from_url(photo_url, prompt="Provide a detailed description")
 
                 text_block = ""
                 if isinstance(detailed_analysis, dict):
@@ -273,18 +237,14 @@ class ImageUpgradeManager:
             logger.error(f"❌ Error generating detailed caption: {e}")
             return "⚠️ Could not generate detailed description right now."
 
-    async def _generate_ocr_details(
-        self, photos: List[Dict[str, Any]], url: str
-    ) -> str:
+    async def _generate_ocr_details(self, photos: List[Dict[str, Any]], url: str) -> str:
         """Generate detailed OCR text extraction from images. [IV]"""
         try:
             ocr_parts = ["🔎 **OCR Text Details**"]
             found_text = False
 
             for idx, photo in enumerate(photos, start=1):
-                photo_url = (
-                    photo.get("url") or photo.get("image_url") or photo.get("src")
-                )
+                photo_url = photo.get("url") or photo.get("image_url") or photo.get("src")
                 if not photo_url:
                     continue
 
@@ -298,42 +258,25 @@ class ImageUpgradeManager:
                 try:
                     router = self.bot.router if hasattr(self.bot, "router") else None
                     ocr_result = await self._get_ocr_analysis(photo)
-                    if (
-                        ocr_result is None
-                        and router
-                        and hasattr(router, "_vl_describe_image_from_url")
-                    ):
-                        ocr_result = await router._vl_describe_image_from_url(
-                            photo_url, prompt=ocr_prompt
-                        )
+                    if ocr_result is None and router and hasattr(router, "_vl_describe_image_from_url"):
+                        ocr_result = await router._vl_describe_image_from_url(photo_url, prompt=ocr_prompt)
 
                     if isinstance(ocr_result, dict):
                         ocr_text = ocr_result.get("ocr_text") or ""
                     else:
                         ocr_text = ocr_result or ""
 
-                    if ocr_text and any(
-                        keyword in ocr_text.lower()
-                        for keyword in ["text", "says", "reads", '"', "invoice"]
-                    ):
+                    if ocr_text and any(keyword in ocr_text.lower() for keyword in ["text", "says", "reads", '"', "invoice"]):
                         found_text = True
-                        header = (
-                            f"**Image {idx}/{len(photos)}:**" if len(photos) > 1 else ""
-                        )
+                        header = f"**Image {idx}/{len(photos)}:**" if len(photos) > 1 else ""
                         ocr_parts.append(f"{header}\n{ocr_text}".strip())
                     else:
-                        header = (
-                            f"**Image {idx}/{len(photos)}:**" if len(photos) > 1 else ""
-                        )
-                        ocr_parts.append(
-                            f"{header}\n*No readable text detected*".strip()
-                        )
+                        header = f"**Image {idx}/{len(photos)}:**" if len(photos) > 1 else ""
+                        ocr_parts.append(f"{header}\n*No readable text detected*".strip())
 
                 except Exception as ocr_err:
                     logger.error(f"❌ OCR analysis failed for image {idx}: {ocr_err}")
-                    ocr_parts.append(
-                        f"**Image {idx}/{len(photos)}:** Could not extract text"
-                    )
+                    ocr_parts.append(f"**Image {idx}/{len(photos)}:** Could not extract text")
 
             if not found_text and len(photos) == 1:
                 return "**🔎 Text Content (OCR)**\n\n*No readable text detected in this image.*"
@@ -390,11 +333,7 @@ class ImageUpgradeManager:
                     found_tags.append(obj)
 
             # Add some context tags
-            if (
-                "outdoor" in text_lower
-                or "street" in text_lower
-                or "building" in text_lower
-            ):
+            if "outdoor" in text_lower or "street" in text_lower or "building" in text_lower:
                 found_tags.append("outdoor")
             if "indoor" in text_lower or "room" in text_lower or "inside" in text_lower:
                 found_tags.append("indoor")
@@ -412,9 +351,7 @@ class ImageUpgradeManager:
             logger.error(f"❌ Error generating tags: {e}")
             return "⚠️ Could not generate tags right now."
 
-    async def _generate_explanation(
-        self, syn_data: Dict[str, Any], original_analysis: List[str], url: str
-    ) -> str:
+    async def _generate_explanation(self, syn_data: Dict[str, Any], original_analysis: List[str], url: str) -> str:
         """Generate neutral explanation of why the image might be interesting. [SFT]"""
         try:
             # Extract context
@@ -429,26 +366,16 @@ class ImageUpgradeManager:
             # Basic interest detection patterns
             interest_indicators = []
 
-            if any(
-                word in analysis_text.lower()
-                for word in ["unusual", "unique", "interesting", "notable"]
-            ):
+            if any(word in analysis_text.lower() for word in ["unusual", "unique", "interesting", "notable"]):
                 interest_indicators.append("Contains noteworthy visual elements")
 
-            if any(
-                word in analysis_text.lower()
-                for word in ["text", "sign", "writing", "document"]
-            ):
+            if any(word in analysis_text.lower() for word in ["text", "sign", "writing", "document"]):
                 interest_indicators.append("Contains readable text or signage")
 
-            if any(
-                word in analysis_text.lower() for word in ["person", "people", "group"]
-            ):
+            if any(word in analysis_text.lower() for word in ["person", "people", "group"]):
                 interest_indicators.append("Shows people or social activity")
 
-            if any(
-                word in analysis_text.lower() for word in ["product", "brand", "logo"]
-            ):
+            if any(word in analysis_text.lower() for word in ["product", "brand", "logo"]):
                 interest_indicators.append("Features commercial or branded content")
 
             # Build neutral explanation
@@ -457,13 +384,9 @@ class ImageUpgradeManager:
                 for indicator in interest_indicators[:3]:  # Limit to top 3
                     explanation_parts.append(f"• {indicator}")
             else:
-                explanation_parts.append(
-                    "This appears to be a general social media image without specific notable features."
-                )
+                explanation_parts.append("This appears to be a general social media image without specific notable features.")
 
-            explanation_parts.append(
-                f"\n*Shared by @{username} without accompanying text.*"
-            )
+            explanation_parts.append(f"\n*Shared by @{username} without accompanying text.*")
 
             return "\n".join(explanation_parts)
 
@@ -511,9 +434,7 @@ class ImageUpgradeManager:
             context_parts.append(f"**URL:** {url}")
 
             # Note about thread context limitation
-            context_parts.append(
-                "\n*Thread context limited - this shows basic tweet metadata only.*"
-            )
+            context_parts.append("\n*Thread context limited - this shows basic tweet metadata only.*")
 
             return "\n".join(context_parts)
 
@@ -535,9 +456,7 @@ class ImageUpgradeManager:
                 del self.upgrade_cache[key]
 
             if expired_keys:
-                logger.info(
-                    f"🧹 Cleaned up {len(expired_keys)} expired upgrade contexts"
-                )
+                logger.info(f"🧹 Cleaned up {len(expired_keys)} expired upgrade contexts")
 
         except Exception as e:
             logger.error(f"❌ Error cleaning up upgrade cache: {e}")
@@ -564,9 +483,7 @@ class ImageUpgradeCommands(commands.Cog):
                 return
 
             # Check for upgrade reaction
-            expanded_content = await self.upgrade_manager.handle_upgrade_reaction(
-                payload
-            )
+            expanded_content = await self.upgrade_manager.handle_upgrade_reaction(payload)
 
             if expanded_content:
                 # Get the channel and message
@@ -594,22 +511,14 @@ class ImageUpgradeCommands(commands.Cog):
                     else:
                         await message.edit(content=new_content)
 
-                    logger.info(
-                        f"✅ Applied upgrade reaction {payload.emoji} to message {payload.message_id}"
-                    )
+                    logger.info(f"✅ Applied upgrade reaction {payload.emoji} to message {payload.message_id}")
 
                 except discord.NotFound:
-                    logger.warning(
-                        f"⚠️ Message {payload.message_id} not found for upgrade"
-                    )
+                    logger.warning(f"⚠️ Message {payload.message_id} not found for upgrade")
                 except discord.Forbidden:
-                    logger.warning(
-                        f"⚠️ No permission to edit message {payload.message_id}"
-                    )
+                    logger.warning(f"⚠️ No permission to edit message {payload.message_id}")
                 except Exception as e:
-                    logger.error(
-                        f"❌ Error applying upgrade to message {payload.message_id}: {e}"
-                    )
+                    logger.error(f"❌ Error applying upgrade to message {payload.message_id}: {e}")
 
         except Exception as e:
             logger.error(f"❌ Error handling reaction upgrade: {e}")

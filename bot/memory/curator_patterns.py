@@ -246,9 +246,7 @@ _PUBLIC_DISCLOSURE_SENSITIVE_PATTERNS = [
 ]
 
 # Compiled regex for is_public_safe — compile once at import.
-_PUBLIC_DISCLOSURE_RE = [
-    re.compile(p, flags=re.I) for p in _PUBLIC_DISCLOSURE_SENSITIVE_PATTERNS
-]
+_PUBLIC_DISCLOSURE_RE = [re.compile(p, flags=re.I) for p in _PUBLIC_DISCLOSURE_SENSITIVE_PATTERNS]
 
 
 def is_public_safe(text: str) -> bool:

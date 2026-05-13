@@ -18,6 +18,7 @@ async def get_relevant_memories(
 ) -> List[Dict[str, Any]]:
     # Low-resource top_k cap [Phase 6-9]
     from ..config import load_config as _retrieval_load_config
+
     _rc = _retrieval_load_config()
     lr_top_k = int(_rc.get("MEMORY_LOW_RESOURCE_TOP_K", top_k))
     effective_top_k = min(top_k, lr_top_k)

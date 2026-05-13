@@ -21,9 +21,7 @@ async def test_extract_tier_a_success_short_circuits() -> None:
     )
 
     svc._tier_a_httpx = AsyncMock(return_value=tier_a)
-    svc._tier_b_playwright = AsyncMock(
-        return_value=ExtractionResult(success=True, tier_used="B", text="nope")
-    )
+    svc._tier_b_playwright = AsyncMock(return_value=ExtractionResult(success=True, tier_used="B", text="nope"))
 
     res = await svc.extract("https://example.com")
 
@@ -38,9 +36,7 @@ async def test_extract_falls_back_to_tier_b_on_tier_a_failure() -> None:
     svc = WebExtractionService()
     svc._tier_b_available = True
 
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(success=False, tier_used="A", error="no text")
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=False, tier_used="A", error="no text"))
     svc._tier_b_playwright = AsyncMock(
         return_value=ExtractionResult(
             success=True,
@@ -65,9 +61,7 @@ async def test_extract_tier_a_http_status_sets_deterministic_error() -> None:
     req = httpx.Request("GET", "https://example.com")
     resp = httpx.Response(404, request=req)
 
-    svc._tier_a_httpx = AsyncMock(
-        side_effect=httpx.HTTPStatusError("boom", request=req, response=resp)
-    )
+    svc._tier_a_httpx = AsyncMock(side_effect=httpx.HTTPStatusError("boom", request=req, response=resp))
 
     res = await svc.extract("https://example.com")
 
@@ -81,13 +75,9 @@ async def test_extract_disables_tier_b_on_fatal_launch_failure() -> None:
     svc = WebExtractionService()
     svc._tier_b_available = True
 
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(success=False, tier_used="A", error="no text")
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=False, tier_used="A", error="no text"))
 
-    svc._tier_b_playwright = AsyncMock(
-        side_effect=Exception("Failed to launch browser")
-    )
+    svc._tier_b_playwright = AsyncMock(side_effect=Exception("Failed to launch browser"))
 
     res = await svc.extract("https://example.com")
 
@@ -101,13 +91,9 @@ async def test_extract_does_not_disable_tier_b_on_transient_page_closed_error() 
     svc = WebExtractionService()
     svc._tier_b_available = True
 
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(success=False, tier_used="A", error="no text")
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=False, tier_used="A", error="no text"))
 
-    svc._tier_b_playwright = AsyncMock(
-        side_effect=Exception("Target page, context or browser has been closed")
-    )
+    svc._tier_b_playwright = AsyncMock(side_effect=Exception("Target page, context or browser has been closed"))
 
     res = await svc.extract("https://example.com")
 
@@ -123,17 +109,9 @@ async def test_extract_does_not_disable_tier_b_on_version_mismatch_428() -> None
     svc = WebExtractionService()
     svc._tier_b_available = True
 
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(
-            success=False, tier_used="A", error="http_status:403"
-        )
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=False, tier_used="A", error="http_status:403"))
 
-    msg = (
-        "BrowserType.connect: WebSocket error: ws://localhost:3006/ "
-        "428 Precondition Required Playwright server version 1.59.1 "
-        "does not match client version 1.55.0"
-    )
+    msg = "BrowserType.connect: WebSocket error: ws://localhost:3006/ 428 Precondition Required Playwright server version 1.59.1 does not match client version 1.55.0"
     svc._tier_b_playwright = AsyncMock(side_effect=Exception(msg))
 
     res = await svc.extract("https://example.com")
@@ -147,8 +125,7 @@ async def test_extract_does_not_disable_tier_b_on_version_mismatch_428() -> None
 def test_is_playwright_fatal_error_version_mismatch() -> None:
     """Verify that connection/websocket/version-mismatch errors are NOT fatal."""
     non_fatal = [
-        "428 Precondition Required Playwright server version 1.59.1 "
-        "does not match client version 1.55.0",
+        "428 Precondition Required Playwright server version 1.59.1 does not match client version 1.55.0",
         "WebSocket error: ws://localhost:3006/ connection refused",
         "BrowserType.connect: WebSocket connection failed",
         "connect ECONNREFUSED 127.0.0.1:3006",

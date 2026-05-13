@@ -149,20 +149,12 @@ class VisionBudgetManager:
                 self._reset_expired_periods(budget)
 
                 # Check all quota levels
-                daily_remaining = budget.daily_limit - (
-                    budget.daily_spent + budget.reserved_amount
-                )
-                weekly_remaining = budget.weekly_limit - (
-                    budget.weekly_spent + budget.reserved_amount
-                )
-                monthly_remaining = budget.monthly_limit - (
-                    budget.monthly_spent + budget.reserved_amount
-                )
+                daily_remaining = budget.daily_limit - (budget.daily_spent + budget.reserved_amount)
+                weekly_remaining = budget.weekly_limit - (budget.weekly_spent + budget.reserved_amount)
+                monthly_remaining = budget.monthly_limit - (budget.monthly_spent + budget.reserved_amount)
 
                 # Find most restrictive limit
-                min_remaining = min(
-                    daily_remaining, weekly_remaining, monthly_remaining
-                )
+                min_remaining = min(daily_remaining, weekly_remaining, monthly_remaining)
 
                 # Check if request can be approved
                 approved = min_remaining >= estimated_cost
@@ -184,9 +176,7 @@ class VisionBudgetManager:
                         reset_time = budget.last_monthly_reset + timedelta(days=30)
 
                     reason = f"{limit_type} budget exceeded: ${estimated_cost:.3f} > ${min_remaining:.3f} remaining"
-                    user_message = self._generate_budget_message(
-                        limit_type, min_remaining, estimated_cost, reset_time
-                    )
+                    user_message = self._generate_budget_message(limit_type, min_remaining, estimated_cost, reset_time)
 
                 result = BudgetResult(
                     approved=approved,
@@ -237,9 +227,7 @@ class VisionBudgetManager:
             budget.reserved_amount += amount
             await self._save_user_budget(budget)
 
-            self.logger.debug(
-                f"Budget reserved - user_id: {user_id}, amount: {amount}, total_reserved: {budget.reserved_amount}"
-            )
+            self.logger.debug(f"Budget reserved - user_id: {user_id}, amount: {amount}, total_reserved: {budget.reserved_amount}")
 
     async def release_reservation(self, user_id: str, amount: float) -> None:
         """Release reserved budget amount (job cancelled/failed) [CMV]"""
@@ -249,13 +237,9 @@ class VisionBudgetManager:
             budget.reserved_amount = max(0.0, budget.reserved_amount - amount)
             await self._save_user_budget(budget)
 
-            self.logger.debug(
-                f"Budget reservation released - user_id: {user_id}, amount: {amount}, new_reserved: {budget.reserved_amount}"
-            )
+            self.logger.debug(f"Budget reservation released - user_id: {user_id}, amount: {amount}, new_reserved: {budget.reserved_amount}")
 
-    async def record_actual_cost(
-        self, user_id: str, reserved_amount: float, actual_cost: float
-    ) -> None:
+    async def record_actual_cost(self, user_id: str, reserved_amount: float, actual_cost: float) -> None:
         """Record actual job cost and adjust budget [CMV]"""
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
@@ -285,9 +269,7 @@ class VisionBudgetManager:
                 }
             )
 
-            self.logger.info(
-                f"Actual cost recorded - user_id: {user_id}, actual_cost: {actual_cost}, reserved_amount: {reserved_amount}, daily_total: {budget.daily_spent}, monthly_total: {budget.monthly_spent}"
-            )
+            self.logger.info(f"Actual cost recorded - user_id: {user_id}, actual_cost: {actual_cost}, reserved_amount: {reserved_amount}, daily_total: {budget.daily_spent}, monthly_total: {budget.monthly_spent}")
 
     async def get_user_budget_status(self, user_id: str) -> Dict[str, Any]:
         """Get detailed budget status for user [CMV]"""
@@ -301,32 +283,20 @@ class VisionBudgetManager:
                     "limit": budget.daily_limit,
                     "spent": budget.daily_spent,
                     "reserved": budget.reserved_amount,
-                    "remaining": budget.daily_limit
-                    - budget.daily_spent
-                    - budget.reserved_amount,
-                    "reset_time": (
-                        budget.last_daily_reset + timedelta(days=1)
-                    ).isoformat(),
+                    "remaining": budget.daily_limit - budget.daily_spent - budget.reserved_amount,
+                    "reset_time": (budget.last_daily_reset + timedelta(days=1)).isoformat(),
                 },
                 "weekly": {
                     "limit": budget.weekly_limit,
                     "spent": budget.weekly_spent,
-                    "remaining": budget.weekly_limit
-                    - budget.weekly_spent
-                    - budget.reserved_amount,
-                    "reset_time": (
-                        budget.last_weekly_reset + timedelta(weeks=1)
-                    ).isoformat(),
+                    "remaining": budget.weekly_limit - budget.weekly_spent - budget.reserved_amount,
+                    "reset_time": (budget.last_weekly_reset + timedelta(weeks=1)).isoformat(),
                 },
                 "monthly": {
                     "limit": budget.monthly_limit,
                     "spent": budget.monthly_spent,
-                    "remaining": budget.monthly_limit
-                    - budget.monthly_spent
-                    - budget.reserved_amount,
-                    "reset_time": (
-                        budget.last_monthly_reset + timedelta(days=30)
-                    ).isoformat(),
+                    "remaining": budget.monthly_limit - budget.monthly_spent - budget.reserved_amount,
+                    "reset_time": (budget.last_monthly_reset + timedelta(days=30)).isoformat(),
                 },
                 "lifetime": {
                     "total_spent": budget.total_spent,
@@ -354,9 +324,7 @@ class VisionBudgetManager:
 
             await self._save_user_budget(budget)
 
-            self.logger.info(
-                f"User budget adjusted - user_id: {user_id}, daily_limit: {budget.daily_limit}, monthly_limit: {budget.monthly_limit}"
-            )
+            self.logger.info(f"User budget adjusted - user_id: {user_id}, daily_limit: {budget.daily_limit}, monthly_limit: {budget.monthly_limit}")
 
     async def get_spend_analytics(self, days: int = 30) -> Dict[str, Any]:
         """Get spending analytics across all users [CMV]"""
@@ -376,9 +344,7 @@ class VisionBudgetManager:
                 async for line in f:
                     try:
                         record = json.loads(line.strip())
-                        record_time = datetime.fromisoformat(
-                            record["timestamp"].replace("Z", "+00:00")
-                        )
+                        record_time = datetime.fromisoformat(record["timestamp"].replace("Z", "+00:00"))
 
                         if record_time >= cutoff_time:
                             actual_cost = record.get("actual_cost", 0.0)
@@ -387,9 +353,7 @@ class VisionBudgetManager:
                             users.add(record.get("user_id"))
 
                             provider = record.get("provider", "unknown")
-                            provider_spend[provider] = (
-                                provider_spend.get(provider, 0.0) + actual_cost
-                            )
+                            provider_spend[provider] = provider_spend.get(provider, 0.0) + actual_cost
 
                             task = record.get("task", "unknown")
                             task_spend[task] = task_spend.get(task, 0.0) + actual_cost
@@ -439,9 +403,7 @@ class VisionBudgetManager:
 
         return min(daily_reset, weekly_reset, monthly_reset)
 
-    def _generate_budget_message(
-        self, limit_type: str, remaining: float, requested: float, reset_time: datetime
-    ) -> str:
+    def _generate_budget_message(self, limit_type: str, remaining: float, requested: float, reset_time: datetime) -> str:
         """Generate user-friendly budget limit message [CMV]"""
         time_until_reset = reset_time - datetime.now(timezone.utc)
 
@@ -469,12 +431,7 @@ class VisionBudgetManager:
     async def _load_user_budget(self, user_id: str) -> UserBudget:
         """Load user budget from file or create default [CMV]"""
         # Check cache first
-        if (
-            user_id in self._budget_cache
-            and user_id in self._cache_timestamps
-            and datetime.now(timezone.utc) - self._cache_timestamps[user_id]
-            < timedelta(seconds=self._cache_ttl)
-        ):
+        if user_id in self._budget_cache and user_id in self._cache_timestamps and datetime.now(timezone.utc) - self._cache_timestamps[user_id] < timedelta(seconds=self._cache_ttl):
             return self._budget_cache[user_id]
 
         budget_file = self.budget_dir / f"{user_id}.json"
@@ -491,9 +448,7 @@ class VisionBudgetManager:
                     "last_monthly_reset",
                 ]:
                     if field in data and isinstance(data[field], str):
-                        data[field] = datetime.fromisoformat(
-                            data[field].replace("Z", "+00:00")
-                        )
+                        data[field] = datetime.fromisoformat(data[field].replace("Z", "+00:00"))
 
                 budget = UserBudget(**data)
             else:

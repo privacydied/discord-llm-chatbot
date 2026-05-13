@@ -194,12 +194,8 @@ async def test_logging_output_single_trace(test_bot, caplog):
     await test_bot.setup_hook()
 
     # Verify single setup start and completion messages
-    setup_start_messages = [
-        record for record in caplog.records if "Starting bot setup" in record.message
-    ]
-    setup_complete_messages = [
-        record for record in caplog.records if "Bot setup complete" in record.message
-    ]
+    setup_start_messages = [record for record in caplog.records if "Starting bot setup" in record.message]
+    setup_complete_messages = [record for record in caplog.records if "Bot setup complete" in record.message]
 
     assert len(setup_start_messages) == 1
     assert len(setup_complete_messages) == 1
@@ -209,20 +205,11 @@ async def test_logging_output_single_trace(test_bot, caplog):
     await test_bot.setup_hook()
 
     # Verify no additional setup messages (only skip message)
-    setup_messages = [
-        record
-        for record in caplog.records
-        if "Starting bot setup" in record.message
-        or "Bot setup complete" in record.message
-    ]
+    setup_messages = [record for record in caplog.records if "Starting bot setup" in record.message or "Bot setup complete" in record.message]
     assert len(setup_messages) == 0
 
     # Should have skip message (at DEBUG level)
-    skip_messages = [
-        record
-        for record in caplog.records
-        if "Setup hook called but boot already completed" in record.message
-    ]
+    skip_messages = [record for record in caplog.records if "Setup hook called but boot already completed" in record.message]
     assert len(skip_messages) == 1
 
 
@@ -249,21 +236,11 @@ async def test_initialization_order_preserved(test_bot):
         return original()
 
     # Replace methods with tracking versions
-    test_bot.load_profiles = lambda: async_track_call(
-        "load_profiles", original_methods["load_profiles"]
-    )
-    test_bot.setup_background_tasks = lambda: sync_track_call(
-        "setup_background_tasks", original_methods["setup_background_tasks"]
-    )
-    test_bot.setup_tts = lambda: async_track_call(
-        "setup_tts", original_methods["setup_tts"]
-    )
-    test_bot.setup_router = lambda: async_track_call(
-        "setup_router", original_methods["setup_router"]
-    )
-    test_bot.load_extensions = lambda: async_track_call(
-        "load_extensions", original_methods["load_extensions"]
-    )
+    test_bot.load_profiles = lambda: async_track_call("load_profiles", original_methods["load_profiles"])
+    test_bot.setup_background_tasks = lambda: sync_track_call("setup_background_tasks", original_methods["setup_background_tasks"])
+    test_bot.setup_tts = lambda: async_track_call("setup_tts", original_methods["setup_tts"])
+    test_bot.setup_router = lambda: async_track_call("setup_router", original_methods["setup_router"])
+    test_bot.load_extensions = lambda: async_track_call("load_extensions", original_methods["load_extensions"])
 
     # Run setup
     await test_bot.setup_hook()
@@ -393,9 +370,7 @@ async def test_load_extensions_with_rich_output(test_bot):
             return None  # Simulate cog not found after setup
         # Return a mock cog for successful loads
         mock_cog = MagicMock()
-        mock_cog.get_commands.return_value = [
-            MagicMock() for _ in range(3)
-        ]  # 3 commands per cog
+        mock_cog.get_commands.return_value = [MagicMock() for _ in range(3)]  # 3 commands per cog
         return mock_cog
 
     # Create a mock cogs property that returns our test cogs

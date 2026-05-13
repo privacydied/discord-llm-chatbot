@@ -247,9 +247,7 @@ def _detect_x_twitter_media(message: Message) -> XTwitterMediaInfo:
     has_x_link = any(host in content_lower for host in canonical_hosts)
 
     tweet_urls: List[str] = []
-    url_pattern = (
-        r"https?://(?:www\.)?(?:x|twitter|fxtwitter|vxtwitter|fixupx)\.com/\S+"
-    )
+    url_pattern = r"https?://(?:www\.)?(?:x|twitter|fxtwitter|vxtwitter|fixupx)\.com/\S+"
     for match in re.finditer(url_pattern, message.content or "", re.IGNORECASE):
         u = match.group(0)
         if u not in tweet_urls:
@@ -268,11 +266,7 @@ def _detect_x_twitter_media(message: Message) -> XTwitterMediaInfo:
         author_url = (getattr(author, "url", "") or "").lower()
 
         is_x_embed = any(host in embed_url_l for host in canonical_hosts)
-        is_x_embed = (
-            is_x_embed
-            or any(host in author_url for host in canonical_hosts)
-            or "twitter" in provider_name
-        )
+        is_x_embed = is_x_embed or any(host in author_url for host in canonical_hosts) or "twitter" in provider_name
 
         if is_x_embed:
             has_x_link = True
@@ -302,9 +296,7 @@ def _detect_x_twitter_media(message: Message) -> XTwitterMediaInfo:
             image_url = None
             if getattr(embed, "image", None) and getattr(embed.image, "url", None):
                 image_url = embed.image.url
-            elif getattr(embed, "thumbnail", None) and getattr(
-                embed.thumbnail, "url", None
-            ):
+            elif getattr(embed, "thumbnail", None) and getattr(embed.thumbnail, "url", None):
                 image_url = embed.thumbnail.url
 
             if image_url:
@@ -402,9 +394,7 @@ class Router:
         self.logger.info("✔ Router initialized.")
         try:
             routing_flags = {
-                "speak_only_when_spoken": self.config.get(
-                    "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", True
-                ),
+                "speak_only_when_spoken": self.config.get("BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", True),
                 "vision_enabled": self.config.get("VISION_ENABLED", True),
                 "vision_t2i_enabled": self.config.get("VISION_T2I_ENABLED", True),
                 "voice_native": self.config.get("VOICE_ENABLE_NATIVE", False),
@@ -430,9 +420,7 @@ class Router:
         self._runtime_compat = runtime_compat
         self._syn_ttl_s = runtime_compat.syn_ttl_s
         # Canonical fx/vx context cache to share frontend + primary mappings downstream [REH]
-        self._x_frontend_canon: "collections.OrderedDict[str, Dict[str, str]]" = (
-            collections.OrderedDict()
-        )
+        self._x_frontend_canon: "collections.OrderedDict[str, Dict[str, str]]" = collections.OrderedDict()
         # Gate tracking to coordinate pre-dispatch decisions with router execution
         self._gate_denied: Dict[int, str] = {}
         self._prefilter_gate: Dict[int, bool] = {}
@@ -440,16 +428,10 @@ class Router:
         # Vision generation system [CA][SFT]
         self._vision_intent_router: Optional[VisionIntentRouter] = None
         # Single source of truth: orchestrator is owned by the bot
-        self._vision_orchestrator: Optional[VisionOrchestrator] = getattr(
-            bot, "vision_orchestrator", None
-        )
+        self._vision_orchestrator: Optional[VisionOrchestrator] = getattr(bot, "vision_orchestrator", None)
 
         # Router fallback: if bot didn't provide an orchestrator, create and attach one [REH]
-        if (
-            self._vision_orchestrator is None
-            and VisionOrchestrator is not None
-            and self.config.get("VISION_ENABLED", True)
-        ):
+        if self._vision_orchestrator is None and VisionOrchestrator is not None and self.config.get("VISION_ENABLED", True):
             try:
                 self._vision_orchestrator = VisionOrchestrator(self.config)
                 setattr(self.bot, "vision_orchestrator", self._vision_orchestrator)
@@ -464,23 +446,10 @@ class Router:
         # Eagerly start the vision orchestrator in the background to reduce cold-start delays [PA]
         try:
             loop = asyncio.get_running_loop()
-            if (
-                loop
-                and loop.is_running()
-                and self._vision_orchestrator
-                and not getattr(self._vision_orchestrator, "_started", False)
-            ):
+            if loop and loop.is_running() and self._vision_orchestrator and not getattr(self._vision_orchestrator, "_started", False):
                 # Create task with done callback for error logging [REH]
                 _task = asyncio.create_task(self._vision_orchestrator.start())
-                _task.add_done_callback(
-                    lambda t: (
-                        self.logger.error(
-                            f"Vision orchestrator start task failed: {t.exception()}"
-                        )
-                        if t.exception()
-                        else None
-                    )
-                )
+                _task.add_done_callback(lambda t: self.logger.error(f"Vision orchestrator start task failed: {t.exception()}") if t.exception() else None)
                 self.logger.debug("🚀 Vision Orchestrator start queued (router init)")
         except Exception:
             # Non-fatal; lazy start path covers this if needed
@@ -490,25 +459,19 @@ class Router:
         try:
             ve = bool(self.config.get("VISION_ENABLED", True))
             vti = bool(self.config.get("VISION_T2I_ENABLED", True))
-            self.logger.info(
-                f"Vision flags | VISION_ENABLED={'on' if ve else 'off'} VISION_T2I_ENABLED={'on' if vti else 'off'}"
-            )
+            self.logger.info(f"Vision flags | VISION_ENABLED={'on' if ve else 'off'} VISION_T2I_ENABLED={'on' if vti else 'off'}")
         except Exception:
             pass
 
         # Load centralized VL prompt guidelines if available [CA]
         self._vl_prompt_guidelines: Optional[str] = None
         try:
-            prompts_path = (
-                Path(__file__).resolve().parents[1] / "prompts" / "vl-prompt.txt"
-            )
+            prompts_path = Path(__file__).resolve().parents[1] / "prompts" / "vl-prompt.txt"
             if prompts_path.exists():
                 content = prompts_path.read_text(encoding="utf-8").strip()
                 if content:
                     self._vl_prompt_guidelines = content
-                    self.logger.debug(
-                        "Loaded VL prompt guidelines from prompts/vl-prompt.txt"
-                    )
+                    self.logger.debug("Loaded VL prompt guidelines from prompts/vl-prompt.txt")
         except Exception:
             # Non-fatal; handler has built-in defaults
             self._vl_prompt_guidelines = None
@@ -523,9 +486,7 @@ class Router:
         # Gate for early X-resolve (enabled by default for correctness) [KBT]
         self._x_early_resolve_enabled = runtime_compat.x_early_resolve_enabled
 
-    def _get_system_prompt(
-        self, key: str, default: Optional[str] = None
-    ) -> Optional[str]:
+    def _get_system_prompt(self, key: str, default: Optional[str] = None) -> Optional[str]:
         """Safely read a prompt template from bot.system_prompts."""
         return get_system_prompt(self.bot, key, default)
 
@@ -736,9 +697,7 @@ class Router:
             stt_res=stt_res,
         )
 
-    async def _format_x_with_resolved_base_text_if_available(
-        self, *, url: str, stt_res: Any
-    ) -> Optional[str]:
+    async def _format_x_with_resolved_base_text_if_available(self, *, url: str, stt_res: Any) -> Optional[str]:
         """Resolve X base text and format only when non-empty base text is available."""
         base_text = await self._resolve_x_base_text_for_url(url)
         if not base_text:
@@ -770,9 +729,7 @@ class Router:
             stt_res=stt_payload,
         )
 
-    async def _route_twitter_syndication_to_vl(
-        self, syn_payload: Dict[str, Any], url: str
-    ) -> str:
+    async def _route_twitter_syndication_to_vl(self, syn_payload: Dict[str, Any], url: str) -> str:
         """Route a syndication-like tweet payload to the unified VL handler."""
         from .syndication.handler import handle_twitter_syndication_to_vl
 
@@ -784,16 +741,12 @@ class Router:
             reply_style="ack+thoughts",
         )
 
-    async def _route_twitter_images_with_caption(
-        self, *, url: str, caption_text: Optional[str], image_urls: List[str]
-    ) -> str:
+    async def _route_twitter_images_with_caption(self, *, url: str, caption_text: Optional[str], image_urls: List[str]) -> str:
         """Build syndication-like payload from caption+images and route to VL."""
         syn_payload = self._build_syndication_photo_payload(caption_text, image_urls)
         return await self._route_twitter_syndication_to_vl(syn_payload, url)
 
-    async def _route_probed_twitter_images_with_caption(
-        self, *, url: str, status_id: Optional[str], image_urls: List[str]
-    ) -> str:
+    async def _route_probed_twitter_images_with_caption(self, *, url: str, status_id: Optional[str], image_urls: List[str]) -> str:
         """Log probed images, resolve caption text, and route through VL."""
         self._log_twitter_syndication_images(image_urls)
         tweet_text = await self._resolve_twitter_caption_text(status_id)
@@ -803,9 +756,7 @@ class Router:
             image_urls=image_urls,
         )
 
-    async def _resolve_and_probe_twitter_images(
-        self, *, url: str, tweet_id: Optional[str] = None
-    ) -> Tuple[str, List[str]]:
+    async def _resolve_and_probe_twitter_images(self, *, url: str, tweet_id: Optional[str] = None) -> Tuple[str, List[str]]:
         """Resolve status id and probe syndication for tweet images."""
         return await resolve_and_probe_twitter_images(
             url=url,
@@ -814,9 +765,7 @@ class Router:
             probe_images=self._probe_twitter_syndication_images,
         )
 
-    def _log_twitter_syndication_images(
-        self, image_urls: List[str], *, msg_id: Optional[int] = None
-    ) -> None:
+    def _log_twitter_syndication_images(self, image_urls: List[str], *, msg_id: Optional[int] = None) -> None:
         """Emit canonical breadcrumb for Twitter image-route detection."""
         self.logger.info(
             format_twitter_syndication_images_log_line(
@@ -825,17 +774,13 @@ class Router:
             )
         )
 
-    def _build_syndication_photo_payload(
-        self, text: Optional[str], image_urls: List[str]
-    ) -> Dict[str, Any]:
+    def _build_syndication_photo_payload(self, text: Optional[str], image_urls: List[str]) -> Dict[str, Any]:
         """Build syndication-like payload consumed by the unified VL handler."""
         return build_syndication_photo_payload(text, image_urls)
 
     def _build_x_syn_quick_request_config(self) -> RequestConfig:
         """Build short-budget HTTP config for quick X syndication probes."""
-        connect_timeout, read_timeout, total_timeout = x_syn_quick_request_timeouts(
-            self._x_syn_timeout_s
-        )
+        connect_timeout, read_timeout, total_timeout = x_syn_quick_request_timeouts(self._x_syn_timeout_s)
         return RequestConfig(
             connect_timeout=connect_timeout,
             read_timeout=read_timeout,
@@ -855,9 +800,7 @@ class Router:
         """Check whether an STT result payload contains non-empty transcription text."""
         return stt_result_has_transcription(stt_result)
 
-    def _extract_sparse_media_resolution(
-        self, resolved_sparse: Any, *, default_url: str
-    ) -> Tuple[str, List[str], str]:
+    def _extract_sparse_media_resolution(self, resolved_sparse: Any, *, default_url: str) -> Tuple[str, List[str], str]:
         """Extract sparse media kind/images/url from resolved payload."""
         return extract_sparse_media_resolution(
             resolved_sparse,
@@ -957,9 +900,7 @@ class Router:
 
         return tweet_text
 
-    async def _resolve_twitter_caption_from_syndication(
-        self, status_id: Optional[str], fallback_text: str = ""
-    ) -> str:
+    async def _resolve_twitter_caption_from_syndication(self, status_id: Optional[str], fallback_text: str = "") -> str:
         """Resolve caption from syndication only; keep fallback text on miss/error."""
         if not status_id:
             return fallback_text
@@ -983,21 +924,15 @@ class Router:
     ) -> Optional[str]:
         """Build anchored system prompt when visual-facts evidence is present."""
         try:
-            has_visual_evidence = has_visual_facts_section(content) or bool(
-                perception_notes and perception_notes.strip()
-            )
+            has_visual_evidence = has_visual_facts_section(content) or bool(perception_notes and perception_notes.strip())
             if not has_visual_evidence:
                 return None
 
-            base_sys = self._get_system_prompt(
-                "text_prompt", "You are a helpful assistant."
-            )
+            base_sys = self._get_system_prompt("text_prompt", "You are a helpful assistant.")
             anchored = build_visual_analysis_anchor_prompt(base_sys)
             try:
                 if fallback:
-                    self.logger.info(
-                        "text.anchor | visual_facts_detected=true (fallback)"
-                    )
+                    self.logger.info("text.anchor | visual_facts_detected=true (fallback)")
                 else:
                     self.logger.info("text.anchor | visual_facts_detected=true")
             except Exception:
@@ -1031,9 +966,7 @@ class Router:
                 self._x_api_client = None
         return self._x_api_client
 
-    async def _get_tweet_via_syndication(
-        self, tweet_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _get_tweet_via_syndication(self, tweet_id: str) -> Optional[Dict[str, Any]]:
         """Fetch tweet via X/Twitter syndication CDN with TTL cache and per-ID concurrency.
         Endpoint shape: https://cdn.syndication.twimg.com/widgets/tweet?id={id}
         Returns parsed JSON dict on success or None on failure. [PA][REH]
@@ -1062,9 +995,7 @@ class Router:
                 # Check cache again inside lock
                 cached = self._syn_cache.get(tweet_id)
                 if cached:
-                    hit_kind = classify_syndication_cache_hit(
-                        now, self._syn_ttl_s, cached
-                    )
+                    hit_kind = classify_syndication_cache_hit(now, self._syn_ttl_s, cached)
                     if hit_kind == "neg":
                         self._metric_inc("x.syndication.neg_cache_hit_locked", None)
                         return None
@@ -1091,9 +1022,7 @@ class Router:
                             "x.syndication.fetch",
                             build_syndication_fetch_metric_payload(endpoint),
                         )
-                        resp = await http_client.get(
-                            url, headers=headers, params=params
-                        )
+                        resp = await http_client.get(url, headers=headers, params=params)
                         if resp.status_code != 200:
                             self.logger.info(
                                 "Syndication non-200",
@@ -1121,9 +1050,7 @@ class Router:
                             continue
                         # If the JSON lacks usable text, try oEmbed fallbacks before moving on
                         if not _has_usable_payload(data):
-                            oembed_url, oembed_fallbacks = (
-                                build_syndication_oembed_fallback_plan(tweet_id)
-                            )
+                            oembed_url, oembed_fallbacks = build_syndication_oembed_fallback_plan(tweet_id)
                             for (
                                 metric_endpoint,
                                 oembed_params,
@@ -1133,18 +1060,14 @@ class Router:
                                 try:
                                     self._metric_inc(
                                         "x.syndication.fetch",
-                                        build_syndication_fetch_metric_payload(
-                                            metric_endpoint
-                                        ),
+                                        build_syndication_fetch_metric_payload(metric_endpoint),
                                     )
                                     resp_oe = await http_client.get(
                                         oembed_url,
                                         headers=headers,
                                         params=oembed_params,
                                     )
-                                    oembed_data = extract_oembed_payload_from_response(
-                                        resp_oe
-                                    )
+                                    oembed_data = extract_oembed_payload_from_response(resp_oe)
                                     if oembed_data:
                                         data = oembed_data
                                 except Exception:
@@ -1178,9 +1101,7 @@ class Router:
                         pass
                     self._metric_inc("x.syndication.invalid", None)
                     # Negative cache to avoid repeated hits for unavailable/blocked tweets
-                    self._syn_cache[tweet_id] = build_syndication_negative_cache_entry(
-                        time.time()
-                    )
+                    self._syn_cache[tweet_id] = build_syndication_negative_cache_entry(time.time())
                     self._metric_inc("x.syndication.neg_store", None)
                     return None
 
@@ -1213,11 +1134,7 @@ class Router:
         """Evict stale syndication cache entries and clean up orphaned locks. [BUGFIX: prevent unbounded growth]"""
         try:
             now = time.time()
-            stale_ids = [
-                tid
-                for tid, entry in self._syn_cache.items()
-                if now - entry.get("ts", 0) > self._syn_ttl_s
-            ]
+            stale_ids = [tid for tid, entry in self._syn_cache.items() if now - entry.get("ts", 0) > self._syn_ttl_s]
             for tid in stale_ids:
                 self._syn_cache.pop(tid, None)
                 self._syn_locks.pop(tid, None)
@@ -1234,9 +1151,7 @@ class Router:
         except Exception:
             pass
 
-    async def _probe_twitter_syndication_images(
-        self, url: str, status_id: str
-    ) -> List[str]:
+    async def _probe_twitter_syndication_images(self, url: str, status_id: str) -> List[str]:
         """Probe syndication API for tweet images. Returns list of image URLs. [PA][REH]"""
         status_id = self._resolve_twitter_status_id(url, tweet_id=status_id)
         if not status_id:
@@ -1292,9 +1207,7 @@ class Router:
     def _syndication_article_has_blocks(article_node: Any) -> bool:
         return syndication_article_has_blocks(article_node)
 
-    def _syndication_needs_article_hydration(
-        self, syn: Dict[str, Any], *, allow_tco_pointer: bool = False
-    ) -> bool:
+    def _syndication_needs_article_hydration(self, syn: Dict[str, Any], *, allow_tco_pointer: bool = False) -> bool:
         return syndication_needs_article_hydration(
             syn,
             allow_tco_pointer=allow_tco_pointer,
@@ -1310,9 +1223,7 @@ class Router:
     ) -> Dict[str, Any]:
         if not status_id or not isinstance(syn, dict):
             return syn if isinstance(syn, dict) else {}
-        if not self._syndication_needs_article_hydration(
-            syn, allow_tco_pointer=allow_tco_pointer
-        ):
+        if not self._syndication_needs_article_hydration(syn, allow_tco_pointer=allow_tco_pointer):
             return syn
         try:
             article_data = await self._fetch_x_article_from_fxtwitter(status_id)
@@ -1391,9 +1302,7 @@ class Router:
         """Extract the tweet/status ID from a Twitter URL. Returns None if not found. [IV]"""
         return parse_twitter_status_id(url)
 
-    def _resolve_twitter_status_id(
-        self, url: str, tweet_id: Optional[str] = None
-    ) -> str:
+    def _resolve_twitter_status_id(self, url: str, tweet_id: Optional[str] = None) -> str:
         """Return status ID from explicit hint first, otherwise parse from URL."""
         return resolve_twitter_status_id(
             url,
@@ -1417,9 +1326,7 @@ class Router:
         """Convert any Twitter status URL to canonical form https://x.com/i/status/{id}. [IV]"""
         return canonicalize_twitter_status_url(url)
 
-    def _register_x_frontend_context(
-        self, url: str, frontend: Optional[str], primary: Optional[str]
-    ) -> None:
+    def _register_x_frontend_context(self, url: str, frontend: Optional[str], primary: Optional[str]) -> None:
         if not url or not frontend or not primary:
             return
         try:
@@ -1449,9 +1356,7 @@ class Router:
         """Retrieve and clear any pre-dispatch gate decision."""
         return self._prefilter_gate.pop(message_id, None)
 
-    async def _run_stt_job(
-        self, task: Awaitable[Any], message: Message, kind: str = "stt"
-    ) -> Any:
+    async def _run_stt_job(self, task: Awaitable[Any], message: Message, kind: str = "stt") -> Any:
         """Run an STT coroutine with standardized start/end breadcrumbs."""
         msg_id = getattr(message, "id", None) if message else None
         status = "ok"
@@ -1493,10 +1398,7 @@ class Router:
         image_count: int,
         frontend: Optional[str],
     ) -> None:
-        msg = (
-            f"x.media.probe primary={primary or ''} "
-            f"video={str(video).lower()} image_count={int(image_count)}"
-        )
+        msg = f"x.media.probe primary={primary or ''} video={str(video).lower()} image_count={int(image_count)}"
         detail = {
             "primary": primary or "",
             "video": bool(video),
@@ -1515,9 +1417,7 @@ class Router:
         except Exception:
             pass
 
-    async def _verify_media_kind(
-        self, url: str, default: str = "unknown"
-    ) -> Tuple[str, str]:
+    async def _verify_media_kind(self, url: str, default: str = "unknown") -> Tuple[str, str]:
         decided = default
         content_type = ""
         try:
@@ -1571,17 +1471,12 @@ class Router:
             decided = "image"
         return decided, content_type
 
-    def _log_media_kind_checked(
-        self, url: str, content_type: str, decided: str
-    ) -> None:
+    def _log_media_kind_checked(self, url: str, content_type: str, decided: str) -> None:
         try:
             host = urlparse(url).netloc.lower()
         except Exception:
             host = ""
-        msg = (
-            f"media.kind_checked url_host={host or ''} "
-            f"ctype={content_type or ''} decided={decided or ''}"
-        )
+        msg = f"media.kind_checked url_host={host or ''} ctype={content_type or ''} decided={decided or ''}"
         try:
             self.logger.info(
                 msg,
@@ -1689,15 +1584,9 @@ class Router:
         try:
             if message.reference and message.reference.message_id:
                 try:
-                    ref_message = (
-                        message.reference.resolved
-                        if getattr(message.reference, "resolved", None)
-                        else None
-                    )
+                    ref_message = message.reference.resolved if getattr(message.reference, "resolved", None) else None
                     if ref_message is None:
-                        ref_message = await message.channel.fetch_message(
-                            message.reference.message_id
-                        )
+                        ref_message = await message.channel.fetch_message(message.reference.message_id)
                     texts.append(ref_message.content or "")
                 except Exception:
                     pass
@@ -1712,25 +1601,19 @@ class Router:
             canonicalize_x_url=self._canonicalize_x_url,
         )
 
-    async def _gather_prioritized_x_urls(
-        self, scope_case: str, message: Message, reply_target: Optional[Message]
-    ) -> Tuple[str, List[str]]:
+    async def _gather_prioritized_x_urls(self, scope_case: str, message: Message, reply_target: Optional[Message]) -> Tuple[str, List[str]]:
         """Collect X/Twitter status URLs using the priority stack within the active scope.
         Returns (layer, urls) where layer in {"trigger","parent","tail","none"}. [CA][IV]
         """
         try:
             # 1) Trigger layer
-            trigger_urls = self._extract_x_status_urls_from_text(
-                getattr(message, "content", "") or ""
-            )
+            trigger_urls = self._extract_x_status_urls_from_text(getattr(message, "content", "") or "")
             if trigger_urls:
                 return "trigger", trigger_urls
 
             # 2) Reply-parent layer (REPLY_CASE only)
             if scope_case == "reply" and reply_target is not None:
-                parent_urls = self._extract_x_status_urls_from_text(
-                    getattr(reply_target, "content", "") or ""
-                )
+                parent_urls = self._extract_x_status_urls_from_text(getattr(reply_target, "content", "") or "")
                 if parent_urls:
                     return "parent", parent_urls
 
@@ -1749,9 +1632,7 @@ class Router:
                     async for m in message.channel.history(limit=k * 3, before=anchor):
                         # keep humans + our bot only (mirror of thread_tail policy)
                         is_bot = bool(getattr(m.author, "bot", False))
-                        is_ours = int(getattr(m.author, "id", 0)) == int(
-                            getattr(self.bot.user, "id", 0)
-                        )
+                        is_ours = int(getattr(m.author, "id", 0)) == int(getattr(self.bot.user, "id", 0))
                         if is_bot and not is_ours:
                             continue
                         msgs.append(m)
@@ -1759,9 +1640,7 @@ class Router:
                             break
                     msgs = list(reversed(msgs))
                     for m in msgs:
-                        u = self._extract_x_status_urls_from_text(
-                            getattr(m, "content", "") or ""
-                        )
+                        u = self._extract_x_status_urls_from_text(getattr(m, "content", "") or "")
                         for cu in u:
                             if cu not in tail_urls:
                                 tail_urls.append(cu)
@@ -1774,9 +1653,7 @@ class Router:
         except Exception:
             return "none", []
 
-    async def _yt_dlp_probe(
-        self, url: str, timeout_s: float = 8.0
-    ) -> Optional[Dict[str, Any]]:
+    async def _yt_dlp_probe(self, url: str, timeout_s: float = 8.0) -> Optional[Dict[str, Any]]:
         """Run a lightweight yt-dlp metadata probe to detect presence of video/audio.
         Returns parsed JSON on success or None on errors/timeouts.
         """
@@ -1785,13 +1662,9 @@ class Router:
             return None
         cmd = ["yt-dlp", "--dump-json", "--no-playlist", "--quiet", "--", url]
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
+            proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=timeout_s
-                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
             except asyncio.TimeoutError:
                 try:
                     proc.kill()
@@ -1919,11 +1792,7 @@ class Router:
         for u in clean:
             status_id = self._parse_twitter_status_id(u)
             lookup = self._normalize_x_url(u)
-            ctx = (
-                self._x_frontend_canon.get(lookup)
-                or self._x_frontend_canon.get(u)
-                or {}
-            )
+            ctx = self._x_frontend_canon.get(lookup) or self._x_frontend_canon.get(u) or {}
             frontend = frontend_hints.get(lookup) or ctx.get("frontend")
             primary = primary_hints.get(lookup) or ctx.get("primary") or status_id
             if primary and not primary_for_log:
@@ -1937,9 +1806,7 @@ class Router:
                     ("fx_json", "api.fxtwitter.com"),
                 ):
                     try:
-                        self.logger.debug(
-                            f"x.resolve_try src={src_name} id={status_id}"
-                        )
+                        self.logger.debug(f"x.resolve_try src={src_name} id={status_id}")
                     except Exception:
                         pass
                     try:
@@ -1958,17 +1825,13 @@ class Router:
                         except Exception:
                             try:
                                 # If brotli is used and not auto-decoded, attempt manual decode [REH]
-                                enc = (
-                                    resp.headers.get("content-encoding") or ""
-                                ).lower()
+                                enc = (resp.headers.get("content-encoding") or "").lower()
                                 if "br" in enc:
                                     try:
                                         import brotli  # type: ignore
 
                                         decoded = brotli.decompress(resp.content)
-                                        data = json.loads(
-                                            decoded.decode("utf-8", errors="replace")
-                                        )
+                                        data = json.loads(decoded.decode("utf-8", errors="replace"))
                                     except Exception:
                                         data = json.loads(resp.text)
                             except Exception:
@@ -2057,16 +1920,10 @@ class Router:
                                 "/ext_tw_video_thumb/",
                                 "/tweet_video_thumb/",
                             )
-                            if host.endswith("pbs.twimg.com") and any(
-                                pref in path for pref in poster_prefixes
-                            ):
+                            if host.endswith("pbs.twimg.com") and any(pref in path for pref in poster_prefixes):
                                 try:
                                     matched = next(
-                                        (
-                                            pref
-                                            for pref in poster_prefixes
-                                            if pref in path
-                                        ),
+                                        (pref for pref in poster_prefixes if pref in path),
                                         "poster_thumb",
                                     )
                                     self.logger.info(
@@ -2086,9 +1943,7 @@ class Router:
                         if videos or uniq:
                             break  # API success
                     except Exception as e:
-                        self.logger.debug(
-                            f"x.syndication.api.error | host={host} err={e}"
-                        )
+                        self.logger.debug(f"x.syndication.api.error | host={host} err={e}")
 
         # Stage 2: HTML/meta fallback on fx/vx
         if not images and http is not None and self._x_syn_probe_enabled:
@@ -2104,9 +1959,7 @@ class Router:
                     )
                     resp = await http.get(html_url, config=cfg)
                     if resp.status_code != 200 or not resp.text:
-                        self.logger.debug(
-                            f"x.syndication.html.non200 | host={host} status={resp.status_code}"
-                        )
+                        self.logger.debug(f"x.syndication.html.non200 | host={host} status={resp.status_code}")
                         continue
                     text = resp.text
                     candidates: List[str] = []
@@ -2190,18 +2043,14 @@ class Router:
             "frontend": frontend_for_log,
         }
 
-    async def _fetch_x_article_from_fxtwitter(
-        self, status_id: str
-    ) -> Optional[Dict[str, Any]]:
+    async def _fetch_x_article_from_fxtwitter(self, status_id: str) -> Optional[Dict[str, Any]]:
         """Resolve X Article payload from fx API for article-style status posts."""
         if not status_id:
             return None
         try:
             http = await get_http_client()
             cfg = self._build_x_syn_quick_request_config()
-            resp = await http.get(
-                f"https://api.fxtwitter.com/status/{status_id}", config=cfg
-            )
+            resp = await http.get(f"https://api.fxtwitter.com/status/{status_id}", config=cfg)
             if getattr(resp, "status_code", 500) != 200:
                 return None
             try:
@@ -2241,18 +2090,14 @@ class Router:
             if kept_blocks:
                 normalized["content"] = {"blocks": kept_blocks}
 
-            if not (
-                normalized.get("title") or normalized.get("preview_text") or kept_blocks
-            ):
+            if not (normalized.get("title") or normalized.get("preview_text") or kept_blocks):
                 return None
             return normalized
         except Exception as e:
             self.logger.debug(f"x.article.resolve.failed id={status_id} err={e}")
             return None
 
-    async def _route_tweet_as_perception_images(
-        self, img_urls: List[str], *, message: Message, context_str: str
-    ) -> BotAction:
+    async def _route_tweet_as_perception_images(self, img_urls: List[str], *, message: Message, context_str: str) -> BotAction:
         self._log_twitter_syndication_images(img_urls, msg_id=message.id)
         # Run VL on first image (budget-friendly), inject to text flow
         notes = None
@@ -2260,16 +2105,12 @@ class Router:
             try:
                 notes = await self._vl_describe_image_from_url(
                     img_urls[0],
-                    prompt=(
-                        "Describe this image in detail, focusing on key visual elements, objects, text, and context."
-                    ),
+                    prompt=("Describe this image in detail, focusing on key visual elements, objects, text, and context."),
                 )
                 notes = sanitize_vl_reply_text(notes or "")
             except Exception:
                 notes = None
-        self.logger.info(
-            f"🎯 Route: text (with perception) | images={len(img_urls)} | msg_id={message.id}"
-        )
+        self.logger.info(f"🎯 Route: text (with perception) | images={len(img_urls)} | msg_id={message.id}")
         return await self._flow_process_text(
             content=(message.content or "").strip(),
             context=context_str,
@@ -2282,9 +2123,7 @@ class Router:
         """Lightweight check for direct image URLs by extension. [IV]"""
         return is_direct_image_url(url)
 
-    async def _process_image_from_attachment_with_model(
-        self, attachment, model_override: Optional[str] = None
-    ) -> str:
+    async def _process_image_from_attachment_with_model(self, attachment, model_override: Optional[str] = None) -> str:
         """Save a Discord image attachment to a temp file and run VL analysis. [RM][REH]"""
         from .see import see_infer
 
@@ -2335,9 +2174,7 @@ class Router:
         """
         if _is_mock(self.bot):
             try:
-                name = (
-                    getattr(getattr(item, "payload", None), "filename", "") or "image"
-                )
+                name = getattr(getattr(item, "payload", None), "filename", "") or "image"
                 resp = see_infer(image_path=getattr(item.payload, "url", None))
                 if asyncio.iscoroutine(resp):
                     resp = await resp
@@ -2350,24 +2187,16 @@ class Router:
         try:
             if item.source_type == "attachment":
                 attachment = item.payload
-                return await self._process_image_from_attachment_with_model(
-                    attachment, model_override
-                )
+                return await self._process_image_from_attachment_with_model(attachment, model_override)
 
             if item.source_type == "url":
                 url = item.payload
                 if self._is_direct_image_url(url):
                     prompt = "Describe this image in detail, focusing on key visual elements, objects, text, and context."
-                    desc = await self._vl_describe_image_from_url(
-                        url, prompt=prompt, model_override=model_override
-                    )
-                    return (
-                        desc or "⚠️ Unable to analyze the image from the provided URL."
-                    )
+                    desc = await self._vl_describe_image_from_url(url, prompt=prompt, model_override=model_override)
+                    return desc or "⚠️ Unable to analyze the image from the provided URL."
                 # Not a direct image URL → screenshot fallback
-                return await self._process_image_from_url(
-                    url, model_override=model_override
-                )
+                return await self._process_image_from_url(url, model_override=model_override)
 
             if item.source_type == "embed":
                 embed = item.payload
@@ -2386,20 +2215,12 @@ class Router:
                 if image_url and self._is_direct_image_url(image_url):
                     desc = await self._vl_describe_image_from_url(
                         image_url,
-                        prompt=(
-                            "Describe this image in detail, focusing on key visual elements, objects, text, and context."
-                        ),
+                        prompt=("Describe this image in detail, focusing on key visual elements, objects, text, and context."),
                         model_override=model_override,
                     )
                     return desc or "⚠️ Unable to analyze the image from the embed."
-                if (
-                    image_url
-                    and isinstance(image_url, str)
-                    and image_url.startswith("http")
-                ):
-                    return await self._process_image_from_url(
-                        image_url, model_override=model_override
-                    )
+                if image_url and isinstance(image_url, str) and image_url.startswith("http"):
+                    return await self._process_image_from_url(image_url, model_override=model_override)
                 return "⚠️ Embed did not contain a usable image URL."
 
             return "⚠️ Unsupported image source type."
@@ -2411,9 +2232,7 @@ class Router:
             )
             return f"⚠️ Failed to process image item (error: {e})"
 
-    async def _handle_image(
-        self, item: InputItem, message: Optional[Message] = None
-    ) -> str:
+    async def _handle_image(self, item: InputItem, message: Optional[Message] = None) -> str:
         """Handle image without explicit model override, using default VL model. [CA]"""
         return await self._handle_image_with_model(item, model_override=None)
 
@@ -2427,13 +2246,9 @@ class Router:
 
     def _is_reply_to_bot(self, message: Message) -> bool:
         """Check if a message is a reply to the bot."""
-        return is_reply_to_bot(
-            message, getattr(getattr(self.bot, "user", None), "id", None)
-        )
+        return is_reply_to_bot(message, getattr(getattr(self.bot, "user", None), "id", None))
 
-    async def _resolve_reference_message(
-        self, message: Message, fallback: Optional[Message] = None
-    ) -> Optional[Message]:
+    async def _resolve_reference_message(self, message: Message, fallback: Optional[Message] = None) -> Optional[Message]:
         """Resolve referenced message from cache first, then fetch if needed."""
         if fallback is not None:
             return fallback
@@ -2453,9 +2268,7 @@ class Router:
 
     def _mentions_bot(self, message: Message) -> bool:
         """Return True if the message explicitly mentions this bot."""
-        return mentions_bot(
-            message, getattr(getattr(self.bot, "user", None), "id", None)
-        )
+        return mentions_bot(message, getattr(getattr(self.bot, "user", None), "id", None))
 
     def _update_dispatch_metadata(
         self,
@@ -2518,23 +2331,17 @@ class Router:
         context = "dm" if is_dm else "guild"
 
         require_mention_in_guilds = cfg.get("REQUIRE_MENTION_IN_GUILDS", True)
-        allow_reply_without_mention = cfg.get(
-            "ALLOW_REPLY_TO_BOT_WITHOUT_MENTION", True
-        )
+        allow_reply_without_mention = cfg.get("ALLOW_REPLY_TO_BOT_WITHOUT_MENTION", True)
         dm_require_mention = cfg.get("DM_REQUIRE_MENTION", False)
 
         mention_detected = self._mentions_bot(message)
         is_reply = self._is_reply_to_bot(message)
-        is_owner = (
-            message.author.id in owners if getattr(message, "author", None) else False
-        )
+        is_owner = message.author.id in owners if getattr(message, "author", None) else False
 
         in_bot_thread = False
         try:
             if isinstance(message.channel, discord.Thread):
-                in_bot_thread = (
-                    getattr(message.channel, "owner_id", None) == self.bot.user.id
-                )
+                in_bot_thread = getattr(message.channel, "owner_id", None) == self.bot.user.id
         except Exception:
             in_bot_thread = False
 
@@ -2547,9 +2354,7 @@ class Router:
                 clean_content = content
         else:
             clean_content = ""
-        has_prefix = (
-            bool(clean_content.startswith(command_prefix)) if clean_content else False
-        )
+        has_prefix = bool(clean_content.startswith(command_prefix)) if clean_content else False
 
         # Master switch: if disabled, allow everything (legacy behavior)
         if not cfg.get("BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", True):
@@ -2594,9 +2399,7 @@ class Router:
                             "reply_to_bot": is_reply,
                         },
                     )
-                    self._metric_inc(
-                        "gate.allowed", {"reason": "dm_reply_without_mention"}
-                    )
+                    self._metric_inc("gate.allowed", {"reason": "dm_reply_without_mention"})
                     return True
 
                 self._gate_denied[message.id] = "dm_mention_required"
@@ -2853,9 +2656,7 @@ class Router:
         if flow_overrides:
             self._flows.update(flow_overrides)
 
-    async def _resolve_scope_and_target(
-        self, message: Message
-    ) -> Tuple[str, Optional[Message], str]:
+    async def _resolve_scope_and_target(self, message: Message) -> Tuple[str, Optional[Message], str]:
         """
         Centralized scope resolution following the deterministic decision tree.
         Returns (scope_case, reply_target, context_str)
@@ -2863,12 +2664,8 @@ class Router:
         try:
             # THREAD_CASE: message is in a Thread/Forum thread
             if _is_thread_channel(getattr(message, "channel", None)):
-                rt, reason = await resolve_thread_reply_target(
-                    self.bot, message, self.config
-                )
-                tail = await collect_thread_tail_context(
-                    self.bot, message, rt, self.config
-                )
+                rt, reason = await resolve_thread_reply_target(self.bot, message, self.config)
+                tail = await collect_thread_tail_context(self.bot, message, rt, self.config)
                 context_str = ""
                 if tail and isinstance(tail, tuple) and len(tail) == 2:
                     tail_joined, _ = tail
@@ -2882,9 +2679,7 @@ class Router:
                         "phase": "scope",
                         "case": "thread",
                         "scope": str(getattr(message.channel, "id", "unknown")),
-                        "reply_target": str(getattr(rt, "id", "unknown"))
-                        if rt
-                        else "none",
+                        "reply_target": str(getattr(rt, "id", "unknown")) if rt else "none",
                     },
                 )
                 return "thread", rt, context_str
@@ -2900,9 +2695,7 @@ class Router:
                         ref_msg = None
 
                 if ref_msg is not None:
-                    mc = await maybe_build_mention_context(
-                        self.bot, message, self.config
-                    )
+                    mc = await maybe_build_mention_context(self.bot, message, self.config)
                     context_str = ""
                     if mc and isinstance(mc, tuple) and len(mc) == 2:
                         joined_text, _ = mc
@@ -2933,13 +2726,9 @@ class Router:
                     txt = txt.strip()
 
                 if not txt:  # No substantive content after mention removal
-                    anchor, _ = await resolve_implicit_anchor(
-                        self.bot, message, self.config
-                    )
+                    anchor, _ = await resolve_implicit_anchor(self.bot, message, self.config)
                     if anchor:
-                        ia = await collect_implicit_anchor_context(
-                            self.bot, message, anchor, self.config
-                        )
+                        ia = await collect_implicit_anchor_context(self.bot, message, anchor, self.config)
                         context_str = ""
                         if ia and isinstance(ia, tuple) and len(ia) == 2:
                             ia_joined, _ = ia
@@ -2953,9 +2742,7 @@ class Router:
                                 "phase": "scope",
                                 "case": "lone",
                                 "scope": str(getattr(message, "id", "unknown")),
-                                "reply_target": str(getattr(anchor, "id", "none"))
-                                if anchor
-                                else "none",
+                                "reply_target": str(getattr(anchor, "id", "none")) if anchor else "none",
                             },
                         )
                         return "lone", anchor, context_str
@@ -3010,9 +2797,7 @@ class Router:
         except Exception:
             return ""
 
-    async def _compat_dispatch_for_tests(
-        self, message: Message, clean_content: str
-    ) -> Optional[ResponseMessage]:
+    async def _compat_dispatch_for_tests(self, message: Message, clean_content: str) -> Optional[ResponseMessage]:
         """Simplified routing path for unit tests using mock bots."""
         if not _is_mock(self.bot):
             return None
@@ -3028,11 +2813,7 @@ class Router:
             modality_fn = getattr(self, "_get_input_modality", None)
             if modality_fn:
                 maybe_modality = modality_fn(message)
-                detected_modality = (
-                    await maybe_modality
-                    if asyncio.iscoroutine(maybe_modality)
-                    else maybe_modality
-                )
+                detected_modality = await maybe_modality if asyncio.iscoroutine(maybe_modality) else maybe_modality
         except Exception:
             detected_modality = None
 
@@ -3080,9 +2861,7 @@ class Router:
                     )
                 if not raw_content.strip() and len(text_out.split()) < 5:
                     text_out = (text_out + " auto generated caption.").strip()
-                return ResponseMessage(
-                    content=text_out, text=text_out, audio_path=audio_path
-                )
+                return ResponseMessage(content=text_out, text=text_out, audio_path=audio_path)
 
         attachments = list(getattr(message, "attachments", []) or [])
         if attachments:
@@ -3106,9 +2885,7 @@ class Router:
                     )
                 if not raw_content.strip() and len(text_out.split()) < 5:
                     text_out = (text_out + " auto generated caption.").strip()
-                return ResponseMessage(
-                    content=text_out, text=text_out, audio_path=audio_path
-                )
+                return ResponseMessage(content=text_out, text=text_out, audio_path=audio_path)
 
             att = attachments[0]
             content_type = (getattr(att, "content_type", "") or "").lower()
@@ -3120,10 +2897,7 @@ class Router:
                     prompt=f"User uploaded an image with the prompt: '{raw_content}'",
                     mime_type=content_type,
                 )
-                brain_input = (
-                    f"User uploaded an image with the prompt: '{raw_content}'. "
-                    f"The image contains: {caption}"
-                )
+                brain_input = f"User uploaded an image with the prompt: '{raw_content}'. The image contains: {caption}"
                 response_text = await brain_infer(brain_input)
                 return ResponseMessage(content=response_text, text=response_text)
 
@@ -3133,10 +2907,7 @@ class Router:
                 tmp_path = Path(tmp.name)
             await att.save(tmp_path)
             doc_content = await self._process_document(str(tmp_path), suffix)
-            prompt = (
-                "DOCUMENT CONTENT:\n---\n"
-                f"{doc_content}\n---\n\nUSER'S PROMPT: {raw_content}"
-            )
+            prompt = f"DOCUMENT CONTENT:\n---\n{doc_content}\n---\n\nUSER'S PROMPT: {raw_content}"
             response_text = await brain_infer(prompt)
             try:
                 os.remove(str(tmp_path))
@@ -3159,9 +2930,7 @@ class Router:
             except Exception:
                 audio_path = None
 
-        return ResponseMessage(
-            content=response_text, text=response_text, audio_path=audio_path
-        )
+        return ResponseMessage(content=response_text, text=response_text, audio_path=audio_path)
 
     def _is_mentioned(self, message: Message) -> bool:
         """Safe mention detection for mock and production messages."""
@@ -3203,13 +2972,9 @@ class Router:
             for attachment in attachments:
                 content_type = (getattr(attachment, "content_type", "") or "").lower()
                 filename = (getattr(attachment, "filename", "") or "").lower()
-                if content_type.startswith("image/") or filename.endswith(
-                    (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
-                ):
+                if content_type.startswith("image/") or filename.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")):
                     has_image = True
-                if content_type.startswith(("audio/", "video/")) or filename.endswith(
-                    (".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mov", ".mkv", ".webm")
-                ):
+                if content_type.startswith(("audio/", "video/")) or filename.endswith((".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mov", ".mkv", ".webm")):
                     has_audio_video = True
 
             if has_image and not is_server_feature_enabled(guild_id, "vision"):
@@ -3222,9 +2987,7 @@ class Router:
         urls = extract_raw_urls_from_texts([content]) if content else []
         if urls:
             has_x_url = any(self._is_twitter_status_url(url) for url in urls)
-            if has_x_url and not is_server_feature_enabled(
-                guild_id, "x_twitter_extraction"
-            ):
+            if has_x_url and not is_server_feature_enabled(guild_id, "x_twitter_extraction"):
                 text = "X/Twitter extraction is disabled on this server."
                 return ResponseMessage(content=text, text=text)
             if not is_server_feature_enabled(guild_id, "web_extraction"):
@@ -3305,19 +3068,10 @@ class Router:
             try:
                 author = getattr(message, "author", None)
                 raw_author_bot = getattr(author, "bot", False) if author else False
-                author_is_bot = (
-                    raw_author_bot is True
-                    if isinstance(raw_author_bot, bool)
-                    else False
-                )
+                author_is_bot = raw_author_bot is True if isinstance(raw_author_bot, bool) else False
                 is_self = False
                 try:
-                    is_self = bool(
-                        hasattr(self.bot, "user")
-                        and author
-                        and getattr(author, "id", None)
-                        == getattr(self.bot.user, "id", None)
-                    )
+                    is_self = bool(hasattr(self.bot, "user") and author and getattr(author, "id", None) == getattr(self.bot.user, "id", None))
                 except Exception:
                     is_self = False
                 if author_is_bot or is_self:
@@ -3344,10 +3098,7 @@ class Router:
                 if msg_id is not None:
                     # Check TTL — expire old entries lazily
                     if msg_id in self._processed_recent_ts:
-                        if (
-                            now - self._processed_recent_ts[msg_id]
-                            < self._DEDUP_TTL_SECONDS
-                        ):
+                        if now - self._processed_recent_ts[msg_id] < self._DEDUP_TTL_SECONDS:
                             self.logger.info(
                                 "gate.skip",
                                 extra={
@@ -3379,9 +3130,7 @@ class Router:
                     extra={
                         "event": "ingest.dispatch_started",
                         "msg_id": message.id,
-                        "channel_id": getattr(
-                            getattr(message, "channel", None), "id", None
-                        ),
+                        "channel_id": getattr(getattr(message, "channel", None), "id", None),
                     },
                 )
             except Exception:
@@ -3390,16 +3139,11 @@ class Router:
             # 1b. Compatibility fast-path for legacy tests: attachments + empty content
             # Run this BEFORE gating and typing() to avoid mock issues in tests
             try:
-                has_attachments = (
-                    bool(getattr(message, "attachments", None))
-                    and len(message.attachments) > 0
-                )
+                has_attachments = bool(getattr(message, "attachments", None)) and len(message.attachments) > 0
             except Exception:
                 has_attachments = False
             cleaned_for_compat = re.sub(mention_pattern, "", content)
-            cleaned_for_compat = strip_leading_bot_mention(
-                cleaned_for_compat, getattr(getattr(self.bot, "user", None), "id", None)
-            )
+            cleaned_for_compat = strip_leading_bot_mention(cleaned_for_compat, getattr(getattr(self.bot, "user", None), "id", None))
             preflight_gate = self._feature_gate_response(message, cleaned_for_compat)
             if preflight_gate is not None:
                 return preflight_gate
@@ -3415,9 +3159,7 @@ class Router:
                 if not all_text_files:
                     handler = self._flows.get("process_attachments")
                     if handler:
-                        self.logger.debug(
-                            "Compat path (pre-gate): delegating to _flows['process_attachments'] with empty text."
-                        )
+                        self.logger.debug("Compat path (pre-gate): delegating to _flows['process_attachments'] with empty text.")
                         res = await handler(message, cleaned_for_compat)
                         if isinstance(res, BotAction):
                             return res
@@ -3437,9 +3179,7 @@ class Router:
                         if isinstance(res, ResponseMessage):
                             res.text = res.content = text_out
                             return res
-                        return ResponseMessage(
-                            content=text_out, text=text_out, audio_path=audio_path
-                        )
+                        return ResponseMessage(content=text_out, text=text_out, audio_path=audio_path)
 
             # Parse commands first so downstream paths can use cleaned content
             try:
@@ -3452,15 +3192,11 @@ class Router:
             # 2. If a command is found, handle special cases or delegate to cogs.
             if parsed_command:
                 cmd = parsed_command.command
-                feature_gate = self._feature_gate_response(
-                    message, clean_content, parsed_command
-                )
+                feature_gate = self._feature_gate_response(message, clean_content, parsed_command)
                 if feature_gate is not None:
                     return feature_gate
                 if cmd == Command.IMG:
-                    self.logger.info(
-                        f"Found command 'IMG', delegating to cog. (msg_id: {message.id})"
-                    )
+                    self.logger.info(f"Found command 'IMG', delegating to cog. (msg_id: {message.id})")
                     return await self._handle_img_command(parsed_command, message)
 
                 if cmd == Command.PING:
@@ -3480,9 +3216,7 @@ class Router:
 
                 # Allow chat-like commands to continue through the normal routing pipeline
                 if cmd != Command.CHAT:
-                    self.logger.info(
-                        f"Found command '{parsed_command.command.name}', delegating to cog. (msg_id: {message.id})"
-                    )
+                    self.logger.info(f"Found command '{parsed_command.command.name}', delegating to cog. (msg_id: {message.id})")
                     return BotAction(meta={"delegated_to_cog": True})
 
             if not parsed_command and clean_content.startswith("!"):
@@ -3495,14 +3229,10 @@ class Router:
                 except Exception:
                     matched = None
                 if matched:
-                    self.logger.info(
-                        f"Found command '{matched}', delegating to cog. (msg_id: {message.id})"
-                    )
+                    self.logger.info(f"Found command '{matched}', delegating to cog. (msg_id: {message.id})")
                     return BotAction(meta={"delegated_to_cog": True})
 
-            compat_response = await self._compat_dispatch_for_tests(
-                message, clean_content
-            )
+            compat_response = await self._compat_dispatch_for_tests(message, clean_content)
             if compat_response is not None:
                 return compat_response
 
@@ -3526,9 +3256,7 @@ class Router:
                     cleaned = re.sub(mention_pattern, "", content).strip()
                 except Exception:
                     cleaned = content.strip()
-                cleaned = strip_leading_bot_mention(
-                    cleaned, getattr(getattr(self.bot, "user", None), "id", None)
-                )
+                cleaned = strip_leading_bot_mention(cleaned, getattr(getattr(self.bot, "user", None), "id", None))
 
                 if is_mentioned and has_meaningful_text(cleaned):
                     try:
@@ -3563,32 +3291,21 @@ class Router:
 
             # --- Start of processing for DMs, Mentions, and Replies ---
             async with self._optional_typing(message.channel):
-                self.logger.info(
-                    f"Processing message: DM={isinstance(message.channel, DMChannel)}, Mention={self._is_mentioned(message)} (msg_id: {message.id})"
-                )
+                self.logger.info(f"Processing message: DM={isinstance(message.channel, DMChannel)}, Mention={self._is_mentioned(message)} (msg_id: {message.id})")
 
                 # 4. Compatibility fast-path for legacy tests: attachments + empty content (secondary safeguard)
                 try:
-                    has_attachments = (
-                        bool(getattr(message, "attachments", None))
-                        and len(message.attachments) > 0
-                    )
+                    has_attachments = bool(getattr(message, "attachments", None)) and len(message.attachments) > 0
                 except Exception:
                     has_attachments = False
                 # Recompute a minimal cleaned content (strip mention prefix like above)
                 mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
-                cleaned_for_compat = re.sub(
-                    mention_pattern, "", (message.content or "").strip()
-                )
+                cleaned_for_compat = re.sub(mention_pattern, "", (message.content or "").strip())
                 cleaned_for_compat = strip_leading_bot_mention(
                     cleaned_for_compat,
                     getattr(getattr(self.bot, "user", None), "id", None),
                 )
-                if (
-                    has_attachments
-                    and cleaned_for_compat == ""
-                    and not _is_mock(self.bot)
-                ):
+                if has_attachments and cleaned_for_compat == "" and not _is_mock(self.bot):
                     # If all attachments are plain text (.txt/text/*), skip legacy compat path
                     try:
                         atts = list(getattr(message, "attachments", []) or [])
@@ -3599,9 +3316,7 @@ class Router:
                     if not all_text_files:
                         handler = self._flows.get("process_attachments")
                         if handler:
-                            self.logger.debug(
-                                "Compat path: delegating to _flows['process_attachments'] with empty text."
-                            )
+                            self.logger.debug("Compat path: delegating to _flows['process_attachments'] with empty text.")
                             res = await handler(message, cleaned_for_compat)
                             if isinstance(res, BotAction):
                                 return res
@@ -3621,9 +3336,7 @@ class Router:
                             if isinstance(res, ResponseMessage):
                                 res.text = res.content = text_out
                                 return res
-                            return ResponseMessage(
-                                content=text_out, text=text_out, audio_path=audio_path
-                            )
+                            return ResponseMessage(content=text_out, text=text_out, audio_path=audio_path)
 
                 # Centralized scope resolution and context building
                 (
@@ -3632,30 +3345,22 @@ class Router:
                     context_str,
                 ) = await self._resolve_scope_and_target(message)
 
-                self.logger.debug(
-                    f"Scope resolved: context_str='{context_str[:100]}...'"
-                )
+                self.logger.debug(f"Scope resolved: context_str='{context_str[:100]}...'")
 
                 # Clean mention from content for processing
                 clean_content = content
                 if self._is_mentioned(message):
-                    clean_content = strip_leading_bot_mention(
-                        content, getattr(getattr(self.bot, "user", None), "id", None)
-                    )
+                    clean_content = strip_leading_bot_mention(content, getattr(getattr(self.bot, "user", None), "id", None))
 
                 # 5. Check for vision generation intent early (before multi-modal)
                 try:
-                    prechecked = await self._prioritized_vision_route(
-                        message, context_str
-                    )
+                    prechecked = await self._prioritized_vision_route(message, context_str)
                 except Exception as e:
                     prechecked = None
                     self.logger.debug(f"vision.precheck_exception | {e}")
                 if prechecked is not None:
                     if router_debug:
-                        self.logger.info(
-                            f"ROUTER_DEBUG | path=t2i reason=vision_intent_detected msg_id={message.id}"
-                        )
+                        self.logger.info(f"ROUTER_DEBUG | path=t2i reason=vision_intent_detected msg_id={message.id}")
                     # Decide final route here for vision
                     try:
                         self.logger.info(
@@ -3673,9 +3378,7 @@ class Router:
                 # 5.5. Deterministic X/Twitter media routing (optional early path; default off)
                 if getattr(self, "_x_early_resolve_enabled", False):
                     try:
-                        layer, x_urls = await self._gather_prioritized_x_urls(
-                            scope_case, message, reply_target
-                        )
+                        layer, x_urls = await self._gather_prioritized_x_urls(scope_case, message, reply_target)
                     except Exception:
                         layer, x_urls = "none", []
                     if x_urls and not parsed_command:
@@ -3701,11 +3404,7 @@ class Router:
                                 except Exception:
                                     normalized_u = canonical_u
                                 norm_urls.append(normalized_u)
-                                ctx = (
-                                    self._x_frontend_canon.get(normalized_u)
-                                    or self._x_frontend_canon.get(canonical_u)
-                                    or {}
-                                )
+                                ctx = self._x_frontend_canon.get(normalized_u) or self._x_frontend_canon.get(canonical_u) or {}
                                 frontend = ctx.get("frontend")
                                 primary = self._resolve_twitter_status_id(
                                     normalized_u,
@@ -3735,28 +3434,19 @@ class Router:
                             resolved = {"kind": "unknown", "reason": f"exception:{e}"}
                         dt_ms = int((time.perf_counter() - t0) * 1000)
                         kind = (resolved or {}).get("kind", "unknown")
-                        base_context_url = (
-                            norm_urls[0] if norm_urls else (x_urls[0] if x_urls else "")
-                        )
+                        base_context_url = norm_urls[0] if norm_urls else (x_urls[0] if x_urls else "")
                         primary_selected = self._resolve_twitter_status_id(
                             base_context_url,
-                            tweet_id=(
-                                (resolved or {}).get("primary")
-                                or primary_hints.get(base_context_url)
-                            ),
+                            tweet_id=((resolved or {}).get("primary") or primary_hints.get(base_context_url)),
                         )
-                        frontend_selected = (resolved or {}).get(
-                            "frontend"
-                        ) or frontend_hints.get(base_context_url)
+                        frontend_selected = (resolved or {}).get("frontend") or frontend_hints.get(base_context_url)
                         # Single-shot detection marker
                         try:
                             src = (resolved or {}).get("src", "unknown")
                             detail = {"kind": kind, "src": src, "ms": dt_ms}
                             if kind == "image":
                                 try:
-                                    detail["count"] = len(
-                                        (resolved or {}).get("images") or []
-                                    )
+                                    detail["count"] = len((resolved or {}).get("images") or [])
                                 except Exception:
                                     pass
                             if primary_selected:
@@ -3777,46 +3467,28 @@ class Router:
                         url_for_stt = (resolved or {}).get("url") or base_context_url
                         final_kind = kind
                         if url_for_stt and kind == "video":
-                            verify_kind, verify_ct = await self._verify_media_kind(
-                                url_for_stt, default="video"
-                            )
-                            self._log_media_kind_checked(
-                                url_for_stt, verify_ct, verify_kind or "video"
-                            )
+                            verify_kind, verify_ct = await self._verify_media_kind(url_for_stt, default="video")
+                            self._log_media_kind_checked(url_for_stt, verify_ct, verify_kind or "video")
                             if verify_kind == "image":
                                 final_kind = "image"
                         elif kind == "image":
                             images_probe = (resolved or {}).get("images") or []
                             if images_probe:
-                                verify_kind, verify_ct = await self._verify_media_kind(
-                                    images_probe[0], default="image"
-                                )
-                                self._log_media_kind_checked(
-                                    images_probe[0], verify_ct, verify_kind or "image"
-                                )
+                                verify_kind, verify_ct = await self._verify_media_kind(images_probe[0], default="image")
+                                self._log_media_kind_checked(images_probe[0], verify_ct, verify_kind or "image")
                                 if verify_kind == "video":
                                     final_kind = "video"
-                                    url_for_stt = (resolved or {}).get(
-                                        "url"
-                                    ) or images_probe[0]
+                                    url_for_stt = (resolved or {}).get("url") or images_probe[0]
 
                         if final_kind == "video":
                             url_for_stt = url_for_stt or base_context_url
-                            self.logger.info(
-                                "route.select kind=video reason=resolved_direct_media"
-                            )
+                            self.logger.info("route.select kind=video reason=resolved_direct_media")
                             # Emit deterministic media selection breadcrumb and harden cache key via fragment [CMV][CDiP]
                             try:
                                 import hashlib as _hl
 
-                                ptid2 = (
-                                    primary_selected
-                                    or extract_primary_tweet_id(url_for_stt)
-                                    or ""
-                                )
-                                uhash2 = _hl.sha256(url_for_stt.encode()).hexdigest()[
-                                    :16
-                                ]
+                                ptid2 = primary_selected or extract_primary_tweet_id(url_for_stt) or ""
+                                uhash2 = _hl.sha256(url_for_stt.encode()).hexdigest()[:16]
                                 detail = {
                                     "primary": ptid2,
                                     "selected": ptid2,
@@ -3835,13 +3507,9 @@ class Router:
                                     },
                                 )
                                 if ptid2 and uhash2:
-                                    url_for_stt = (
-                                        f"{url_for_stt}#ptid={ptid2}&uh={uhash2}"
-                                    )
+                                    url_for_stt = f"{url_for_stt}#ptid={ptid2}&uh={uhash2}"
                                     if frontend_selected:
-                                        url_for_stt = (
-                                            f"{url_for_stt}&fe={frontend_selected}"
-                                        )
+                                        url_for_stt = f"{url_for_stt}&fe={frontend_selected}"
                             except Exception:
                                 pass
                             dur = (resolved or {}).get("duration")
@@ -3850,18 +3518,14 @@ class Router:
                                 host = urlparse(url_for_stt).netloc
                             except Exception:
                                 host = ""
-                            self.logger.info(
-                                f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int, float)) else 'NA'}s"
-                            )
+                            self.logger.info(f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int, float)) else 'NA'}s")
                             try:
                                 self.logger.info(
                                     "x.video.url_ok",
                                     extra={
                                         "event": "x.video.url_ok",
                                         "detail": {
-                                            "src": (
-                                                (resolved or {}).get("src") or "ytdlp"
-                                            ),
+                                            "src": ((resolved or {}).get("src") or "ytdlp"),
                                             "ms": dt_ms,
                                         },
                                         "msg_id": message.id,
@@ -3872,9 +3536,7 @@ class Router:
                             try:
                                 timeout_override_raw = None
                                 try:
-                                    timeout_override_raw = self.config.get(
-                                        "X_STT_TIMEOUT_S"
-                                    )
+                                    timeout_override_raw = self.config.get("X_STT_TIMEOUT_S")
                                 except Exception:
                                     timeout_override_raw = None
                                 stt_timeout: Optional[float]
@@ -3886,31 +3548,17 @@ class Router:
                                         stt_timeout = None
                                 if stt_timeout is None or stt_timeout <= 0:
                                     try:
-                                        stt_rtf = float(
-                                            self.config.get(
-                                                "X_STT_TIMEOUT_RTF", X_STT_RTF_DEFAULT
-                                            )
-                                        )
+                                        stt_rtf = float(self.config.get("X_STT_TIMEOUT_RTF", X_STT_RTF_DEFAULT))
                                     except Exception:
                                         stt_rtf = X_STT_RTF_DEFAULT
                                     try:
-                                        speedup_cfg = float(
-                                            self.config.get(
-                                                "VIDEO_SPEEDUP", _DEFAULT_VIDEO_SPEEDUP
-                                            )
-                                        )
+                                        speedup_cfg = float(self.config.get("VIDEO_SPEEDUP", _DEFAULT_VIDEO_SPEEDUP))
                                     except Exception:
                                         speedup_cfg = _DEFAULT_VIDEO_SPEEDUP
-                                    safe_speedup = (
-                                        speedup_cfg
-                                        if speedup_cfg > 0
-                                        else _DEFAULT_VIDEO_SPEEDUP
-                                    )
+                                    safe_speedup = speedup_cfg if speedup_cfg > 0 else _DEFAULT_VIDEO_SPEEDUP
                                     effective_duration = 0.0
                                     if isinstance(dur, (int, float)):
-                                        effective_duration = max(float(dur), 0.0) / max(
-                                            safe_speedup, 0.1
-                                        )
+                                        effective_duration = max(float(dur), 0.0) / max(safe_speedup, 0.1)
                                     computed = max(
                                         X_STT_MIN_TIMEOUT_S,
                                         effective_duration * stt_rtf + X_STT_PADDING_S,
@@ -3919,16 +3567,8 @@ class Router:
                                 if stt_timeout is None or stt_timeout <= 0:
                                     stt_timeout = X_STT_MIN_TIMEOUT_S
                                 try:
-                                    mm = (
-                                        int((dur or 0) // 60)
-                                        if isinstance(dur, (int, float))
-                                        else 0
-                                    )
-                                    ss = (
-                                        int((dur or 0) % 60)
-                                        if isinstance(dur, (int, float))
-                                        else 0
-                                    )
+                                    mm = int((dur or 0) // 60) if isinstance(dur, (int, float)) else 0
+                                    ss = int((dur or 0) % 60) if isinstance(dur, (int, float)) else 0
                                     self.logger.info(
                                         "stt.start",
                                         extra={
@@ -3950,14 +3590,10 @@ class Router:
                                     ),
                                     message,
                                 )
-                                formatted = self._format_x_tweet_with_transcription(
-                                    base_text=None, url=url_for_stt, stt_res=stt_res
-                                )
+                                formatted = self._format_x_tweet_with_transcription(base_text=None, url=url_for_stt, stt_res=stt_res)
                                 try:
                                     el_ms = int((time.perf_counter() - stt_t0) * 1000)
-                                    chars = len(
-                                        (stt_res or {}).get("transcription", "")
-                                    )
+                                    chars = len((stt_res or {}).get("transcription", ""))
                                     self.logger.info(
                                         "stt.ok",
                                         extra={
@@ -3972,9 +3608,7 @@ class Router:
                                     )
                                 except Exception:
                                     pass
-                                self.logger.info(
-                                    f"🎯 Route: stt_from_x_video | msg_id={message.id}"
-                                )
+                                self.logger.info(f"🎯 Route: stt_from_x_video | msg_id={message.id}")
                                 try:
                                     self.logger.info(
                                         "route.final",
@@ -4008,10 +3642,7 @@ class Router:
                                 except Exception:
                                     pass
                                 return BotAction(
-                                    content=(
-                                        "⚠️ I couldn't transcribe this video before timing out. "
-                                        "Please try again or use a shorter clip."
-                                    ),
+                                    content=("⚠️ I couldn't transcribe this video before timing out. Please try again or use a shorter clip."),
                                     error=True,
                                 )
                             except Exception as e:
@@ -4020,11 +3651,7 @@ class Router:
                                     es = str(e).lower()
                                     if "403" in es or "forbidden" in es:
                                         reason = "403"
-                                    elif (
-                                        "format" in es
-                                        or "no video formats" in es
-                                        or "no such format" in es
-                                    ):
+                                    elif "format" in es or "no video formats" in es or "no such format" in es:
                                         reason = "no_formats"
                                     elif "timeout" in es:
                                         reason = "timeout"
@@ -4059,26 +3686,15 @@ class Router:
                                 except Exception:
                                     pass
                                 return BotAction(
-                                    content=(
-                                        "⚠️ I couldn't transcribe this video. "
-                                        "Please try again later or share a shorter clip."
-                                    ),
+                                    content=("⚠️ I couldn't transcribe this video. Please try again later or share a shorter clip."),
                                     error=True,
                                 )
                         elif final_kind == "image":
                             images = (resolved or {}).get("images") or []
-                            self.logger.info(
-                                "route.select kind=image reason=resolved_syndication_photos"
-                            )
-                            self.logger.info(
-                                f"media.resolve: result=image count={len(images)}"
-                            )
+                            self.logger.info("route.select kind=image reason=resolved_syndication_photos")
+                            self.logger.info(f"media.resolve: result=image count={len(images)}")
                             try:
-                                domain = (
-                                    "pbs.twimg.com"
-                                    if any("pbs.twimg.com" in (i or "") for i in images)
-                                    else "unknown"
-                                )
+                                domain = "pbs.twimg.com" if any("pbs.twimg.com" in (i or "") for i in images) else "unknown"
                                 self.logger.info(
                                     "x.photos.ok",
                                     extra={
@@ -4108,9 +3724,7 @@ class Router:
                                 try:
                                     vl_notes = await self._vl_describe_image_from_url(
                                         images[0],
-                                        prompt=(
-                                            "Describe this image in detail, focusing on key visual elements, objects, text, and context."
-                                        ),
+                                        prompt=("Describe this image in detail, focusing on key visual elements, objects, text, and context."),
                                     )
                                     vl_notes = sanitize_vl_reply_text(vl_notes or "")
                                 except Exception:
@@ -4122,9 +3736,7 @@ class Router:
                                     tweet_id=primary_selected,
                                 )
                                 if caption_tweet_id:
-                                    tweet_caption = await self._resolve_twitter_caption_from_syndication(
-                                        caption_tweet_id
-                                    )
+                                    tweet_caption = await self._resolve_twitter_caption_from_syndication(caption_tweet_id)
                                 self.logger.info(
                                     "x.image.caption.resolve",
                                     extra={
@@ -4143,9 +3755,7 @@ class Router:
                                 tweet_caption=tweet_caption,
                                 vl_notes=vl_notes,
                             )
-                            self.logger.info(
-                                f"🎯 Route: vl_from_x_images | msg_id={message.id}"
-                            )
+                            self.logger.info(f"🎯 Route: vl_from_x_images | msg_id={message.id}")
                             try:
                                 self.logger.info(
                                     "route.final",
@@ -4165,9 +3775,7 @@ class Router:
                             )
                         else:
                             reason = (resolved or {}).get("reason", "unknown")
-                            self.logger.info(
-                                f"media.resolve: result=unknown reason={reason}"
-                            )
+                            self.logger.info(f"media.resolve: result=unknown reason={reason}")
                             try:
                                 self.logger.info(
                                     "media_fallback",
@@ -4184,9 +3792,7 @@ class Router:
                 # 6. Sequential multimodal processing (guarded by a global timeout to avoid hangs)
                 try:
                     try:
-                        total_budget = float(
-                            self.config.get("MULTIMODAL_TOTAL_BUDGET_S", 240.0)
-                        )
+                        total_budget = float(self.config.get("MULTIMODAL_TOTAL_BUDGET_S", 240.0))
                     except Exception:
                         total_budget = 240.0
                     try:
@@ -4207,35 +3813,21 @@ class Router:
                     )
                 except asyncio.TimeoutError:
                     # Fail-fast with user-friendly message; typing context will exit afterwards
-                    self.logger.error(
-                        f"multimodal.total_timeout | msg_id={message.id} budget={total_budget}s"
-                    )
+                    self.logger.error(f"multimodal.total_timeout | msg_id={message.id} budget={total_budget}s")
                     return BotAction(
-                        content=(
-                            "⏳ This is taking too long to process, so I'll stop here to avoid hanging. "
-                            "Please try again with a shorter video or later."
-                        ),
+                        content=("⏳ This is taking too long to process, so I'll stop here to avoid hanging. Please try again with a shorter video or later."),
                         error=True,
                     )
                 if router_debug:
                     # Determine what path was taken based on message content
-                    has_x_urls = any(
-                        self._is_twitter_url(url)
-                        for url in re.findall(r"https?://\S+", content)
-                    )
+                    has_x_urls = any(self._is_twitter_url(url) for url in re.findall(r"https?://\S+", content))
                     has_attachments = bool(getattr(message, "attachments", None))
                     if has_x_urls:
-                        self.logger.info(
-                            f"ROUTER_DEBUG | path=x_syndication_vl reason=twitter_url_detected msg_id={message.id}"
-                        )
+                        self.logger.info(f"ROUTER_DEBUG | path=x_syndication_vl reason=twitter_url_detected msg_id={message.id}")
                     elif has_attachments:
-                        self.logger.info(
-                            f"ROUTER_DEBUG | path=attachment_vl reason=image_attachments msg_id={message.id}"
-                        )
+                        self.logger.info(f"ROUTER_DEBUG | path=attachment_vl reason=image_attachments msg_id={message.id}")
                     else:
-                        self.logger.info(
-                            f"ROUTER_DEBUG | path=multimodal reason=default_flow msg_id={message.id}"
-                        )
+                        self.logger.info(f"ROUTER_DEBUG | path=multimodal reason=default_flow msg_id={message.id}")
                 return result_action  # Return the actual processing result
 
         except Exception as e:
@@ -4264,20 +3856,12 @@ class Router:
                 if self._processing_locks_cleanup_counter >= 100:
                     self._processing_locks_cleanup_counter = 0
                     # Clean any locks that aren't currently locked
-                    old_ids = [
-                        k
-                        for k, v in self._processing_locks.items()
-                        if hasattr(v, "locked") and not v.locked()
-                    ]
+                    old_ids = [k for k, v in self._processing_locks.items() if hasattr(v, "locked") and not v.locked()]
                     for old_id in old_ids:
                         self._processing_locks.pop(old_id, None)
                     # Keep typing suppression bounded as well.
                     now = time.monotonic()
-                    stale_channels = [
-                        k
-                        for k, until in self._typing_suppressed_until.items()
-                        if until < now
-                    ]
+                    stale_channels = [k for k, until in self._typing_suppressed_until.items() if until < now]
                     for channel_id in stale_channels:
                         self._typing_suppressed_until.pop(channel_id, None)
                     # BUGFIX 46: Also evict stale metadata entries without active processing
@@ -4287,9 +3871,7 @@ class Router:
                         self._gate_denied,
                         self._prefilter_gate,
                     ):
-                        stale = [
-                            k for k in list(meta_dict.keys()) if k not in active_ids
-                        ]
+                        stale = [k for k in list(meta_dict.keys()) if k not in active_ids]
                         for k in stale:
                             meta_dict.pop(k, None)
             except Exception:
@@ -4405,11 +3987,7 @@ class Router:
                 else:
                     reasons.append("text_disabled")
 
-            modality = (
-                "MEDIA_OR_HEAVY"
-                if ("media" in domains or "search" in domains or "rag" in domains)
-                else "TEXT_ONLY"
-            )
+            modality = "MEDIA_OR_HEAVY" if ("media" in domains or "search" in domains or "rag" in domains) else "TEXT_ONLY"
             return {
                 "eligible": bool(allow),
                 "modality": modality,
@@ -4426,9 +4004,7 @@ class Router:
                 "reason": "exception",
             }
 
-    async def _process_multimodal_message_internal(
-        self, message: Message, context_str: str
-    ) -> Optional[BotAction]:
+    async def _process_multimodal_message_internal(self, message: Message, context_str: str) -> Optional[BotAction]:
         """
         Process all input items from a message sequentially with result aggregation.
         Follows the 1 IN → 1 OUT rule by combining all results into a single response.
@@ -4451,9 +4027,7 @@ class Router:
                                 timeout=handler_timeout_s,
                             )
                         except TypeError:
-                            handler_res = await asyncio.wait_for(
-                                self._handle_video_url(item), timeout=handler_timeout_s
-                            )
+                            handler_res = await asyncio.wait_for(self._handle_video_url(item), timeout=handler_timeout_s)
                     elif modality in (
                         InputModality.GENERAL_URL,
                         InputModality.SCREENSHOT_URL,
@@ -4478,9 +4052,7 @@ class Router:
                                 timeout=handler_timeout_s,
                             )
                         except TypeError:
-                            handler_res = await asyncio.wait_for(
-                                self._handle_image(item), timeout=handler_timeout_s
-                            )
+                            handler_res = await asyncio.wait_for(self._handle_image(item), timeout=handler_timeout_s)
                     elif modality in (
                         InputModality.PDF_DOCUMENT,
                         InputModality.PDF_OCR,
@@ -4491,24 +4063,18 @@ class Router:
                                 timeout=handler_timeout_s,
                             )
                         except TypeError:
-                            handler_res = await asyncio.wait_for(
-                                self._handle_pdf(item), timeout=handler_timeout_s
-                            )
+                            handler_res = await asyncio.wait_for(self._handle_pdf(item), timeout=handler_timeout_s)
                 except asyncio.TimeoutError:
                     try:
                         mod_label = getattr(modality, "name", "input").lower()
-                        await message.reply(
-                            f"⚠️ Processing timed out for {mod_label}. Please try again."
-                        )
+                        await message.reply(f"⚠️ Processing timed out for {mod_label}. Please try again.")
                     except Exception:
                         pass
                     handler_res = None
                 except Exception as exc:
                     try:
                         mod_label = getattr(modality, "name", "input").lower()
-                        await message.reply(
-                            f"⚠️ An error occurred while processing {mod_label}: {exc}"
-                        )
+                        await message.reply(f"⚠️ An error occurred while processing {mod_label}: {exc}")
                     except Exception:
                         pass
                     handler_res = None
@@ -4543,14 +4109,7 @@ class Router:
         items = collect_input_items(message)
         # Treat plain text attachments as prompt extensions, not standalone items
         try:
-            items = [
-                it
-                for it in (items or [])
-                if not (
-                    getattr(it, "source_type", None) == "attachment"
-                    and is_text_attachment(getattr(it, "payload", None))
-                )
-            ]
+            items = [it for it in (items or []) if not (getattr(it, "source_type", None) == "attachment" and is_text_attachment(getattr(it, "payload", None)))]
         except Exception:
             # Non-fatal: fallback to original items list on any error
             pass
@@ -4561,9 +4120,7 @@ class Router:
         if message.reference and self.config.get("VISION_REPLY_IMAGE_HARVEST", True):
             try:
                 # Fetch the referenced message to harvest images
-                ref_message = await self._resolve_reference_message(
-                    message, fallback=ref_message
-                )
+                ref_message = await self._resolve_reference_message(message, fallback=ref_message)
                 if ref_message is None:
                     raise RuntimeError("reference_unavailable")
                 reply_images = collect_image_urls_from_message(ref_message)
@@ -4582,9 +4139,7 @@ class Router:
                     # Logging per acceptance: use 📎 and count/kept/truncated fields
                     kept_count = len(reply_images)
                     truncated = False  # No truncation at harvest time
-                    self.logger.info(
-                        f"📎 Reply image capture | from_msg={ref_message.id} count={len(reply_images)} kept={kept_count} truncated={truncated}"
-                    )
+                    self.logger.info(f"📎 Reply image capture | from_msg={ref_message.id} count={len(reply_images)} kept={kept_count} truncated={truncated}")
 
             except Exception as e:
                 # Non-fatal: continue without reply images if fetch fails
@@ -4593,9 +4148,7 @@ class Router:
         # Reply link/attachment harvest (non-image) so reply chains route correctly [REH][IV]
         try:
             if message.reference:
-                ref_message = await self._resolve_reference_message(
-                    message, fallback=ref_message
-                )
+                ref_message = await self._resolve_reference_message(message, fallback=ref_message)
 
                 if ref_message:
                     # Build a set of existing payloads to avoid duplicates
@@ -4614,9 +4167,7 @@ class Router:
                         )
                         if added:
                             try:
-                                self.logger.info(
-                                    f"📎 Reply link capture | from_msg={ref_message.id} urls_added={added}"
-                                )
+                                self.logger.info(f"📎 Reply link capture | from_msg={ref_message.id} urls_added={added}")
                             except Exception:
                                 pass
                     except Exception:
@@ -4644,9 +4195,7 @@ class Router:
                             added_atts += 1
                         if added_atts:
                             try:
-                                self.logger.info(
-                                    f"📎 Reply attachment capture | from_msg={ref_message.id} attachments_added={added_atts}"
-                                )
+                                self.logger.info(f"📎 Reply attachment capture | from_msg={ref_message.id} attachments_added={added_atts}")
                             except Exception:
                                 pass
                     except Exception:
@@ -4659,9 +4208,7 @@ class Router:
         # Note: This block lives inside the image-harvest section for historical reasons, but URL harvest
         # must NOT depend on the VISION_REPLY_IMAGE_HARVEST flag. We add an unconditional safety harvest below.
         try:
-            ref_msg = await self._resolve_reference_message(
-                message, fallback=ref_message
-            )
+            ref_msg = await self._resolve_reference_message(message, fallback=ref_message)
             if ref_msg and getattr(ref_msg, "content", None):
                 # Extract URLs from the referenced message
                 found_urls = extract_urls_strict(ref_msg.content or "")
@@ -4676,9 +4223,7 @@ class Router:
                     )
                     if added_urls:
                         try:
-                            self.logger.info(
-                                f"📎 Reply URL harvest | from_msg={ref_msg.id} urls_added={added_urls}"
-                            )
+                            self.logger.info(f"📎 Reply URL harvest | from_msg={ref_msg.id} urls_added={added_urls}")
                         except Exception:
                             pass
         except Exception:
@@ -4689,9 +4234,7 @@ class Router:
         # Ensures reply→video (YouTube/TikTok/X) routes always collect the URL even when image harvest is disabled. [REH]
         try:
             if getattr(message, "reference", None):
-                ref_msg = await self._resolve_reference_message(
-                    message, fallback=ref_message
-                )
+                ref_msg = await self._resolve_reference_message(message, fallback=ref_message)
                 if ref_msg:
                     # 1) URLs present in the parent's text content
                     if getattr(ref_msg, "content", None):
@@ -4716,9 +4259,7 @@ class Router:
                         )
                         if added_urls:
                             try:
-                                self.logger.info(
-                                    f"📎 Reply URL harvest (unconditional) | from_msg={getattr(ref_msg, 'id', 'na')} urls_added={added_urls} now_items={len(items)}"
-                                )
+                                self.logger.info(f"📎 Reply URL harvest (unconditional) | from_msg={getattr(ref_msg, 'id', 'na')} urls_added={added_urls} now_items={len(items)}")
                             except Exception:
                                 pass
         except Exception:
@@ -4731,9 +4272,7 @@ class Router:
         except Exception:
             mentions = []
         if mentions and getattr(self.bot, "user", None) in mentions:
-            original_text = strip_leading_bot_mention(
-                original_text, getattr(getattr(self.bot, "user", None), "id", None)
-            )
+            original_text = strip_leading_bot_mention(original_text, getattr(getattr(self.bot, "user", None), "id", None))
 
         # Remove URLs from text content since they will be processed separately
         original_text = strip_urls(original_text)
@@ -4750,12 +4289,8 @@ class Router:
         # Diagnostics: post-harvest item counts [RAT][PA]
         try:
             url_ct = sum(1 for it in items if getattr(it, "source_type", None) == "url")
-            att_ct = sum(
-                1 for it in items if getattr(it, "source_type", None) == "attachment"
-            )
-            self.logger.info(
-                f"mm.items.after_harvest | count={len(items)} urls={url_ct} atts={att_ct} msg_id={message.id}"
-            )
+            att_ct = sum(1 for it in items if getattr(it, "source_type", None) == "attachment")
+            self.logger.info(f"mm.items.after_harvest | count={len(items)} urls={url_ct} atts={att_ct} msg_id={message.id}")
         except Exception:
             pass
 
@@ -4765,9 +4300,7 @@ class Router:
             if _is_thread_channel(getattr(message, "channel", None)):
                 if not original_text or not original_text.strip():
                     try:
-                        rt, _ = await resolve_thread_reply_target(
-                            self.bot, message, self.config
-                        )
+                        rt, _ = await resolve_thread_reply_target(self.bot, message, self.config)
                     except Exception:
                         rt = None
                     adopted = False
@@ -4785,12 +4318,8 @@ class Router:
                                     extra={
                                         "subsys": "mem.thread",
                                         "event": "adopt_ok",
-                                        "guild_id": getattr(
-                                            getattr(message, "guild", None), "id", None
-                                        ),
-                                        "user_id": getattr(
-                                            getattr(message, "author", None), "id", None
-                                        ),
+                                        "guild_id": getattr(getattr(message, "guild", None), "id", None),
+                                        "user_id": getattr(getattr(message, "author", None), "id", None),
                                         "msg_id": getattr(message, "id", None),
                                         "detail": {
                                             "source": "reply_target",
@@ -4803,9 +4332,7 @@ class Router:
                     if not adopted:
                         anchor = rt or message
                         try:
-                            async for m in message.channel.history(
-                                limit=10, before=anchor
-                            ):
+                            async for m in message.channel.history(limit=10, before=anchor):
                                 is_human = not bool(getattr(m.author, "bot", False))
                                 m_text = str(getattr(m, "content", "") or "").strip()
                                 if is_human and m_text:
@@ -4844,16 +4371,12 @@ class Router:
 
         # Reply-case UX fallback (non-thread): mention + reply with minimal text → adopt parent text. [REH][IV]
         try:
-            if not _is_thread_channel(getattr(message, "channel", None)) and getattr(
-                message, "reference", None
-            ):
+            if not _is_thread_channel(getattr(message, "channel", None)) and getattr(message, "reference", None):
                 # Only trigger on @mention to avoid hijacking normal replies
                 if self.bot.user in (getattr(message, "mentions", None) or []):
                     minimal = True
                     try:
-                        minimal = not bool(
-                            re.search(r"[A-Za-z0-9]", original_text or "")
-                        )
+                        minimal = not bool(re.search(r"[A-Za-z0-9]", original_text or ""))
                     except Exception:
                         minimal = not bool(original_text and original_text.strip())
                     if minimal:
@@ -4861,9 +4384,7 @@ class Router:
                         ref_msg = getattr(ref, "resolved", None)
                         if ref_msg is None and getattr(ref, "message_id", None):
                             try:
-                                ref_msg = await message.channel.fetch_message(
-                                    ref.message_id
-                                )
+                                ref_msg = await message.channel.fetch_message(ref.message_id)
                             except Exception:
                                 ref_msg = None
                         if ref_msg and getattr(ref_msg, "content", None):
@@ -4929,9 +4450,7 @@ class Router:
                     elif blob:
                         original_text = blob.strip()
                     try:
-                        self.logger.info(
-                            f"attachments.txt_loaded count={loaded_count} bytes_total={bytes_total} truncated={str(truncated).lower()}"
-                        )
+                        self.logger.info(f"attachments.txt_loaded count={loaded_count} bytes_total={bytes_total} truncated={str(truncated).lower()}")
                         if len(txt_atts) > 1:
                             extra = len(txt_atts) - 1
                             self.logger.info(f"attachments.txt_ignored extra={extra}")
@@ -4939,9 +4458,7 @@ class Router:
                         pass
                 else:
                     try:
-                        self.logger.info(
-                            "attachments.txt_reject reason=invalid_or_oversize"
-                        )
+                        self.logger.info("attachments.txt_reject reason=invalid_or_oversize")
                     except Exception:
                         pass
         except Exception:
@@ -4954,9 +4471,7 @@ class Router:
         try:
             prechecked = await self._prioritized_vision_route(message, context_str)
             if prechecked is not None:
-                self._metric_inc(
-                    "routing.vision.precedence", {"stage": "in_multimodal"}
-                )
+                self._metric_inc("routing.vision.precedence", {"stage": "in_multimodal"})
                 return prechecked
         except Exception as e:
             # Never break dispatch because of a precheck failure
@@ -4976,9 +4491,7 @@ class Router:
             ref_count = 0
             if message.reference:
                 try:
-                    ref_message = await message.channel.fetch_message(
-                        message.reference.message_id
-                    )
+                    ref_message = await message.channel.fetch_message(message.reference.message_id)
                     ref_imgs = collect_image_urls_from_message(ref_message)
                     ref_count = len(ref_imgs or [])
                 except Exception:
@@ -4989,18 +4502,11 @@ class Router:
             # Fallback to heuristic count from collected items
             for item in items:
                 if item.source_type == "attachment":
-                    if (
-                        hasattr(item.payload, "content_type")
-                        and item.payload.content_type
-                        and item.payload.content_type.startswith("image/")
-                    ):
+                    if hasattr(item.payload, "content_type") and item.payload.content_type and item.payload.content_type.startswith("image/"):
                         heuristic_image_items.append(item)
                 elif item.source_type == "url":
                     url_lower = str(item.payload).lower()
-                    if any(
-                        ext in url_lower
-                        for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]
-                    ):
+                    if any(ext in url_lower for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"]):
                         heuristic_image_items.append(item)
             combined_count = len(heuristic_image_items)
 
@@ -5017,9 +4523,7 @@ class Router:
             "vxtwitter.com",
             "fixupx.com",
         ]
-        has_x_url = any(
-            host in (message.content or "").lower() for host in x_hosts_for_gate
-        ) or (x_info_for_gate.has_x_link if x_info_for_gate else False)
+        has_x_url = any(host in (message.content or "").lower() for host in x_hosts_for_gate) or (x_info_for_gate.has_x_link if x_info_for_gate else False)
         x_status_urls_from_items: set[str] = set()
         try:
             for it in items:
@@ -5048,9 +4552,7 @@ class Router:
             "allow_vision": x_media_kind != "video",
         }
         if x_info_for_gate and x_info_for_gate.media_urls:
-            x_media_state["primary_urls"] = {
-                self._normalize_x_url(u) for u in x_info_for_gate.media_urls if u
-            }
+            x_media_state["primary_urls"] = {self._normalize_x_url(u) for u in x_info_for_gate.media_urls if u}
         else:
             x_media_state["primary_urls"] = x_status_urls_from_items
 
@@ -5061,9 +4563,7 @@ class Router:
             for item in heuristic_image_items:
                 try:
                     candidate_urls = self._collect_x_candidate_urls(item)
-                    if candidate_urls and all(
-                        self._is_twitter_thumbnail_url(u) for u in candidate_urls
-                    ):
+                    if candidate_urls and all(self._is_twitter_thumbnail_url(u) for u in candidate_urls):
                         suppressed += 1
                         self._metric_inc("routing.twitter.thumb_suppressed", None)
                         continue
@@ -5075,15 +4575,8 @@ class Router:
             combined_count = len(filtered_items)
 
         # Route to perception (VL notes) → TEXT when conditions met (but skip for X/Twitter)
-        if (
-            (is_dm or mentioned_me or is_reply)
-            and combined_count >= 1
-            and bool(self.config.get("HYBRID_FORCE_PERCEPTION_ON_REPLY", True))
-            and not has_x_url
-        ):
-            self.logger.info(
-                f"🎯 Route: text (with perception) | images={combined_count} | msg_id={message.id}"
-            )
+        if (is_dm or mentioned_me or is_reply) and combined_count >= 1 and bool(self.config.get("HYBRID_FORCE_PERCEPTION_ON_REPLY", True)) and not has_x_url:
+            self.logger.info(f"🎯 Route: text (with perception) | images={combined_count} | msg_id={message.id}")
             try:
                 # Run silent perception step to obtain VL notes (sanitized & capped)
                 notes, reason = await self._run_perception_notes(message, original_text)
@@ -5093,15 +4586,10 @@ class Router:
                     # text model will treat that as visual evidence and can reply with
                     # "drop a pic" even though an image was actually received. [REH]
                     reason_label = reason or "unknown"
-                    self.logger.info(
-                        f"❌ perception unavailable | reason={reason_label}"
-                    )
+                    self.logger.info(f"❌ perception unavailable | reason={reason_label}")
                     if reason_label == "timeout":
                         return BotAction(
-                            content=(
-                                "I got the image, but the vision model timed out before it could analyze it. "
-                                "Try again, or send a smaller/compressed image if it keeps happening."
-                            ),
+                            content=("I got the image, but the vision model timed out before it could analyze it. Try again, or send a smaller/compressed image if it keeps happening."),
                             error=True,
                         )
                     return BotAction(
@@ -5122,9 +4610,7 @@ class Router:
                 except Exception:
                     max_final = 420
                 if action and getattr(action, "content", None):
-                    action.content = self._truncate_final_text(
-                        action.content, max_final
-                    )
+                    action.content = self._truncate_final_text(action.content, max_final)
                 return action
             except Exception as e:
                 self.logger.error(f"Perception→TEXT routing failed: {e}", exc_info=True)
@@ -5149,59 +4635,40 @@ class Router:
                     )
                 except Exception:
                     pass
-                return BotAction(
-                    content=(
-                        "I didn’t find a link or any text in your reply. If you're replying to a video or image, "
-                        "please include the link or upload the media."
-                    )
-                )
+                return BotAction(content=("I didn’t find a link or any text in your reply. If you're replying to a video or image, please include the link or upload the media."))
 
             # Default to TEXT for any minimal chat signal (mentions, punctuation, emoji, short words)
             try:
-                mentioned_me = self.bot.user in (
-                    getattr(message, "mentions", None) or []
-                )
+                mentioned_me = self.bot.user in (getattr(message, "mentions", None) or [])
                 self.logger.info(
                     "text_default",
                     extra={
                         "subsys": "route",
                         "event": "text_default",
-                        "reason": "mention_has_text"
-                        if mentioned_me
-                        else "ambiguous_intent",
+                        "reason": "mention_has_text" if mentioned_me else "ambiguous_intent",
                         "msg_id": getattr(message, "id", None),
                     },
                 )
             except Exception:
                 pass
 
-            response_action = await self._invoke_text_flow(
-                original_text, message, context_str
-            )
+            response_action = await self._invoke_text_flow(original_text, message, context_str)
             if response_action and response_action.has_payload:
-                self.logger.info(
-                    f"✅ Text-only response generated successfully (msg_id: {message.id})"
-                )
+                self.logger.info(f"✅ Text-only response generated successfully (msg_id: {message.id})")
                 return response_action
             else:
-                self.logger.warning(
-                    f"No response generated from text-only flow (msg_id: {message.id})"
-                )
+                self.logger.warning(f"No response generated from text-only flow (msg_id: {message.id})")
                 return None
 
         # 1) Web link precedence (if enabled): when URLs are present and vision intent wasn't selected,
         #    prioritize URL processing over other modalities. This preserves 1 IN → 1 OUT by limiting the
         #    item set to URLs only. [Feature-flag: ROUTING_WEB_LINK_PRECEDENCE]
         try:
-            web_link_precedence = bool(
-                self.config.get("ROUTING_WEB_LINK_PRECEDENCE", False)
-            )
+            web_link_precedence = bool(self.config.get("ROUTING_WEB_LINK_PRECEDENCE", False))
         except Exception:
             web_link_precedence = False
         try:
-            url_items = [
-                it for it in items if getattr(it, "source_type", None) == "url"
-            ]
+            url_items = [it for it in items if getattr(it, "source_type", None) == "url"]
         except Exception:
             url_items = []
 
@@ -5209,9 +4676,7 @@ class Router:
         #    run VL description using the default prompt. We keep the sequential pipeline but scope items
         #    to image attachments to minimize disruption. [Feature-flag: VL_DEFAULT_PROMPT_FOR_BARE_IMAGE]
         try:
-            vl_default_for_bare_image = bool(
-                self.config.get("VL_DEFAULT_PROMPT_FOR_BARE_IMAGE", True)
-            )
+            vl_default_for_bare_image = bool(self.config.get("VL_DEFAULT_PROMPT_FOR_BARE_IMAGE", True))
         except Exception:
             vl_default_for_bare_image = True
         try:
@@ -5228,24 +4693,14 @@ class Router:
 
         precedence_applied = False
         if web_link_precedence and url_items:
-            self.logger.info(
-                f"🔗 Web link precedence enabled; routing to URL-only processing (urls={len(url_items)}) (msg_id: {message.id})"
-            )
-            self._metric_inc(
-                "routing.url.precedence.selected", {"count": str(len(url_items))}
-            )
+            self.logger.info(f"🔗 Web link precedence enabled; routing to URL-only processing (urls={len(url_items)}) (msg_id: {message.id})")
+            self._metric_inc("routing.url.precedence.selected", {"count": str(len(url_items))})
             items = url_items
             precedence_applied = True
-        elif (
-            vl_default_for_bare_image
-            and image_attachment_items
-            and (not has_meaningful_text(original_text))
-        ):
+        elif vl_default_for_bare_image and image_attachment_items and (not has_meaningful_text(original_text)):
             # Backward-compat: legacy attachment-only messages with truly empty content remain supported by
             # the earlier fast-path. This branch handles minimal/implicit prompts too. [REH]
-            self.logger.info(
-                f"route=attachments | 🖼️ Bare image attachments detected with no meaningful text; prioritizing VL analysis (msg_id: {message.id})"
-            )
+            self.logger.info(f"route=attachments | 🖼️ Bare image attachments detected with no meaningful text; prioritizing VL analysis (msg_id: {message.id})")
             self._metric_inc(
                 "routing.vl.default_bare_image.selected",
                 {"count": str(len(image_attachment_items))},
@@ -5253,9 +4708,7 @@ class Router:
             items = image_attachment_items
             precedence_applied = True
 
-        self.logger.info(
-            f"🚶 Processing {len(items)} input items SEQUENTIALLY for deterministic order (precedence={precedence_applied}) (msg_id: {message.id})"
-        )
+        self.logger.info(f"🚶 Processing {len(items)} input items SEQUENTIALLY for deterministic order (precedence={precedence_applied}) (msg_id: {message.id})")
 
         # Initialize result aggregator and retry manager
         aggregator = ResultAggregator()
@@ -5264,9 +4717,7 @@ class Router:
 
         # Per-item budgets: read from live config so hot-reloads take effect [REH][PA]
         # LLM/vision tasks can be shorter; media (yt-dlp/transcribe) needs more time.
-        LLM_PER_ITEM_BUDGET = float(
-            self.config.get("MULTIMODAL_PER_ITEM_BUDGET", "30.0")
-        )
+        LLM_PER_ITEM_BUDGET = float(self.config.get("MULTIMODAL_PER_ITEM_BUDGET", "30.0"))
         MEDIA_PER_ITEM_BUDGET = float(self.config.get("MEDIA_PER_ITEM_BUDGET", "120.0"))
 
         # Process items strictly sequentially for determinism [CA]
@@ -5279,35 +4730,23 @@ class Router:
             is_twitter_thumbnail = False
             if has_x_url:
                 x_candidate_urls = self._collect_x_candidate_urls(item)
-                status_keys = {
-                    self._normalize_x_url(u)
-                    for u in x_candidate_urls
-                    if self._is_twitter_status_url(u)
-                }
+                status_keys = {self._normalize_x_url(u) for u in x_candidate_urls if self._is_twitter_status_url(u)}
                 if not status_keys and x_candidate_urls:
                     for u in x_candidate_urls:
                         normalized = self._normalize_x_url(u)
                         if normalized in x_media_state["primary_urls"]:
                             status_keys.add(normalized)
-                if x_candidate_urls and all(
-                    self._is_twitter_thumbnail_url(u) for u in x_candidate_urls
-                ):
+                if x_candidate_urls and all(self._is_twitter_thumbnail_url(u) for u in x_candidate_urls):
                     is_twitter_thumbnail = True
 
-            if (
-                x_media_state["kind"] == "video"
-                and modality == InputModality.GENERAL_URL
-                and status_keys
-            ):
+            if x_media_state["kind"] == "video" and modality == InputModality.GENERAL_URL and status_keys:
                 modality = InputModality.VIDEO_URL
 
             # Create description for logging
             if item.source_type == "attachment":
                 description = f"{item.payload.filename}"
             elif item.source_type == "url":
-                description = (
-                    f"URL: {item.payload[:30]}{'...' if len(item.payload) > 30 else ''}"
-                )
+                description = f"URL: {item.payload[:30]}{'...' if len(item.payload) > 30 else ''}"
             else:
                 description = f"{item.source_type}"
 
@@ -5323,12 +4762,7 @@ class Router:
                     if existing:
                         skip_reason = f"duplicate:{existing}"
                         break
-            if (
-                skip_reason is None
-                and x_media_state["kind"] == "video"
-                and not x_media_state["allow_vision"]
-                and is_twitter_thumbnail
-            ):
+            if skip_reason is None and x_media_state["kind"] == "video" and not x_media_state["allow_vision"] and is_twitter_thumbnail:
                 skip_reason = "thumbnail_blocked"
 
             if skip_reason:
@@ -5394,20 +4828,14 @@ class Router:
                 attempts = 0
                 try:
                     result_text = await asyncio.wait_for(
-                        self._handle_item_with_provider(
-                            item, modality, None, message=message
-                        ),
+                        self._handle_item_with_provider(item, modality, None, message=message),
                         timeout=selected_budget,
                     )
                     success = True
                     duration = time.time() - start_time
-                    self.logger.info(
-                        f"✅ Item {i} completed (extraction-only, no provider ladder) ({duration:.2f}s)"
-                    )
+                    self.logger.info(f"✅ Item {i} completed (extraction-only, no provider ladder) ({duration:.2f}s)")
                 except asyncio.TimeoutError:
-                    self.logger.warning(
-                        f"⏱️ Item {i} timed out (budget={selected_budget}s)"
-                    )
+                    self.logger.warning(f"⏱️ Item {i} timed out (budget={selected_budget}s)")
                     success = False
                     result_text = f"⏱️ Timed out after {selected_budget}s"
                     duration = selected_budget
@@ -5422,9 +4850,7 @@ class Router:
                 # Vision/image modalities benefit from model-provider fallback
                 def create_handler_coro(provider_config: ProviderConfig):
                     async def handler_coro():
-                        return await self._handle_item_with_provider(
-                            item, modality, provider_config, message=message
-                        )
+                        return await self._handle_item_with_provider(item, modality, provider_config, message=message)
 
                     return handler_coro
 
@@ -5436,9 +4862,7 @@ class Router:
                     )
 
                     if result.success:
-                        self.logger.info(
-                            f"✅ Item {i} completed successfully ({result.total_time:.2f}s)"
-                        )
+                        self.logger.info(f"✅ Item {i} completed successfully ({result.total_time:.2f}s)")
                         success = True
                         result_text = result.result
                         duration = result.total_time
@@ -5447,9 +4871,7 @@ class Router:
                         msg = f"❌ Failed after {result.attempts} attempts: {result.error}"
                         if result.fallback_occurred:
                             msg += " (fallback attempted)"
-                        self.logger.warning(
-                            f"❌ Item {i} failed ({result.total_time:.2f}s)"
-                        )
+                        self.logger.warning(f"❌ Item {i} failed ({result.total_time:.2f}s)")
                         success = False
                         result_text = msg
                         duration = result.total_time
@@ -5495,34 +4917,24 @@ class Router:
         stats = aggregator.get_summary_stats()
         successful_items = stats.get("successful_items", 0)
         total_items = stats.get("total_items", 0)
-        self.logger.info(
-            f"📦 SEQUENTIAL MULTIMODAL COMPLETE: {successful_items}/{total_items} successful, total: {total_time:.1f}s"
-        )
+        self.logger.info(f"📦 SEQUENTIAL MULTIMODAL COMPLETE: {successful_items}/{total_items} successful, total: {total_time:.1f}s")
 
         # Generate single aggregated response through text flow (1 IN → 1 OUT)
         # Gate out early if all multimodal items failed and no meaningful text remains.
         # A summary-only prompt ("I processed 1 input, 0 successful") is not real input
         # and must not trigger LLM generation. [REH][PA]
         if not aggregated_prompt or not aggregated_prompt.strip():
-            self.logger.warning(
-                f"No content to process after multimodal aggregation (msg_id: {message.id})"
-            )
+            self.logger.warning(f"No content to process after multimodal aggregation (msg_id: {message.id})")
             return BotAction(
                 content="I couldn't access that URL to extract content. The site may be blocking automated requests or temporarily unavailable.",
                 error=True,
             )
 
-        response_action = await self._invoke_text_flow(
-            aggregated_prompt, message, context_str
-        )
+        response_action = await self._invoke_text_flow(aggregated_prompt, message, context_str)
         if response_action and response_action.has_payload:
-            self.logger.info(
-                f"✅ Multimodal response generated successfully (msg_id: {message.id})"
-            )
+            self.logger.info(f"✅ Multimodal response generated successfully (msg_id: {message.id})")
             return response_action
-        self.logger.warning(
-            f"No response generated from text flow (msg_id: {message.id})"
-        )
+        self.logger.warning(f"No response generated from text flow (msg_id: {message.id})")
         return None
 
     async def _handle_item_with_provider(
@@ -5550,16 +4962,12 @@ class Router:
 
         # Vision modalities need model override from provider ladder
         if modality in (InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE):
-            return await self._handle_image_with_model(
-                item, model_override=provider_config.model, message=message
-            )
+            return await self._handle_image_with_model(item, model_override=provider_config.model, message=message)
 
         handler = handlers.get(modality, self._handle_unknown)
         return await handler(item, message=message)
 
-    async def _process_image_from_url(
-        self, url: str, model_override: Optional[str] = None
-    ) -> str:
+    async def _process_image_from_url(self, url: str, model_override: Optional[str] = None) -> str:
         """Process image from URL using screenshot API + vision analysis. Passes model_override to VL."""
         from .utils.external_api import external_screenshot
         from .see import see_infer
@@ -5588,9 +4996,7 @@ class Router:
                 return f"⚠️ Failed to capture screenshot of URL: {url}"
 
             # Process the screenshot with vision model
-            self.logger.info(
-                f"👁️ Processing screenshot with vision model: {screenshot_path}"
-            )
+            self.logger.info(f"👁️ Processing screenshot with vision model: {screenshot_path}")
             vision_result = await see_infer(
                 image_path=screenshot_path,
                 prompt="Describe the contents of this screenshot",
@@ -5599,24 +5005,14 @@ class Router:
 
             # Reject error-shaped BotAction results (e.g. VL ladder exhausted) [REH]
             if not vision_result or getattr(vision_result, "error", None):
-                self.logger.warning(
-                    f"⚠️ Vision analysis failed for screenshot: {screenshot_path}"
-                )
+                self.logger.warning(f"⚠️ Vision analysis failed for screenshot: {screenshot_path}")
                 return f"⚠️ Screenshot captured but vision analysis failed for: {url}"
-            if (
-                vision_result
-                and hasattr(vision_result, "content")
-                and vision_result.content
-            ):
+            if vision_result and hasattr(vision_result, "content") and vision_result.content:
                 analysis = vision_result.content
-                self.logger.info(
-                    f"✅ Screenshot analysis completed: {len(analysis)} chars"
-                )
+                self.logger.info(f"✅ Screenshot analysis completed: {len(analysis)} chars")
                 return f"Screenshot analysis of {url}: {analysis}"
             else:
-                self.logger.warning(
-                    f"⚠️ Vision analysis returned empty result for: {screenshot_path}"
-                )
+                self.logger.warning(f"⚠️ Vision analysis returned empty result for: {screenshot_path}")
                 return f"⚠️ Screenshot captured but vision analysis failed for: {url}"
 
         except Exception as e:
@@ -5638,11 +5034,7 @@ class Router:
         Download an image from a direct URL and run VL inference. Returns text or None.
         [IV][RM][REH]
         """
-        if (
-            not image_url
-            or not isinstance(image_url, str)
-            or not re.match(r"^https?://", image_url)
-        ):
+        if not image_url or not isinstance(image_url, str) or not re.match(r"^https?://", image_url):
             self.logger.warning(f"⚠️ Invalid image URL for VL: {image_url}")
             return None
         suffix = ".jpg"
@@ -5677,9 +5069,7 @@ class Router:
                                 p.fragment,
                             )
                         )
-                        self.logger.warning(
-                            f"⚠️ High-res download failed, retrying with 'name=large': {fallback_url}"
-                        )
+                        self.logger.warning(f"⚠️ High-res download failed, retrying with 'name=large': {fallback_url}")
                         ok = await download_file(fallback_url, Path(tmp_path))
                         if not ok:
                             # Third tier: try 'name=medium' to stay under budget [PA]
@@ -5694,14 +5084,10 @@ class Router:
                                     p.fragment,
                                 )
                             )
-                            self.logger.warning(
-                                f"⚠️ Large download failed, retrying with 'name=medium': {fallback_medium}"
-                            )
+                            self.logger.warning(f"⚠️ Large download failed, retrying with 'name=medium': {fallback_medium}")
                             ok = await download_file(fallback_medium, Path(tmp_path))
                             if not ok:
-                                self.logger.error(
-                                    f"❌ Failed to download Twitter image even with fallbacks: {fallback_medium}"
-                                )
+                                self.logger.error(f"❌ Failed to download Twitter image even with fallbacks: {fallback_medium}")
                                 return None
                             # Update for logging clarity
                             image_url = fallback_medium
@@ -5709,36 +5095,23 @@ class Router:
                             # Update for logging clarity
                             image_url = fallback_url
                     else:
-                        self.logger.error(
-                            f"❌ Failed to download image for VL: {image_url}"
-                        )
+                        self.logger.error(f"❌ Failed to download image for VL: {image_url}")
                         return None
                 except Exception as _e:
-                    self.logger.error(
-                        f"❌ Image download failed (no fallback applied): {image_url} err={_e}"
-                    )
+                    self.logger.error(f"❌ Image download failed (no fallback applied): {image_url} err={_e}")
                     return None
-            vl_prompt = (
-                prompt
-                or "Describe this image in detail. Focus on salient objects, text, and context."
-            )
-            res = await see_infer(
-                image_path=tmp_path, prompt=vl_prompt, model_override=model_override
-            )
+            vl_prompt = prompt or "Describe this image in detail. Focus on salient objects, text, and context."
+            res = await see_infer(image_path=tmp_path, prompt=vl_prompt, model_override=model_override)
             if res and getattr(res, "content", None):
                 # Reject error-shaped BotAction results (e.g. VL ladder exhausted) [REH]
                 if getattr(res, "error", None):
-                    self.logger.warning(
-                        f"⚠️ VL inference error for {image_url}: {res.content}"
-                    )
+                    self.logger.warning(f"⚠️ VL inference error for {image_url}: {res.content}")
                     return None
                 return str(res.content).strip()
             self.logger.warning(f"⚠️ VL returned empty content for: {image_url}")
             return None
         except Exception as e:
-            self.logger.error(
-                f"❌ VL describe failed for {image_url}: {e}", exc_info=True
-            )
+            self.logger.error(f"❌ VL describe failed for {image_url}: {e}", exc_info=True)
             return None
         finally:
             try:
@@ -5747,9 +5120,7 @@ class Router:
             except Exception:
                 pass
 
-    async def _handle_video_url(
-        self, item: InputItem, message: Optional[Message] = None
-    ) -> str:
+    async def _handle_video_url(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle video URL input items (YouTube, TikTok, etc.).
         For Twitter/X URLs: tries yt-dlp first, routes non-video posts to the tiered WebExtractionService (no auto-screenshot).
@@ -5762,9 +5133,7 @@ class Router:
         self.logger.info(f"🎥 Processing video URL: {url}")
 
         # For Twitter/X URLs, implement fallback logic
-        is_twitter = re.match(
-            r"https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com/", url
-        )
+        is_twitter = re.match(r"https?://(?:www\.)?(?:twitter|x|fxtwitter|vxtwitter|fixupx)\.com/", url)
 
         try:
             # Try video/audio extraction first
@@ -5779,15 +5148,9 @@ class Router:
                     normalized_url = url
                 frontend_hint: Dict[str, str] = {}
                 primary_hint: Dict[str, str] = {}
-                ctx = (
-                    self._x_frontend_canon.get(normalized_url)
-                    or self._x_frontend_canon.get(canonical_url)
-                    or {}
-                )
+                ctx = self._x_frontend_canon.get(normalized_url) or self._x_frontend_canon.get(canonical_url) or {}
                 frontend_ctx = ctx.get("frontend")
-                primary_ctx = ctx.get("primary") or self._parse_twitter_status_id(
-                    normalized_url
-                )
+                primary_ctx = ctx.get("primary") or self._parse_twitter_status_id(normalized_url)
                 if frontend_ctx:
                     frontend_hint[normalized_url] = frontend_ctx
                 if primary_ctx:
@@ -5800,27 +5163,14 @@ class Router:
                     )
                 except Exception:
                     resolved = {"kind": "unknown"}
-                primary_selected = (
-                    (resolved or {}).get("primary")
-                    or primary_ctx
-                    or self._parse_twitter_status_id(normalized_url)
-                    or ""
-                )
+                primary_selected = (resolved or {}).get("primary") or primary_ctx or self._parse_twitter_status_id(normalized_url) or ""
                 frontend_selected = (resolved or {}).get("frontend") or frontend_ctx
-                if (resolved or {}).get("kind") == "video" and (resolved or {}).get(
-                    "url"
-                ):
+                if (resolved or {}).get("kind") == "video" and (resolved or {}).get("url"):
                     candidate_url = str(resolved.get("url"))
-                    verify_kind, verify_ct = await self._verify_media_kind(
-                        candidate_url, default="video"
-                    )
-                    self._log_media_kind_checked(
-                        candidate_url, verify_ct, verify_kind or "video"
-                    )
+                    verify_kind, verify_ct = await self._verify_media_kind(candidate_url, default="video")
+                    self._log_media_kind_checked(candidate_url, verify_ct, verify_kind or "video")
                     if verify_kind == "video":
-                        self.logger.info(
-                            "route.select kind=video reason=resolved_direct_media"
-                        )
+                        self.logger.info("route.select kind=video reason=resolved_direct_media")
                         stt_target_url = candidate_url
                         try:
                             import hashlib as _hl
@@ -5845,9 +5195,7 @@ class Router:
                             if primary_selected and uhash:
                                 stt_target_url = f"{stt_target_url}#ptid={primary_selected}&uh={uhash}"
                                 if frontend_selected:
-                                    stt_target_url = (
-                                        f"{stt_target_url}&fe={frontend_selected}"
-                                    )
+                                    stt_target_url = f"{stt_target_url}&fe={frontend_selected}"
                         except Exception:
                             pass
                     else:
@@ -5874,9 +5222,7 @@ class Router:
                 raw_transcription = result.get("transcription") or result.get("text")
                 # Handle tuple-shaped transcription [BUGFIX]
                 if isinstance(raw_transcription, tuple):
-                    transcription = str(
-                        raw_transcription[0] if raw_transcription else ""
-                    ).strip()
+                    transcription = str(raw_transcription[0] if raw_transcription else "").strip()
                 elif isinstance(raw_transcription, str):
                     transcription = raw_transcription.strip()
                 else:
@@ -5919,20 +5265,11 @@ class Router:
             error_str = str(ve).lower()
 
             # For Twitter URLs with no media, use syndication/API path instead of web extractor [CA][REH]
-            if is_twitter and (
-                "no video or audio content found" in error_str
-                or "no video could be found" in error_str
-                or "failed to download video" in error_str
-                or "no video" in error_str
-            ):
+            if is_twitter and ("no video or audio content found" in error_str or "no video could be found" in error_str or "failed to download video" in error_str or "no video" in error_str):
                 # New: targeted syndication image probe (feature-flagged)
-                if getattr(
-                    self, "_x_syn_probe_enabled", True
-                ) and self._is_twitter_status_url(url):
+                if getattr(self, "_x_syn_probe_enabled", True) and self._is_twitter_status_url(url):
                     try:
-                        status_id, imgs = await self._resolve_and_probe_twitter_images(
-                            url=url
-                        )
+                        status_id, imgs = await self._resolve_and_probe_twitter_images(url=url)
                         if imgs:
                             # Prefer unified VL pipeline with caption when available [CA][REH]
                             try:
@@ -5944,25 +5281,16 @@ class Router:
                             except Exception:
                                 # Fallback: single-image VL without caption
                                 try:
-                                    desc = await self._vl_describe_image_from_url(
-                                        imgs[0]
-                                    )
-                                    return (
-                                        desc
-                                        or "⚠️ Unable to analyze the images from this tweet."
-                                    )
+                                    desc = await self._vl_describe_image_from_url(imgs[0])
+                                    return desc or "⚠️ Unable to analyze the images from this tweet."
                                 except Exception:
                                     # Fall through to general handler on VL error
                                     pass
                     except Exception as e:
                         self.logger.debug(f"x.syndication.probe.failed | {e}")
-                self.logger.info(
-                    f"🐦 No video in Twitter URL; routing to syndication/API path: {url}"
-                )
+                self.logger.info(f"🐦 No video in Twitter URL; routing to syndication/API path: {url}")
                 # Fallback: general URL handler which has X syndication logic
-                return await self._handle_general_url(
-                    InputItem(source_type="url", payload=url)
-                )
+                return await self._handle_general_url(InputItem(source_type="url", payload=url))
 
             # For non-Twitter URLs, provide user-friendly message
             self.logger.info(f"ℹ️ Video processing: {ve}")
@@ -5975,11 +5303,9 @@ class Router:
                     self._emit_caption_only_fallback_breadcrumbs("error")
 
                     # Try API then syndication for anchored caption.
-                    formatted = (
-                        await self._format_x_with_resolved_base_text_if_available(
-                            url=url,
-                            stt_res={"transcription": ""},
-                        )
+                    formatted = await self._format_x_with_resolved_base_text_if_available(
+                        url=url,
+                        stt_res={"transcription": ""},
                     )
                     if formatted:
                         return formatted
@@ -5992,15 +5318,11 @@ class Router:
         except Exception as e:
             # Handle any other unexpected errors gracefully
             error_str = str(e).lower()
-            self.logger.error(
-                f"❌ Unexpected video processing error: {e}", exc_info=True
-            )
+            self.logger.error(f"❌ Unexpected video processing error: {e}", exc_info=True)
 
             # For Twitter URLs, attempt tiered extractor (no screenshot fallback)
             if is_twitter:
-                self.logger.info(
-                    f"🐦 Attempting tiered extractor due to unexpected error: {url}"
-                )
+                self.logger.info(f"🐦 Attempting tiered extractor due to unexpected error: {url}")
                 extract_res = await web_extractor.extract(url)
                 if extract_res.success:
                     from bot.url_safety import wrap_untrusted_content
@@ -6015,9 +5337,7 @@ class Router:
 
             return f"⚠️ Video processing failed: {str(e)}"
 
-    async def _handle_audio_video_file(
-        self, item: InputItem, message: Optional[Message] = None
-    ) -> str:
+    async def _handle_audio_video_file(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle audio/video file attachments.
         Returns transcribed text for further processing.
@@ -6038,14 +5358,10 @@ class Router:
             self.logger.error(f"❌ Audio/video inference failed: {ie}")
             return f"⚠️ {str(ie)}"
         except Exception as e:
-            self.logger.error(
-                f"❌ Audio/video file processing failed: {e}", exc_info=True
-            )
+            self.logger.error(f"❌ Audio/video file processing failed: {e}", exc_info=True)
             return f"⚠️ Could not process this audio/video file: {str(e)}"
 
-    async def _handle_pdf(
-        self, item: InputItem, message: Optional[Message] = None
-    ) -> str:
+    async def _handle_pdf(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle PDF document input items.
         Returns extracted text for further processing.
@@ -6056,9 +5372,7 @@ class Router:
             elif item.source_type == "url":
                 return await self._process_pdf_from_url(item.payload)
             else:
-                return (
-                    f"PDF handler received unsupported source type: {item.source_type}"
-                )
+                return f"PDF handler received unsupported source type: {item.source_type}"
 
         except Exception as e:
             self.logger.error(f"Error processing PDF: {e}", exc_info=True)
@@ -6109,16 +5423,12 @@ class Router:
 
             if result.get("error"):
                 err = str(result["error"])
-                self.logger.warning(
-                    f"PDF URL ingestion failed url={url[:80]} error={err[:100]}"
-                )
+                self.logger.warning(f"PDF URL ingestion failed url={url[:80]} error={err[:100]}")
                 return f"Could not extract text from PDF URL: {url} (Error: {err})"
 
             text = (result.get("text") or "").strip()
             if not text:
-                self.logger.warning(
-                    f"PDF URL ingestion produced no text url={url[:80]}"
-                )
+                self.logger.warning(f"PDF URL ingestion produced no text url={url[:80]}")
                 return f"Could not extract text from PDF URL: {url}"
 
             # Use a generic label; the aggregator already includes per-item headers
@@ -6132,9 +5442,7 @@ class Router:
             )
             return "Failed to process PDF document from URL."
 
-    async def _handle_pdf_ocr(
-        self, item: InputItem, message: Optional[Message] = None
-    ) -> str:
+    async def _handle_pdf_ocr(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle PDF documents that require OCR processing.
         Returns extracted text for further processing.
@@ -6143,9 +5451,7 @@ class Router:
         # TODO: Implement OCR-specific logic
         return await self._handle_pdf(item)
 
-    async def _handle_general_url(
-        self, item: InputItem, message: Optional[Message] = None
-    ) -> str:
+    async def _handle_general_url(self, item: InputItem, message: Optional[Message] = None) -> str:
         """
         Handle general URL input items.
         Returns extracted content for further processing.
@@ -6214,9 +5520,7 @@ class Router:
                                 "detail": {"bucket": "VIDEO", "url": url[:200]},
                             },
                         )
-                        return await self._handle_video_file_url(
-                            url, classified, message
-                        )
+                        return await self._handle_video_file_url(url, classified, message)
 
                     elif classified.bucket == AttachmentBucket.IMAGE:
                         # Image URL → VL pipeline
@@ -6256,9 +5560,7 @@ class Router:
                 x_stt_probe_timeout = 60.0
             try:
                 # Prefer seconds; fallback to ms if provided
-                x_api_timeout_s = float(cfg.get("X_API_TIMEOUT_S", 0)) or (
-                    float(cfg.get("X_API_TIMEOUT_MS", 8000)) / 1000.0
-                )
+                x_api_timeout_s = float(cfg.get("X_API_TIMEOUT_S", 0)) or (float(cfg.get("X_API_TIMEOUT_MS", 8000)) / 1000.0)
             except Exception:
                 x_api_timeout_s = 8.0
             try:
@@ -6269,9 +5571,7 @@ class Router:
                     )
                 )
             except Exception:
-                x_syn_call_timeout = (
-                    max(getattr(self, "_x_syn_timeout_s", 3.0), 3.0) + 0.5
-                )
+                x_syn_call_timeout = max(getattr(self, "_x_syn_timeout_s", 3.0), 3.0) + 0.5
             try:
                 url_process_timeout = float(cfg.get("URL_PROCESS_TIMEOUT_S", 25.0))
             except Exception:
@@ -6283,9 +5583,7 @@ class Router:
 
             api_data: Optional[Dict[str, Any]] = None
 
-            async def _bounded(
-                coro, timeout_s: float, tag: str, detail: Optional[dict] = None
-            ):
+            async def _bounded(coro, timeout_s: float, tag: str, detail: Optional[dict] = None):
                 """Await coro with a timeout and emit start/ok/timeout/fail breadcrumbs. [REH][PA]"""
                 import time as _t
 
@@ -6304,16 +5602,13 @@ class Router:
                     res = await asyncio.wait_for(coro, timeout=timeout_s)
                     try:
                         dt_ms = int((_t.time() - t0) * 1000)
-                        if hasattr(res, "success") and not getattr(
-                            res, "success", False
-                        ):
+                        if hasattr(res, "success") and not getattr(res, "success", False):
                             err = getattr(res, "error", "") or "unknown"
                             self.logger.warning(
                                 f"{tag}.fail extraction_no_content ms={dt_ms} ({err})",
                                 extra={
                                     "event": f"{tag}.fail",
-                                    "detail": (detail or {})
-                                    | {"ms": dt_ms, "error": err},
+                                    "detail": (detail or {}) | {"ms": dt_ms, "error": err},
                                 },
                             )
                         else:
@@ -6334,8 +5629,7 @@ class Router:
                             f"{tag}.timeout ms={dt_ms}",
                             extra={
                                 "event": f"{tag}.timeout",
-                                "detail": (detail or {})
-                                | {"ms": dt_ms, "timeout_s": timeout_s},
+                                "detail": (detail or {}) | {"ms": dt_ms, "timeout_s": timeout_s},
                             },
                         )
                     except Exception:
@@ -6348,8 +5642,7 @@ class Router:
                             f"{tag}.fail {e.__class__.__name__}: {e}",
                             extra={
                                 "event": f"{tag}.fail",
-                                "detail": (detail or {})
-                                | {"ms": dt_ms, "error": str(e)},
+                                "detail": (detail or {}) | {"ms": dt_ms, "error": str(e)},
                             },
                         )
                     except Exception:
@@ -6360,11 +5653,7 @@ class Router:
             # IMPORTANT: For X/Twitter status URLs we now defer unroll until after media detection,
             # so images/video can take precedence. The early unroll remains available for non-X URLs.
             try:
-                if (
-                    bool(self.config.get("TWITTER_UNROLL_ENABLED", False))
-                    and self._is_twitter_status_url(url)
-                    and False
-                ):
+                if bool(self.config.get("TWITTER_UNROLL_ENABLED", False)) and self._is_twitter_status_url(url) and False:
                     # Emit a DEBUG start event so operators can see attempts when LOG_LEVEL=debug
                     try:
                         self.logger.debug(
@@ -6380,15 +5669,9 @@ class Router:
                     t0 = time.time()
                     ctx, reason = await unroll_author_thread(
                         url,
-                        timeout_s=float(
-                            self.config.get("TWITTER_UNROLL_TIMEOUT_S", 15.0)
-                        ),
-                        max_tweets=int(
-                            self.config.get("TWITTER_UNROLL_MAX_TWEETS", 30)
-                        ),
-                        max_chars=int(
-                            self.config.get("TWITTER_UNROLL_MAX_CHARS", 6000)
-                        ),
+                        timeout_s=float(self.config.get("TWITTER_UNROLL_TIMEOUT_S", 15.0)),
+                        max_tweets=int(self.config.get("TWITTER_UNROLL_MAX_TWEETS", 30)),
+                        max_chars=int(self.config.get("TWITTER_UNROLL_MAX_CHARS", 6000)),
                     )
                     if ctx is not None and getattr(ctx, "joined_text", None):
                         dt_ms = int((time.time() - t0) * 1000)
@@ -6415,9 +5698,7 @@ class Router:
                                 extra={
                                     "subsys": "threads.x",
                                     "event": "unroll_fallback",
-                                    "detail": {
-                                        "reason": reason or "unroll_not_available"
-                                    },
+                                    "detail": {"reason": reason or "unroll_not_available"},
                                 },
                             )
                         except Exception:
@@ -6457,12 +5738,7 @@ class Router:
                 # Removed STT probe-first path - it was unreliable and ran STT on image-only tweets
                 # Syndication now ALWAYS runs first to determine content type
                 # Tier 1: Syndication JSON (cache + concurrency) when allowed and preferred [PA][REH]
-                if (
-                    tweet_id
-                    and syndication_enabled
-                    and not require_api
-                    and (syndication_first or x_client is None)
-                ):
+                if tweet_id and syndication_enabled and not require_api and (syndication_first or x_client is None):
                     syn, _ = await _bounded(
                         self._get_tweet_via_syndication(tweet_id),
                         x_syn_call_timeout,
@@ -6470,16 +5746,12 @@ class Router:
                         {"tweet_id": tweet_id},
                     )
                     if syn:
-                        syn = await self._maybe_hydrate_syndication_payload(
-                            tweet_id, syn
-                        )
+                        syn = await self._maybe_hydrate_syndication_payload(tweet_id, syn)
                         self._metric_inc("x.syndication.hit", None)
 
                         # Log syndication response keys for video detection debugging [IV][REH]
                         try:
-                            syn_keys = (
-                                list(syn.keys())[:30] if isinstance(syn, dict) else []
-                            )
+                            syn_keys = list(syn.keys())[:30] if isinstance(syn, dict) else []
                             self.logger.info(
                                 f"route=x_syndication.metadata keys={syn_keys} tweet_id={tweet_id}",
                                 extra={
@@ -6526,9 +5798,7 @@ class Router:
 
                         # Bread crumb for future debugging [CMV]
                         try:
-                            self.logger.info(
-                                f"route=x_syndication.pick | photos={len(photos)} extracted={len(extracted_images)}"
-                            )
+                            self.logger.info(f"route=x_syndication.pick | photos={len(photos)} extracted={len(extracted_images)}")
                         except Exception:
                             pass
 
@@ -6538,14 +5808,7 @@ class Router:
                         is_image_only = has_any_images and (not _syn_has_video)
                         # X Article posts often syndicate as a t.co pointer with no media metadata.
                         # Resolve article text early so they stay in text flow (not STT/VL fallbacks).
-                        if (
-                            (not _syn_has_video)
-                            and (not has_any_images)
-                            and tweet_id
-                            and bool(
-                                re.search(r"https?://t\.co/[A-Za-z0-9]+", text or "")
-                            )
-                        ):
+                        if (not _syn_has_video) and (not has_any_images) and tweet_id and bool(re.search(r"https?://t\.co/[A-Za-z0-9]+", text or "")):
                             article_data, _ = await _bounded(
                                 self._fetch_x_article_from_fxtwitter(tweet_id),
                                 min(
@@ -6570,8 +5833,7 @@ class Router:
                                             "detail": {
                                                 "tweet_id": tweet_id,
                                                 "chars": len(text or ""),
-                                                "article_id": article_data.get("id")
-                                                or "",
+                                                "article_id": article_data.get("id") or "",
                                             },
                                         },
                                     )
@@ -6608,17 +5870,9 @@ class Router:
 
                         # Log routing decision for observability [IV][REH]
                         try:
-                            routing_decision = (
-                                "video"
-                                if _syn_has_video
-                                else (
-                                    "image_only" if is_image_only else "text_or_mixed"
-                                )
-                            )
+                            routing_decision = "video" if _syn_has_video else ("image_only" if is_image_only else "text_or_mixed")
                             self.logger.info(
-                                f"route=x_syndication.decision decision={routing_decision} "
-                                f"photos={len(photos)} extracted={len(extracted_images)} "
-                                f"has_video={_syn_has_video} has_images={has_any_images}",
+                                f"route=x_syndication.decision decision={routing_decision} photos={len(photos)} extracted={len(extracted_images)} has_video={_syn_has_video} has_images={has_any_images}",
                                 extra={
                                     "event": "x.syndication.routing_decision",
                                     "detail": {
@@ -6634,39 +5888,25 @@ class Router:
                         except Exception:
                             pass
 
-                        if is_image_only and bool(
-                            cfg.get("TWITTER_IMAGE_ONLY_ENABLE", True)
-                        ):
+                        if is_image_only and bool(cfg.get("TWITTER_IMAGE_ONLY_ENABLE", True)):
                             # Preserve existing specialized path when native photos are present [CA]
                             # Also route to VL when images were extracted from extended_entities [IV]
-                            img_count = (
-                                len(extracted_images)
-                                if extracted_images
-                                else len(photos)
-                            )
-                            self.logger.info(
-                                f"🖼️ Image-only tweet detected, routing to Vision/OCR: {url}"
-                            )
+                            img_count = len(extracted_images) if extracted_images else len(photos)
+                            self.logger.info(f"🖼️ Image-only tweet detected, routing to Vision/OCR: {url}")
                             self._metric_inc(
                                 "x.tweet_image_only.syndication",
                                 {
                                     "photos": str(img_count),
-                                    "source": "extracted"
-                                    if extracted_images
-                                    else "native",
+                                    "source": "extracted" if extracted_images else "native",
                                 },
                             )
                             syn_for_images = syn
-                            syn_for_images = (
-                                await self._maybe_hydrate_syndication_payload(
-                                    tweet_id,
-                                    syn_for_images,
-                                    allow_tco_pointer=True,
-                                )
+                            syn_for_images = await self._maybe_hydrate_syndication_payload(
+                                tweet_id,
+                                syn_for_images,
+                                allow_tco_pointer=True,
                             )
-                            return await self._handle_image_only_tweet(
-                                url, syn_for_images, source="syndication"
-                            )
+                            return await self._handle_image_only_tweet(url, syn_for_images, source="syndication")
 
                         # Compose evidence for text-only tweets through the standard bundle [CA]
                         base = self._compose_text_tweet_evidence(url, syn)
@@ -6709,16 +5949,12 @@ class Router:
                         # No video confirmed. Probe for images only when none were extracted yet.
                         if (not photos) and (not extracted_images):
                             try:
-                                status_id = self._resolve_twitter_status_id(
-                                    url, tweet_id=tweet_id
-                                )
+                                status_id = self._resolve_twitter_status_id(url, tweet_id=tweet_id)
                             except Exception:
                                 status_id = ""
                             if status_id:
                                 imgs, _ = await _bounded(
-                                    self._probe_twitter_syndication_images(
-                                        url, status_id
-                                    ),
+                                    self._probe_twitter_syndication_images(url, status_id),
                                     self._x_syn_probe_budget_timeout_s(),
                                     "x.syndication.image_probe",
                                     {"tweet_id": status_id},
@@ -6731,20 +5967,14 @@ class Router:
                                         status_id,
                                         fallback_text=text,
                                     )
-                                    result = (
-                                        await self._route_twitter_images_with_caption(
-                                            url=url,
-                                            caption_text=tweet_text,
-                                            image_urls=imgs,
-                                        )
+                                    result = await self._route_twitter_images_with_caption(
+                                        url=url,
+                                        caption_text=tweet_text,
+                                        image_urls=imgs,
                                     )
                                     return result
 
-                            sparse_no_media = (
-                                (not _syn_has_video)
-                                and (not has_any_images)
-                                and (not syn_media_hints)
-                            )
+                            sparse_no_media = (not _syn_has_video) and (not has_any_images) and (not syn_media_hints)
                             if sparse_no_media:
                                 try:
                                     self.logger.info(
@@ -6753,12 +5983,8 @@ class Router:
                                             "event": "x.syndication.defer",
                                             "detail": {
                                                 "tweet_id": tweet_id,
-                                                "syn_keys": sorted(list(syn.keys()))[
-                                                    :30
-                                                ],
-                                                "has_api_client": bool(
-                                                    x_client is not None
-                                                ),
+                                                "syn_keys": sorted(list(syn.keys()))[:30],
+                                                "has_api_client": bool(x_client is not None),
                                             },
                                         },
                                     )
@@ -6776,11 +6002,9 @@ class Router:
                                 except Exception:
                                     resolved_sparse = None
 
-                                sparse_kind, sparse_images, sparse_url = (
-                                    self._extract_sparse_media_resolution(
-                                        resolved_sparse,
-                                        default_url=url,
-                                    )
+                                sparse_kind, sparse_images, sparse_url = self._extract_sparse_media_resolution(
+                                    resolved_sparse,
+                                    default_url=url,
                                 )
                                 if sparse_kind == "video":
                                     try:
@@ -6816,12 +6040,10 @@ class Router:
                                         syn,
                                         fallback_text=text,
                                     )
-                                    return (
-                                        await self._route_twitter_images_with_caption(
-                                            url=url,
-                                            caption_text=image_text,
-                                            image_urls=sparse_images,
-                                        )
+                                    return await self._route_twitter_images_with_caption(
+                                        url=url,
+                                        caption_text=image_text,
+                                        image_urls=sparse_images,
                                     )
                                 if sparse_kind not in ("video", "image"):
                                     # Last resort for sparse syndication: attempt STT directly on the tweet URL.
@@ -6888,9 +6110,7 @@ class Router:
                                 pass
 
                             syn_for_vl = syn
-                            syn_for_vl = await self._maybe_hydrate_syndication_payload(
-                                tweet_id, syn_for_vl, allow_tco_pointer=True
-                            )
+                            syn_for_vl = await self._maybe_hydrate_syndication_payload(tweet_id, syn_for_vl, allow_tco_pointer=True)
                             result = await self._route_twitter_syndication_to_vl(
                                 syn_for_vl,
                                 url,
@@ -6899,9 +6119,7 @@ class Router:
                             return result
 
                     # If syndication JSON failed to produce data, probe fx/vx for high-res photos [REH][PA]
-                    if getattr(
-                        self, "_x_syn_probe_enabled", True
-                    ) and self._is_twitter_status_url(url):
+                    if getattr(self, "_x_syn_probe_enabled", True) and self._is_twitter_status_url(url):
                         try:
                             (
                                 status_id,
@@ -6933,9 +6151,7 @@ class Router:
                             raise APIError(f"X API call failed ({apist})")
                         includes = api_data.get("includes") or {}
                         media_list = includes.get("media") or []
-                        media_types = {
-                            m.get("type") for m in media_list if isinstance(m, dict)
-                        }
+                        media_types = {m.get("type") for m in media_list if isinstance(m, dict)}
 
                         if {"video", "animated_gif"} & media_types:
                             try:
@@ -6952,9 +6168,7 @@ class Router:
                                     stt_res=stt_res,
                                 )
                                 if formatted:
-                                    return (
-                                        f"Video/audio content from {url}: {formatted}"
-                                    )
+                                    return f"Video/audio content from {url}: {formatted}"
                                 # No-speech in API probe: log and continue with caption-only bundle [REH]
                                 return await self._format_x_no_speech_fallback(
                                     base_text=base,
@@ -6969,33 +6183,18 @@ class Router:
                                 base = self._format_x_tweet_result(api_data, url)
                                 return f"{base}\n\nDetected media in this tweet but could not process it right now."
 
-                        if media_types == {"photo"} or (
-                            "photo" in media_types and len(media_types) == 1
-                        ):
+                        if media_types == {"photo"} or ("photo" in media_types and len(media_types) == 1):
                             # Check for image-only tweet via API data [IV]
                             tweet_data = self._extract_x_api_primary_tweet(api_data)
 
                             api_text = (tweet_data.get("text") or "").strip()
-                            photos = [
-                                m
-                                for m in media_list
-                                if isinstance(m, dict) and m.get("type") == "photo"
-                            ]
-                            normalize_empty = bool(
-                                cfg.get("TWITTER_NORMALIZE_EMPTY_TEXT", True)
-                            )
-                            is_image_only = photos and (
-                                not api_text
-                                or (normalize_empty and not api_text.strip())
-                            )
+                            photos = [m for m in media_list if isinstance(m, dict) and m.get("type") == "photo"]
+                            normalize_empty = bool(cfg.get("TWITTER_NORMALIZE_EMPTY_TEXT", True))
+                            is_image_only = photos and (not api_text or (normalize_empty and not api_text.strip()))
 
-                            if is_image_only and bool(
-                                cfg.get("TWITTER_IMAGE_ONLY_ENABLE", True)
-                            ):
+                            if is_image_only and bool(cfg.get("TWITTER_IMAGE_ONLY_ENABLE", True)):
                                 # Route to Vision/OCR pipeline for image-only tweets [CA]
-                                self.logger.info(
-                                    f"🖼️ Image-only tweet detected via API, routing to Vision/OCR: {url}"
-                                )
+                                self.logger.info(f"🖼️ Image-only tweet detected via API, routing to Vision/OCR: {url}")
                                 self._metric_inc(
                                     "x.tweet_image_only.api",
                                     {"photos": str(len(photos))},
@@ -7003,19 +6202,11 @@ class Router:
                                 # Convert API data to syndication-like format for unified handling
                                 api_as_syn = {
                                     "text": api_text,
-                                    "photos": [
-                                        {"url": p.get("url")}
-                                        for p in photos
-                                        if p.get("url")
-                                    ],
-                                    "user": {
-                                        "screen_name": "unknown"
-                                    },  # Will be enriched if user data available
+                                    "photos": [{"url": p.get("url")} for p in photos if p.get("url")],
+                                    "user": {"screen_name": "unknown"},  # Will be enriched if user data available
                                     "created_at": tweet_data.get("created_at"),
                                 }
-                                return await self._handle_image_only_tweet(
-                                    url, api_as_syn, source="api"
-                                )
+                                return await self._handle_image_only_tweet(url, api_as_syn, source="api")
 
                             if not bool(cfg.get("X_API_ROUTE_PHOTOS_TO_VL", False)):
                                 return self._format_x_tweet_result(api_data, url)
@@ -7035,9 +6226,7 @@ class Router:
                             for idx, photo in enumerate(photos, start=1):
                                 photo_url = str((photo.get("url") or "")).strip()
                                 if not photo_url:
-                                    notes.append(
-                                        f"📷 Photo {idx}/{total}: URL unavailable"
-                                    )
+                                    notes.append(f"📷 Photo {idx}/{total}: URL unavailable")
                                     continue
                                 try:
                                     desc = await self._vl_describe_image_from_url(
@@ -7050,17 +6239,13 @@ class Router:
                                     analyzed += 1
                                     notes.append(f"📷 Photo {idx}/{total}: {desc}")
                                 else:
-                                    notes.append(
-                                        f"📷 Photo {idx}/{total}: analysis unavailable"
-                                    )
+                                    notes.append(f"📷 Photo {idx}/{total}: analysis unavailable")
 
                             lines: List[str] = [f"Photos analyzed: {analyzed}/{total}"]
                             if api_text:
                                 lines.extend(["[Tweet Caption]", api_text, ""])
                             lines.extend(notes)
-                            lines.extend(
-                                ["", self._canonicalize_twitter_status_url(url)]
-                            )
+                            lines.extend(["", self._canonicalize_twitter_status_url(url)])
                             return "\n".join(lines).strip()
 
                         return self._format_x_tweet_result(api_data, url)
@@ -7083,11 +6268,7 @@ class Router:
                                 extra={"detail": {"url": url, "error": emsg}},
                             )
                             return "⚠️ This X post cannot be accessed via API (private/removed). Per policy, scraping is disabled."
-                        if (
-                            ("429" in emsg or "server error" in emsg)
-                            and (not require_api)
-                            and allow_fallback_5xx
-                        ):
+                        if ("429" in emsg or "server error" in emsg) and (not require_api) and allow_fallback_5xx:
                             self.logger.warning(
                                 "X API transient issue, falling back to generic extractor",
                                 extra={"detail": {"url": url, "error": emsg}},
@@ -7105,18 +6286,14 @@ class Router:
                     # else fall through to generic handling
 
             # Use existing URL processing logic - process_url returns a dict
-            url_result, _ = await _bounded(
-                process_url(url), url_process_timeout, "url.process", {"url": url}
-            )
+            url_result, _ = await _bounded(process_url(url), url_process_timeout, "url.process", {"url": url})
 
             if isinstance(url_result, str):
                 return f"Web content from {url}:\n{url_result}"
 
             # Handle errors: before giving up, try tiered extractor (A/B) [REH]
             if not url_result or url_result.get("error"):
-                self.logger.info(
-                    f"🧭 process_url failed for {url}; falling back to tiered extractor"
-                )
+                self.logger.info(f"🧭 process_url failed for {url}; falling back to tiered extractor")
                 extract_res, _ = await _bounded(
                     web_extractor.extract(url),
                     web_extract_timeout,
@@ -7143,9 +6320,7 @@ class Router:
                         },
                     },
                 )
-                raise DispatchEmptyError(
-                    f"Could not extract content from URL: {url} (Error: {err_detail})"
-                )
+                raise DispatchEmptyError(f"Could not extract content from URL: {url} (Error: {err_detail})")
 
             # Extract text content from result dictionary
             content = url_result.get("text", "")
@@ -7154,9 +6329,7 @@ class Router:
                 if url_result.get("screenshot_path"):
                     return f"Screenshot captured for {url}: {url_result['screenshot_path']}"
                 # As a last attempt, try tiered extractor (if process_url returned no error but empty)
-                self.logger.info(
-                    f"🧭 No text from process_url; trying tiered extractor for {url}"
-                )
+                self.logger.info(f"🧭 No text from process_url; trying tiered extractor for {url}")
                 extract_res, _ = await _bounded(
                     web_extractor.extract(url),
                     web_extract_timeout,
@@ -7187,9 +6360,7 @@ class Router:
             # Check if smart routing detected media and should route to yt-dlp
             route_to_ytdlp = url_result.get("route_to_ytdlp", False)
             if route_to_ytdlp:
-                self.logger.info(
-                    f"🎥 Smart routing detected media in {url}, routing to yt-dlp flow"
-                )
+                self.logger.info(f"🎥 Smart routing detected media in {url}, routing to yt-dlp flow")
 
                 try:
                     # Process through yt-dlp flow
@@ -7224,9 +6395,7 @@ class Router:
                 return f"Web content from {url}: {wrapped}"
 
             # If no text was extracted (and no media route), use tiered extractor (no screenshots)
-            self.logger.info(
-                f"🧭 Falling back to tiered extractor for {url} (no auto-screenshot)"
-            )
+            self.logger.info(f"🧭 Falling back to tiered extractor for {url} (no auto-screenshot)")
             extract_res, _ = await _bounded(
                 web_extractor.extract(url),
                 web_extract_timeout,
@@ -7240,9 +6409,7 @@ class Router:
                     extract_res.to_message(),
                     source=extract_res.canonical_url or url,
                 )
-                return (
-                    f"Web content from {extract_res.canonical_url or url}:\n{wrapped}"
-                )
+                return f"Web content from {extract_res.canonical_url or url}:\n{wrapped}"
             # Both tiered extraction tiers failed — propagate as real failure [REH][PA]
             self.logger.warning(
                 f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', 'no_result')}",
@@ -7303,9 +6470,7 @@ class Router:
             result = await ingest_document_from_url(url)
 
             if result.get("error"):
-                self.logger.warning(
-                    f"doc.url.failed url={url[:80]} error={result['error'][:100]}"
-                )
+                self.logger.warning(f"doc.url.failed url={url[:80]} error={result['error'][:100]}")
                 # Fall through to web scraping silently - don't surface error to user
                 return ""
 
@@ -7319,9 +6484,7 @@ class Router:
             return ""
 
         except Exception as e:
-            self.logger.error(
-                f"doc.url.exception url={url[:80]} error={e}", exc_info=True
-            )
+            self.logger.error(f"doc.url.exception url={url[:80]} error={e}", exc_info=True)
             return ""
 
     async def _handle_audio_url(
@@ -7364,9 +6527,7 @@ class Router:
                 metadata = result.get("metadata", {})
                 duration = metadata.get("original_duration_s", 0)
 
-                self.logger.info(
-                    f"audio.url.success url={url[:80]} chars={len(transcription)} duration={duration:.1f}s"
-                )
+                self.logger.info(f"audio.url.success url={url[:80]} chars={len(transcription)} duration={duration:.1f}s")
 
                 return f"[AUDIO TRANSCRIPT: {filename}]\n{transcription}"
 
@@ -7375,9 +6536,7 @@ class Router:
             return ""
 
         except Exception as e:
-            self.logger.error(
-                f"audio.url.exception url={url[:80]} error={e}", exc_info=True
-            )
+            self.logger.error(f"audio.url.exception url={url[:80]} error={e}", exc_info=True)
             return ""
 
     async def _handle_video_file_url(
@@ -7423,9 +6582,7 @@ class Router:
                 metadata = result.get("metadata", {})
                 duration = metadata.get("original_duration_s", 0)
 
-                self.logger.info(
-                    f"video.url.success url={url[:80]} chars={len(transcription)} duration={duration:.1f}s"
-                )
+                self.logger.info(f"video.url.success url={url[:80]} chars={len(transcription)} duration={duration:.1f}s")
 
                 return f"[VIDEO TRANSCRIPT: {filename}]\n{transcription}"
 
@@ -7434,9 +6591,7 @@ class Router:
             return ""
 
         except Exception as e:
-            self.logger.error(
-                f"video.url.exception url={url[:80]} error={e}", exc_info=True
-            )
+            self.logger.error(f"video.url.exception url={url[:80]} error={e}", exc_info=True)
             return ""
 
     async def _handle_image_url(
@@ -7478,9 +6633,7 @@ class Router:
 
             if analysis:
                 filename = classified.filename or "image"
-                self.logger.info(
-                    f"image.url.success url={url[:80]} chars={len(analysis)}"
-                )
+                self.logger.info(f"image.url.success url={url[:80]} chars={len(analysis)}")
                 return f"[IMAGE: {filename}]\n{analysis}"
 
             # No analysis - fall through silently
@@ -7488,9 +6641,7 @@ class Router:
             return ""
 
         except Exception as e:
-            self.logger.error(
-                f"image.url.exception url={url[:80]} error={e}", exc_info=True
-            )
+            self.logger.error(f"image.url.exception url={url[:80]} error={e}", exc_info=True)
             return ""
 
     async def _handle_screenshot_url(
@@ -7505,9 +6656,7 @@ class Router:
         ctx = RouteContext(item=item, message=message)
         return await screenshot_handler.handle(ctx)
 
-    async def _handle_unknown(
-        self, item: InputItem, message: Optional[Message] = None
-    ) -> str:
+    async def _handle_unknown(self, item: InputItem, message: Optional[Message] = None) -> str:
         """Handle unknown or unsupported input items.
 
         Delegates to the extracted UnknownHandler (Phase 12 extraction).
@@ -7541,22 +6690,16 @@ class Router:
         try:
             from .video_ingest import SUPPORTED_PATTERNS
 
-            self.logger.debug(
-                f"🎥 Testing {len(SUPPORTED_PATTERNS)} video patterns against: {message.content}"
-            )
+            self.logger.debug(f"🎥 Testing {len(SUPPORTED_PATTERNS)} video patterns against: {message.content}")
 
             for pattern in SUPPORTED_PATTERNS:
                 if re.search(pattern, message.content):
-                    self.logger.info(
-                        f"✅ Video URL detected: {message.content} matched pattern: {pattern}"
-                    )
+                    self.logger.info(f"✅ Video URL detected: {message.content} matched pattern: {pattern}")
                     return InputModality.VIDEO_URL
 
             self.logger.debug(f"❌ No video patterns matched for: {message.content}")
         except ImportError as e:
-            self.logger.warning(
-                f"Could not import SUPPORTED_PATTERNS from video_ingest: {e}, using fallback patterns"
-            )
+            self.logger.warning(f"Could not import SUPPORTED_PATTERNS from video_ingest: {e}, using fallback patterns")
             # Fallback patterns (original limited set)
             fallback_patterns = [
                 r"https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+",
@@ -7576,16 +6719,12 @@ class Router:
 
         return InputModality.TEXT_ONLY
 
-    def _get_output_modality(
-        self, parsed_command: Optional[ParsedCommand], message: Message
-    ) -> OutputModality:
+    def _get_output_modality(self, parsed_command: Optional[ParsedCommand], message: Message) -> OutputModality:
         """Determine the output modality based on command or channel settings."""
         # Future: check for TTS commands or channel/user settings
         return OutputModality.TEXT
 
-    async def _prioritized_vision_route(
-        self, message: Message, context_str: str
-    ) -> Optional[BotAction]:
+    async def _prioritized_vision_route(self, message: Message, context_str: str) -> Optional[BotAction]:
         """Early, prioritized vision routing based on direct triggers or intent.
         Respects feature flags and supports dry-run mode. Returns a BotAction if
         vision generation should be taken over immediately; otherwise None to continue
@@ -7605,10 +6744,7 @@ class Router:
 
             # Perception beats generation: if images or Twitter URLs are present, skip gen path
             try:
-                has_img_attachments = any(
-                    (getattr(a, "content_type", "") or "").startswith("image/")
-                    for a in (getattr(message, "attachments", None) or [])
-                )
+                has_img_attachments = any((getattr(a, "content_type", "") or "").startswith("image/") for a in (getattr(message, "attachments", None) or []))
             except Exception:
                 has_img_attachments = False
 
@@ -7624,10 +6760,7 @@ class Router:
 
             try:
                 if ref_msg:
-                    has_img_attachments = has_img_attachments or any(
-                        (getattr(a, "content_type", "") or "").startswith("image/")
-                        for a in (getattr(ref_msg, "attachments", None) or [])
-                    )
+                    has_img_attachments = has_img_attachments or any((getattr(a, "content_type", "") or "").startswith("image/") for a in (getattr(ref_msg, "attachments", None) or []))
             except Exception:
                 pass
 
@@ -7635,31 +6768,23 @@ class Router:
             try:
                 url_candidates = re.findall(r"https?://\S+", content)
                 if ref_msg:
-                    url_candidates += re.findall(
-                        r"https?://\S+", getattr(ref_msg, "content", "") or ""
-                    )
+                    url_candidates += re.findall(r"https?://\S+", getattr(ref_msg, "content", "") or "")
                 has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
             except Exception:
                 has_twitter_url = False
 
             if has_img_attachments or has_twitter_url:
                 route = "attachments" if has_img_attachments else "x_syndication"
-                self.logger.info(
-                    f"route.guard: perception_beats_generation | route={route} (msg_id: {message.id})"
-                )
+                self.logger.info(f"route.guard: perception_beats_generation | route={route} (msg_id: {message.id})")
                 try:
-                    self._metric_inc(
-                        "vision.route.vl_only_bypass_t2i", {"route": route}
-                    )
+                    self._metric_inc("vision.route.vl_only_bypass_t2i", {"route": route})
                 except Exception:
                     pass
                 # Never trigger image generation if images or Twitter URLs are present
                 return None
 
             # Check vision availability using centralized helper [CA][REH]
-            cfg_enabled = self.config.get(
-                "VISION_ENABLED", True
-            )  # Use centralized parsed boolean
+            cfg_enabled = self.config.get("VISION_ENABLED", True)  # Use centralized parsed boolean
             dry_run = bool(self.config.get("VISION_DRY_RUN_MODE", False))
             vision_available = self._vision_available()
 
@@ -7675,12 +6800,8 @@ class Router:
                     intent_result = await self._vision_intent_router.determine_intent(
                         user_message=content_clean,
                         context=context_str,
-                        user_id=str(
-                            getattr(getattr(message, "author", None), "id", "")
-                        ),
-                        guild_id=str(message.guild.id)
-                        if getattr(message, "guild", None)
-                        else None,
+                        user_id=str(getattr(getattr(message, "author", None), "id", "")),
+                        guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
                     )
                 except Exception:
                     intent_result = None
@@ -7692,9 +6813,7 @@ class Router:
                         pass
                     return None
 
-                if intent_result and getattr(
-                    intent_result.decision, "use_vision", False
-                ):
+                if intent_result and getattr(intent_result.decision, "use_vision", False):
                     try:
                         self._metric_inc("vision.route.intent", {"stage": "precheck"})
                     except Exception:
@@ -7704,9 +6823,7 @@ class Router:
                             self._metric_inc("vision.route.dry_run", {"path": "intent"})
                         except Exception:
                             pass
-                        return BotAction(
-                            content="[DRY RUN] Vision generation would be triggered via intent router."
-                        )
+                        return BotAction(content="[DRY RUN] Vision generation would be triggered via intent router.")
                     if not self._vision_orchestrator:
                         try:
                             self._metric_inc(
@@ -7718,16 +6835,10 @@ class Router:
                             )
                         except Exception:
                             pass
-                        return BotAction(
-                            content="🚫 Vision generation is not available right now. Please try again later."
-                        )
+                        return BotAction(content="🚫 Vision generation is not available right now. Please try again later.")
                     if not vision_available:
-                        return BotAction(
-                            content="🚫 Vision generation is not available right now. Please try again later."
-                        )
-                    return await self._handle_vision_generation(
-                        intent_result, message, context_str
-                    )
+                        return BotAction(content="🚫 Vision generation is not available right now. Please try again later.")
+                    return await self._handle_vision_generation(intent_result, message, context_str)
 
             if dry_run and _is_mock(self.bot):
                 try:
@@ -7738,12 +6849,7 @@ class Router:
                     self._metric_inc("vision.route.dry_run", {"path": "direct"})
                 except Exception:
                     pass
-                return BotAction(
-                    content=(
-                        "[DRY RUN] Vision generation would be triggered via direct trigger "
-                        f"(prompt='{content_clean[:80]}...')."
-                    )
-                )
+                return BotAction(content=(f"[DRY RUN] Vision generation would be triggered via direct trigger (prompt='{content_clean[:80]}...')."))
 
             if _is_mock(self.bot):
                 from types import SimpleNamespace
@@ -7772,18 +6878,12 @@ class Router:
                         )
                     except Exception:
                         pass
-                    return BotAction(
-                        content="🚫 Vision generation is not available right now. Please try again later."
-                    )
+                    return BotAction(content="🚫 Vision generation is not available right now. Please try again later.")
 
                 if not vision_available:
-                    return BotAction(
-                        content="🚫 Vision generation is not available right now. Please try again later."
-                    )
+                    return BotAction(content="🚫 Vision generation is not available right now. Please try again later.")
 
-                return await self._handle_vision_generation(
-                    intent_result, message, context_str
-                )
+                return await self._handle_vision_generation(intent_result, message, context_str)
 
             # If vision is not enabled at all, skip
             if not cfg_enabled:
@@ -7793,9 +6893,7 @@ class Router:
             # 1) Direct trigger bypass (highest priority)
             direct_vision = self._detect_direct_vision_triggers(content_clean, message)
             if direct_vision:
-                self.logger.info(
-                    f"🎨 Precheck: Direct vision bypass (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})"
-                )
+                self.logger.info(f"🎨 Precheck: Direct vision bypass (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})")
                 self._metric_inc("vision.route.direct", {"stage": "precheck"})
 
                 # Create a mock intent result for the vision handler
@@ -7814,22 +6912,13 @@ class Router:
 
                 if dry_run:
                     self._metric_inc("vision.route.dry_run", {"path": "direct"})
-                    return BotAction(
-                        content=(
-                            "[DRY RUN] Vision generation would be triggered via direct trigger "
-                            f"(task={intent_result.extracted_params.task}, prompt='{intent_result.extracted_params.prompt[:80]}...')."
-                        )
-                    )
+                    return BotAction(content=(f"[DRY RUN] Vision generation would be triggered via direct trigger (task={intent_result.extracted_params.task}, prompt='{intent_result.extracted_params.prompt[:80]}...')."))
 
                 # Lazy start orchestrator if not started [CA]
-                if self._vision_orchestrator and not getattr(
-                    self._vision_orchestrator, "_started", False
-                ):
+                if self._vision_orchestrator and not getattr(self._vision_orchestrator, "_started", False):
                     try:
                         await self._vision_orchestrator.ensure_started()
-                        vision_available = (
-                            self._vision_available()
-                        )  # Re-check after lazy start
+                        vision_available = self._vision_available()  # Re-check after lazy start
                     except Exception as e:
                         self.logger.warning(f"Lazy orchestrator start failed: {e}")
 
@@ -7838,18 +6927,12 @@ class Router:
                         "vision.route.blocked",
                         {"reason": "orchestrator_unavailable", "path": "direct"},
                     )
-                    return BotAction(
-                        content="🚫 Vision generation is not available right now. Please try again later."
-                    )
+                    return BotAction(content="🚫 Vision generation is not available right now. Please try again later.")
 
-                return await self._handle_vision_generation(
-                    intent_result, message, context_str
-                )
+                return await self._handle_vision_generation(intent_result, message, context_str)
 
             # 2) Intent router decision (lower priority than direct bypass)
-            allow_nlp_triggers = bool(
-                self.config.get("VISION_ALLOW_NLP_TRIGGERS", False)
-            )
+            allow_nlp_triggers = bool(self.config.get("VISION_ALLOW_NLP_TRIGGERS", False))
             if allow_nlp_triggers and self._vision_intent_router:
                 try:
                     intent_result = await self._vision_intent_router.determine_intent(
@@ -7858,35 +6941,20 @@ class Router:
                         user_id=str(message.author.id),
                         guild_id=str(message.guild.id) if message.guild else None,
                     )
-                    if intent_result and getattr(
-                        intent_result.decision, "use_vision", False
-                    ):
+                    if intent_result and getattr(intent_result.decision, "use_vision", False):
                         conf = float(getattr(intent_result, "confidence", 0.0) or 0.0)
-                        self.logger.info(
-                            f"🎨 Precheck: Vision intent detected (confidence: {conf:.2f}), routing to Vision system (msg_id: {message.id})"
-                        )
+                        self.logger.info(f"🎨 Precheck: Vision intent detected (confidence: {conf:.2f}), routing to Vision system (msg_id: {message.id})")
                         self._metric_inc("vision.route.intent", {"stage": "precheck"})
                         if dry_run:
                             self._metric_inc("vision.route.dry_run", {"path": "intent"})
-                            return BotAction(
-                                content=(
-                                    "[DRY RUN] Vision generation would be triggered via intent detection "
-                                    f"(confidence={conf:.2f})."
-                                )
-                            )
+                            return BotAction(content=(f"[DRY RUN] Vision generation would be triggered via intent detection (confidence={conf:.2f})."))
                         # Lazy start orchestrator if not started [CA]
-                        if self._vision_orchestrator and not getattr(
-                            self._vision_orchestrator, "_started", False
-                        ):
+                        if self._vision_orchestrator and not getattr(self._vision_orchestrator, "_started", False):
                             try:
                                 await self._vision_orchestrator.ensure_started()
-                                vision_available = (
-                                    self._vision_available()
-                                )  # Re-check after lazy start
+                                vision_available = self._vision_available()  # Re-check after lazy start
                             except Exception as e:
-                                self.logger.warning(
-                                    f"Lazy orchestrator start failed: {e}"
-                                )
+                                self.logger.warning(f"Lazy orchestrator start failed: {e}")
 
                         if not vision_available:
                             self._metric_inc(
@@ -7896,12 +6964,8 @@ class Router:
                                     "path": "intent",
                                 },
                             )
-                            return BotAction(
-                                content="🚫 Vision generation is not available right now. Please try again later."
-                            )
-                        return await self._handle_vision_generation(
-                            intent_result, message, context_str
-                        )
+                            return BotAction(content="🚫 Vision generation is not available right now. Please try again later.")
+                        return await self._handle_vision_generation(intent_result, message, context_str)
                 except Exception as e:
                     self.logger.error(
                         f"❌ Vision intent precheck failed: {e} (msg_id: {message.id})",
@@ -7931,19 +6995,14 @@ class Router:
         # Convert EvidenceBundle to string for processing
         if isinstance(content, EvidenceBundle):
             content_str = content.compose_prompt_text()
-            self.logger.debug(
-                f"📋 Composed evidence bundle for text flow: {len(content_str)} chars"
-            )
+            self.logger.debug(f"📋 Composed evidence bundle for text flow: {len(content_str)} chars")
         else:
             content_str = content
 
         # Perception beats generation: suppress gen triggers if images/any-URL present (from original message or referenced message in reply chains)
         perception_guard = False
         try:
-            has_img_attachments = any(
-                (getattr(a, "content_type", "") or "").startswith("image/")
-                for a in (getattr(message, "attachments", None) or [])
-            )
+            has_img_attachments = any((getattr(a, "content_type", "") or "").startswith("image/") for a in (getattr(message, "attachments", None) or []))
         except Exception:
             has_img_attachments = False
         try:
@@ -7961,16 +7020,11 @@ class Router:
                 ref_msg = None
             if ref_msg:
                 try:
-                    url_candidates += re.findall(
-                        r"https?://\S+", getattr(ref_msg, "content", "") or ""
-                    )
+                    url_candidates += re.findall(r"https?://\S+", getattr(ref_msg, "content", "") or "")
                 except Exception:
                     pass
                 try:
-                    has_img_attachments = has_img_attachments or any(
-                        (getattr(a, "content_type", "") or "").startswith("image/")
-                        for a in (getattr(ref_msg, "attachments", None) or [])
-                    )
+                    has_img_attachments = has_img_attachments or any((getattr(a, "content_type", "") or "").startswith("image/") for a in (getattr(ref_msg, "attachments", None) or []))
                 except Exception:
                     pass
             has_any_url = bool(url_candidates)
@@ -7981,11 +7035,7 @@ class Router:
         if has_img_attachments or has_any_url or has_twitter_url:
             perception_guard = True
             try:
-                route = (
-                    "attachments"
-                    if has_img_attachments
-                    else ("x_syndication" if has_twitter_url else "links")
-                )
+                route = "attachments" if has_img_attachments else ("x_syndication" if has_twitter_url else "links")
                 self._metric_inc("vision.route.vl_only_bypass_t2i", {"route": route})
             except Exception:
                 pass
@@ -8010,9 +7060,7 @@ class Router:
         if content_str.strip() and not perception_guard:
             direct_vision = self._detect_direct_vision_triggers(content_str, message)
             if direct_vision:
-                self.logger.info(
-                    f"route=gen | 🎨 Direct vision bypass triggered (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})"
-                )
+                self.logger.info(f"route=gen | 🎨 Direct vision bypass triggered (reason: {direct_vision['bypass_reason']}) (msg_id: {message.id})")
                 self._metric_inc("vision.route.direct", {"stage": "text_flow"})
                 # Create a mock intent result for the vision handler
                 from types import SimpleNamespace
@@ -8028,18 +7076,11 @@ class Router:
                 intent_result.extracted_params.batch_size = 1
                 intent_result.confidence = direct_vision["confidence"]
 
-                return await self._handle_vision_generation(
-                    intent_result, message, context_str
-                )
+                return await self._handle_vision_generation(intent_result, message, context_str)
 
         # Check if this should be routed to Vision generation [CA][SFT]
         allow_nlp_triggers = bool(self.config.get("VISION_ALLOW_NLP_TRIGGERS", False))
-        if (
-            allow_nlp_triggers
-            and (not perception_guard)
-            and self._vision_intent_router
-            and content_str.strip()
-        ):
+        if allow_nlp_triggers and (not perception_guard) and self._vision_intent_router and content_str.strip():
             try:
                 intent_result = await self._vision_intent_router.determine_intent(
                     user_message=content_str,
@@ -8049,13 +7090,9 @@ class Router:
                 )
 
                 if intent_result.decision.use_vision:
-                    self.logger.info(
-                        f"🎨 Vision intent detected (confidence: {intent_result.confidence:.2f}), routing to Vision system (msg_id: {message.id})"
-                    )
+                    self.logger.info(f"🎨 Vision intent detected (confidence: {intent_result.confidence:.2f}), routing to Vision system (msg_id: {message.id})")
                     self._metric_inc("vision.route.intent", {"stage": "text_flow"})
-                    return await self._handle_vision_generation(
-                        intent_result, message, context_str
-                    )
+                    return await self._handle_vision_generation(intent_result, message, context_str)
             except Exception as e:
                 self.logger.error(
                     f"❌ Vision intent routing failed: {e} (msg_id: {message.id})",
@@ -8065,9 +7102,7 @@ class Router:
                 # Continue to regular text flow on error
 
         try:
-            action = await self._flows["process_text"](
-                content, context_str, message, perception_notes=perception_notes
-            )
+            action = await self._flows["process_text"](content, context_str, message, perception_notes=perception_notes)
             if action and action.has_payload:
                 # Respect TTS state: one-time flag first, then per-user/global preference [CA][REH]
                 try:
@@ -8082,18 +7117,14 @@ class Router:
                     if require_tts:
                         action.meta["requires_tts"] = True
                         # Include transcript captions unless disabled via env/config [IV][CMV]
-                        include_transcript = os.getenv(
-                            "TTS_INCLUDE_TRANSCRIPT", "true"
-                        ).lower() in ("1", "true", "yes", "on")
+                        include_transcript = os.getenv("TTS_INCLUDE_TRANSCRIPT", "true").lower() in ("1", "true", "yes", "on")
                         action.meta["include_transcript"] = include_transcript
                 except Exception as e:
                     # Never break dispatch on TTS flag evaluation
                     self.logger.debug(f"tts.flag_eval_failed | {e}")
                 return action
             else:
-                self.logger.warning(
-                    f"Text flow returned no response. (msg_id: {message.id})"
-                )
+                self.logger.warning(f"Text flow returned no response. (msg_id: {message.id})")
                 return None
         except Exception as e:
             self.logger.error(
@@ -8120,13 +7151,9 @@ class Router:
             return s[:boundary].rstrip() + "…"
         except Exception:
             # Fallback hard cut
-            return (text or "")[:max_chars].rstrip() + (
-                "…" if len(text or "") > max_chars else ""
-            )
+            return (text or "")[:max_chars].rstrip() + ("…" if len(text or "") > max_chars else "")
 
-    async def _run_perception_notes(
-        self, message: Message, text_instruction: str
-    ) -> Tuple[Optional[str], Optional[str]]:
+    async def _run_perception_notes(self, message: Message, text_instruction: str) -> Tuple[Optional[str], Optional[str]]:
         """
         Run silent perception on reply-image context and return sanitized/capped VL notes.
         Returns (notes, reason) where reason is set on failure paths.
@@ -8141,9 +7168,7 @@ class Router:
             ref_id = None
             if message.reference:
                 try:
-                    ref_message = await message.channel.fetch_message(
-                        message.reference.message_id
-                    )
+                    ref_message = await message.channel.fetch_message(message.reference.message_id)
                     ref_id = getattr(ref_message, "id", None)
                     refs = collect_image_urls_from_message(ref_message) or []
                     image_refs.extend(refs)
@@ -8152,9 +7177,7 @@ class Router:
             cur_refs = collect_image_urls_from_message(message) or []
             image_refs.extend(cur_refs)
 
-            self.logger.info(
-                f"📎 Perception capture | ref_msg={ref_id if ref_id else 'none'} total={len(image_refs)}"
-            )
+            self.logger.info(f"📎 Perception capture | ref_msg={ref_id if ref_id else 'none'} total={len(image_refs)}")
 
             if not image_refs:
                 return None, "no_images"
@@ -8166,9 +7189,7 @@ class Router:
             downloaded_path = None
             tmp_path = None
             try:
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".jpg"
-                ) as tmp_file:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
                     tmp_path = tmp_file.name
                 ok = await download_robust_image(image_refs[0], tmp_path)
                 if not ok:
@@ -8190,9 +7211,7 @@ class Router:
                 return None, "download_exception"
 
             # Run VL adapter to get raw notes
-            prompt = (
-                text_instruction or ""
-            ).strip() or "Analyze this image briefly and provide concise notes."
+            prompt = (text_instruction or "").strip() or "Analyze this image briefly and provide concise notes."
             try:
                 # Prevent long hangs: cap VL notes time budget with a small timeout [REH][PA]
                 try:
@@ -8204,11 +7223,7 @@ class Router:
                     timeout=timeout_s,
                 )
                 raw_text = ""
-                if (
-                    vision_result
-                    and hasattr(vision_result, "content")
-                    and vision_result.content
-                ):
+                if vision_result and hasattr(vision_result, "content") and vision_result.content:
                     # Reject error-shaped BotAction results from see_infer. When the VL
                     # ladder exhausts (or produces an empty completion) see_infer returns
                     # a BotAction with a friendly error string AND error=True — that text
@@ -8225,9 +7240,7 @@ class Router:
                 except Exception:
                     notes_max = 600
                 strip_reason = bool(self.config.get("VL_STRIP_REASONING", True))
-                notes = sanitize_vl_reply_text(
-                    raw_text, max_chars=notes_max, strip_reasoning=strip_reason
-                )
+                notes = sanitize_vl_reply_text(raw_text, max_chars=notes_max, strip_reasoning=strip_reason)
                 return (notes or ""), None
             except asyncio.TimeoutError:
                 # Provider too slow for perception notes; fall back gracefully
@@ -8271,9 +7284,7 @@ class Router:
         # Convert EvidenceBundle to string for processing
         if isinstance(content, EvidenceBundle):
             content_str = content.compose_prompt_text()
-            self.logger.debug(
-                f"📋 Composed evidence bundle into {len(content_str)} chars"
-            )
+            self.logger.debug(f"📋 Composed evidence bundle into {len(content_str)} chars")
         else:
             content_str = content
 
@@ -8286,17 +7297,13 @@ class Router:
                 from bot.rag.hybrid_search import get_hybrid_search
 
                 max_results = int(os.getenv("RAG_MAX_VECTOR_RESULTS", "5"))
-                self.logger.debug(
-                    f"🔍 RAG: Starting concurrent search for: '{content_str[:50]}...' [msg_id={message.id if message else 'N/A'}]"
-                )
+                self.logger.debug(f"🔍 RAG: Starting concurrent search for: '{content_str[:50]}...' [msg_id={message.id if message else 'N/A'}]")
 
                 # Start RAG search concurrently - don't await here
                 async def rag_search_task():
                     search_engine = await get_hybrid_search()
                     if search_engine:
-                        return await search_engine.search(
-                            query=content_str, max_results=max_results
-                        )
+                        return await search_engine.search(query=content_str, max_results=max_results)
                     return None
 
                 rag_task = asyncio.create_task(rag_search_task())
@@ -8313,24 +7320,18 @@ class Router:
                 # Add timeout to prevent hanging [REH]
                 rag_results = await asyncio.wait_for(rag_task, timeout=5.0)
                 if rag_results:
-                    self.logger.debug(
-                        f"📊 RAG: Search completed, found {len(rag_results)} results"
-                    )
+                    self.logger.debug(f"📊 RAG: Search completed, found {len(rag_results)} results")
 
                     # Extract relevant content from search results (List[HybridSearchResult])
                     rag_context_parts = []
-                    for i, result in enumerate(
-                        rag_results[:5]
-                    ):  # Limit to top 5 results
+                    for i, result in enumerate(rag_results[:5]):  # Limit to top 5 results
                         # HybridSearchResult should have content attribute or similar
                         if hasattr(result, "content"):
                             chunk_content = result.content.strip()
                         elif hasattr(result, "text"):
                             chunk_content = result.text.strip()
                         elif isinstance(result, dict):
-                            chunk_content = result.get(
-                                "content", result.get("text", "")
-                            ).strip()
+                            chunk_content = result.get("content", result.get("text", "")).strip()
                         else:
                             chunk_content = str(result).strip()
 
@@ -8339,18 +7340,10 @@ class Router:
 
                     if rag_context_parts:
                         rag_context = "\n\n".join(rag_context_parts)
-                        enhanced_context = (
-                            f"{context}\n\n=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n"
-                            if context
-                            else f"=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n"
-                        )
-                        self.logger.debug(
-                            f"✅ RAG: Enhanced context with {len(rag_context_parts)} knowledge chunks"
-                        )
+                        enhanced_context = f"{context}\n\n=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n" if context else f"=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n"
+                        self.logger.debug(f"✅ RAG: Enhanced context with {len(rag_context_parts)} knowledge chunks")
                     else:
-                        self.logger.debug(
-                            "⚠️ RAG: Search returned results but all chunks were empty"
-                        )
+                        self.logger.debug("⚠️ RAG: Search returned results but all chunks were empty")
                 else:
                     self.logger.debug("🚫 RAG: No relevant results found")
             except Exception as e:
@@ -8360,55 +7353,32 @@ class Router:
             try:
                 memory_block = await build_memory_prompt_block(
                     user_id=str(message.author.id) if message else None,
-                    guild_id=str(message.guild.id)
-                    if getattr(message, "guild", None)
-                    else None,
-                    channel_id=str(message.channel.id)
-                    if getattr(message, "channel", None)
-                    else None,
-                    thread_id=str(message.channel.id)
-                    if isinstance(getattr(message, "channel", None), discord.Thread)
-                    else None,
+                    guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
+                    channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
+                    thread_id=str(message.channel.id) if isinstance(getattr(message, "channel", None), discord.Thread) else None,
                     query=content_str or content,
-                    max_chars=int(
-                        self.config.get("PERSISTENT_MEMORY_MAX_PROMPT_CHARS", 1200)
-                    ),
+                    max_chars=int(self.config.get("PERSISTENT_MEMORY_MAX_PROMPT_CHARS", 1200)),
                     top_k=int(self.config.get("PERSISTENT_MEMORY_TOP_K", 6)),
                 )
                 if memory_block:
-                    enhanced_context = (
-                        f"{enhanced_context}\n\n{memory_block}"
-                        if enhanced_context
-                        else memory_block
-                    )
+                    enhanced_context = f"{enhanced_context}\n\n{memory_block}" if enhanced_context else memory_block
             except Exception as e:
                 self.logger.debug(f"persistent memory retrieval skipped: {e}")
 
         # 3. Use contextual brain inference if enhanced context manager is available and message is provided
-        if (
-            message
-            and hasattr(self.bot, "enhanced_context_manager")
-            and self.bot.enhanced_context_manager
-            and os.getenv("USE_ENHANCED_CONTEXT", "true").lower() == "true"
-        ):
+        if message and hasattr(self.bot, "enhanced_context_manager") and self.bot.enhanced_context_manager and os.getenv("USE_ENHANCED_CONTEXT", "true").lower() == "true":
             try:
                 from bot.contextual_brain import contextual_brain_infer_simple
 
-                self.logger.debug(
-                    f"🧠 Using contextual brain inference [msg_id={message.id}]"
-                )
+                self.logger.debug(f"🧠 Using contextual brain inference [msg_id={message.id}]")
                 if perception_notes:
                     # Breadcrumb for injection [INFO]
                     try:
-                        self.logger.info(
-                            f"🧩 Injecting perception into text prompt | chars={len(perception_notes)}"
-                        )
+                        self.logger.info(f"🧩 Injecting perception into text prompt | chars={len(perception_notes)}")
                     except Exception:
                         pass
                 # Anchor visual analysis when present to avoid "no image" drift while preserving persona [REH][IV]
-                anchored_system = self._build_visual_anchored_system_prompt(
-                    content_str, perception_notes=perception_notes
-                )
+                anchored_system = self._build_visual_anchored_system_prompt(content_str, perception_notes=perception_notes)
 
                 response_text = await contextual_brain_infer_simple(
                     message,
@@ -8461,9 +7431,7 @@ class Router:
                             r"where['’]s\s+the\s+(actual\s+)?(pic|image|photo)",
                             re.IGNORECASE,
                         )
-                        pattern_send = re.compile(
-                            r"(re)?send\s+the\s+(pic|image|photo)", re.IGNORECASE
-                        )
+                        pattern_send = re.compile(r"(re)?send\s+the\s+(pic|image|photo)", re.IGNORECASE)
                         pattern_not_pic = re.compile(
                             r"\b(ain['’]?t|isn['’]?t|not)\s+(an?\s+)?(pic|image|photo)\b",
                             re.IGNORECASE,
@@ -8472,12 +7440,7 @@ class Router:
                             r"\bjust\s+(a\s+)?(screenshot|scan|document|letter|text)\b",
                             re.IGNORECASE,
                         )
-                        contradicts = bool(
-                            pattern_where.search(response_text or "")
-                            or pattern_send.search(response_text or "")
-                            or pattern_not_pic.search(response_text or "")
-                            or pattern_just.search(response_text or "")
-                        )
+                        contradicts = bool(pattern_where.search(response_text or "") or pattern_send.search(response_text or "") or pattern_not_pic.search(response_text or "") or pattern_just.search(response_text or ""))
                 except Exception:
                     contradicts = False
 
@@ -8487,10 +7450,7 @@ class Router:
                         repair_prompt = (
                             (content_str or "")
                             + "\n\n"  # Preserve original prompt context.
-                            + (
-                                "The previous draft incorrectly implied there was no image. "
-                                "Respect the provided visual facts (including any VL prompt output) and answer accordingly."
-                            )
+                            + ("The previous draft incorrectly implied there was no image. Respect the provided visual facts (including any VL prompt output) and answer accordingly.")
                         )
                         second = await contextual_brain_infer_simple(
                             message,
@@ -8500,9 +7460,7 @@ class Router:
                             extra_context=enhanced_context,
                             system_prompt=anchored_system,
                         )
-                        if second and not any(
-                            p in (second or "").lower() for p in bad_phrases
-                        ):
+                        if second and not any(p in (second or "").lower() for p in bad_phrases):
                             return BotAction(content=second)
                     except Exception as _e:
                         self.logger.debug(f"text.anchor.guard.regen_failed | {_e}")
@@ -8521,9 +7479,7 @@ class Router:
                             "[image:",
                             "image analysis",
                         )
-                        starts = [
-                            lower_s.find(m) for m in markers if lower_s.find(m) != -1
-                        ]
+                        starts = [lower_s.find(m) for m in markers if lower_s.find(m) != -1]
                         if starts:
                             vl_section = s[min(starts) :]
                             # Trim at next aggregation/original-text header if present.
@@ -8532,13 +7488,8 @@ class Router:
                                 if pos > 0:
                                     vl_section = vl_section[:pos]
                         if not vl_section.strip() and perception_notes:
-                            vl_section = (
-                                f"Perception notes:\n{perception_notes.strip()}"
-                            )
-                        vl_section = (
-                            vl_section.strip()
-                            or "Visual analysis available, but failed to synthesize."
-                        )
+                            vl_section = f"Perception notes:\n{perception_notes.strip()}"
+                        vl_section = vl_section.strip() or "Visual analysis available, but failed to synthesize."
                         return BotAction(content=vl_section)
                     except Exception:
                         # Last resort: return the first response anyway
@@ -8546,35 +7497,23 @@ class Router:
 
                 return BotAction(content=response_text)
             except Exception as e:
-                self.logger.warning(
-                    f"Contextual brain inference failed, falling back to basic: {e}"
-                )
+                self.logger.warning(f"Contextual brain inference failed, falling back to basic: {e}")
 
         # 4. Fallback to basic brain inference with enhanced context (including RAG).
         # Ensure perception notes are not lost in fallback path by appending as a context block.
         if perception_notes:
             try:
                 perception_block = f"Perception (from the image the user replied to):\n{perception_notes.strip()}"
-                enhanced_context = (
-                    f"{enhanced_context}\n\n{perception_block}"
-                    if enhanced_context
-                    else perception_block
-                )
+                enhanced_context = f"{enhanced_context}\n\n{perception_block}" if enhanced_context else perception_block
             except Exception:
                 pass
         # Basic fallback: apply the same visual-analysis anchoring when present
-        anchored_system_fallback = self._build_visual_anchored_system_prompt(
-            content_str, fallback=True, perception_notes=perception_notes
-        )
+        anchored_system_fallback = self._build_visual_anchored_system_prompt(content_str, fallback=True, perception_notes=perception_notes)
 
-        return await brain_infer(
-            content, context=enhanced_context, system_prompt=anchored_system_fallback
-        )
+        return await brain_infer(content, context=enhanced_context, system_prompt=anchored_system_fallback)
 
     # ===== Inline [search(...)] directive handling =====
-    def _extract_inline_search_queries(
-        self, text: str
-    ) -> list[tuple[tuple[int, int], str, Optional[SearchCategory]]]:
+    def _extract_inline_search_queries(self, text: str) -> list[tuple[tuple[int, int], str, Optional[SearchCategory]]]:
         """
         Extract inline search directives of the form [search(<query>)] or
         [search(<query>, <category>)] from text.
@@ -8633,9 +7572,7 @@ class Router:
         if not directives:
             return text
 
-        self.logger.info(
-            f"🔎 Found {len(directives)} inline search directive(s) (msg_id: {message.id})"
-        )
+        self.logger.info(f"🔎 Found {len(directives)} inline search directive(s) (msg_id: {message.id})")
 
         # Config [IV]: pull from self.config with safe defaults
         provider_name = str(self.config.get("SEARCH_PROVIDER", "ddg"))
@@ -8646,11 +7583,7 @@ class Router:
             safesearch = SafeSearch(safe_str)
         except Exception:
             safesearch = SafeSearch.MODERATE
-        timeout_ms = (
-            int(self.config.get("DDG_TIMEOUT_MS", 5000))
-            if provider_name == "ddg"
-            else int(self.config.get("CUSTOM_SEARCH_TIMEOUT_MS", 8000))
-        )
+        timeout_ms = int(self.config.get("DDG_TIMEOUT_MS", 5000)) if provider_name == "ddg" else int(self.config.get("CUSTOM_SEARCH_TIMEOUT_MS", 8000))
         max_concurrency = int(os.getenv("SEARCH_INLINE_MAX_CONCURRENCY", "3"))
 
         provider = get_search_provider()
@@ -8674,14 +7607,10 @@ class Router:
                         "inline_search.start",
                         {"category": cat_label, "provider": provider_name},
                     )
-                    self.logger.debug(
-                        f"[InlineSearch] Executing: '{q[:80]}' (category={cat_label})"
-                    )
+                    self.logger.debug(f"[InlineSearch] Executing: '{q[:80]}' (category={cat_label})")
                     return await provider.search(params)
                 except Exception as e:
-                    self.logger.error(
-                        f"[InlineSearch] provider error for '{q}': {e}", exc_info=True
-                    )
+                    self.logger.error(f"[InlineSearch] provider error for '{q}': {e}", exc_info=True)
                     cat_label = cat.value if isinstance(cat, SearchCategory) else "text"
                     self._metric_inc(
                         "inline_search.error",
@@ -8704,12 +7633,8 @@ class Router:
             if isinstance(results, Exception):
                 replacement = f"❌ Search failed for '{query}': please try again later."
             else:
-                replacement = self._format_inline_search_block(
-                    query, results, provider_name, safesearch
-                )
-                cat_label = (
-                    category.value if isinstance(category, SearchCategory) else "text"
-                )
+                replacement = self._format_inline_search_block(query, results, provider_name, safesearch)
+                cat_label = category.value if isinstance(category, SearchCategory) else "text"
                 self._metric_inc(
                     "inline_search.success",
                     {"category": cat_label, "provider": provider_name},
@@ -8721,9 +7646,7 @@ class Router:
         # Append trailing text
         pieces.append(text[cursor:])
         new_text = "".join(pieces)
-        self.logger.debug(
-            f"[InlineSearch] Rewrote text with {len(directives)} replacement(s). New length={len(new_text)}"
-        )
+        self.logger.debug(f"[InlineSearch] Rewrote text with {len(directives)} replacement(s). New length={len(new_text)}")
         return new_text
 
     def _format_inline_search_block(
@@ -8829,30 +7752,19 @@ class Router:
 
             # Combine video context with conversation history
             if context_str:
-                full_context = (
-                    f"{context_str}\n\n--- VIDEO CONTENT ---\n{video_context}"
-                )
+                full_context = f"{context_str}\n\n--- VIDEO CONTENT ---\n{video_context}"
             else:
                 full_context = video_context
 
             # Process through text flow with enriched context
-            prompt = (
-                "Please summarize and discuss the key points from this video. "
-                "Provide insights, analysis, or answer any questions about the content."
-            )
+            prompt = "Please summarize and discuss the key points from this video. Provide insights, analysis, or answer any questions about the content."
 
             # Use contextual brain inference if available
-            if (
-                hasattr(self.bot, "enhanced_context_manager")
-                and self.bot.enhanced_context_manager
-                and os.getenv("USE_ENHANCED_CONTEXT", "true").lower() == "true"
-            ):
+            if hasattr(self.bot, "enhanced_context_manager") and self.bot.enhanced_context_manager and os.getenv("USE_ENHANCED_CONTEXT", "true").lower() == "true":
                 try:
                     from bot.contextual_brain import contextual_brain_infer_simple
 
-                    self.logger.debug(
-                        f"🧠🎥 Using contextual brain for video analysis [msg_id={message.id}]"
-                    )
+                    self.logger.debug(f"🧠🎥 Using contextual brain for video analysis [msg_id={message.id}]")
 
                     # Add video metadata to enhanced context
                     video_metadata_context = {
@@ -8879,9 +7791,7 @@ class Router:
                     return BotAction(content=response_text)
 
                 except Exception as e:
-                    self.logger.warning(
-                        f"Contextual brain inference failed for video, falling back: {e}"
-                    )
+                    self.logger.warning(f"Contextual brain inference failed for video, falling back: {e}")
 
             # Fallback to basic brain inference
             return await brain_infer(prompt, context=full_context)
@@ -8920,9 +7830,7 @@ class Router:
                     error=True,
                 )
 
-    async def _flow_process_attachments_legacy(
-        self, message: Message, attachment=None
-    ) -> BotAction:
+    async def _flow_process_attachments_legacy(self, message: Message, attachment=None) -> BotAction:
         """DEPRECATED: Legacy attachment processor (has .txt short-circuit bug). Use _flow_process_attachments_multimodal instead."""
         # Accept either a Discord Attachment object or a placeholder (e.g., "" from compat path)
         if not hasattr(attachment, "filename"):
@@ -8937,19 +7845,13 @@ class Router:
                             break
                     attachment = non_text or attachments[0]
                 else:
-                    self.logger.warning(
-                        f"No attachments available to process (msg_id: {message.id})"
-                    )
+                    self.logger.warning(f"No attachments available to process (msg_id: {message.id})")
                     return BotAction(content="I didn't receive a file to process.")
             except Exception:
-                self.logger.warning(
-                    f"Attachment placeholder received but unable to access message.attachments (msg_id: {message.id})"
-                )
+                self.logger.warning(f"Attachment placeholder received but unable to access message.attachments (msg_id: {message.id})")
                 return BotAction(content="I didn't receive a file to process.")
 
-        self.logger.info(
-            f"Processing attachment: {attachment.filename} (msg_id: {message.id})"
-        )
+        self.logger.info(f"Processing attachment: {attachment.filename} (msg_id: {message.id})")
 
         content_type = getattr(attachment, "content_type", None)
         filename = (getattr(attachment, "filename", "") or "").lower()
@@ -9008,10 +7910,7 @@ class Router:
             pass
 
         # Process image attachments
-        if (content_type and content_type.startswith("image/")) or any(
-            filename.endswith(ext)
-            for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
-        ):
+        if (content_type and content_type.startswith("image/")) or any(filename.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")):
             return await self._process_image_attachment(message, attachment)
 
         # Process document attachments
@@ -9020,18 +7919,12 @@ class Router:
 
         else:
             # Avoid emitting unsupported for plain text attachments; let text path handle them.
-            if filename.endswith(".txt") or (content_type or "").lower().startswith(
-                "text/"
-            ):
+            if filename.endswith(".txt") or (content_type or "").lower().startswith("text/"):
                 return BotAction(content="I didn't receive a file to process.")
-            self.logger.warning(
-                f"Unsupported attachment type: {filename} (msg_id: {message.id})"
-            )
+            self.logger.warning(f"Unsupported attachment type: {filename} (msg_id: {message.id})")
             return BotAction(content="I can't process that type of file attachment.")
 
-    async def _unified_vl_to_text_pipeline(
-        self, image_paths: List[str], user_caption: str = "", intent: str = "Thoughts?"
-    ) -> BotAction:
+    async def _unified_vl_to_text_pipeline(self, image_paths: List[str], user_caption: str = "", intent: str = "Thoughts?") -> BotAction:
         """
         Unified 1-hop VL → Text pipeline that enforces "1 in ➜ 1 out" rule.
 
@@ -9056,17 +7949,11 @@ class Router:
             # Limit images to max
             limited_paths = image_paths[:max_images]
             if debug_flow:
-                self.logger.info(
-                    f"VL_DEBUG_FLOW | processing {len(limited_paths)}/{len(image_paths)} images"
-                )
+                self.logger.info(f"VL_DEBUG_FLOW | processing {len(limited_paths)}/{len(image_paths)} images")
 
             # Get prompts
-            vl_prompt = self._get_system_prompt(
-                "vl_prompt", "Analyze and describe this image."
-            )
-            text_prompt = self._get_system_prompt(
-                "text_prompt", "You are a helpful assistant."
-            )
+            vl_prompt = self._get_system_prompt("vl_prompt", "Analyze and describe this image.")
+            text_prompt = self._get_system_prompt("text_prompt", "You are a helpful assistant.")
 
             # Step 1: Single VL call with all images
             vl_results = []
@@ -9075,9 +7962,7 @@ class Router:
                 try:
                     from .see import see_infer
 
-                    vision_result = await see_infer(
-                        image_path=image_path, prompt=vl_prompt
-                    )
+                    vision_result = await see_infer(image_path=image_path, prompt=vl_prompt)
                     if vision_result and getattr(vision_result, "content", None):
                         raw_content = str(vision_result.content).strip()
                         # Sanitize VL output immediately
@@ -9089,9 +7974,7 @@ class Router:
                         vl_raw_contents.append("[No analysis available]")
                 except Exception as e:
                     self.logger.error(f"VL processing failed for image {i + 1}: {e}")
-                    vl_results.append(
-                        f"Image {i + 1}: [Analysis failed: {str(e)[:100]}]"
-                    )
+                    vl_results.append(f"Image {i + 1}: [Analysis failed: {str(e)[:100]}]")
                     vl_raw_contents.append("[Analysis failed]")
 
             if not vl_results:
@@ -9103,9 +7986,7 @@ class Router:
             # Combine VL results
             combined_vl_result = "\n\n".join(vl_results)
             if debug_flow:
-                self.logger.info(
-                    f"VL_DEBUG_FLOW | sanitized VL result: {len(combined_vl_result)} chars"
-                )
+                self.logger.info(f"VL_DEBUG_FLOW | sanitized VL result: {len(combined_vl_result)} chars")
 
             # Structured output for Tweet analysis: include caption + per-image blocks [CA]
             if intent.lower().startswith("tweet"):
@@ -9130,9 +8011,7 @@ class Router:
             # Step 2 (default): Prepare input for Text Flow
             if user_caption.strip():
                 # User provided caption - include it as context
-                text_input = (
-                    f"{combined_vl_result}\n\nUser message: {user_caption.strip()}"
-                )
+                text_input = f"{combined_vl_result}\n\nUser message: {user_caption.strip()}"
             else:
                 # No caption - use implicit intent (but don't echo it to Discord)
                 text_input = f"{combined_vl_result}\n\nInternal intent: {intent}"
@@ -9143,9 +8022,7 @@ class Router:
             final_response = await brain_infer(text_input, context=text_prompt)
 
             if debug_flow:
-                self.logger.info(
-                    "VL_DEBUG_FLOW | 1-hop pipeline complete: VL→Text→1 final response"
-                )
+                self.logger.info("VL_DEBUG_FLOW | 1-hop pipeline complete: VL→Text→1 final response")
 
             return final_response
 
@@ -9156,37 +8033,25 @@ class Router:
                 error=True,
             )
 
-    async def _process_image_attachment(
-        self, message: Message, attachment
-    ) -> BotAction:
-        self.logger.info(
-            f"Processing image attachment: {attachment.filename} (msg_id: {message.id})"
-        )
+    async def _process_image_attachment(self, message: Message, attachment) -> BotAction:
+        self.logger.info(f"Processing image attachment: {attachment.filename} (msg_id: {message.id})")
 
-        with tempfile.NamedTemporaryFile(
-            delete=False, suffix=os.path.splitext(attachment.filename)[1] or ".jpg"
-        ) as tmp_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(attachment.filename)[1] or ".jpg") as tmp_file:
             tmp_path = tmp_file.name
 
         try:
             await attachment.save(tmp_path)
-            self.logger.debug(
-                f"Saved image to temp file: {tmp_path} (msg_id: {message.id})"
-            )
+            self.logger.debug(f"Saved image to temp file: {tmp_path} (msg_id: {message.id})")
 
             # Determine user caption and intent
             user_caption = message.content.strip() if message.content else ""
             intent = "Thoughts?" if not user_caption else user_caption
 
             # Use unified VL → Text pipeline (enforces 1 in ➜ 1 out)
-            return await self._unified_vl_to_text_pipeline(
-                [tmp_path], user_caption, intent
-            )
+            return await self._unified_vl_to_text_pipeline([tmp_path], user_caption, intent)
 
         except Exception as e:
-            self.logger.error(
-                f"❌ Image processing failed: {e} (msg_id: {message.id})", exc_info=True
-            )
+            self.logger.error(f"❌ Image processing failed: {e} (msg_id: {message.id})", exc_info=True)
             error_str = str(e).lower()
             if "timeout" in error_str or "time" in error_str:
                 return BotAction(
@@ -9218,9 +8083,7 @@ class Router:
                 os.unlink(tmp_path)
 
     async def _process_pdf_attachment(self, message: Message, attachment) -> BotAction:
-        self.logger.info(
-            f"📄 Processing PDF attachment: {attachment.filename} (msg_id: {message.id})"
-        )
+        self.logger.info(f"📄 Processing PDF attachment: {attachment.filename} (msg_id: {message.id})")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             tmp_path = tmp_file.name
         try:
@@ -9232,19 +8095,13 @@ class Router:
             final_prompt = f"User uploaded a PDF document. Here is the text content:\n\n{text_content}"
             return await brain_infer(final_prompt)
         except Exception as e:
-            self.logger.error(
-                f"❌ PDF processing failed: {e} (msg_id: {message.id})", exc_info=True
-            )
-            return BotAction(
-                content="⚠️ An error occurred while processing this PDF.", error=True
-            )
+            self.logger.error(f"❌ PDF processing failed: {e} (msg_id: {message.id})", exc_info=True)
+            return BotAction(content="⚠️ An error occurred while processing this PDF.", error=True)
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
-    async def _flow_process_attachments_multimodal(
-        self, message: Message, raw_content: str | None = None
-    ) -> BotAction:
+    async def _flow_process_attachments_multimodal(self, message: Message, raw_content: str | None = None) -> BotAction:
         """
         Process all attachments with per-file classification (no .txt short-circuit).
 
@@ -9256,9 +8113,7 @@ class Router:
             self.logger.warning(f"No attachments to process (msg_id: {message.id})")
             return BotAction(content="I didn't receive any files to process.")
 
-        self.logger.info(
-            f"Processing {len(attachments)} attachments multimodally (msg_id: {message.id})"
-        )
+        self.logger.info(f"Processing {len(attachments)} attachments multimodally (msg_id: {message.id})")
 
         # Classify all attachments independently (no short-circuit)
         from .exceptions import InferenceError
@@ -9267,17 +8122,13 @@ class Router:
 
         # Aggregate results by bucket
         evidence_parts = []
-        user_caption = (
-            raw_content if raw_content is not None else (message.content or "")
-        ).strip()
+        user_caption = (raw_content if raw_content is not None else (message.content or "")).strip()
 
         # 1. TXT_PROMPT: Append first .txt to evidence
         txt_atts = get_by_bucket(classified, AttachmentBucket.TXT_PROMPT)
         if txt_atts:
             try:
-                txt_content = await read_attachment_text(
-                    txt_atts[0].attachment, max_bytes=50000
-                )
+                txt_content = await read_attachment_text(txt_atts[0].attachment, max_bytes=50000)
                 if txt_content:
                     evidence_parts.append(f"[TXT FILE]\n{txt_content}")
                     self.logger.info(f"Loaded .txt file: {len(txt_content)} chars")
@@ -9290,16 +8141,10 @@ class Router:
             try:
                 result = await ingest_document_attachment(doc_att.attachment)
                 if result.get("text"):
-                    evidence_parts.append(
-                        f"[DOCUMENT: {doc_att.filename}]\n{result['text']}"
-                    )
-                    self.logger.info(
-                        f"Extracted document: {doc_att.filename} → {len(result['text'])} chars"
-                    )
+                    evidence_parts.append(f"[DOCUMENT: {doc_att.filename}]\n{result['text']}")
+                    self.logger.info(f"Extracted document: {doc_att.filename} → {len(result['text'])} chars")
                 elif result.get("error"):
-                    self.logger.warning(
-                        f"Document extraction failed for {doc_att.filename}: {result['error']}"
-                    )
+                    self.logger.warning(f"Document extraction failed for {doc_att.filename}: {result['error']}")
             except Exception as e:
                 self.logger.error(
                     f"Document ingestion error for {doc_att.filename}: {e}",
@@ -9312,9 +8157,7 @@ class Router:
 
         for av_att in audio_atts + video_atts:
             try:
-                self.logger.info(
-                    f"stt.enqueue kind={av_att.bucket.name.lower()} name={av_att.filename}"
-                )
+                self.logger.info(f"stt.enqueue kind={av_att.bucket.name.lower()} name={av_att.filename}")
 
                 # Save attachment to temp file for STT
                 import tempfile
@@ -9328,16 +8171,10 @@ class Router:
                     transcript = await self._run_stt_job(hear_infer(tmp_path), message)
 
                     if transcript and transcript.strip():
-                        evidence_parts.append(
-                            f"[TRANSCRIPT: {av_att.filename}]\n{transcript}"
-                        )
-                        self.logger.info(
-                            f"STT success: {av_att.filename} → {len(transcript)} chars"
-                        )
+                        evidence_parts.append(f"[TRANSCRIPT: {av_att.filename}]\n{transcript}")
+                        self.logger.info(f"STT success: {av_att.filename} → {len(transcript)} chars")
                     else:
-                        self.logger.warning(
-                            f"STT returned empty transcript for {av_att.filename}"
-                        )
+                        self.logger.warning(f"STT returned empty transcript for {av_att.filename}")
 
                 finally:
                     if tmp_path.exists():
@@ -9345,10 +8182,7 @@ class Router:
 
             except InferenceError as ie:
                 self.logger.warning(f"STT failed for {av_att.filename}: {ie}")
-                evidence_parts.append(
-                    f"[{av_att.filename}: Audio transcription is temporarily unavailable. "
-                    "Please try sending your message as text.]"
-                )
+                evidence_parts.append(f"[{av_att.filename}: Audio transcription is temporarily unavailable. Please try sending your message as text.]")
             except Exception as e:
                 self.logger.warning(f"STT failed for {av_att.filename}: {e}")
                 # Continue processing other attachments
@@ -9359,16 +8193,12 @@ class Router:
             # If we have text evidence from docs/audio, combine with image
             if evidence_parts:
                 # Process image and combine
-                img_result = await self._process_image_attachment(
-                    message, img_atts[0].attachment
-                )
+                img_result = await self._process_image_attachment(message, img_atts[0].attachment)
                 if img_result and img_result.content:
                     evidence_parts.append(f"[IMAGE ANALYSIS]\n{img_result.content}")
             else:
                 # Image-only message, use existing VL flow
-                return await self._process_image_attachment(
-                    message, img_atts[0].attachment
-                )
+                return await self._process_image_attachment(message, img_atts[0].attachment)
 
         # 5. Aggregate all evidence
         if evidence_parts:
@@ -9380,10 +8210,7 @@ class Router:
             else:
                 final_prompt = combined_evidence
 
-            self.logger.info(
-                f"Multimodal aggregation complete: {len(evidence_parts)} sources, "
-                f"{len(final_prompt)} total chars"
-            )
+            self.logger.info(f"Multimodal aggregation complete: {len(evidence_parts)} sources, {len(final_prompt)} total chars")
 
             # Send to brain for final processing
             return await brain_infer(final_prompt)
@@ -9391,10 +8218,7 @@ class Router:
         # No processable attachments found
         other_count = len(get_by_bucket(classified, AttachmentBucket.OTHER))
         if other_count > 0:
-            return BotAction(
-                content=f"I couldn't process {other_count} unsupported file type(s). "
-                "I support images, audio/video, PDFs, and documents (DOCX/RTF/MD)."
-            )
+            return BotAction(content=f"I couldn't process {other_count} unsupported file type(s). I support images, audio/video, PDFs, and documents (DOCX/RTF/MD).")
 
         return BotAction(content="I couldn't process any of the attachments.")
 
@@ -9411,9 +8235,7 @@ class Router:
         except Exception:
             return True
 
-    async def _handle_image_only_tweet(
-        self, url: str, syn_data: Dict[str, Any], source: str = "syndication"
-    ) -> str:
+    async def _handle_image_only_tweet(self, url: str, syn_data: Dict[str, Any], source: str = "syndication") -> str:
         """
         Handle image-only tweets with Vision/OCR pipeline and emoji upgrade support.
         Returns composed evidence text using caption + vision/ocr with deterministic ordering. [CA][SFT][REH]
@@ -9423,22 +8245,15 @@ class Router:
             photos = syn_data.get("photos") or []
 
             if not photos:
-                self.logger.warning(
-                    f"⚠️ Called _handle_image_only_tweet but no photos found: {url}"
-                )
-                return (
-                    "⚠️ Expected image content but no photos were found in this tweet."
-                )
+                self.logger.warning(f"⚠️ Called _handle_image_only_tweet but no photos found: {url}")
+                return "⚠️ Expected image content but no photos were found in this tweet."
 
             # Extract tweet metadata for provenance
             user = syn_data.get("user") or {}
             username = user.get("screen_name") or user.get("name") or "unknown"
             created_at = syn_data.get("created_at") or "unknown"
 
-            self.logger.info(
-                f"🖼️ Processing {len(photos)} image(s) from image-only tweet: {url}"
-                f" | author={username} | created_at={created_at}"
-            )
+            self.logger.info(f"🖼️ Processing {len(photos)} image(s) from image-only tweet: {url} | author={username} | created_at={created_at}")
             self._metric_inc(
                 "vision.image_only_tweet.start",
                 {"source": source, "images": str(len(photos))},
@@ -9450,9 +8265,7 @@ class Router:
             safety_flags = []
 
             for idx, photo in enumerate(photos, start=1):
-                photo_url = (
-                    photo.get("url") or photo.get("image_url") or photo.get("src")
-                )
+                photo_url = photo.get("url") or photo.get("image_url") or photo.get("src")
                 if not photo_url:
                     results.append(f"📷 Image {idx}/{len(photos)} — URL not available")
                     continue
@@ -9462,15 +8275,11 @@ class Router:
                     prompt = self._build_neutral_vision_prompt(idx, len(photos), url)
 
                     # Get vision analysis with retry logic
-                    analysis = await self._vl_describe_image_from_url(
-                        photo_url, prompt=prompt
-                    )
+                    analysis = await self._vl_describe_image_from_url(photo_url, prompt=prompt)
 
                     if analysis:
                         # Parse analysis for alt-text and OCR if enabled
-                        alt_text, ocr_text, safety = self._parse_vision_analysis(
-                            analysis, cfg
-                        )
+                        alt_text, ocr_text, safety = self._parse_vision_analysis(analysis, cfg)
                         results.append(alt_text)
 
                         if ocr_text:
@@ -9478,16 +8287,10 @@ class Router:
                         if safety:
                             safety_flags.extend(safety)
 
-                        self._metric_inc(
-                            "vision.image_only_tweet.success", {"image_idx": str(idx)}
-                        )
+                        self._metric_inc("vision.image_only_tweet.success", {"image_idx": str(idx)})
                     else:
-                        results.append(
-                            f"📷 Image {idx}/{len(photos)} — analysis unavailable"
-                        )
-                        self._metric_inc(
-                            "vision.image_only_tweet.failure", {"image_idx": str(idx)}
-                        )
+                        results.append(f"📷 Image {idx}/{len(photos)} — analysis unavailable")
+                        self._metric_inc("vision.image_only_tweet.failure", {"image_idx": str(idx)})
 
                 except Exception as img_err:
                     self.logger.error(
@@ -9495,17 +8298,11 @@ class Router:
                         exc_info=True,
                     )
                     results.append(f"📷 Image {idx}/{len(photos)} — could not analyze")
-                    self._metric_inc(
-                        "vision.image_only_tweet.error", {"image_idx": str(idx)}
-                    )
+                    self._metric_inc("vision.image_only_tweet.error", {"image_idx": str(idx)})
 
             # Compose final text with clear sections for tests and users
             if results:
-                header = (
-                    "📷 Image Analysis"
-                    if len(results) == 1
-                    else f"📷 Images Analysis ({len(results)})"
-                )
+                header = "📷 Image Analysis" if len(results) == 1 else f"📷 Images Analysis ({len(results)})"
                 caption_text = self._extract_syndication_text(syn_data)
                 analysis_block = "\n".join(results)
                 parts = [header]
@@ -9542,23 +8339,14 @@ class Router:
             )
 
             # If everything failed, return a user-friendly error
-            if not composed.strip() or all(
-                r.startswith("📷") and "could not analyze" in r for r in results
-            ):
-                return (
-                    "⚠️ Could not process images from this tweet right now. "
-                    "Please try again later."
-                )
+            if not composed.strip() or all(r.startswith("📷") and "could not analyze" in r for r in results):
+                return "⚠️ Could not process images from this tweet right now. Please try again later."
 
-            self.logger.info(
-                f"✅ Image-only tweet processed successfully: {len(results)} images analyzed"
-            )
+            self.logger.info(f"✅ Image-only tweet processed successfully: {len(results)} images analyzed")
             return composed
 
         except Exception as e:
-            self.logger.error(
-                f"❌ Image-only tweet processing failed: {e}", exc_info=True
-            )
+            self.logger.error(f"❌ Image-only tweet processing failed: {e}", exc_info=True)
             self._metric_inc("vision.image_only_tweet.fatal_error", {"source": source})
             return "⚠️ Could not process images from this tweet right now. Please try again later."
 
@@ -9581,9 +8369,7 @@ class Router:
                 f"Keep the description neutral and factual. Avoid speculation or sensitive commentary."
             )
 
-    def _parse_vision_analysis(
-        self, analysis: str, cfg: Dict[str, Any]
-    ) -> tuple[str, Optional[str], Optional[List[str]]]:
+    def _parse_vision_analysis(self, analysis: str, cfg: Dict[str, Any]) -> tuple[str, Optional[str], Optional[List[str]]]:
         """
         Parse vision analysis into alt-text, OCR text, and safety flags.
         Returns (alt_text, ocr_text, safety_flags). [IV][SFT]
@@ -9659,9 +8445,7 @@ class Router:
             self.logger.error(f"TTS generation failed: {e}", exc_info=True)
             return None
 
-    async def _handle_vision_generation(
-        self, intent_result, message: Message, context_str: str
-    ) -> BotAction:
+    async def _handle_vision_generation(self, intent_result, message: Message, context_str: str) -> BotAction:
         """
         Handle Vision generation request through orchestrator with comprehensive error handling [REH][SFT]
 
@@ -9675,14 +8459,10 @@ class Router:
         """
         # Generate unique request ID for tracking
         request_id = f"{message.id}_{int(message.created_at.timestamp())}"
-        self.logger.info(
-            f"Starting vision generation - request_id: {request_id}, user_id: {message.author.id}"
-        )
+        self.logger.info(f"Starting vision generation - request_id: {request_id}, user_id: {message.author.id}")
 
         if not self._vision_orchestrator:
-            self.logger.error(
-                f"Vision orchestrator not available - request_id: {request_id}"
-            )
+            self.logger.error(f"Vision orchestrator not available - request_id: {request_id}")
             return BotAction(
                 content="🚫 Vision generation is not available right now. Please try again later.",
                 error=True,
@@ -9702,35 +8482,23 @@ class Router:
                 user_id=str(message.author.id),
                 guild_id=str(message.guild.id) if message.guild else None,
                 channel_id=str(message.channel.id),
-                negative_prompt=getattr(
-                    intent_result.extracted_params, "negative_prompt", ""
-                ),
+                negative_prompt=getattr(intent_result.extracted_params, "negative_prompt", ""),
                 width=getattr(intent_result.extracted_params, "width", 1024),
                 height=getattr(intent_result.extracted_params, "height", 1024),
                 steps=getattr(intent_result.extracted_params, "steps", 30),
-                guidance_scale=getattr(
-                    intent_result.extracted_params, "guidance_scale", 7.0
-                ),
+                guidance_scale=getattr(intent_result.extracted_params, "guidance_scale", 7.0),
                 seed=getattr(intent_result.extracted_params, "seed", None),
-                preferred_provider=getattr(
-                    intent_result.extracted_params, "preferred_provider", None
-                ),
+                preferred_provider=getattr(intent_result.extracted_params, "preferred_provider", None),
             )
 
             # Submit job to orchestrator
-            self.logger.info(
-                f"🎨 Submitting Vision job: {task_enum.value} (request_id: {request_id}, msg_id: {message.id})"
-            )
+            self.logger.info(f"🎨 Submitting Vision job: {task_enum.value} (request_id: {request_id}, msg_id: {message.id})")
 
             try:
                 job = await self._vision_orchestrator.submit_job(vision_request)
-                self.logger.info(
-                    f"Vision job submitted successfully - job_id: {job.job_id[:8]} (request_id: {request_id})"
-                )
+                self.logger.info(f"Vision job submitted successfully - job_id: {job.job_id[:8]} (request_id: {request_id})")
             except Exception as e:
-                self.logger.error(
-                    f"Vision job submission failed - request_id: {request_id}, error: {e}"
-                )
+                self.logger.error(f"Vision job submission failed - request_id: {request_id}, error: {e}")
                 raise
 
             # Initial message uses compact working card
@@ -9756,36 +8524,26 @@ class Router:
 
             if "content filtered" in error_str or "safety" in error_str:
                 return BotAction(
-                    content="🚫 **Content Safety Issue**\n"
-                    "Your request contains content that violates our usage policies. "
-                    "Please modify your prompt to remove prohibited content and try again.",
+                    content="🚫 **Content Safety Issue**\nYour request contains content that violates our usage policies. Please modify your prompt to remove prohibited content and try again.",
                     error=True,
                 )
             elif "budget" in error_str or "quota" in error_str:
                 return BotAction(
-                    content="💰 **Budget Limit Reached**\n"
-                    "You've reached your vision generation budget limit. "
-                    "Please wait for your quota to reset or contact an admin for assistance.",
+                    content="💰 **Budget Limit Reached**\nYou've reached your vision generation budget limit. Please wait for your quota to reset or contact an admin for assistance.",
                     error=True,
                 )
             elif "provider" in error_str or "service" in error_str:
                 return BotAction(
-                    content="🔄 **Service Temporarily Unavailable**\n"
-                    "The vision generation service is experiencing issues. "
-                    "Please try again in a few moments.",
+                    content="🔄 **Service Temporarily Unavailable**\nThe vision generation service is experiencing issues. Please try again in a few moments.",
                     error=True,
                 )
             else:
                 return BotAction(
-                    content="❌ **Generation Failed**\n"
-                    "An error occurred during vision generation. "
-                    "Please check your parameters and try again.",
+                    content="❌ **Generation Failed**\nAn error occurred during vision generation. Please check your parameters and try again.",
                     error=True,
                 )
 
-    async def _monitor_vision_job(
-        self, job, progress_msg, original_msg: Message
-    ) -> BotAction:
+    async def _monitor_vision_job(self, job, progress_msg, original_msg: Message) -> BotAction:
         """
         Monitor Vision job progress and update Discord message with results [REH][PA]
 
@@ -9814,46 +8572,26 @@ class Router:
                 )
 
                 if not updated_job:
-                    self.logger.warning(
-                        f"⚠️ Vision job watcher returned no result - job_id: {job.job_id[:8]}"
-                    )
-                    return BotAction(
-                        content="Job monitoring failed or timed out", error=True
-                    )
+                    self.logger.warning(f"⚠️ Vision job watcher returned no result - job_id: {job.job_id[:8]}")
+                    return BotAction(content="Job monitoring failed or timed out", error=True)
 
                 # Handle final result based on terminal state
                 if updated_job.is_terminal_state():
                     if updated_job.state.value == "completed" and updated_job.response:
-                        self.logger.info(
-                            f"✅ Vision job completed successfully - job_id: {updated_job.job_id[:8]}"
-                        )
-                        return await self._handle_vision_success(
-                            updated_job, progress_msg, original_msg
-                        )
+                        self.logger.info(f"✅ Vision job completed successfully - job_id: {updated_job.job_id[:8]}")
+                        return await self._handle_vision_success(updated_job, progress_msg, original_msg)
                     else:
-                        self.logger.warning(
-                            f"❌ Vision job failed - job_id: {updated_job.job_id[:8]}, state: {updated_job.state.value}"
-                        )
-                        return await self._handle_vision_failure(
-                            updated_job, progress_msg
-                        )
+                        self.logger.warning(f"❌ Vision job failed - job_id: {updated_job.job_id[:8]}, state: {updated_job.state.value}")
+                        return await self._handle_vision_failure(updated_job, progress_msg)
                 else:
                     # Should not happen with proper watcher implementation
-                    self.logger.error(
-                        f"🔴 Vision job watcher returned non-terminal job - job_id: {updated_job.job_id[:8]}"
-                    )
-                    return BotAction(
-                        content="Unexpected job monitoring result", error=True
-                    )
+                    self.logger.error(f"🔴 Vision job watcher returned non-terminal job - job_id: {updated_job.job_id[:8]}")
+                    return BotAction(content="Unexpected job monitoring result", error=True)
 
         except Exception as e:
             self.logger.error(f"❌ Vision job monitoring failed: {e}", exc_info=True)
             try:
-                await progress_msg.edit(
-                    content=f"❌ **Monitoring Error**\n"
-                    f"Job ID: `{job.job_id[:8]}`\n"
-                    f"Lost connection to job status. Please check back later."
-                )
+                await progress_msg.edit(content=f"❌ **Monitoring Error**\nJob ID: `{job.job_id[:8]}`\nLost connection to job status. Please check back later.")
             except Exception:
                 pass  # Don't fail if message edit fails
             return BotAction(content="Job monitoring failed", error=True)
@@ -9868,18 +8606,14 @@ class Router:
         """Handle reply-image → VL analysis with silent mode (no cards) [CA][REH]"""
         if not image_items:
             self.logger.info("Reply-image VL failed | reason=no_images")
-            return BotAction(
-                content="I couldn’t fetch the image you replied to. Please re-upload it or try again."
-            )
+            return BotAction(content="I couldn’t fetch the image you replied to. Please re-upload it or try again.")
 
         # Check silent mode config (default on)
         silent_mode = self.config.get("VISION_REPLY_IMAGE_SILENT", True)
 
         if not silent_mode:
             # Fall back to card-based UI for backward compatibility
-            return await self._handle_reply_image_analysis_with_cards(
-                image_items, text_instruction, message, context_str
-            )
+            return await self._handle_reply_image_analysis_with_cards(image_items, text_instruction, message, context_str)
 
         # Silent mode: no cards, just plain text responses
         try:
@@ -9892,39 +8626,29 @@ class Router:
             image_refs = []
             if message.reference:
                 try:
-                    ref_message = await message.channel.fetch_message(
-                        message.reference.message_id
-                    )
-                    image_refs.extend(
-                        collect_image_urls_from_message(ref_message) or []
-                    )
+                    ref_message = await message.channel.fetch_message(message.reference.message_id)
+                    image_refs.extend(collect_image_urls_from_message(ref_message) or [])
                 except Exception:
                     pass
             image_refs.extend(collect_image_urls_from_message(message) or [])
 
             if not image_refs:
                 self.logger.info("Reply-image VL failed | reason=no_images")
-                return BotAction(
-                    content="I couldn’t fetch the image you replied to. Please re-upload it or try again."
-                )
+                return BotAction(content="I couldn’t fetch the image you replied to. Please re-upload it or try again.")
 
             # Cap at provider limit (assume 1 for simplicity, could be configurable)
             provider_limit = 1  # Most VL providers handle 1 image well
             truncated = len(image_refs) > provider_limit
             if truncated:
                 image_refs = image_refs[:provider_limit]
-                self.logger.debug(
-                    f"Truncated image batch from {len(image_refs)} to {provider_limit}"
-                )
+                self.logger.debug(f"Truncated image batch from {len(image_refs)} to {provider_limit}")
 
             # Download first available image using robust method
             downloaded_paths = []
 
             for img_ref in image_refs:
                 try:
-                    with tempfile.NamedTemporaryFile(
-                        delete=False, suffix=".jpg"
-                    ) as tmp_file:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
                         tmp_path = tmp_file.name
 
                     success = await download_robust_image(img_ref, tmp_path)
@@ -9944,20 +8668,13 @@ class Router:
 
             if not downloaded_paths:
                 self.logger.info("Reply-image VL failed | reason=all_downloads_failed")
-                return BotAction(
-                    content="I couldn’t fetch the image you replied to. Please re-upload it or try again."
-                )
+                return BotAction(content="I couldn’t fetch the image you replied to. Please re-upload it or try again.")
 
             # Use existing VL analysis pipeline
-            prompt = (
-                text_instruction.strip()
-                or "Analyze this image in detail. Describe what you see, including objects, text, and context."
-            )
+            prompt = text_instruction.strip() or "Analyze this image in detail. Describe what you see, including objects, text, and context."
 
             try:
-                vision_result = await see_infer(
-                    image_path=downloaded_paths[0], prompt=prompt
-                )
+                vision_result = await see_infer(image_path=downloaded_paths[0], prompt=prompt)
 
                 if not vision_result or getattr(vision_result, "error", None):
                     raise Exception("Vision analysis returned no results")
@@ -9985,9 +8702,7 @@ class Router:
                 except Exception:
                     max_chars = 420
                 strip_reasoning = bool(self.config.get("VL_STRIP_REASONING", True))
-                final_text = sanitize_vl_reply_text(
-                    raw_text, max_chars=max_chars, strip_reasoning=strip_reasoning
-                )
+                final_text = sanitize_vl_reply_text(raw_text, max_chars=max_chars, strip_reasoning=strip_reasoning)
 
                 if not final_text:
                     final_text = "I can't produce a concise description. Say 'expand' if you want the long version."
@@ -10003,13 +8718,9 @@ class Router:
                         pass
 
         except Exception as e:
-            self.logger.info(
-                f"Reply-image VL failed | reason=provider_error | error={str(e)[:100]}"
-            )
+            self.logger.info(f"Reply-image VL failed | reason=provider_error | error={str(e)[:100]}")
             self.logger.debug(f"Reply-image VL analysis failed: {e}", exc_info=True)
-            return BotAction(
-                content="Vision analysis failed. Please try again or re-upload the image."
-            )
+            return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
 
     async def _handle_reply_image_analysis_with_cards(
         self,
@@ -10035,14 +8746,8 @@ class Router:
 
         if text_instruction.strip():
             # Truncate instruction to fit embed limits
-            instruction_display = (
-                text_instruction[:1020] + "..."
-                if len(text_instruction) > 1020
-                else text_instruction
-            )
-            embed.add_field(
-                name="Instruction", value=f"`{instruction_display}`", inline=False
-            )
+            instruction_display = text_instruction[:1020] + "..." if len(text_instruction) > 1020 else text_instruction
+            embed.add_field(name="Instruction", value=f"`{instruction_display}`", inline=False)
 
         # Post working card
         working_msg = await message.channel.send(embed=embed)
@@ -10053,10 +8758,7 @@ class Router:
             image_url = str(first_item.payload)
 
             # Use existing VL analysis pipeline
-            prompt = (
-                text_instruction.strip()
-                or "Analyze this image in detail. Describe what you see, including objects, text, and context."
-            )
+            prompt = text_instruction.strip() or "Analyze this image in detail. Describe what you see, including objects, text, and context."
 
             # Download and analyze image
             analysis_start = time.time()
@@ -10067,9 +8769,7 @@ class Router:
                 import tempfile
                 from .utils.file_utils import download_file
 
-                with tempfile.NamedTemporaryFile(
-                    delete=False, suffix=".jpg"
-                ) as tmp_file:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
                     tmp_path = tmp_file.name
 
                 success = await download_file(image_url, tmp_path)
@@ -10081,11 +8781,7 @@ class Router:
 
                 processing_time = time.time() - analysis_start
 
-                if (
-                    vision_result
-                    and hasattr(vision_result, "content")
-                    and vision_result.content
-                ):
+                if vision_result and hasattr(vision_result, "content") and vision_result.content:
                     # Success - update to Complete card
                     embed = discord.Embed(
                         title="✅ Vision Analysis Complete",
@@ -10093,9 +8789,7 @@ class Router:
                         timestamp=datetime.now(timezone.utc),
                     )
                     embed.add_field(name="Task", value="Image Analysis", inline=True)
-                    embed.add_field(
-                        name="Images", value=str(len(image_items)), inline=True
-                    )
+                    embed.add_field(name="Images", value=str(len(image_items)), inline=True)
                     embed.add_field(
                         name="Processing Time",
                         value=f"{processing_time:.2f}s",
@@ -10103,11 +8797,7 @@ class Router:
                     )
 
                     if text_instruction.strip():
-                        instruction_display = (
-                            text_instruction[:1020] + "..."
-                            if len(text_instruction) > 1020
-                            else text_instruction
-                        )
+                        instruction_display = text_instruction[:1020] + "..." if len(text_instruction) > 1020 else text_instruction
                         embed.add_field(
                             name="Prompt",
                             value=f"`{instruction_display}`",
@@ -10166,14 +8856,8 @@ class Router:
 
             # Add prompt if provided
             if text_instruction.strip():
-                prompt_display = (
-                    text_instruction[:350] + "..."
-                    if len(text_instruction) > 350
-                    else text_instruction
-                )
-                embed.add_field(
-                    name="Prompt", value=f"`{prompt_display}`", inline=False
-                )
+                prompt_display = text_instruction[:350] + "..." if len(text_instruction) > 350 else text_instruction
+                embed.add_field(name="Prompt", value=f"`{prompt_display}`", inline=False)
 
             # Footer with user info
             if message.author:
@@ -10197,16 +8881,12 @@ class Router:
 
         # If no prompt, check for attachments
         if not prompt:
-            self.logger.info(
-                f"IMG: No prompt, checking {len(message.attachments)} attachments"
-            )
+            self.logger.info(f"IMG: No prompt, checking {len(message.attachments)} attachments")
 
             # Try to read prompt from attachments
             for att in message.attachments:
                 try:
-                    self.logger.info(
-                        f"IMG: Trying attachment {att.filename} ({att.size} bytes)"
-                    )
+                    self.logger.info(f"IMG: Trying attachment {att.filename} ({att.size} bytes)")
                     if att.size > 262144:  # 256KB limit
                         continue
 
@@ -10227,9 +8907,7 @@ class Router:
                         text = text.replace("\x00", "").strip()
                         if text:
                             prompt = text[:2000]  # Limit prompt length
-                            self.logger.info(
-                                f"IMG: Found prompt from {att.filename}: '{prompt[:50]}...'"
-                            )
+                            self.logger.info(f"IMG: Found prompt from {att.filename}: '{prompt[:50]}...'")
                             break
                 except Exception as e:
                     self.logger.error(f"IMG: Error reading {att.filename}: {e}")
@@ -10292,9 +8970,7 @@ class Router:
                 error=True,
             )
 
-    async def _handle_vision_success(
-        self, job, progress_msg, original_msg: Message
-    ) -> BotAction:
+    async def _handle_vision_success(self, job, progress_msg, original_msg: Message) -> BotAction:
         """Handle successful Vision generation with file uploads [PA]"""
         try:
             response = job.response
@@ -10304,9 +8980,7 @@ class Router:
             can_attach_files = False
 
             try:
-                if hasattr(channel, "permissions_for") and hasattr(
-                    original_msg.guild, "me"
-                ):
+                if hasattr(channel, "permissions_for") and hasattr(original_msg.guild, "me"):
                     # Guild channel - check bot permissions
                     perms = channel.permissions_for(original_msg.guild.me)
                     can_attach_files = perms.attach_files and perms.send_messages
@@ -10321,9 +8995,7 @@ class Router:
                     # DM channel - assume we can attach files
                     can_attach_files = True
             except Exception as e:
-                self.logger.warning(
-                    f"Permission check failed, assuming no upload capability: {e}"
-                )
+                self.logger.warning(f"Permission check failed, assuming no upload capability: {e}")
                 can_attach_files = False
 
             # Download and prepare files for Discord upload
@@ -10338,9 +9010,7 @@ class Router:
                         continue
 
                     # Determine file format and name from path with proper MIME type detection
-                    ext = (
-                        artifact_path.suffix.lower().lstrip(".") or "png"
-                    )  # fallback to png
+                    ext = artifact_path.suffix.lower().lstrip(".") or "png"  # fallback to png
                     filename = f"generated_{job.job_id[:8]}_{i}.{ext}"
 
                     if can_attach_files:
@@ -10353,10 +9023,7 @@ class Router:
                             content_type = "image/png"
                         elif header_bytes.startswith(b"\xff\xd8\xff"):
                             content_type = "image/jpeg"
-                        elif (
-                            header_bytes.startswith(b"RIFF")
-                            and b"WEBP" in header_bytes[:12]
-                        ):
+                        elif header_bytes.startswith(b"RIFF") and b"WEBP" in header_bytes[:12]:
                             content_type = "image/webp"
                         elif header_bytes.startswith((b"GIF87a", b"GIF89a")):
                             content_type = "image/gif"
@@ -10392,9 +9059,7 @@ class Router:
 
             # Instrumentation before message assembly [PA]
             try:
-                self.logger.info(
-                    f"🧾 Vision success summary | job={job.job_id[:8]} cost={cost_str} artifacts={len(response.artifacts) if response and response.artifacts else 0}"
-                )
+                self.logger.info(f"🧾 Vision success summary | job={job.job_id[:8]} cost={cost_str} artifacts={len(response.artifacts) if response and response.artifacts else 0}")
             except Exception:
                 pass
 
@@ -10427,25 +9092,13 @@ class Router:
                             else:
                                 upload_meta.append((f.filename, None))
                         except Exception:
-                            upload_meta.append(
-                                (getattr(f, "filename", "unknown"), None)
-                            )
-                    self.logger.info(
-                        "📤 Upload starting | files="
-                        + ", ".join(
-                            [
-                                f"{name} ({size} bytes)" if size is not None else name
-                                for name, size in upload_meta
-                            ]
-                        )
-                    )
+                            upload_meta.append((getattr(f, "filename", "unknown"), None))
+                    self.logger.info("📤 Upload starting | files=" + ", ".join([f"{name} ({size} bytes)" if size is not None else name for name, size in upload_meta]))
                 except Exception:
                     pass
                 try:
                     await original_msg.channel.send(files=files_to_upload)
-                    self.logger.info(
-                        f"📤 Successfully uploaded {len(files_to_upload)} files for job {job.job_id[:8]}"
-                    )
+                    self.logger.info(f"📤 Successfully uploaded {len(files_to_upload)} files for job {job.job_id[:8]}")
                 except discord.Forbidden as e:
                     # 403 Forbidden - likely missing Attach Files permission
                     self.logger.warning(f"Upload failed due to permissions (403): {e}")
@@ -10461,17 +9114,10 @@ class Router:
                 except Exception as e:
                     # Other upload errors
                     self.logger.error(f"File upload failed: {e}")
-                    fallback_content = (
-                        f"✅ **Generation Complete**\n"
-                        f"Job ID: `{job.job_id[:8]}`\n"
-                        f"⚠️ **Upload Issue:** {str(e)[:100]}...\n"
-                        f"Files generated but upload failed. Please try again."
-                    )
+                    fallback_content = f"✅ **Generation Complete**\nJob ID: `{job.job_id[:8]}`\n⚠️ **Upload Issue:** {str(e)[:100]}...\nFiles generated but upload failed. Please try again."
                     await original_msg.channel.send(content=fallback_content)
                 except Exception as perm_e:
-                    self.logger.warning(
-                        f"Permission check failed, attempting upload anyway: {perm_e}"
-                    )
+                    self.logger.warning(f"Permission check failed, attempting upload anyway: {perm_e}")
                     await original_msg.channel.send(files=files_to_upload)
 
             return BotAction(content="Vision generation completed successfully")
@@ -10485,21 +9131,15 @@ class Router:
                     state="FAILED",
                     job=job,
                     user=user,
-                    prompt=job.request.prompt
-                    if hasattr(job, "request") and hasattr(job.request, "prompt")
-                    else "",
+                    prompt=job.request.prompt if hasattr(job, "request") and hasattr(job.request, "prompt") else "",
                     response=None,
                     error_reason=f"Upload failed: {str(e)[:200]}...",
                 )
                 await progress_msg.edit(content=None, embed=failure_embed)
             except Exception as card_e:
-                self.logger.error(
-                    f"❌ Failed to update failure card: {card_e}", exc_info=True
-                )
+                self.logger.error(f"❌ Failed to update failure card: {card_e}", exc_info=True)
                 await progress_msg.edit(content="❌ Vision generation failed")
-            return BotAction(
-                content="Generation completed with upload issues", error=True
-            )
+            return BotAction(content="Generation completed with upload issues", error=True)
 
     async def _handle_vision_failure(self, job, progress_msg) -> BotAction:
         """Handle failed Vision generation with unified card system [REH]"""
@@ -10512,13 +9152,9 @@ class Router:
                 state="FAILED",
                 job=job,
                 user=user,
-                prompt=job.request.prompt
-                if hasattr(job, "request") and hasattr(job.request, "prompt")
-                else "",
+                prompt=job.request.prompt if hasattr(job, "request") and hasattr(job.request, "prompt") else "",
                 response=None,
-                error_reason=job.error.user_message
-                if job.error
-                else "Unknown error occurred",
+                error_reason=job.error.user_message if job.error else "Unknown error occurred",
             )
 
             # Edit the progress message to show failure card
@@ -10555,9 +9191,7 @@ class Router:
                 # Never let metrics failures break the application
                 self.logger.debug(f"Metrics increment failed for {metric_name}: {e}")
 
-    def _detect_direct_vision_triggers(
-        self, content: str, message: Optional[Message] = None
-    ) -> Optional[Dict[str, Any]]:
+    def _detect_direct_vision_triggers(self, content: str, message: Optional[Message] = None) -> Optional[Dict[str, Any]]:
         """
         Direct pattern matching for obvious vision requests to bypass rate-limited intent detection.
         Returns extracted vision parameters if triggers found, None otherwise.
@@ -10568,10 +9202,7 @@ class Router:
         # Early bail-out: if original message has URLs or attachments, never trigger regex T2I
         try:
             if message is not None:
-                has_attachments = (
-                    bool(getattr(message, "attachments", None))
-                    and len(message.attachments) > 0
-                )
+                has_attachments = bool(getattr(message, "attachments", None)) and len(message.attachments) > 0
                 raw_text = message.content or ""
                 has_any_url = bool(re.search(r"https?://\S+", raw_text))
                 if has_attachments or has_any_url:
@@ -10593,9 +9224,7 @@ class Router:
         if message is not None and bot_id:
             try:
                 mentions = getattr(message, "mentions", [])
-                bot_mentioned = any(
-                    getattr(mention, "id", None) == bot_id for mention in mentions
-                )
+                bot_mentioned = any(getattr(mention, "id", None) == bot_id for mention in mentions)
             except Exception:
                 bot_mentioned = False
 
@@ -10643,9 +9272,7 @@ class Router:
                     continue
                 prompt = (m.group(1) or "").strip()
                 # Normalize leading filler like "of a/an"
-                prompt = re.sub(
-                    r"^(?:of\s+)?(?:a\s+|an\s+)?", "", prompt, flags=re.IGNORECASE
-                )
+                prompt = re.sub(r"^(?:of\s+)?(?:a\s+|an\s+)?", "", prompt, flags=re.IGNORECASE)
                 return prompt
             return None
 
@@ -10670,16 +9297,8 @@ class Router:
             final_prompt = " ".join(prompt.split())
 
             # Log the trigger with context
-            context = (
-                "dm"
-                if is_dm
-                else "guild_mentioned"
-                if bot_mentioned
-                else "guild_no_mention"
-            )
-            self.logger.info(
-                f"🎨 Direct vision trigger detected: prompt '{final_prompt[:50]}...' (context: {context})"
-            )
+            context = "dm" if is_dm else "guild_mentioned" if bot_mentioned else "guild_no_mention"
+            self.logger.info(f"🎨 Direct vision trigger detected: prompt '{final_prompt[:50]}...' (context: {context})")
             return {
                 "use_vision": True,
                 "task": "text_to_image",
@@ -10689,9 +9308,7 @@ class Router:
             }
 
         if debug_triggers:
-            self.logger.info(
-                f"VISION_TRIGGER_DEBUG | no_token_matched content='{text[:100]}...'"
-            )
+            self.logger.info(f"VISION_TRIGGER_DEBUG | no_token_matched content='{text[:100]}...'")
         return None
 
     def _vision_available(self) -> bool:
@@ -10707,9 +9324,7 @@ class Router:
 
         # Check orchestrator state
         orchestrator_exists = self._vision_orchestrator is not None
-        orchestrator_ready = orchestrator_exists and getattr(
-            self._vision_orchestrator, "ready", False
-        )
+        orchestrator_ready = orchestrator_exists and getattr(self._vision_orchestrator, "ready", False)
 
         # Debug logging (controlled by env var) [PA]
         vision_debug = os.getenv("VISION_ORCH_DEBUG", "0").lower() in (
@@ -10747,16 +9362,10 @@ class Router:
             )
 
             if hasattr(job, "error_message") and job.error_message:
-                reason = (
-                    job.error_message[:512] + "..."
-                    if len(job.error_message) > 512
-                    else job.error_message
-                )
+                reason = job.error_message[:512] + "..." if len(job.error_message) > 512 else job.error_message
                 embed.add_field(name="Reason", value=reason, inline=False)
 
-            footer_text = (
-                f"Requested by {user.display_name} • Session: {job.job_id[:8]}"
-            )
+            footer_text = f"Requested by {user.display_name} • Session: {job.job_id[:8]}"
             embed.set_footer(text=footer_text[:2048])
             return embed
 
@@ -10769,11 +9378,7 @@ class Router:
         )
 
         # Task field (always present)
-        task_name = (
-            job.request.task.value.replace("_", " ").title()
-            if hasattr(job.request, "task")
-            else "Vision Task"
-        )
+        task_name = job.request.task.value.replace("_", " ").title() if hasattr(job.request, "task") else "Vision Task"
         embed.add_field(name="Task", value=task_name, inline=True)
 
         if state == "WORKING":
@@ -10789,9 +9394,7 @@ class Router:
 
         elif state == "COMPLETED" and response:
             # Full completion card with all details
-            embed.add_field(
-                name="Provider", value=response.provider.value.title(), inline=True
-            )
+            embed.add_field(name="Provider", value=response.provider.value.title(), inline=True)
             embed.add_field(
                 name="Processing Time",
                 value=f"{response.processing_time_seconds:.1f}s",
@@ -10812,15 +9415,11 @@ class Router:
             if response.artifacts:
                 for i, artifact in enumerate(response.artifacts):
                     if hasattr(artifact, "filename") and artifact.filename:
-                        result_descriptions.append(
-                            f"• [{artifact.filename}](attachment://{artifact.filename})"
-                        )
+                        result_descriptions.append(f"• [{artifact.filename}](attachment://{artifact.filename})")
                     else:
                         result_descriptions.append(f"• Image {i + 1}")
 
-            results_text = (
-                "\n".join(result_descriptions) if result_descriptions else "No files"
-            )
+            results_text = "\n".join(result_descriptions) if result_descriptions else "No files"
             if len(results_text) > 1024:
                 results_text = results_text[:1021] + "..."
             embed.add_field(name="Results", value=results_text, inline=False)
@@ -10847,12 +9446,7 @@ class Router:
 
         # Footer with user and session info
         footer_text = f"Requested by {user.display_name}"
-        if (
-            state == "COMPLETED"
-            and response
-            and hasattr(response, "model_name")
-            and response.model_name
-        ):
+        if state == "COMPLETED" and response and hasattr(response, "model_name") and response.model_name:
             footer_text += f" • Model: {response.model_name}"
         else:
             footer_text += " • Model: —"
@@ -10870,9 +9464,7 @@ class Router:
             total_length += len(embed.footer.text if embed.footer else "")
 
             if total_length > 1500:  # Hard cap for compact working card
-                self.logger.warning(
-                    f"⚠️ Working embed exceeds 1500 chars ({total_length}), truncating"
-                )
+                self.logger.warning(f"⚠️ Working embed exceeds 1500 chars ({total_length}), truncating")
                 # Truncate prompt further if needed
                 for field in embed.fields:
                     if field.name == "Prompt" and len(field.value) > 100:

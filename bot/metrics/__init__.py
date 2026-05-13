@@ -34,12 +34,8 @@ _degraded_reasons = []
 @runtime_checkable
 class Metrics(Protocol):
     def inc(self, name: str, value: int = 1, labels: Optional[dict] = None) -> None: ...
-    def increment(
-        self, name: str, labels: Optional[dict] = None, value: int = 1
-    ) -> None: ...
-    def observe(
-        self, name: str, value: float, labels: Optional[dict] = None
-    ) -> None: ...
+    def increment(self, name: str, labels: Optional[dict] = None, value: int = 1) -> None: ...
+    def observe(self, name: str, value: float, labels: Optional[dict] = None) -> None: ...
     def gauge(self, name: str, value: float, labels: Optional[dict] = None) -> None: ...
     def timer(self, name: str, labels: Optional[dict] = None): ...
 
@@ -78,13 +74,9 @@ def get_metrics() -> Metrics:
 
         # Get optional configuration
         prometheus_port = int(os.getenv("PROMETHEUS_PORT", "8001"))
-        http_server_enabled = (
-            os.getenv("PROMETHEUS_HTTP_SERVER", "true").lower() == "true"
-        )
+        http_server_enabled = os.getenv("PROMETHEUS_HTTP_SERVER", "true").lower() == "true"
 
-        metrics_instance = PrometheusMetrics(
-            port=prometheus_port, enable_http_server=http_server_enabled
-        )
+        metrics_instance = PrometheusMetrics(port=prometheus_port, enable_http_server=http_server_enabled)
 
         logger.info(
             "📊 Prometheus metrics initialized successfully",

@@ -42,9 +42,7 @@ logger = get_logger(__name__)
 # Resource caps [Phase 12-16]
 _VL_MAX_IMAGES = _low_resource_int("VL_MAX_IMAGES", 5, 2)
 _VL_MAX_IMAGE_DIMENSION = _low_resource_int("VL_MAX_IMAGE_DIMENSION", 2048, 1024)
-_VISION_LOW_RESOURCE_RETRIES = _low_resource_int(
-    "VISION_LOW_RESOURCE_RETRIES", 3, 2
-)
+_VISION_LOW_RESOURCE_RETRIES = _low_resource_int("VISION_LOW_RESOURCE_RETRIES", 3, 2)
 
 
 class VisionOrchestrator:
@@ -86,9 +84,7 @@ class VisionOrchestrator:
         self._cleanup_task: Optional[asyncio.Task] = None
         self._background_tasks_started = False
 
-        self.logger.info(
-            f"Vision Orchestrator initialized - max_concurrent: {self.max_concurrent_jobs}, max_per_user: {self.max_user_concurrent_jobs}"
-        )
+        self.logger.info(f"Vision Orchestrator initialized - max_concurrent: {self.max_concurrent_jobs}, max_per_user: {self.max_user_concurrent_jobs}")
 
     async def start(self) -> None:
         """Start the orchestrator and verify providers are available [CA][REH]"""
@@ -111,11 +107,7 @@ class VisionOrchestrator:
                     try:
                         caps = plugin.capabilities()
                         modes = caps.get("modes", []) if isinstance(caps, dict) else []
-                        if (
-                            VisionTask
-                            and hasattr(VisionTask, "TEXT_TO_IMAGE")
-                            and (VisionTask.TEXT_TO_IMAGE in modes)
-                        ):
+                        if VisionTask and hasattr(VisionTask, "TEXT_TO_IMAGE") and (VisionTask.TEXT_TO_IMAGE in modes):
                             available_providers.append(provider_name)
                     except Exception:
                         continue
@@ -128,17 +120,11 @@ class VisionOrchestrator:
                     self.reason = "creds_missing"
                 else:
                     self.reason = "no_providers"
-                self.logger.error(
-                    "VisionOrchestrator: no T2I providers configured (VISION_API_KEY missing)"
-                    if not api_key
-                    else "VisionOrchestrator: no T2I providers configured"
-                )
+                self.logger.error("VisionOrchestrator: no T2I providers configured (VISION_API_KEY missing)" if not api_key else "VisionOrchestrator: no T2I providers configured")
                 self.ready = False
             else:
                 self.reason = "ok"
-                self.logger.info(
-                    f"VisionOrchestrator: providers=[{', '.join(available_providers)}] ready"
-                )
+                self.logger.info(f"VisionOrchestrator: providers=[{', '.join(available_providers)}] ready")
                 self.ready = True
 
             # Start background tasks
@@ -146,9 +132,7 @@ class VisionOrchestrator:
             self._started = True
 
         except Exception as e:
-            self.logger.error(
-                f"❌ Failed to start Vision Orchestrator: {e}", exc_info=True
-            )
+            self.logger.error(f"❌ Failed to start Vision Orchestrator: {e}", exc_info=True)
             self.ready = False
             self.reason = "init_error"
             raise
@@ -171,9 +155,7 @@ class VisionOrchestrator:
         Raises:
             VisionError: On validation, safety, or quota failures
         """
-        self.logger.info(
-            f"Submitting vision job - task: {request.task.value}, user_id: {request.user_id}, estimated_cost: {request.estimated_cost}"
-        )
+        self.logger.info(f"Submitting vision job - task: {request.task.value}, user_id: {request.user_id}, estimated_cost: {request.estimated_cost}")
 
         # Generate unique job ID
         job_id = str(uuid.uuid4())
@@ -216,9 +198,7 @@ class VisionOrchestrator:
             job.request.estimated_cost = request.estimated_cost
 
             # Reserve budget (will be adjusted when job completes)
-            await self.budget_manager.reserve_budget(
-                request.user_id, estimated_cost_money
-            )
+            await self.budget_manager.reserve_budget(request.user_id, estimated_cost_money)
 
             # Persist initial job state
             await self.job_store.save_job(job)
@@ -232,28 +212,20 @@ class VisionOrchestrator:
             self.active_jobs[job_id] = task
 
             # Update user concurrency tracking
-            self.user_job_counts[request.user_id] = (
-                self.user_job_counts.get(request.user_id, 0) + 1
-            )
+            self.user_job_counts[request.user_id] = self.user_job_counts.get(request.user_id, 0) + 1
 
-            self.logger.info(
-                f"Vision job queued successfully - job_id: {job_id[:8]}, user_id: {request.user_id}, estimated_cost: {estimated_cost_money}"
-            )
+            self.logger.info(f"Vision job queued successfully - job_id: {job_id[:8]}, user_id: {request.user_id}, estimated_cost: {estimated_cost_money}")
 
             return job
 
         except VisionError as e:
             # Log and re-raise vision errors
-            self.logger.warning(
-                f"Vision job submission failed - error_type: {e.error_type.value}, message: {e.message}, user_message: {e.user_message}"
-            )
+            self.logger.warning(f"Vision job submission failed - error_type: {e.error_type.value}, message: {e.message}, user_message: {e.user_message}")
             raise e
 
         except Exception as e:
             # Wrap unexpected errors
-            self.logger.error(
-                f"Unexpected error submitting vision job: {str(e)}", exc_info=True
-            )
+            self.logger.error(f"Unexpected error submitting vision job: {str(e)}", exc_info=True)
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Unexpected error: {str(e)}",
@@ -400,9 +372,7 @@ class VisionOrchestrator:
 
             # Transition to running state
             job.transition_to(VisionJobState.RUNNING, "Starting generation")
-            job.provider_assigned = (
-                job.request.preferred_provider
-            )  # May be overridden by gateway
+            job.provider_assigned = job.request.preferred_provider  # May be overridden by gateway
             await self.job_store.save_job(job)
 
             # Execute generation via gateway
@@ -417,15 +387,11 @@ class VisionOrchestrator:
 
                 # CRITICAL FIX: Update job ID if provider returned different ID
                 if response.job_id and response.job_id != job_id:
-                    self.logger.info(
-                        f"🔄 Updating job ID mapping - original: {job_id[:8]}, provider: {response.job_id}"
-                    )
+                    self.logger.info(f"🔄 Updating job ID mapping - original: {job_id[:8]}, provider: {response.job_id}")
                     # Update job store with provider job ID for Router to find
                     job.provider_job_id = response.job_id
 
-                job.transition_to(
-                    VisionJobState.COMPLETED, "Generation completed successfully"
-                )
+                job.transition_to(VisionJobState.COMPLETED, "Generation completed successfully")
                 job.update_progress(100, "Complete")
 
                 # Determine actual cost via usage parser chain when available [REH]
@@ -447,8 +413,7 @@ class VisionOrchestrator:
                             fallback = self.config.get("VISION_BUDGET_PARSE_FALLBACK_COST_USD", 0.02)
                             actual_cost_money = Money(f"{fallback}")
                             self.logger.warning(
-                                "vision:cost_zero_on_paid provider=%s "
-                                "fallback_cost=%.4f",
+                                "vision:cost_zero_on_paid provider=%s fallback_cost=%.4f",
                                 response.provider,
                                 fallback,
                             )
@@ -457,9 +422,7 @@ class VisionOrchestrator:
                             self.usage_parser.validate_usage_cost(
                                 provider=response.provider,
                                 task=job.request.task,
-                                estimated_cost=self._ensure_money(
-                                    job.request.estimated_cost
-                                ),
+                                estimated_cost=self._ensure_money(job.request.estimated_cost),
                                 actual_cost=actual_cost_money,
                             )
                         except Exception:
@@ -467,13 +430,10 @@ class VisionOrchestrator:
                     except Exception as parse_exc:
                         # Usage parser failed on a completed job — charge
                         # conservatively using the configured fallback cost.
-                        fallback = self.config.get(
-                            "VISION_BUDGET_PARSE_FALLBACK_COST_USD", 0.02
-                        )
+                        fallback = self.config.get("VISION_BUDGET_PARSE_FALLBACK_COST_USD", 0.02)
                         actual_cost_money = Money(f"{fallback}")
                         self.logger.warning(
-                            "vision:cost_parse_failed provider=%s error=%s "
-                            "fallback_cost=%.4f",
+                            "vision:cost_parse_failed provider=%s error=%s fallback_cost=%.4f",
                             response.provider,
                             type(parse_exc).__name__,
                             fallback,
@@ -485,8 +445,7 @@ class VisionOrchestrator:
                         fallback = self.config.get("VISION_BUDGET_PARSE_FALLBACK_COST_USD", 0.02)
                         actual_cost_money = Money(f"{fallback}")
                         self.logger.warning(
-                            "vision:cost_zero_no_parser provider=unknown "
-                            "fallback_cost=%.4f",
+                            "vision:cost_zero_no_parser provider=unknown fallback_cost=%.4f",
                             fallback,
                         )
 
@@ -507,9 +466,7 @@ class VisionOrchestrator:
                     task=str(job.request.task),
                 )
 
-                self.logger.info(
-                    f"Job completed successfully - job_id: {job_id[:8]}, provider: {response.provider.value}, actual_cost: {response.actual_cost}, processing_time: {response.processing_time_seconds}s"
-                )
+                self.logger.info(f"Job completed successfully - job_id: {job_id[:8]}, provider: {response.provider.value}, actual_cost: {response.actual_cost}, processing_time: {response.processing_time_seconds}s")
             else:
                 # Provider returned failure
                 job.error = response.error
@@ -520,20 +477,14 @@ class VisionOrchestrator:
                 )
 
                 # Release reserved budget on failure
-                await self.budget_manager.release_reservation(
-                    job.request.user_id, self._ensure_money(job.request.estimated_cost)
-                )
+                await self.budget_manager.release_reservation(job.request.user_id, self._ensure_money(job.request.estimated_cost))
 
-                self.logger.error(
-                    f"Job failed at provider - job_id: {job_id[:8]}, error: {response.error.message if response.error else 'Unknown error'}"
-                )
+                self.logger.error(f"Job failed at provider - job_id: {job_id[:8]}, error: {response.error.message if response.error else 'Unknown error'}")
 
         except asyncio.CancelledError:
             # Job was cancelled
             job.transition_to(VisionJobState.CANCELLED, "Job cancelled")
-            await self.budget_manager.release_reservation(
-                job.request.user_id, self._ensure_money(job.request.estimated_cost)
-            )
+            await self.budget_manager.release_reservation(job.request.user_id, self._ensure_money(job.request.estimated_cost))
             self.logger.info(f"Job cancelled: {job_id[:8]}")
 
         except VisionError as e:
@@ -541,13 +492,9 @@ class VisionOrchestrator:
             job.error = e
             job.transition_to(VisionJobState.FAILED, f"Error: {e.message}")
 
-            await self.budget_manager.release_reservation(
-                job.request.user_id, self._ensure_money(job.request.estimated_cost)
-            )
+            await self.budget_manager.release_reservation(job.request.user_id, self._ensure_money(job.request.estimated_cost))
 
-            self.logger.error(
-                f"Job failed with VisionError - job_id: {job_id[:8]}, error_type: {e.error_type.value}, message: {e.message}"
-            )
+            self.logger.error(f"Job failed with VisionError - job_id: {job_id[:8]}, error_type: {e.error_type.value}, message: {e.message}")
 
         except Exception as e:
             # Handle unexpected errors
@@ -559,9 +506,7 @@ class VisionOrchestrator:
             job.error = error
             job.transition_to(VisionJobState.FAILED, f"Unexpected error: {str(e)}")
 
-            await self.budget_manager.release_reservation(
-                job.request.user_id, self._ensure_money(job.request.estimated_cost)
-            )
+            await self.budget_manager.release_reservation(job.request.user_id, self._ensure_money(job.request.estimated_cost))
 
             self.logger.error(
                 f"Job failed with unexpected error - job_id: {job_id[:8]}, error: {str(e)}",
@@ -579,9 +524,7 @@ class VisionOrchestrator:
             # Decrement user job count
             user_id = job.request.user_id
             if user_id in self.user_job_counts:
-                self.user_job_counts[user_id] = max(
-                    0, self.user_job_counts[user_id] - 1
-                )
+                self.user_job_counts[user_id] = max(0, self.user_job_counts[user_id] - 1)
                 if self.user_job_counts[user_id] == 0:
                     del self.user_job_counts[user_id]
 
@@ -633,19 +576,13 @@ class VisionOrchestrator:
         for job_id in active_job_ids:
             try:
                 job = await self.job_store.load_job(job_id)
-                if (
-                    job
-                    and not job.is_terminal_state()
-                    and job.is_expired(timeout_seconds)
-                ):
+                if job and not job.is_terminal_state() and job.is_expired(timeout_seconds):
                     # Cancel expired job
                     if job_id in self.active_jobs:
                         self.active_jobs[job_id].cancel()
 
                     # Mark as expired
-                    job.transition_to(
-                        VisionJobState.EXPIRED, f"Job expired after {timeout_seconds}s"
-                    )
+                    job.transition_to(VisionJobState.EXPIRED, f"Job expired after {timeout_seconds}s")
                     await self.job_store.save_job(job)
 
                     # Release budget reservation
@@ -715,11 +652,7 @@ class VisionOrchestrator:
                 # Only await real awaitables; tests may inject mocks here [REH]
                 awaitables = []
                 for t in self.active_jobs.values():
-                    if (
-                        asyncio.isfuture(t)
-                        or isinstance(t, asyncio.Task)
-                        or inspect.isawaitable(t)
-                    ):
+                    if asyncio.isfuture(t) or isinstance(t, asyncio.Task) or inspect.isawaitable(t):
                         awaitables.append(t)
                 if awaitables:
                     await asyncio.wait_for(

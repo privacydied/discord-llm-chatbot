@@ -22,9 +22,7 @@ from utils.waveform import compute_waveform_b64
 
 IS_VOICE_MESSAGE_FLAG = 8192  # Discord message flags: IS_VOICE_MESSAGE
 USER_AGENT = "DiscordVoicePublisher/1.0"
-VOICE_MSG_FORBIDDEN_CODE = (
-    50173  # Discord API error code when voice messages are disallowed in channel
-)
+VOICE_MSG_FORBIDDEN_CODE = 50173  # Discord API error code when voice messages are disallowed in channel
 BLOCK_TTL_SECONDS = 15 * 60  # 15 minutes [PA]
 
 
@@ -62,13 +60,9 @@ class VoiceMessagePublisher:
         ffprobe_path = shutil.which("ffprobe")
         self._tools_ok = bool(ffmpeg_path) and bool(ffprobe_path)
         if not self._tools_ok:
-            self.logger.warning(
-                "voice.native.tools_missing | ffmpeg/ffprobe not found; disabling native voice for this run"
-            )
+            self.logger.warning("voice.native.tools_missing | ffmpeg/ffprobe not found; disabling native voice for this run")
         else:
-            self.logger.debug(
-                f"voice.native.tools_ok | ffmpeg={ffmpeg_path} ffprobe={ffprobe_path}"
-            )
+            self.logger.debug(f"voice.native.tools_ok | ffmpeg={ffmpeg_path} ffprobe={ffprobe_path}")
         return self._tools_ok
 
     def _is_blocked(self, channel_id: int) -> bool:
@@ -102,9 +96,7 @@ class VoiceMessagePublisher:
         }
 
         async def _do():
-            async with session.post(
-                url, headers=headers, json=payload, timeout=self._attachments_timeout_s
-            ) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=self._attachments_timeout_s) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
                     err = aiohttp.ClientResponseError(
@@ -194,9 +186,7 @@ class VoiceMessagePublisher:
         }
 
         async def _do():
-            async with session.post(
-                url, headers=headers, json=payload, timeout=self._message_post_timeout_s
-            ) as resp:
+            async with session.post(url, headers=headers, json=payload, timeout=self._message_post_timeout_s) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
                     err = aiohttp.ClientResponseError(
@@ -234,9 +224,7 @@ class VoiceMessagePublisher:
         try:
             # Global fallback (0.0 or missing -> ignore)
             global_to = float(cfg.get("VOICE_PUBLISHER_TIMEOUT_S", 0.0) or 0.0)
-            att_to = float(
-                cfg.get("VOICE_PUBLISHER_ATTACHMENTS_CREATE_TIMEOUT_S", 30.0)
-            )
+            att_to = float(cfg.get("VOICE_PUBLISHER_ATTACHMENTS_CREATE_TIMEOUT_S", 30.0))
             upl_to = float(cfg.get("VOICE_PUBLISHER_UPLOAD_TIMEOUT_S", 60.0))
             msg_to = float(cfg.get("VOICE_PUBLISHER_MESSAGE_POST_TIMEOUT_S", 30.0))
             if global_to > 0:
@@ -308,9 +296,7 @@ class VoiceMessagePublisher:
                 bitrate = str(cfg.get("VOICE_PUBLISHER_OPUS_BITRATE", "64k") or "64k")
                 vbr = str(cfg.get("VOICE_PUBLISHER_OPUS_VBR", "on") or "on")
                 comp = int(cfg.get("VOICE_PUBLISHER_OPUS_COMP_LEVEL", 10) or 10)
-                ogg_p = await transcode_to_ogg_opus(
-                    audio_p, bitrate=bitrate, vbr=vbr, compression_level=comp
-                )
+                ogg_p = await transcode_to_ogg_opus(audio_p, bitrate=bitrate, vbr=vbr, compression_level=comp)
                 ogg_bytes = ogg_p.read_bytes()
                 waveform_b64 = compute_waveform_b64(audio_p)
             # Prefer probing duration from OGG (matches reference behavior)
@@ -326,15 +312,11 @@ class VoiceMessagePublisher:
             async with aiohttp.ClientSession(raise_for_status=False) as session:
                 # Use a standard display filename per reference script
                 filename_display = "voice-message.ogg"
-                meta = await self._attachments_create(
-                    session, channel_id, token, filename_display, len(ogg_bytes)
-                )
+                meta = await self._attachments_create(session, channel_id, token, filename_display, len(ogg_bytes))
                 attach = (meta or {}).get("attachments", [{}])[0]
                 upload_url = attach.get("upload_url")
                 # API typically returns 'upload_filename'; be tolerant if 'uploaded_filename' appears.
-                upload_filename = attach.get("upload_filename") or attach.get(
-                    "uploaded_filename"
-                )
+                upload_filename = attach.get("upload_filename") or attach.get("uploaded_filename")
                 if not upload_url or not upload_filename:
                     raise RuntimeError(f"attachments.create missing fields: {attach}")
 
@@ -351,11 +333,7 @@ class VoiceMessagePublisher:
 
             # 3) Fetch created message (optional) and return success
             try:
-                created_id = (
-                    int(msg_json.get("id"))
-                    if isinstance(msg_json.get("id"), (str, int))
-                    else None
-                )
+                created_id = int(msg_json.get("id")) if isinstance(msg_json.get("id"), (str, int)) else None
                 created_msg: Optional[discord.Message] = None
                 if created_id:
                     created_msg = await message.channel.fetch_message(created_id)
@@ -388,16 +366,12 @@ class VoiceMessagePublisher:
                 msg_text = getattr(e, "message", "") or ""
                 try:
                     data = json.loads(msg_text)
-                    if int(
-                        data.get("code", 0)
-                    ) == VOICE_MSG_FORBIDDEN_CODE and isinstance(channel_id, int):
+                    if int(data.get("code", 0)) == VOICE_MSG_FORBIDDEN_CODE and isinstance(channel_id, int):
                         self._block(channel_id)
                         blocked = True
                 except Exception:
                     # Fallback string check
-                    if str(VOICE_MSG_FORBIDDEN_CODE) in msg_text and isinstance(
-                        channel_id, int
-                    ):
+                    if str(VOICE_MSG_FORBIDDEN_CODE) in msg_text and isinstance(channel_id, int):
                         self._block(channel_id)
                         blocked = True
 
