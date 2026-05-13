@@ -3,27 +3,48 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**Production-ready discord bot** that blends chat, search/RAG, and multimodal (vision, OCR, TTS/STT). Built on `discord.py 2.x` with robust routing, retries, structured logs, and optional Prometheus metrics.
+**Production-ready Discord bot** that blends chat, search/RAG, and multimodal (vision, OCR, TTS/STT). Built on `discord.py 2.x` with robust routing, retries, structured logs, and optional Prometheus metrics.
 
-> Text via OpenAI/OpenRouter, **NVIDIA NIM**, or local Ollama. RAG via ChromaDB. Vision via Together/Novita. STT via faster-whisper/whispercpp. OCR via PyMuPDF + Tesseract.
+> Text via OpenAI/OpenRouter, **NVIDIA NIM**, or local Ollama. RAG via ChromaDB. Vision via Together/Novita. STT via faster-whisper/whispercpp. TTS via Kokoro. OCR via PyMuPDF + Tesseract. Server Archive via SQLite. Admin alerts, config hot-reload, voice publishing, and syndication-based X/Twitter text extraction.
 
 ---
-
 
 ## ✨ Features
 
 * **Chat & Tools**
   * General chat, search, screenshots, memory, admin/config.
-  * Hybrid RAG (vector + keyword) over a local KB.
-* **Media**
-  * Video → **STT** (yt-dlp + faster-whisper), PDF/Images → **OCR**.
-  * X/Twitter URL extraction with smart routing (VL vs STT vs web text).
-* **Vision**
-  * Image/video generation with provider budgeting, retries, and artifacts.
+  * Hybrid RAG (vector + keyword) over a local ChromaDB KB.
+  * Hot-reload of config from `.env` file changes.
+  * Admin alert sessions in DMs for interactive configuration.
+  * Janitor for cache and log cleanup.
+* **Multimodal Input**
+  * Sequential multimodal processing: extracts ALL attachments, URLs, and embeds in message order.
+  * **Images** → Vision/VL models (see.py) for evidence extraction.
+  * **Video/Audio** → STT pipeline (yt-dlp + ffmpeg + faster-whisper/whispercpp, or YouTube transcript-first).
+  * **PDFs** → PyMuPDF text extraction + Tesseract OCR fallback.
+  * **Documents** → docx/txt ingestion.
+  * **URLs** → Web extraction, X/Twitter syndication (fxtwitter/vxtwitter), screenshot fallback.
+  * **X/Twitter** → Thread unrolling of author self-replies, syndication probes with image→VL routing.
+* **Vision Generation**
+  * Image & video generation with provider budgeting, safety filtering, job management, artifact caching, and cost tracking.
+  * Provider ladder: Together.ai → Novita.ai.
+  * Slash commands: `/image`, `/imgedit`, `/video`, `/vidref`.
+* **Voice & Speech**
+  * **TTS** via Kokoro (local, G2P-based) with phoneme vocabulary loading, IPA-based assets, and engine abstraction.
+  * **STT** orchestrator with multi-provider support (local whisper cascade, caching, confidence thresholds).
+  * **Native voice publishing** for Discord voice channels.
+* **Memory & Archival**
+  * Persistent user/server profiles with auto-save.
+  * Curated memory service with semantic memory (explicit + inferred).
+  * Memory distiller: background summarization of archived conversations.
+  * Server Archive: SQLite-backed message archival with distillation and search.
 * **Ops**
-  * Dual sinks: pretty console + **JSONL** (`logs/bot.jsonl`) with secret scrubbing.
-  * Graceful shutdown, backoff/retries, health logs.
-  * **Prometheus** (optional) for metrics.
+  * Dual-sink logging: Rich console + JSONL (`logs/bot.jsonl`) with secret scrubbing.
+  * Graceful shutdown, backoff/retries, health monitoring, SLO tracking.
+  * **Prometheus** (optional) for metrics — Discord retries, gate counters, vision/X routing, syndication tiers.
+  * Public output safety: sanitizes all send/edit boundaries.
+  * Per-user message queues with dedup guards and concurrency locks.
+  * Resource monitoring (CPU, RAM, low-resource mode).
 
 ---
 
@@ -31,69 +52,93 @@
 
 ```mermaid
 flowchart TD
-    R["run.py"] --> M["bot.main"]
-    M --> B["LLMBot (discord.py)"]
-    B --> SH["setup_hook()"]
+    %% ── Entry & Bootstrap ──────────────────────────────────────
+    RUNPY["run.py"] --> MAIN["bot.main (async entry)"]
+    MAIN --> CLI["CLI args: --version / --config-check / --debug"]
+    MAIN --> CFG["config: load_config() + hot-reload watcher"]
+    MAIN --> PREFLIGHT["pre-flight checks (env, Playwright, ports)"]
+    MAIN --> BOT["LLMBot (discord.py Bot)"]
 
-    SH --> COGS["Command Cogs"]
-    SH --> ROUTER["Router (orchestration)"]
-    SH --> VO["VisionOrchestrator"]
-    SH --> TTS["TTSManager"]
-    SH --> RAGINIT["RAG init (optional eager load)"]
-    SH --> MET["Metrics: Prometheus or Noop"]
+    %% ── Setup Hook ─────────────────────────────────────────────
+    BOT --> SH["setup_hook() — asynchronous bootstrap"]
+    SH --> TSHIM["torch compat shim (deferred)"]
+    SH --> SANITY["public-output safety hooks (monkey-patch send/edit)"]
+    SH --> MP["MessageProcessor (per-user queue + dedup)"]
+    SH --> METRICS["Metrics: PrometheusMetrics or NoopMetrics"]
+    SH --> CM["ContextManager + EnhancedContextManager"]
+    SH --> COGS["Command Cogs (12+ cogs loaded dynamically)"]
+    SH --> ROUTER["Router (multimodal dispatch)"]
+    SH --> VO["VisionOrchestrator (eager start)"]
+    SH --> TTS["TTSManager (Kokoro engine)"]
+    SH --> RAG["RAG (optional eager ChromaDB load)"]
 
-    DG["Discord Gateway Events"] --> Q["Per-user message queue"]
-    Q --> RD["router.dispatch_message()"]
-    RD --> CMD["Command delegation"]
-    CMD --> COGS
+    %% ── Message Flow ───────────────────────────────────────────
+    DG["Discord Gateway Events (on_message)"] --> MP
 
-    RD --> MM["Multimodal collector + ResultAggregator"]
-    MM --> IMG["Image inputs"]
-    MM --> VID["Video/Audio URLs"]
-    MM --> URL["General URLs (incl. X/Twitter)"]
-    MM --> DOC["PDF/Docs"]
+    subgraph MessageProcessor["MessageProcessor (per-user orchestration)"]
+        DEDUP["dedup guard (OrderedDict, FIFO, 1000 max)"]
+        ARCHIVE["best-effort server-archive enqueue"]
+        ALERT["admin alert DM suppression gate"]
+        QUEUE["per-user asyncio.Queue"]
+        WORKER["_process_user_messages (one-at-a-time, 300s idle)"]
+        DEDUP --> ARCHIVE --> ALERT --> QUEUE --> WORKER
+    end
 
-    IMG --> SEE["see.py"]
-    SEE --> VLB["VL backend ladder (OpenRouter)"]
-    VLB --> EVID["Evidence text"]
+    WORKER --> DISPATCH["LLMBot._process_single_message(message)"]
+    DISPATCH --> GATE["gating: prefiler gates (DMs, threads, ignore lists)"]
+    GATE --> RENTRY["fast-path: bot replies to self (re-entry guard)"]
+    RENTRY --> CMDCHECK["command delegation via command_parser"]
+    CMDCHECK --> COGS
+    RENTRY --> MM["Multimodal collector (collect_input_items)"]
 
-    URL --> XS["X syndication + article hydration + media detection"]
-    URL --> WEB["Web extraction service"]
-    XS --> EVID
-    WEB --> EVID
+    %% ── Component Subgraphs ────────────────────────────────────
+    subgraph InputItems["Sequential Multimodal Input"]
+        II["InputItem(source=attachment|url|embed)"]
+        II_AT["🖼 Attachments (image, audio/video, PDF, txt/docx)"]
+        II_URL["🔗 URLs (general, video, X/Twitter, screenshot)"]
+        II_EMBED["📎 Discord embeds (auto-resolved)"]
+    end
 
-    DOC --> PDF["PyMuPDF parsing"]
-    DOC --> OCR["Tesseract OCR (optional)"]
-    PDF --> EVID
-    OCR --> EVID
+    MM --> II_AT
+    MM --> II_URL
+    MM --> II_EMBED
 
-    VID --> YTF["YouTube transcript-first resolver"]
-    YTF -->|hit| EVID
-    YTF -->|miss| YTDLP["video_ingest: yt-dlp"]
-    YTDLP --> FFMPEG["python-ffmpeg preprocess"]
-    FFMPEG --> WH["faster-whisper / whispercpp"]
-    WH --> EVID
+    %% ── Handlers ───────────────────────────────────────────────
+    II_AT --> ATT_CLASS["attachment_classifier → bucket: image/pdf/doc/media"]
+    ATT_CLASS --> HANDLE_IMG["handle_image → see.py"]
+    ATT_CLASS --> HANDLE_STT["handle_audio_video_video_url → STT pipeline"]
+    ATT_CLASS --> HANDLE_DOC["handle_document → document_ingest"]
 
-    EVID --> TF["_invoke_text_flow()"]
-    TF --> RAG["Hybrid RAG search (ChromaDB)"]
-    TF --> CTX["Contextual brain + memory context"]
-    RAG --> BRAIN["brain_infer()"]
-    CTX --> BRAIN
-    BRAIN --> AIR["ai_backend router"]
-    AIR --> OA["OpenAI/OpenRouter text ladder"]
-    AIR --> OL["Ollama"]
-    OA --> ACT["BotAction"]
-    OL --> ACT
+    II_URL --> URL_CLASS["url_classifier → classified: twitter/video/general"]
+    URL_CLASS --> X_ROUTE["x_routing: syndication probe → oembed → raw fetch"]
+    X_ROUTE --> X_UNROLL["x_thread_unroll: author self-reply chain"]
+    URL_CLASS --> VIDEO_ROUTE["video_ingest → yt-dlp → ffmpeg → whisper"]
+    URL_CLASS --> WEB_ROUTE["web_extractor (Playwright/curl)"]
+    URL_CLASS --> SS_ROUTE["screenshot → playwright_remote (PW_SERVER_URL)"]
 
-    ACT --> SEND["_execute_action()"]
-    SEND --> VOICE["TTS + optional native voice publish"]
-    SEND --> OUT["Discord reply/edit"]
+    %% ── Evidence Assembly ──────────────────────────────────────
+    HANDLE_IMG --> EVID["EvidenceBundle (aggregated perception text)"]
+    HANDLE_STT --> EVID
+    X_ROUTE --> EVID
+    X_UNROLL --> EVID
+    WEB_ROUTE --> EVID
+    SS_ROUTE --> EVID
+    HANDLE_DOC --> EVID
 
-    B --> LOG["Rich console + JSONL logging"]
-    ROUTER --> LOG
-    B --> MET
+    subgraph STTPipeline["STT Pipeline (multi-provider)"]
+        YTF["YouTube transcript-first (fast path)"]
+        YTDLP["yt-dlp download"]
+        FFMPEG["ffmpeg preprocess (speedup, trim)"]
+        STT_ORCH["stt_orchestrator (single / cascade)"]
+        LWHISPER["LocalWhisper (faster-whisper)"]
+        CACHED_STT["single-flight cache (TTL)"]
+        YTF -->|hit| CACHED_STT
+        YTF -->|miss| YTDLP --> FFMPEG --> STT_ORCH --> LWHISPER --> CACHED_STT
+        CACHED_STT --> EVID
+    end
 
-    subgraph RC["Router Components (refactored helper layer)"]
+    %% ── Router Components ──────────────────────────────────────
+    subgraph RouterComponents["Router Components (refactored helper layer)"]
         XR["x_routing.py: URL/X/media/syndication helpers"]
         CMP["compose.py: perception/text composition"]
         GT["gating.py: mention/reply guards"]
@@ -102,37 +147,188 @@ flowchart TD
         RT["runtime.py: compat/runtime access"]
     end
 
-    ROUTER --> RC
-    XS --> XR
-    URL --> XR
-    MM --> IH
+    %% ── Text Flow ──────────────────────────────────────────────
+    EVID --> TF["_invoke_text_flow()"]
     TF --> CMP
-    RD --> GT
     TF --> PA
-    ROUTER --> RT
+    TF --> RT
 
-    subgraph Storage["Files / Storage"]
-        KB["kb/ + chroma_db/"]
-        CTXSTORE["context.json + enhanced_context.json"]
-        CACHE["cache/stt_* + cache/video_audio + cache/youtube_transcripts"]
-        PROF["user_profiles/ + server_profiles/"]
-        VDATA["vision_data/ + logs/"]
+    subgraph Knowledge["Context & Knowledge Assembly"]
+        MEM["memory: explicit + distilled + relevant block"]
+        MENTION["mention_context: quoted/mentioned users"]
+        T_THREAD["thread_tail: conversation history in threads"]
+        IMPL_ANCHOR["implicit_anchor: resolved reply targets"]
+        RAG_SEARCH["RAG hybrid_search (vector + keyword)"]
+        CTX["context_manager + enhanced_context_manager"]
     end
 
-    RAG --> KB
+    TF --> MEM
+    TF --> MENTION
+    TF --> T_THREAD
+    TF --> IMPL_ANCHOR
+    TF --> RAG_SEARCH
+    TF --> CTX
+
+    subgraph Brain["Text Generation Pipeline"]
+        BRAIN["brain_infer() → composed prompt"]
+        BACKEND["ai_backend router"]
+        OPENAI["OpenAI/OpenRouter/NIM text ladder"]
+        NVIDIA["NVIDIA NIM backend"]
+        OLLAMA["Ollama local backend"]
+        RETRY["enhanced_retry (backoff, fallback ladder)"]
+        STREAM["streaming async generator"]
+    end
+
+    MEM --> BRAIN
+    MENTION --> BRAIN
+    CTX --> BRAIN
+    RAG_SEARCH --> BRAIN
+    BRAIN --> BACKEND
+    BACKEND --> OPENAI
+    BACKEND --> NVIDIA
+    BACKEND --> OLLAMA
+    OPENAI --> RETRY
+    NVIDIA --> RETRY
+    OLLAMA --> RETRY
+    RETRY --> STREAM
+
+    %% ── Action Execution ───────────────────────────────────────
+    STREAM --> ACT["BotAction (send, edit, TTS, voice, file)"]
+    ACT --> PUBLIC_SAN["sanitize_public_message_payload"]
+    PUBLIC_SAN --> TTS_PATH["optional TTS synthesis (Kokoro)"]
+    PUBLIC_SAN --> DISC_SEND["Discord reply / edit (with retry)"]
+    TTS_PATH --> VOICE_PUB["VoiceMessagePublisher (native voice)"]
+    VOICE_PUB --> DISC_SEND
+    DISC_SEND --> CTX_UPDATE["enhanced_context_manager.append_message"]
+
+    %% ── Vision System ──────────────────────────────────────────
+    subgraph Vision["Vision Generation System"]
+        VIR["VisionIntentRouter (direct vs intent-based)"]
+        VORCH["VisionOrchestrator (job queue, async exec)"]
+        VSTORE["VisionJobStore (JSON persistence)"]
+        VSF["VisionSafetyFilter (content moderation)"]
+        VBM["VisionBudgetManager (cost quotas)"]
+        VAC["VisionArtifactCache (dedup cache)"]
+        VGW["VisionGateway (Together/Novita ladder)"]
+        VPROV_T["Together provider"]
+        VPROV_N["Novita provider"]
+        MONITOR["VisionJobWatcher (poll + Discord upload)"]
+        VORCH --> VSTORE
+        VORCH --> VSF --> VBM --> VAC --> VGW
+        VGW --> VPROV_T
+        VGW --> VPROV_N
+        VORCH --> MONITOR
+    end
+
+    COGS --> VIR
+    ROUTER --> VORCH
+    METRICS --> VORCH
+
+    %% ── TTS System ─────────────────────────────────────────────
+    subgraph TTS["TTS Engine (Kokoro)"]
+        KOKORO_V8["Kokoro v8 engine"]
+        G2P["eng_g2p_local (grapheme-to-phoneme)"]
+        IPA["ipa_vocab_loader + kokoro_v1 vocabulary"]
+        TTS_I18N["ipa_vocab_kokoro_v1 (localized IPA)"]
+        TTS_STUB["TTS stub (fallback no-op)"]
+        MANAGER["TTSManager (orchestrator, instrumentation)"]
+        TTS_STATE["tts_state (per-user on/off, queues)"]
+    end
+
+    TTS_PATH --> MANAGER
+    MANAGER --> KOKORO_V8
+    KOKORO_V8 --> G2P --> IPA
+    MANAGER --> TTS_I18N
+    MANAGER --> TTS_STUB
+    MANAGER --> TTS_STATE
+
+    %% ── Background Tasks ───────────────────────────────────────
+    subgraph Background["Background Tasks (spawn_background_tasks)"]
+        MEM_SAVE["memory_profiler autosave (periodic .json)"]
+        MEM_SERVICE["curated memory service (semantic store)"]
+        DISTILLER["memory distiller (archive summarization)"]
+        ARCH_SERVICE["server archive service (SQLite ingestion)"]
+        JANITOR["janitor (cache/log cleanup, periodic)"]
+        HEALTH["health check (memory, guilds, readiness)"]
+        LOG_CLEANUP["log cleanup (30-day retention)"]
+    end
+
+    BOT --> MEM_SAVE
+    BOT --> MEM_SERVICE
+    BOT --> DISTILLER
+    BOT --> ARCH_SERVICE
+    BOT --> JANITOR
+    BOT --> HEALTH
+    BOT --> LOG_CLEANUP
+
+    %% ── Server Archive ─────────────────────────────────────────
+    subgraph ServerArchive["Server Archive System"]
+        SA_ING["ingestion_queue (per-channel)"]
+        SA_SVC["archive_service (live message enqueue)"]
+        SA_STORE["SQLite store (messages, metadata)"]
+        SA_SYNC["sync: periodic flush + compaction"]
+        SA_SEARCH["search: full-text + semantic over archive"]
+    end
+
+    SA_SVC --> SA_ING --> SA_STORE
+    SA_STORE --> SA_SYNC
+    SA_STORE --> SA_SEARCH
+    ARCHIVE --> SA_SVC
+
+    %% ── Observability ──────────────────────────────────────────
+    subgraph Observability["Observability"]
+        RICH["Rich console (pretty)"]
+        JSONL["JSONL file logs (structured, secret-scrubbed)"]
+        PROM["Prometheus /metrics endpoint"]
+        SLO["SLO monitor (latency percentiles)"]
+        RES_MON["resource_monitor (CPU/RAM/low-resource)"]
+        DIAG["maintenance diagnostics"]
+    end
+
+    SH --> RICH
+    SH --> JSONL
+    METRICS --> PROM
+    BOT --> SLO
+    BOT --> RES_MON
+    BOT --> DIAG
+
+    %% ── Storage ────────────────────────────────────────────────
+    subgraph Storage["Files / Storage"]
+        KB["kb/ + chroma_db/ (RAG vectors)"]
+        CTXSTORE["context.json + enhanced_context.json"]
+        CACHE_STT_FILES["cache/stt_* + cache/video_audio + cache/youtube_transcripts"]
+        PROF["user_profiles/ + server_profiles/"]
+        VDATA["vision_data/ + logs/"]
+        MEMDB["memory/ (semantic store JSON)"]
+        ARCHDB["archive/ (SQLite)"]
+    end
+
+    RAG_SEARCH --> KB
     TF --> CTXSTORE
-    YTF --> CACHE
-    YTDLP --> CACHE
-    FFMPEG --> CACHE
-    WH --> CACHE
-    B --> PROF
+    YTF --> CACHE_STT_FILES
+    YTDLP --> CACHE_STT_FILES
+    FFMPEG --> CACHE_STT_FILES
+    STT_ORCH --> CACHE_STT_FILES
+    BOT --> PROF
     VO --> VDATA
-    LOG --> VDATA
+    RICH --> JSONL
+    MEM_SERVICE --> MEMDB
+    SA_STORE --> ARCHDB
+
+    %% ── Router Components wiring ───────────────────────────────
+    ROUTER --> RouterComponents
+    XR --> X_ROUTE
+    XR --> X_UNROLL
+    IH --> MM
+    CMP --> TF
+    PA --> BRAIN
+    GT --> GATE
+    RT --> TF
 ```
 
-Entrypoint: `run.py` → `bot.main:run_bot()` → `LLMBot.start()`
-Commands autoload in `LLMBot.setup_hook()`; vision slash commands via `discord.app_commands`.
-Config is `.env`-driven; prompt files loaded from disk.
+Entrypoint: `run.py` → `bot.main:run_bot()` → `asyncio.run(main_with_cleanup())` → `LLMBot.start()` → `setup_hook()`.
+
+Commands autoload in `LLMBot.setup_hook()` via `bot.commands.__init__:setup_commands()`; vision slash commands via `discord.app_commands`. Config is `.env`-driven with hot-reload via filesystem watcher.
 
 ---
 
@@ -207,7 +403,7 @@ uv run python -m bot.main
 | -------------------- | -------- | ------------------------------ | ----------------------- | ------------------------------------- |
 | `DISCORD_TOKEN`      | ✅        | —                              | `A1B2...`               | Bot token                             |
 | `BOT_PREFIX`         | ❌        | `!`                            | `!,?`                   | Comma-separated allowed               |
-| `TEXT_BACKEND`       | ❌        | `openai`                       | `ollama`                | Text provider                         |
+| `TEXT_BACKEND`       | ❌        | `openai`                       | `ollama`                | Text provider                           |
 | `OPENAI_API_KEY`     | "Maybe"  | —                              | `sk-or-...`             | Needed for OpenAI/OpenRouter          |
 | `OPENAI_API_BASE`    | ❌        | `https://openrouter.ai/api/v1` | custom                  | OpenRouter base                       |
 | `OPENAI_TEXT_MODEL`  | ❌        | —                              | `deepseek/...`          | Model id when using OpenRouter/OpenAI |
@@ -225,6 +421,8 @@ uv run python -m bot.main
 * **OCR/PDF**: Tesseract (`tesseract`, language packs), PyMuPDF, Poppler (`pdftoppm`).
 * **Tier-B Web**: Playwright Chromium (auto-installed on first run or `uv run playwright install chromium`).
 * **STT**: `ffmpeg` recommended for robust media handling.
+* **TTS**: Kokoro (bundled) — requires no additional services.
+* **Voice**: Discord voice channel permissions for native voice publishing.
 
 ---
 
@@ -232,7 +430,8 @@ uv run python -m bot.main
 
 - Enabled by default. Toggle off with `TWITTER_UNROLL_ENABLED=false`.
 - Limits (env): `TWITTER_UNROLL_MAX_TWEETS` (default 30), `TWITTER_UNROLL_MAX_CHARS` (default 6000), `TWITTER_UNROLL_TIMEOUT_S` (default 15).
-- Behavior: When a `x.com/twitter.com` status URL is shared, the bot collects the author’s self-reply chain (contiguous) and packages it as a single context block; on any failure, it silently falls back to existing single-tweet handling. Non-Twitter links unaffected.
+- Behavior: When a `x.com/twitter.com` status URL is shared, the bot collects the author's self-reply chain (contiguous) and packages it as a single context block; on any failure, it silently falls back to existing single-tweet handling. Non-Twitter links unaffected.
+- Syndication probe: fxtwitter/vxtwitter tiers with image→VL routing for rich content extraction.
 - Validate manually:
   - Post a long author thread → bot replies with consolidated context (count shown as [i/N] lines).
   - Post a single tweet → behavior unchanged.
@@ -253,6 +452,8 @@ uv run python -m bot.main
 * Memory: `!memory add <content>`, `!memory list`, `!memory clear`
 * Context & privacy: `!context_reset`, `!context_stats`, `!privacy_optout`, `!privacy_optin`
 * Admin/Config: `!reload-config`, `!config-status`, `!alert`, `!rag <subcommand>`
+* Janitor: `!janitor run`, `!janitor status`
+* Server Archive: `!archive search <query>`, `!archive stats`
 
 **Slash (vision)**
 
@@ -268,6 +469,11 @@ uv run python -m bot.main
   * Secrets scrubbed by default filter.
 * **Metrics**
   * Enable with `PROMETHEUS_ENABLED=true`, port via `PROMETHEUS_PORT`.
+  * Discord HTTP retry counters, gate allowed/blocked, X routing/syndication tiers, vision routing, TTS/STT instrumentation.
+* **Health**
+  * SLO monitor: latency percentiles for text/STT/vision flows.
+  * Resource monitor: CPU/RAM/low-resource mode support.
+  * Maintenance diagnostics: `!diagnostics` for runtime state.
 
 ---
 
@@ -278,13 +484,15 @@ uv run python -m bot.main
 * **Playwright errors** → `uv run playwright install chromium`; install system deps if prompted.
 * **OCR errors** → Ensure `tesseract` + language packs and `pdftoppm` are installed.
 * **Ollama not found** → Start Ollama locally and confirm `OLLAMA_BASE_URL`.
+* **High RAM** → Set `LOW_RESOURCE_MODE=true` (reduces Discord message cache, defers heavy imports). TTS can save ~700MB with `enable_cpu_mem_arena=False`.
+* **Playwright remote** → Set `PW_SERVER_URL=http://localhost:3006` for Docker-based Chromium. Version must match requirements.txt.
 
 ---
 
 ## 🤝 Contributing
 
 * Keep functions tidy, add tests where practical (`pytest`, `pytest-asyncio`).
-* Don’t log secrets; keep the two logging handlers intact.
+* Don't log secrets; keep the two logging handlers intact.
 * Update `.env.example` and docs when adding features.
 * In PRs, note risks, new envs, and any schema changes.
 
@@ -296,6 +504,7 @@ uv run python -m bot.main
 * Message Content Intent processes user content; ensure policy compliance.
 * Restrict permissions on prompt/context files.
 * JSONL logs scrub common secrets.
+* Public output safety hooks sanitize all Discord send/edit boundaries against prompt-injection leaks.
 
 ---
 
