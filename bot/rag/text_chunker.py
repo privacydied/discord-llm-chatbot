@@ -2,8 +2,9 @@
 Text chunking utilities for RAG document processing.
 """
 
+import hashlib
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from .vector_schema import ChunkingResult, HybridSearchConfig
 from ..utils.logging import get_logger
 
@@ -33,6 +34,14 @@ class TextChunker:
             logger.warning("[RAG] Empty text provided for chunking")
             return ChunkingResult.create(text, [], source_metadata)
 
+        # Document size cap [Phase 6-9]
+        max_doc_bytes = getattr(self.config, "max_doc_bytes", 1048576)
+        if len(text.encode("utf-8", errors="replace")) > max_doc_bytes:
+            logger.warning(
+                f"[RAG] Truncated document from {len(text)} to {max_doc_bytes} bytes"
+            )
+            text = text[:max_doc_bytes]
+
         # Store original text length before cleaning [CSD]
         original_text = text
 
@@ -51,6 +60,20 @@ class TextChunker:
                 # Split large chunks with sliding window
                 sub_chunks = self._sliding_window_chunk(chunk)
                 final_chunks.extend(sub_chunks)
+
+        # Chunk dedup by content hash [Phase 6-9]
+        seen_chunk_hashes: Set[str] = set()
+        dedup_max = getattr(self.config, "dedup_chunks", 500)
+        unique_chunks = []
+        for chunk in final_chunks:
+            h = hashlib.sha256(chunk.encode("utf-8", errors="replace")).hexdigest()[:16]
+            if h not in seen_chunk_hashes:
+                seen_chunk_hashes.add(h)
+                unique_chunks.append(chunk)
+            if len(unique_chunks) >= dedup_max:
+                logger.debug(f"[RAG] Hit chunk dedup cap ({dedup_max})")
+                break
+        final_chunks = unique_chunks
 
         # Filter out chunks that are too small, but be more lenient [REH]
         # If we have very little text overall, allow smaller chunks to avoid losing content

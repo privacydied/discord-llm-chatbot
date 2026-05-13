@@ -14,11 +14,27 @@ from .config import load_config
 # Load configuration
 config = load_config()
 
+
+def _load_int_config(key: str, default: int) -> int:
+    """Load an integer config value respecting LOW_RESOURCE_MODE via load_config()."""
+    try:
+        cfg = load_config()
+        val = cfg.get(key)
+        if val is not None:
+            return int(val)
+    except Exception:
+        pass
+    return default
+
+
 # Conversation store for tracking message history
 conversation_store = defaultdict(list)
 CONTEXT_TTL = config.get("CONTEXT_TTL", 900)  # 15 minutes in seconds
-CONTEXT_MAXLEN = config.get("CONTEXT_MAXLEN", 30)
+CONTEXT_MAXLEN = _load_int_config("CONTEXT_MAX_MESSAGES", 30)
 CONTEXT_RESET_AFTER = config.get("CONTEXT_RESET_AFTER", 3600)  # 1 hour in seconds
+# Context trimming limits — respect LOW_RESOURCE_MODE via load_config()
+CONTEXT_MAX_CHARS_PER_MESSAGE = _load_int_config("CONTEXT_MAX_CHARS_PER_MESSAGE", 2000)
+CONTEXT_MAX_TOTAL_CHARS = _load_int_config("CONTEXT_MAX_TOTAL_CHARS", 8000)
 last_message_time = {}
 
 
@@ -80,6 +96,10 @@ def add_to_context(message: Message, role: str, content: str, **kwargs):
         if current_time - msg.get("timestamp", 0) <= CONTEXT_TTL
     ]
 
+    # Truncate content to per-message char limit
+    if len(content) > CONTEXT_MAX_CHARS_PER_MESSAGE:
+        content = content[: CONTEXT_MAX_CHARS_PER_MESSAGE]
+
     # Add new message
     message_data = {
         "role": role,
@@ -89,6 +109,13 @@ def add_to_context(message: Message, role: str, content: str, **kwargs):
     }
 
     conversation_store[key].append(message_data)
+
+    # Enforce total chars cap: drop oldest messages until under limit
+    while len(conversation_store[key]) > 0:
+        total = sum(len(m.get("content", "")) for m in conversation_store[key])
+        if total <= CONTEXT_MAX_TOTAL_CHARS:
+            break
+        conversation_store[key] = conversation_store[key][1:]
 
     # Trim to max length
     if len(conversation_store[key]) > CONTEXT_MAXLEN:
@@ -129,6 +156,12 @@ def get_conversation_context(
     context = [
         msg for msg in context if current_time - msg.get("timestamp", 0) <= CONTEXT_TTL
     ]
+
+    # Truncate each message to per-message char limit
+    for msg in context:
+        c = msg.get("content", "")
+        if len(c) > CONTEXT_MAX_CHARS_PER_MESSAGE:
+            msg["content"] = c[: CONTEXT_MAX_CHARS_PER_MESSAGE]
 
     # Update the store with cleaned context
     conversation_store[key] = context

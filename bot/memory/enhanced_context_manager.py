@@ -15,8 +15,33 @@ from cryptography.fernet import Fernet
 import discord
 
 from bot.utils.logging import get_logger
+from bot.config import load_config as _load_config
 
 logger = get_logger(__name__)
+
+
+def _load_int_config(key: str, default: int) -> int:
+    """Load an integer config value respecting LOW_RESOURCE_MODE."""
+    try:
+        cfg = _load_config()
+        val = cfg.get(key)
+        if val is not None:
+            return int(val)
+    except Exception:
+        pass
+    return default
+
+
+def _load_bool_config(key: str, default: bool) -> bool:
+    """Load a bool config value from config dict."""
+    try:
+        cfg = _load_config()
+        val = cfg.get(key)
+        if val is not None:
+            return bool(val)
+    except Exception:
+        pass
+    return default
 
 
 @dataclass
@@ -81,6 +106,17 @@ class EnhancedContextManager:
         self.in_memory_only = (
             os.getenv("IN_MEMORY_CONTEXT_ONLY", "false").lower() == "true"
         )
+
+        # Context trimming limits — respect LOW_RESOURCE_MODE via load_config()
+        self.max_chars_per_message = _load_int_config(
+            "CONTEXT_MAX_CHARS_PER_MESSAGE", 2000
+        )
+        self.max_total_chars = _load_int_config("CONTEXT_MAX_TOTAL_CHARS", 8000)
+        self.ignore_continuation_chunks = _load_bool_config(
+            "CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS", True
+        )
+        # Override message count cap with config if available
+        self.max_messages = _load_int_config("CONTEXT_MAX_MESSAGES", self.history_window)
 
         # Initialize encryption
         if encryption_key:
@@ -247,6 +283,11 @@ class EnhancedContextManager:
         async with self._memory_lock:
             context_key = self._get_context_key(message)
 
+            # Truncate content to per-message char limit
+            raw_content = message.content or ""
+            if len(raw_content) > self.max_chars_per_message:
+                raw_content = raw_content[: self.max_chars_per_message]
+
             # Create message entry
             entry = MessageEntry(
                 user_id=str(message.author.id),
@@ -256,7 +297,7 @@ class EnhancedContextManager:
                 else None,
                 timestamp=message.created_at.isoformat(),
                 role=role,
-                content=self._encrypt_content(message.content or ""),
+                content=self._encrypt_content(raw_content),
                 guild_id=str(message.guild.id) if message.guild else None,
             )
 
@@ -356,9 +397,20 @@ class EnhancedContextManager:
         max_tokens = max_tokens or self.max_token_limit
         lines = []
         total_tokens = 0
+        total_chars = 0
+
+        # Filter continuation chunks
+        filtered = []
+        for entry in entries:
+            if self.ignore_continuation_chunks:
+                content = self._decrypt_content(entry.content)
+                stripped = content.strip()
+                if stripped in ("...", "…", "more", "**(continues)**", "(more)", "more..."):
+                    continue
+            filtered.append(entry)
 
         # Process entries in reverse to prioritize recent messages
-        for entry in reversed(entries):
+        for entry in reversed(filtered):
             try:
                 # Decrypt content
                 content = self._decrypt_content(entry.content)
@@ -384,8 +436,15 @@ class EnhancedContextManager:
                     logger.debug(f"Context truncated at {total_tokens} tokens")
                     break
 
+                # Check total char limit
+                line_chars = len(line)
+                if total_chars + line_chars > self.max_total_chars and lines:
+                    logger.debug(f"Context truncated at {total_chars} total chars")
+                    break
+
                 lines.append(line)
                 total_tokens += line_tokens
+                total_chars += line_chars
 
             except Exception as e:
                 logger.error(f"❌ Error formatting context entry: {e}")

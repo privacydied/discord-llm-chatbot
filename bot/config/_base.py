@@ -345,6 +345,31 @@ def load_config():
             "1200",
             "PERSISTENT_MEMORY_MAX_PROMPT_CHARS",
         ),
+        # Memory semantic dedupe & resource caps [Phase 6-9]
+        "MEMORY_SEMANTIC_DEDUPE_ENABLED": _low_resource_bool(
+            "MEMORY_SEMANTIC_DEDUPE_ENABLED", True, True
+        ),
+        "MEMORY_MAX_TEXT_CHARS": _low_resource_int(
+            "MEMORY_MAX_TEXT_CHARS", 500, 300
+        ),
+        "MEMORY_SEMANTIC_TOP_K": _low_resource_int(
+            "MEMORY_SEMANTIC_TOP_K", 5, 2
+        ),
+        "MEMORY_INGEST_WORKERS": _low_resource_int(
+            "MEMORY_INGEST_WORKERS", 2, 1
+        ),
+        "MEMORY_RECALL_CACHE_TTL_S": _low_resource_int(
+            "MEMORY_RECALL_CACHE_TTL_S", 30, 15
+        ),
+        "MEMORY_AUTO_CURATION_ENABLED": _low_resource_bool(
+            "MEMORY_AUTO_CURATION_ENABLED", True, False
+        ),
+        "MEMORY_DISTILL_INTERVAL_S": _low_resource_int(
+            "MEMORY_DISTILL_INTERVAL_S", 900, 3600
+        ),
+        "CHROMADB_MAX_RESULTS": _low_resource_int(
+            "CHROMADB_MAX_RESULTS", 5, 3
+        ),
         "PERSISTENT_MEMORY_DEFAULT_TTL_DAYS": _safe_int(
             os.getenv("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS"),
             "180",
@@ -474,6 +499,11 @@ def load_config():
         "THREAD_CONTEXT_TAIL_COUNT": _safe_int(
             os.getenv("THREAD_CONTEXT_TAIL_COUNT"), "5", "THREAD_CONTEXT_TAIL_COUNT"
         ),
+        # Context trimming — character and message limits
+        "CONTEXT_MAX_MESSAGES": CONTEXT_MAX_MESSAGES,
+        "CONTEXT_MAX_CHARS_PER_MESSAGE": CONTEXT_MAX_CHARS_PER_MESSAGE,
+        "CONTEXT_MAX_TOTAL_CHARS": CONTEXT_MAX_TOTAL_CHARS,
+        "CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS": CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS,
         # DIRECTORY SETTINGS
         "USER_PROFILE_DIR": Path(os.getenv("USER_PROFILE_DIR", "user_profiles")),
         "SERVER_PROFILE_DIR": Path(os.getenv("SERVER_PROFILE_DIR", "server_profiles")),
@@ -1104,3 +1134,28 @@ def _low_resource_bool(env_key: str, normal: bool, low: bool) -> bool:
     if raw is not None:
         return _parse_bool_str(raw, normal)
     return low if _low_resource_mode_env else normal
+
+
+# ---------------------------------------------------------------------------
+# CONTEXT TRIMMING — limits applied when constructing LLM context strings
+# ---------------------------------------------------------------------------
+CONTEXT_MAX_MESSAGES = _low_resource_int(
+    "CONTEXT_MAX_MESSAGES",
+    10,
+    5,
+)
+CONTEXT_MAX_CHARS_PER_MESSAGE = _low_resource_int(
+    "CONTEXT_MAX_CHARS_PER_MESSAGE",
+    2000,
+    500,
+)
+CONTEXT_MAX_TOTAL_CHARS = _low_resource_int(
+    "CONTEXT_MAX_TOTAL_CHARS",
+    8000,
+    2000,
+)
+# When building context, skip bot continuation/"more..." lines
+CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS = _parse_bool_str(
+    _clean_env_value(os.getenv("CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS")),
+    True,
+)

@@ -64,6 +64,10 @@ def load_rag_config() -> HybridSearchConfig:
         indexing_workers=int(os.getenv("RAG_INDEXING_WORKERS", "2")),
         indexing_batch_size=int(os.getenv("RAG_INDEXING_BATCH_SIZE", "10")),
         lazy_load_timeout=float(os.getenv("RAG_LAZY_LOAD_TIMEOUT", "30.0")),
+        # Document & snippet caps [Phase 6-9]
+        max_doc_bytes=int(os.getenv("RAG_MAX_DOC_BYTES", "1048576")),
+        max_snippet_chars=int(os.getenv("RAG_MAX_SNIPPET_CHARS", "2000")),
+        dedup_chunks=int(os.getenv("RAG_DEDUP_CHUNKS", "500")),
     )
 
     try:

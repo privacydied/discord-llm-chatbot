@@ -26,6 +26,11 @@ from ._base import (
     KOKORO_FORCE_IPA_EN,
     _config_cache,  # noqa: F401 — exposed for invalidation/test introspection
     _cache_timestamp,  # noqa: F401 — exposed for invalidation/test introspection
+    # Context trimming limits
+    CONTEXT_MAX_MESSAGES,
+    CONTEXT_MAX_CHARS_PER_MESSAGE,
+    CONTEXT_MAX_TOTAL_CHARS,
+    CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS,
     # Startup / validation helpers (still in _base; extracted incrementally)
     audit_env_file,
     validate_required_env,
@@ -50,4 +55,9 @@ __all__ = [
     "check_venv_activation",
     "ConfigurationError",
     "KOKORO_FORCE_IPA_EN",
+    # Context trimming limits
+    "CONTEXT_MAX_MESSAGES",
+    "CONTEXT_MAX_CHARS_PER_MESSAGE",
+    "CONTEXT_MAX_TOTAL_CHARS",
+    "CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS",
 ]

@@ -251,6 +251,15 @@ class ChromaRAGBackend:
             except Exception:
                 pass
 
+            # Additional low-resource cap [Phase 6-9]
+            try:
+                from ..config import load_config as _chroma_load_config
+                _cc = _chroma_load_config()
+                chroma_max = int(_cc.get("CHROMADB_MAX_RESULTS", 5))
+                effective_n = min(effective_n, chroma_max)
+            except Exception:
+                pass
+
             # Perform vector search (run in thread pool)
             loop = asyncio.get_event_loop()
             results = await loop.run_in_executor(

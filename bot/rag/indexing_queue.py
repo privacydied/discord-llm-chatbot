@@ -6,9 +6,11 @@ backpressure handling, and graceful shutdown capabilities.
 """
 
 import asyncio
+import hashlib
+import os
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Set
 from datetime import datetime
 from enum import Enum
 
@@ -74,6 +76,10 @@ class IndexingQueue:
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.enabled = enabled
+
+        # Chunk-level dedup set: track (source_id, text_hash) [Phase 6-9]
+        self._seen_chunks: Set[str] = set()
+        self._dedup_max = int(os.getenv("RAG_DEDUP_CHUNKS", "1000"))
 
         # Queue and worker management
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
@@ -143,6 +149,22 @@ class IndexingQueue:
                 f"[RAG Indexing] Background indexing disabled, processing synchronously: {task.source_id}"
             )
             return await self._process_task_sync(task)
+
+        # Chunk dedup by content hash [Phase 6-9]
+        text_hash = hashlib.sha256(task.text.encode("utf-8", errors="replace")).hexdigest()[:16]
+        dedup_key = f"{task.source_id}:{text_hash}"
+        if dedup_key in self._seen_chunks:
+            logger.debug(
+                f"[RAG Indexing] Skipping already-indexed chunk: {task.source_id}"
+            )
+            return True  # Already indexed; not an error
+
+        if len(self._seen_chunks) >= self._dedup_max:
+            # Evict oldest entries when dedup set gets too large
+            seen = list(self._seen_chunks)
+            self._seen_chunks = set(seen[len(seen)//2:])
+
+        self._seen_chunks.add(dedup_key)
 
         try:
             # Try to enqueue without blocking

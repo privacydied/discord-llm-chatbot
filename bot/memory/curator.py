@@ -302,10 +302,13 @@ class CuratedMemoryCurator:
     # ---------------- internal helpers: normalization & filters ----------------
 
     def _normalize(self, text: str) -> str:
+        from ..config import load_config as _curator_load_config
+        _cc = _curator_load_config()
+        max_chars = int(_cc.get("MEMORY_MAX_TEXT_CHARS", 500))
         if not text:
             return ""
         text = re.sub(r"\s+", " ", text.strip())
-        return text[:2000]
+        return text[:min(2000, max_chars)]
 
     def _looks_sensitive(self, text: str) -> bool:
         lower = text.lower()

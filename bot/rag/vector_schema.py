@@ -174,6 +174,10 @@ class HybridSearchConfig:
     indexing_workers: int = 2  # Number of background indexing workers
     indexing_batch_size: int = 10  # Documents to process per batch
     lazy_load_timeout: float = 30.0  # Timeout for lazy vector index loading (seconds)
+    # Document caps [Phase 6-9]
+    max_doc_bytes: int = 1048576  # 1 MB hard limit for RAG documents
+    max_snippet_chars: int = 2000  # Max chars per retrieved snippet
+    dedup_chunks: int = 500  # Max chunks to index per document
 
     def validate(self) -> None:
         """Validate configuration parameters."""
@@ -226,10 +230,18 @@ class SearchResult:
 
     @property
     def snippet(self) -> str:
-        """Get text snippet."""
+        """Get text snippet, capped by RAG_MAX_SNIPPET_CHARS."""
         text = self.document.chunk_text
-        if len(text) > 200:
-            return text[:197] + "..."
+        # Snippet cap from config [Phase 6-9]
+        max_snippet = 200
+        try:
+            from ..config import load_config as _rag_snippet_config
+            _rc = _rag_snippet_config()
+            max_snippet = int(_rc.get("RAG_MAX_SNIPPET_CHARS", 200))
+        except Exception:
+            pass
+        if len(text) > max_snippet:
+            return text[:max_snippet - 3] + "..."
         return text
 
     @property

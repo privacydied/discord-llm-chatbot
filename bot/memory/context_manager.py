@@ -6,10 +6,35 @@ from typing import Dict, List, Optional, Tuple, Any
 import logging
 import stat
 from bot.utils.env import get_bool
+from bot.config import load_config as _load_config
 
 import discord
 
 logger = logging.getLogger(__name__)
+
+
+def _load_int_config(key: str, default: int) -> int:
+    """Load an integer config value that respects LOW_RESOURCE_MODE via load_config()."""
+    try:
+        cfg = _load_config()
+        val = cfg.get(key)
+        if val is not None:
+            return int(val)
+    except Exception:
+        pass
+    return default
+
+
+def _load_bool_config(key: str, default: bool) -> bool:
+    """Load a bool config value, respecting the config dict."""
+    try:
+        cfg = _load_config()
+        val = cfg.get(key)
+        if val is not None:
+            return bool(val)
+    except Exception:
+        pass
+    return default
 
 
 class ContextManager:
@@ -31,14 +56,26 @@ class ContextManager:
             filepath (str): The path to the JSON file for context storage.
             max_messages (int): The maximum number of messages to store per context.
         """
-        self.filepath = filepath
-        self.max_messages = int(os.getenv("MAX_CONTEXT_MESSAGES", max_messages))
-        self.in_memory_only = get_bool("IN_MEMORY_CONTEXT_ONLY", False)
         self.bot = bot
+        self.filepath = filepath
+        self.max_messages = int(
+            os.getenv("MAX_CONTEXT_MESSAGES", max_messages)
+        )
+        self.in_memory_only = get_bool("IN_MEMORY_CONTEXT_ONLY", False)
+        # Context trimming limits
+        self.max_chars_per_message = _load_int_config(
+            "CONTEXT_MAX_CHARS_PER_MESSAGE", 2000
+        )
+        self.max_total_chars = _load_int_config("CONTEXT_MAX_TOTAL_CHARS", 8000)
+        self.ignore_continuation_chunks = _load_bool_config(
+            "CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS", True
+        )
         self.memory: Dict[str, Any] = {}
         self._load()
         logger.info(
-            f"ContextManager initialized. In-memory only: {self.in_memory_only}, Max messages: {self.max_messages}"
+            f"ContextManager initialized. In-memory only: {self.in_memory_only}, "
+            f"Max messages: {self.max_messages}, Max chars/msg: {self.max_chars_per_message}, "
+            f"Max total chars: {self.max_total_chars}"
         )
 
     def _get_source_keys(self, message: discord.Message) -> Tuple[str, Optional[str]]:
@@ -129,9 +166,14 @@ class ContextManager:
         """Appends a message to the appropriate context history."""
         primary_key, secondary_key = self._get_source_keys(message)
 
+        # Truncate content to per-message char limit
+        raw_content = message.content or ""
+        if len(raw_content) > self.max_chars_per_message:
+            raw_content = raw_content[: self.max_chars_per_message]
+
         entry = {
             "author_id": str(message.author.id),
-            "content": message.content,
+            "content": raw_content,
             "timestamp": message.created_at.isoformat(),
         }
 
@@ -167,11 +209,27 @@ class ContextManager:
         if not context_history:
             return ""
 
-        # Cache for user details to avoid redundant API calls within a single format operation
+        # Filter out continuation chunks if configured
+        filtered = []
+        for entry in context_history:
+            if self.ignore_continuation_chunks:
+                content = entry.get("content", "")
+                stripped = content.strip()
+                if stripped in ("...", "…", "more", "**(continues)**", "(more)", "more..."):
+                    continue
+            filtered.append(entry)
+
+        # Build from newest to oldest to prioritize recent messages,
+        # then reverse to chronological order. This drops oldest when
+        # total char cap is exceeded.
+        lines = []
+        total_chars = 0
+
+        # Cache for user details
         user_cache: Dict[str, str] = {}
 
-        lines = []
-        for entry in context_history:
+        for entry in reversed(filtered):
+            content = entry.get("content", "")
             author_id = entry.get("author_id")
             username = user_cache.get(author_id)
 
@@ -187,6 +245,12 @@ class ContextManager:
                 except (discord.NotFound, discord.HTTPException):
                     username = f"User ({author_id})"
 
-            lines.append(f"[{username}]: {entry.get('content', '')}")
+            line = f"[{username}]: {content}"
+            line_chars = len(line)
+            if total_chars + line_chars > self.max_total_chars and lines:
+                break
 
-        return "\n".join(lines)
+            lines.append(line)
+            total_chars += line_chars
+
+        return "\n".join(reversed(lines))

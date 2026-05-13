@@ -475,6 +475,10 @@ class CuratedMemoryService:
         - Returns the original candidate if we should still insert it as-new,
           or None if it was merged and should be skipped.
         """
+        # Skip semantic dedupe if disabled in config [Phase 6-9]
+        cfg = load_config()
+        dedupe_enabled = bool(cfg.get("MEMORY_SEMANTIC_DEDUPE_ENABLED", True))
+
         query_text = candidate.summary or candidate.text
         if not query_text:
             return candidate
@@ -500,7 +504,10 @@ class CuratedMemoryService:
             )
             return None  # merged; do not insert candidate
 
-        # 2) Semantic similarity-based dedupe
+        # 2) Semantic similarity-based dedupe (skipped if disabled or exact match already found)
+        if not dedupe_enabled:
+            return candidate
+
         try:
             results = await self.semantic_store.query(
                 query_text,

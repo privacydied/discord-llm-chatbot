@@ -61,6 +61,12 @@ class CuratedMemorySemanticStore:
         if not document.strip():
             return memory_id
 
+        # Cap text length before embedding to reduce CPU/memory [Phase 6-9]
+        from ..config import load_config as _upsert_load_config
+        _cfg = _upsert_load_config()
+        max_chars = int(_cfg.get("MEMORY_MAX_TEXT_CHARS", 500))
+        document = document[:max_chars]
+
         embedding = await self.embedding.encode_single(document)
         sanitized = self._sanitize_metadata(metadata)
 
@@ -90,18 +96,34 @@ class CuratedMemorySemanticStore:
         top_k: int = 6,
         where: Optional[Dict[str, Any]] = None,
         where_document: Optional[Dict[str, Any]] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         await self.initialize()
         if not query.strip():
             return []
+
+        # Low-resource top_k cap [Phase 6-9]
+        from ..config import load_config as _query_load_config
+        _qc = _query_load_config()
+        chroma_max = int(_qc.get("CHROMADB_MAX_RESULTS", 5))
+        semantic_top_k_cfg = int(_qc.get("MEMORY_SEMANTIC_TOP_K", 5))
+        effective_top_k = min(int(top_k), semantic_top_k_cfg, chroma_max)
+        effective_top_k = max(1, effective_top_k)
+
+        # Keyword prefilter before embedding to reduce search surface [Phase 6-9]
+        query_words = set(query.lower().split())
+        kw_tokens = {w for w in query_words if len(w) > 2}
+        kw_where_doc: Optional[Dict[str, Any]] = where_document
+        if kw_tokens and kw_where_doc is None:
+            # Require at least one keyword token to appear in stored document
+            kw_where_doc = {"$contains": " ".join(kw_tokens)}
 
         query_embedding = await self.embedding.encode_single(query)
         result = await asyncio.to_thread(
             self.collection.query,
             query_embeddings=[query_embedding.tolist()],
-            n_results=max(1, int(top_k)),
+            n_results=effective_top_k,
             where=where,
-            where_document=where_document,
+            where_document=kw_where_doc,
             include=["metadatas", "documents", "distances"],
         )
 
