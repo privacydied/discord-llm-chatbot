@@ -29,7 +29,7 @@ def _has_kokoro_assets() -> bool:
 _HAS_KOKORO = _has_kokoro_assets()
 
 
-def pytest_collection_modifyitems(_, __, items: Sequence["pytest.Item"]) -> None:
+def pytest_collection_modifyitems(config, items):
     """Skip tests marked 'needs_kokoro_assets' when model files are missing."""
     if _HAS_KOKORO:
         return
