@@ -5,6 +5,7 @@ Hooks
 pytest_collection_modifyitems: skip tests requiring local Kokoro ONNX / voices
 assets when they are absent (e.g. CI runners that don't store the 340 MB model).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
