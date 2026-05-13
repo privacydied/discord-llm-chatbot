@@ -41,21 +41,21 @@ jobs:
 
       - name: Import check
         run: |
-          python -c "import bot"
-          python -c "from bot.core.bot import LLMBot"
-          python -c "from bot.router import Router"
+          uv run python -c "import bot"
+          uv run python -c "from bot.core.bot import LLMBot"
+          uv run python -c "from bot.router import Router"
 
       - name: Run tests (unit only)
         run: uv run pytest -q --tb=short -m "not integration"
 
       - name: Config validation smoke
         run: |
-          export DISCORD_TOKEN=fake_token_for_testing
-          export OPENAI_API_KEY=fake_key_for_testing
+          export DISCORD_TOKEN=fake_token_smoketest
+          export OPENAI_API_KEY=fake_key_smoketest
           export COMMAND_PREFIX="!"
           export BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO=true
           export VISION_ENABLED=false
           export TTS_ENABLED=false
           export PERSISTENT_MEMORY_ENABLE=false
           export RAG_ENABLED=false
-          python -c "from bot.config import load_config; cfg = load_config(); assert 'COMMAND_PREFIX' in cfg; print('Config validation: OK')"
+          uv run python -c "from bot.config import load_config; cfg = load_config(); assert 'COMMAND_PREFIX' in cfg; print('Config validation: OK')"
