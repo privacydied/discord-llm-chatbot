@@ -4,8 +4,8 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-from .exceptions import ConfigurationError
-from .utils.logging import get_logger
+from ..exceptions import ConfigurationError
+from ..utils.logging import get_logger
 import time
 from typing import Dict, Any, Optional
 
