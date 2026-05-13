@@ -9261,6 +9261,8 @@ class Router:
         )
 
         # Classify all attachments independently (no short-circuit)
+        from .exceptions import InferenceError
+
         classified = classify_attachments(attachments)
 
         # Aggregate results by bucket
@@ -9341,6 +9343,12 @@ class Router:
                     if tmp_path.exists():
                         tmp_path.unlink()
 
+            except InferenceError as ie:
+                self.logger.warning(f"STT failed for {av_att.filename}: {ie}")
+                evidence_parts.append(
+                    f"[{av_att.filename}: Audio transcription is temporarily unavailable. "
+                    "Please try sending your message as text.]"
+                )
             except Exception as e:
                 self.logger.warning(f"STT failed for {av_att.filename}: {e}")
                 # Continue processing other attachments

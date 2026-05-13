@@ -2636,7 +2636,10 @@ async def _run_whisper_with_fallback(
             logger.info(
                 "[STT] Multimodal fallback is disabled, re-raising primary error"
             )
-            raise primary_error
+            raise InferenceError(
+                "Audio transcription is temporarily unavailable. "
+                "Please try sending your message as text."
+            ) from primary_error
 
         if not STTFailureClassifier.should_attempt_fallback(
             classification=failure,

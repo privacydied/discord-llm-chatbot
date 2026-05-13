@@ -73,7 +73,7 @@ class TemplateCache:
 
     def _generate_template_id(self, content: str, persona: str = "default") -> str:
         """Generate stable template ID from content and persona."""
-        content_hash = hashlib.md5(f"{content}{persona}".encode()).hexdigest()[:8]
+        content_hash = hashlib.md5(f"{content}{persona}".encode(), usedforsecurity=False).hexdigest()[:8]
         return f"tpl_{persona}_{content_hash}"
 
     def _extract_variables(self, content: str) -> List[str]:
@@ -152,7 +152,7 @@ class TemplateCache:
             metadata = TemplateMetadata(
                 template_id=template_id,
                 file_path=file_path,
-                content_hash=hashlib.md5(content.encode()).hexdigest(),
+                content_hash=hashlib.md5(content.encode(), usedforsecurity=False).hexdigest(),
                 variables=variables,
             )
 
@@ -239,7 +239,7 @@ class TemplateCache:
 
             # Verify content hasn't changed if file-based
             if file_path:
-                current_hash = hashlib.md5(content.encode()).hexdigest()
+                current_hash = hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
                 if current_hash != cached_template.metadata.content_hash:
                     logger.debug(f"🔄 Template changed, recompiling: {template_id}")
                     # Content changed, recompile
