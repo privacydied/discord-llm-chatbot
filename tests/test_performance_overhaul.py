@@ -201,10 +201,10 @@ class TestTemplateCaching:
         cache = get_template_cache()
 
         content = """System: You are a helpful AI assistant.
-        
+
         User context: {context}
         Current query: {query}
-        
+
         Please provide a helpful response."""
 
         template = await cache.get_template(content=content, persona="optimized")

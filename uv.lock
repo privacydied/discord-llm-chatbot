@@ -905,7 +905,7 @@ dependencies = [
     { name = "yt-dlp" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "bandit" },
     { name = "ruff" },
@@ -915,7 +915,6 @@ dev = [
 requires-dist = [
     { name = "aiofiles", specifier = "==24.1.0" },
     { name = "aiohttp", specifier = "==3.12.15" },
-    { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.8.0" },
     { name = "beautifulsoup4", specifier = "==4.13.5" },
     { name = "brotli", specifier = "==1.1.0" },
     { name = "cachetools", specifier = "==6.2.0" },
@@ -957,7 +956,6 @@ requires-dist = [
     { name = "reportlab", specifier = "==4.4.3" },
     { name = "requests", specifier = "==2.32.5" },
     { name = "rich", specifier = "==14.1.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
     { name = "scipy", specifier = "==1.16.1" },
     { name = "sentence-transformers", specifier = "==5.1.0" },
     { name = "soundfile", specifier = "==0.13.1" },
@@ -967,7 +965,12 @@ requires-dist = [
     { name = "urllib3", specifier = "==2.5.0" },
     { name = "yt-dlp", specifier = "==2024.10.22" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "bandit", specifier = ">=1.8.0" },
+    { name = "ruff", specifier = ">=0.9.0" },
+]
 
 [[package]]
 name = "discord-py"

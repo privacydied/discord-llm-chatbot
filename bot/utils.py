@@ -11,7 +11,6 @@ import aiohttp
 import logging
 
 # Import config
-from .config import load_config
 
 
 def clean_response(text: str) -> str:

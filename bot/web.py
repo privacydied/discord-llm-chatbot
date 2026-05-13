@@ -12,7 +12,6 @@ import trafilatura
 from trafilatura.settings import use_config
 
 # Import bot modules
-from .config import load_config
 from .utils.external_api import _is_private_hostname
 
 

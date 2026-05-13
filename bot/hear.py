@@ -54,7 +54,6 @@ if TYPE_CHECKING:
     import discord
     from faster_whisper import WhisperModel
     from .stt import ModelSpec
-    from .stt_module.failure_classifier import STTFailureClassifier
     from .stt_module.multimodal_fallback import multimodal_fallback_provider
     from .stt_pipeline import (
         ffmpeg_supports_aac_decoder as _ffmpeg_supports_aac_decoder,

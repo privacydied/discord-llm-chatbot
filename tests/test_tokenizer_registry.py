@@ -127,7 +127,7 @@ class TestTokenizerRegistry(unittest.TestCase):
         # Find available phoneme tokenizer for English
         available = set(registry1._available_tokenizers)
         known = {"eng_g2p_local", "g2p_en", "misaki", "grapheme"}
-        en_tokenizers = available & known
+        available & known
 
         # Simulate registry corruption (another module resets it)
         registry1._available_tokenizers.clear()

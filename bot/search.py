@@ -13,7 +13,6 @@ from bs4 import BeautifulSoup
 from pathlib import Path
 
 # Import bot modules
-from .config import load_config
 from .memory import get_profile, get_server_profile
 
 # Import from the utils.py module using absolute import to avoid package conflict

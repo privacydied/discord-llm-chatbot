@@ -466,7 +466,7 @@ async def test_duplicate_memories_merge_instead_of_inserting_duplicates(distille
 
 @pytest.mark.asyncio
 async def test_archive_results_are_never_directly_injected_into_prompt(distiller_env):
-    distiller = distiller_env["distiller"]
+    distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
 

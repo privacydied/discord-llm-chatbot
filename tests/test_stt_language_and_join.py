@@ -41,7 +41,7 @@ class TestSTTLanguagePropagation:
 
         spec = ModelSpec(size="base", compute_type="int8")
 
-        key = _transcript_cache_key("audio123", spec)
+        _transcript_cache_key("audio123", spec)
 
         # Version should be part of the key (key is hash, but we can verify it's set)
         assert STT_PIPELINE_VERSION == "stt-v2-lang-aware-stitch"

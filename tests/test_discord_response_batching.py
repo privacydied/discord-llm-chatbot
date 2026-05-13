@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import discord
@@ -189,7 +188,7 @@ async def test_send_chunked_short_message_sends_once(bot_stub):
     message.channel.send = AsyncMock(side_effect=_channel_send_side_effect)
     reply_target.channel = message.channel
 
-    result = await LLMBot._send_chunked_reply(
+    await LLMBot._send_chunked_reply(
         bot_stub,
         message=message,
         action=action,
@@ -282,7 +281,7 @@ async def test_send_chunked_long_message_is_sequential_and_ordered(bot_stub):
 
     # First chunk may include a user mention prefix, so only strictly enforce
     # length limit on continuation chunks.
-    continuation_contents = (
+    (
         channel_send_calls[0]["content"] if channel_send_calls else ""
     )
     for c in all_contents[1:]:

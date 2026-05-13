@@ -7,13 +7,10 @@ where `from bot.config import <name>` would silently break.
 
 from __future__ import annotations
 
-import types
 import importlib
-import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import os
-import sys
 
 import pytest
 
@@ -253,7 +250,7 @@ class TestInvalidateConfigCache:
         from bot.config import load_config, invalidate_config_cache
 
         # Load and cache original
-        cfg_a = load_config()
+        load_config()
 
         # Change an env var that affects config
         monkeypatch.setenv("TEST_BACKEND", "new-backend")

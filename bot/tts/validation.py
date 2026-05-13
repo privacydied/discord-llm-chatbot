@@ -529,14 +529,14 @@ def validate_voice_vector(voice_vector: np.ndarray, voice_id: str = None) -> boo
     return True
     """
     Validate a voice embedding vector.
-    
+
     Args:
         voice_vector: Voice embedding vector
         voice_id: Voice ID for logging
-        
+
     Returns:
         True if valid, False otherwise
-        
+
     Raises:
         ValueError: If voice vector is invalid
     """

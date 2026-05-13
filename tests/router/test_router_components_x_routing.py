@@ -2662,7 +2662,8 @@ def test_resolve_twitter_status_parser_default_and_override() -> None:
     default_parser = resolve_twitter_status_parser()
     assert default_parser is parse_twitter_status_id
 
-    custom = lambda _u: "999"
+    def custom(_u):
+        return "999"
     assert resolve_twitter_status_parser(custom) is custom
 
 

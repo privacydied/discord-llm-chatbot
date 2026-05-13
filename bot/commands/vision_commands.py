@@ -12,7 +12,6 @@ Follows existing bot patterns and integrates with Vision orchestration system.
 
 import asyncio
 import discord
-import os
 from discord.ext import commands
 from discord import app_commands
 from typing import Optional, Literal, Set

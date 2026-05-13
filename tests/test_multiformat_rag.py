@@ -78,25 +78,25 @@ This content demonstrates markdown structure preservation during chunking.
 </head>
 <body>
     <h1>HTML Document Test</h1>
-    
+
     <p>This is a sample HTML document for testing RAG parsing capabilities.</p>
-    
+
     <h2>Key Features</h2>
     <ul>
         <li>HTML structure preservation</li>
         <li>Metadata extraction</li>
         <li>Clean text extraction</li>
     </ul>
-    
+
     <h3>Technical Information</h3>
     <p>The HTML parser uses BeautifulSoup to extract clean text content
     while preserving document structure for better chunking.</p>
-    
+
     <script>
         // This script should be removed during parsing
         console.log("This should not appear in parsed content");
     </script>
-    
+
     <style>
         /* This CSS should be removed during parsing */
         body { font-family: Arial; }

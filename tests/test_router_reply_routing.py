@@ -134,7 +134,7 @@ class TestReplyTargetResolution:
 
         # Mock resolve_thread_reply_target
         with (
-            patch("bot.router.resolve_thread_reply_target") as mock_resolve,
+            patch("bot.router.resolve_thread_reply_target"),
             patch(
                 "bot.memory.thread_tail.resolve_thread_reply_target",
                 return_value=(human_msg, "latest_human"),
@@ -432,7 +432,7 @@ class TestTextDefaultBehavior:
             mock_multi.return_value = BotAction(content="processed")
 
             # This should process the message since it has a mention
-            action = await router.dispatch_message(msg)
+            await router.dispatch_message(msg)
 
             # Should process the message
             mock_multi.assert_called_once()

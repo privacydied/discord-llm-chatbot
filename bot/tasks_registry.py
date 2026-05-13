@@ -87,7 +87,7 @@ class BackgroundTaskRegistry:
         old = self._tasks.get(name)
         if old is not None and not old.task.done():
             logger.debug(
-                f"background_task_registry.replace",
+                "background_task_registry.replace",
                 extra={
                     "event": "background_task_registry.replace",
                     "task_name": name,
@@ -100,7 +100,7 @@ class BackgroundTaskRegistry:
         task.add_done_callback(lambda _t: None)
 
         logger.debug(
-            f"background_task_registry.register",
+            "background_task_registry.register",
             extra={
                 "event": "background_task_registry.register",
                 "task_name": name,

@@ -69,6 +69,30 @@ dev = [
     "bandit>=1.8.0",
 ]
 
+[tool.ruff]
+target-version = "py311"
+line-length = 220
+exclude = [
+    ".venv",
+    "__pycache__",
+    "scripts/",
+    "utils/",
+]
+
+[tool.ruff.lint]
+select = ["F", "W"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "E402",
+    "F841",
+    "E731",
+    "E501",
+    "F821",
+    "F811",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["bot*"]
