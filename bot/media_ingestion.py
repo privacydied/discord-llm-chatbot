@@ -15,7 +15,7 @@ from .media_capability import media_detector, ProbeResult
 from .media_ingestion_helpers import build_media_context, sanitize_metadata
 from .action import BotAction
 
-from ..config import _low_resource_int
+from .config import _low_resource_int
 
 logger = get_logger(__name__)
 
