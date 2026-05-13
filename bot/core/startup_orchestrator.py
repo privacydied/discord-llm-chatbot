@@ -14,7 +14,6 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
-from concurrent.futures import ThreadPoolExecutor
 
 from bot.metrics import (
     metrics,
@@ -298,8 +297,7 @@ class StartupOrchestrator:
         else:
             # Run blocking initializers in thread pool
             loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor() as executor:
-                return await loop.run_in_executor(executor, initializer)
+            return await loop.run_in_executor(None, initializer)
 
     def _classify_error(self, error: Exception) -> ErrorClass:
         """Classify error for handling strategy determination."""

@@ -34,10 +34,7 @@ def __getattr__(name: str):
     raise AttributeError(name)
 
 
-try:
-    from .utils.torch_compat import ensure_reduce_op_alias
-
-    ensure_reduce_op_alias()
-except Exception:
-    # Fail-open: compatibility shim should never block package import
-    pass
+# Defer torch_compat shims to setup_hook so we don't load torch at import time.
+# Calling ensure_reduce_op_alias() loads torch.distributed which pulls in ~600
+# modules and ~300 MB RSS just for a deprecation-warning workaround.
+# This is invoked in bot/core/bot.py setup_hook, before Discord connects.

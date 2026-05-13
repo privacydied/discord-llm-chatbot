@@ -141,9 +141,8 @@ def run_pre_flight_checks(config: dict) -> None:
     required_intents = {
         "message_content": intents.message_content,
         "guilds": intents.guilds,
-        "guild_messages": intents.messages,  # This covers guild messages
-        "dm_messages": intents.messages,  # and DM messages
-        "guild_voice_states": intents.voice_states,
+        "guild_messages": intents.messages,
+        "dm_messages": intents.messages,
     }
 
     all_intents_ok = True
@@ -170,12 +169,16 @@ def run_pre_flight_checks(config: dict) -> None:
 
 
 def create_bot_intents() -> discord.Intents:
-    """Create Discord intents with all required permissions."""
-    intents = discord.Intents.default()
-    intents.message_content = True
+    """Create Discord intents with minimal permissions required for operation.
+
+    Uses Intents.none() and enables only guilds, messages, and message_content.
+    Excludes members, presences, voice_states, reactions, emojis, and typing
+    to reduce memory footprint and gateway subscription overhead.
+    """
+    intents = discord.Intents.none()
     intents.guilds = True
-    intents.members = True  # Required for many user-related operations
-    intents.voice_states = True  # Required for TTS
+    intents.messages = True
+    intents.message_content = True
     return intents
 
 

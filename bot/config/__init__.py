@@ -24,9 +24,8 @@ from ._base import (
     get_vl_model_ladder,
     invalidate_config_cache,
     KOKORO_FORCE_IPA_EN,
-    # Internal cache state — re-exported for invalidation / test introspection
-    _config_cache,
-    _cache_timestamp,
+    _config_cache,  # noqa: F401 — exposed for invalidation/test introspection
+    _cache_timestamp,  # noqa: F401 — exposed for invalidation/test introspection
     # Startup / validation helpers (still in _base; extracted incrementally)
     audit_env_file,
     validate_required_env,

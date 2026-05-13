@@ -153,7 +153,12 @@ class SessionCache:
         self._start_cleanup_task()
 
     def _start_cleanup_task(self):
-        """Start background cleanup task for expired entries [RM]."""
+        """Start background cleanup task for expired entries [RM].
+
+        Idempotent: if a cleanup task is already running, does nothing.
+        """
+        if self._cleanup_task and not self._cleanup_task.done():
+            return  # Already running — prevent duplication on reconnect
 
         async def cleanup_loop():
             while True:

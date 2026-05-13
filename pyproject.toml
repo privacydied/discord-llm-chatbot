@@ -63,6 +63,12 @@ dependencies = [
     "yt-dlp==2024.10.22",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.9.0",
+    "bandit>=1.8.0",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["bot*"]

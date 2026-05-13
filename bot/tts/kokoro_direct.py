@@ -8,9 +8,11 @@ from pathlib import Path
 from enum import Enum
 import shutil
 import importlib
+
+from bot.tts.helpers import maybe_onnx_session
+
 import onnxruntime as ort
 import soundfile as sf
-from bot.tts.helpers import maybe_onnx_session
 
 logger = logging.getLogger(__name__)
 

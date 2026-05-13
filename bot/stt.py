@@ -14,18 +14,14 @@ import threading
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Optional, Tuple
-
-import torch
-from faster_whisper import WhisperModel
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 from .utils.logging import get_logger
-from .utils.torch_compat import ensure_reduce_op_alias
+
+if TYPE_CHECKING:
+    from faster_whisper import WhisperModel
 
 logger = get_logger(__name__)
-
-# Ensure third-party whisper dependencies do not trigger torch distributed warnings.
-ensure_reduce_op_alias()
 
 # ---------------------------------------------------------------------------
 # Environment controls — keep numeric libraries single-threaded on CPU
@@ -46,10 +42,18 @@ with _THREAD_LOCK:
             os.environ[_env] = "1"
     if not os.getenv("CT_NUM_THREADS"):
         os.environ["CT_NUM_THREADS"] = str(_CPU_THREADS)
+    # Defer torch.set_num_threads to when torch is actually loaded (during STT).
+    # Setting it here via module-level import torch loads ~600 modules even when
+    # STT is disabled. Applied lazily in _preload_cpu_threads().
+
+
+def _preload_cpu_threads() -> None:
+    """Apply torch.set_num_threads once torch is available."""
     try:
+        import torch  # noqa: F811
+
         torch.set_num_threads(_CPU_THREADS)
     except Exception:
-        # Some Torch builds may not expose set_num_threads; ignore
         pass
 
 
@@ -106,11 +110,13 @@ def _resolve_spec(declaration: str, default_compute: str) -> ModelSpec:
 
 def _device_for_runtime() -> str:
     # Even though optimised for CPU, keep CUDA detection for environments that may supply GPUs.
-    if torch.cuda.is_available():
-        try:
+    try:
+        import torch  # noqa: F811
+
+        if torch.cuda.is_available():
             return "cuda"
-        except Exception:
-            pass
+    except Exception:
+        pass
     return "cpu"
 
 
@@ -171,6 +177,9 @@ class STTManager:
             return
 
         def _loader() -> None:
+
+            _preload_cpu_threads()
+
             try:
                 self._load_model(self._default_spec)
                 self._available = True
@@ -192,6 +201,8 @@ class STTManager:
         self._init_thread.start()
 
     def _load_model(self, spec: ModelSpec) -> WhisperModel:
+        from faster_whisper import WhisperModel  # noqa: F811
+
         lock = self._get_lock_for(spec)
         with lock:
             model = self._model_cache.get(spec)
@@ -292,8 +303,26 @@ class STTManager:
         return await loop.run_in_executor(None, _transcribe)
 
 
-# Global singleton used throughout the bot
-stt_manager = STTManager()
+# Global singleton — created lazily to avoid spinning up a thread + importing
+# torch/faster_whisper at module import time. [IV][REH]
+_stt_manager: Optional[STTManager] = None
+
+
+def get_stt_manager() -> STTManager:
+    """Return the global STTManager, creating it on first call."""
+    global _stt_manager
+    if _stt_manager is None:
+        _stt_manager = STTManager()
+    return _stt_manager
+
+
+# Backwards-compatible alias for existing callers that access stt_manager directly.
+# This is a module-level property-like shim — direct access from other modules
+# will create the manager at access time, NOT at import time.
+def __getattr__(name: str):
+    if name == "stt_manager":
+        return get_stt_manager()
+    raise AttributeError(name)
 
 
 # Convenience shim maintained for backwards compatibility -----------------------
@@ -301,4 +330,4 @@ stt_manager = STTManager()
 
 async def transcribe_wav(path: Path) -> str:
     """Alias to stt_manager.transcribe_async for historical callers."""
-    return await stt_manager.transcribe_async(path)
+    return await get_stt_manager().transcribe_async(path)

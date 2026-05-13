@@ -461,6 +461,17 @@ class LLMBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         """Asynchronous setup phase for the bot."""
+        # Defer torch_compat shims here so torch is NOT loaded at import time.
+        # Previously this ran in bot/__init__.py, pulling in ~600 modules / ~300 MB RSS
+        # during every import (including tests, config load, etc.). [IV][REH]
+        try:
+            from bot.utils.torch_compat import ensure_reduce_op_alias
+
+            ensure_reduce_op_alias()
+            self.logger.debug("torch compat shim applied")
+        except Exception:
+            pass  # fail-open
+
         # Prevent duplicate initialization [DRY][REH]
         if self._boot_completed:
             self.logger.debug(
@@ -2596,29 +2607,76 @@ class LLMBot(commands.Bot):
         """Set up background tasks for the bot."""
         try:
             from bot.tasks import setup_memory_save_task
+            from bot.tasks_registry import get_registry
 
-            self._track_background_task(
-                asyncio.create_task(start_memory_service(self), name="memory_service")
+            registry = get_registry()
+
+            # --- Curated memory service ---
+            memory_enabled = bool(
+                self.config.get("PERSISTENT_MEMORY_ENABLE", True)
             )
-            self._track_background_task(
-                asyncio.create_task(start_memory_distiller(self), name="memory_distiller")
+            if memory_enabled:
+                memory_task = asyncio.create_task(
+                    start_memory_service(self), name="memory_service"
+                )
+                registry.register(memory_task, name="memory_service", feature="memory")
+                self._track_background_task(memory_task)
+                self.logger.info("Curated memory service background worker started")
+            else:
+                self.logger.info(
+                    "Curated memory service disabled — skipping background worker"
+                )
+
+            # --- Memory distiller ---
+            distiller_enabled = bool(
+                self.config.get("MEMORY_DISTILLER_ENABLED", False)
             )
+            if distiller_enabled:
+                distiller_task = asyncio.create_task(
+                    start_memory_distiller(self), name="memory_distiller"
+                )
+                registry.register(distiller_task, name="memory_distiller", feature="memory")
+                self._track_background_task(distiller_task)
+                self.logger.info("Memory distiller background worker started")
+            else:
+                self.logger.info("Memory distiller disabled — skipping background worker")
+
+            # --- Context autosave ---
             self.memory_save_task = setup_memory_save_task(self)
             self.memory_save_task.start()
-            archive_start_task = asyncio.create_task(
-                start_server_archive_service(self), name="server_archive_start"
+            registry.register(
+                getattr(self.memory_save_task, "_current_loop", self.memory_save_task),
+                name="memory_save",
+                feature="memory",
             )
 
-            def _log_archive_start_failure(task):
-                try:
-                    self.archive_service = task.result()
-                except Exception as exc:
-                    self.logger.error(
-                        f"Server archive startup failed: {exc}", exc_info=True
-                    )
+            # --- Server archive ingest ---
+            archive_enabled = bool(
+                self.config.get(
+                    "SERVER_ARCHIVE_ENABLED",
+                    self.config.get("SERVER_ARCHIVE_ENABLE", False),
+                )
+            )
+            if archive_enabled:
+                archive_start_task = asyncio.create_task(
+                    start_server_archive_service(self), name="server_archive_start"
+                )
 
-            archive_start_task.add_done_callback(_log_archive_start_failure)
-            self._track_background_task(archive_start_task)
+                def _log_archive_start_failure(task):
+                    try:
+                        self.archive_service = task.result()
+                    except Exception as exc:
+                        self.logger.error(
+                            f"Server archive startup failed: {exc}", exc_info=True
+                        )
+
+                archive_start_task.add_done_callback(_log_archive_start_failure)
+                self._track_background_task(archive_start_task)
+                registry.register(archive_start_task, name="server_archive", feature="server_archive")
+            else:
+                self.logger.info(
+                    "Server archive disabled — skipping ingest workers"
+                )
         except Exception as e:
             self.logger.error(f"Failed to set up background tasks: {e}", exc_info=True)
 

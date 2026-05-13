@@ -61,7 +61,11 @@ async def main(bot_ref: Optional[Dict[str, LLMBot]] = None) -> NoReturn:
 
     intents = create_bot_intents()
     bot = LLMBot(
-        config=config, command_prefix=get_prefix, intents=intents, help_command=None
+        config=config,
+        command_prefix=get_prefix,
+        intents=intents,
+        help_command=None,
+        max_messages=256,  # Limit internal message cache to reduce memory
     )
     if bot_ref is not None:
         bot_ref["bot"] = bot

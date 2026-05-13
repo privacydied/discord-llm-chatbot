@@ -49,7 +49,7 @@ from .video_ingest import (
     fetch_and_prepare_url_audio,
 )
 from .config import load_config
-from .stt import ModelSpec, stt_manager
+
 from .stt_module.failure_classifier import STTFailureClassifier
 from .stt_module.multimodal_fallback import multimodal_fallback_provider
 from .stt_pipeline import (
@@ -72,8 +72,44 @@ from .youtube_transcript import is_youtube_shorts, resolve_youtube_transcript
 if TYPE_CHECKING:
     import discord
     from faster_whisper import WhisperModel
+    from .stt import ModelSpec
+
 
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Lazy accessors for stt_manager and ModelSpec.
+# These defer torch/faster_whisper import until first STT call.
+# Do NOT reference stt_manager or ModelSpec at module top level.
+# ---------------------------------------------------------------------------
+def _stt_manager():
+    """Lazy accessor — deferred torch/faster_whisper load [IV][REH]."""
+    # Respect monkeypatch/test overrides set directly on the module.
+    if "stt_manager" in globals():
+        return globals()["stt_manager"]
+    if "_stt_mgr" not in globals():
+        from .stt import stt_manager as _sm
+        globals()["_stt_mgr"] = _sm
+    return globals()["_stt_mgr"]
+
+
+def _ModelSpec():
+    """Lazy accessor — deferred model spec import [IV][REH]."""
+    if "_ModelSpec_cls" not in globals():
+        from .stt import ModelSpec as _ms
+        globals()["_ModelSpec_cls"] = _ms
+    return globals()["_ModelSpec_cls"]
+
+
+# Lazy re-exports so external modules and tests can use `bot.hear.stt_manager`
+# and `bot.hear.ModelSpec` without triggering torch import at module load time.
+def __getattr__(name):
+    if name == "stt_manager":
+        return _stt_manager()
+    if name == "ModelSpec":
+        return _ModelSpec()
+    raise AttributeError(name)
+
 
 # ---------------------------------------------------------------------------
 # Constants & thresholds tuned for dual-core CPU-only environments
@@ -915,7 +951,7 @@ def _load_transcript_cache(cache_key: str) -> Optional[TranscriptResult]:
         return None
 
     try:
-        spec = ModelSpec(
+        spec = _ModelSpec()(
             data["model"]["size"],
             data["model"]["compute_type"],
         )
@@ -1650,7 +1686,7 @@ async def _run_whisper(
     attempted_slow_downgrade = False
 
     while True:
-        model = await stt_manager.ensure_model(spec)
+        model = await _stt_manager().ensure_model(spec)
         try:
             transcript = await _transcribe_with_model(
                 model=model,
@@ -1684,7 +1720,7 @@ async def _run_whisper(
             not attempted_slow_downgrade
             and transcript.first_chunk_runtime > SLOW_DECODE_THRESHOLD_S
         ):
-            next_spec = stt_manager.downgrade_spec(spec)
+            next_spec = _stt_manager().downgrade_spec(spec)
             if next_spec and next_spec != spec:
                 logger.info(
                     "whisper.model_downgrade from=%s to=%s reason=slow_decode",
@@ -2185,7 +2221,7 @@ def _log_summary(
         _format_spans(spans.spans),
         transcript.model_spec.size,
         transcript.model_spec.compute_type,
-        stt_manager.cpu_threads,
+        _stt_manager().cpu_threads,
         str(cache_hit).lower(),
     )
 
@@ -2259,7 +2295,7 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
                 voice_note=voice_note,
                 ram_guard=ram_guard,
                 job=job,
-                manager=stt_manager,
+                manager=_stt_manager(),
                 logger=logger,
                 preprocess_audio_with_retry=_preprocess_audio_with_retry,
                 run_whisper_with_fallback=_run_whisper_with_fallback,
@@ -2442,7 +2478,7 @@ async def hear_infer_from_url(
             download = await prepare_url_download_for_stt(
                 url=url,
                 force_refresh=force_refresh,
-                manager=stt_manager,
+                manager=_stt_manager(),
                 job=job,
                 spans=spans,
                 ram_guard=ram_guard,
@@ -2457,7 +2493,7 @@ async def hear_infer_from_url(
                 voice_note=False,
                 ram_guard=ram_guard,
                 job=job,
-                manager=stt_manager,
+                manager=_stt_manager(),
                 logger=logger,
                 preprocess_audio_with_retry=_preprocess_audio_with_retry,
                 run_whisper_with_fallback=_run_whisper_with_fallback,
