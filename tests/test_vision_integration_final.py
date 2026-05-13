@@ -9,7 +9,8 @@ from pathlib import Path
 
 def test_vision_integration():
     """Test Vision integration points without full Discord stack [CDiP]"""
-    router_path = Path("/volume1/py/discord-llm-chatbot/bot/router.py")
+    project_root = Path(__file__).resolve().parents[1]
+    router_path = project_root / "bot" / "router.py"
     router_content = router_path.read_text()
 
     required_methods = [
