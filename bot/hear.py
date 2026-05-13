@@ -57,19 +57,7 @@ if TYPE_CHECKING:
     from .stt_module.failure_classifier import STTFailureClassifier
     from .stt_module.multimodal_fallback import multimodal_fallback_provider
     from .stt_pipeline import (
-        abort_and_finish_failure as _abort_and_finish_failure,
-        build_url_transcript_result as _build_url_transcript_result,
-        create_stt_job as _create_stt_job,
-        ffmpeg_bin_has_aac as _ffmpeg_bin_has_aac,
-        ffmpeg_candidates_from_env as _ffmpeg_candidates_from_env,
         ffmpeg_supports_aac_decoder as _ffmpeg_supports_aac_decoder,
-        prepare_url_download_for_stt as _prepare_url_download_for_stt,
-        log_stt_job_complete as _log_stt_job_complete,
-        load_stt_runtime_compat as _load_stt_runtime_compat,
-        parse_stt_max_ram_mb as _parse_stt_max_ram_mb,
-        preprocess_and_transcribe as _preprocess_and_transcribe,
-        run_stitch_stage as _run_stitch_stage,
-        try_youtube_transcript_first as _try_youtube_transcript_first,
     )
 
 logger = get_logger(__name__)
@@ -2341,7 +2329,7 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
     """
     Transcribe an attachment or local audio file.
     """
-    spans, ram_guard, job = create_stt_job(
+    spans, ram_guard, job = _stt_pipeline()["create_stt_job"](
         kind="attachment",
         stt_max_ram_mb=STT_MAX_RAM_MB,
         spans_cls=SpanRecorder,
@@ -2355,7 +2343,7 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
             local_path, temp_handle, created_temp = await _ensure_local_audio(audio)
             job.register_temp(temp_handle, local_path if created_temp else None)
             voice_note = _is_voice_note(attachment) if attachment is not None else False
-            pre, transcript = await preprocess_and_transcribe(
+            pre, transcript = await _stt_pipeline()["preprocess_and_transcribe"](
                 source_path=local_path,
                 spans=spans,
                 download=None,
@@ -2368,7 +2356,7 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
                 run_whisper_with_fallback=_run_whisper_with_fallback,
             )
 
-            result_text = run_stitch_stage(
+            result_text = _stt_pipeline()["run_stitch_stage"](
                 spans=spans,
                 pre=pre,
                 transcript=transcript,
@@ -2377,7 +2365,7 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
             )
             return await job.finish_success(result_text)
     except RAMGuardExceeded as exc:
-        await abort_and_finish_failure(
+        await _stt_pipeline()["abort_and_finish_failure"](
             job=job,
             logger=logger,
             exc=exc,
@@ -2385,7 +2373,7 @@ async def hear_infer(audio: Union[Path, "discord.Attachment"]) -> str:
         )
         raise InferenceError(str(exc)) from exc
     except Exception as exc:
-        await abort_and_finish_failure(
+        await _stt_pipeline()["abort_and_finish_failure"](
             job=job,
             logger=logger,
             exc=exc,
@@ -2514,7 +2502,7 @@ async def hear_infer_from_url(
         force_refresh,
     )
 
-    spans, ram_guard, job = create_stt_job(
+    spans, ram_guard, job = _stt_pipeline()["create_stt_job"](
         kind="url",
         stt_max_ram_mb=STT_MAX_RAM_MB,
         spans_cls=SpanRecorder,
@@ -2524,7 +2512,7 @@ async def hear_infer_from_url(
     download: Optional[DownloadedAudio] = None
     try:
         async with _JOB_SEMAPHORE:
-            runtime_compat = load_stt_runtime_compat()
+            runtime_compat = _stt_pipeline()["load_stt_runtime_compat"]()
             # YouTube routing: Shorts → yt-dlp STT, long-form → summarize CLI.
             # On failure we fail open to the existing yt-dlp/whisper pipeline.
             if runtime_compat.youtube_transcript_first and not is_youtube_shorts(url):
@@ -2533,7 +2521,7 @@ async def hear_infer_from_url(
                 if result:
                     return await job.finish_success(result)
                 # Fallback: try caption-track resolver (original path)
-                result = await try_youtube_transcript_first(
+                result = await _stt_pipeline()["try_youtube_transcript_first"](
                     url=url,
                     force_refresh=force_refresh,
                     resolver=resolve_youtube_transcript,
@@ -2542,7 +2530,7 @@ async def hear_infer_from_url(
                 if result:
                     return await job.finish_success(result)
 
-            download = await prepare_url_download_for_stt(
+            download = await _stt_pipeline()["prepare_url_download_for_stt"](
                 url=url,
                 force_refresh=force_refresh,
                 manager=_stt_manager(),
@@ -2553,7 +2541,7 @@ async def hear_infer_from_url(
                 ingest_error_type=VideoIngestError,
             )
 
-            pre, transcript = await preprocess_and_transcribe(
+            pre, transcript = await _stt_pipeline()["preprocess_and_transcribe"](
                 source_path=download.raw_path,
                 spans=spans,
                 download=download,
@@ -2567,11 +2555,11 @@ async def hear_infer_from_url(
                 language=language,
             )
 
-            result = run_stitch_stage(
+            result = _stt_pipeline()["run_stitch_stage"](
                 spans=spans,
                 pre=pre,
                 transcript=transcript,
-                build_result=lambda: build_url_transcript_result(
+                build_result=lambda: _stt_pipeline()["build_url_transcript_result"](
                     transcript=transcript,
                     download=download,
                     pre=pre,
@@ -2581,7 +2569,7 @@ async def hear_infer_from_url(
             )
 
             # Log transcript completion with URL identity for debugging [REH]
-            log_stt_job_complete(
+            _stt_pipeline()["log_stt_job_complete"](
                 logger=logger,
                 url=url,
                 transcript_text=transcript.text,
@@ -2589,7 +2577,7 @@ async def hear_infer_from_url(
 
             return await job.finish_success(result)
     except RAMGuardExceeded as exc:
-        await abort_and_finish_failure(
+        await _stt_pipeline()["abort_and_finish_failure"](
             job=job,
             logger=logger,
             exc=exc,
@@ -2597,7 +2585,7 @@ async def hear_infer_from_url(
         )
         raise InferenceError(str(exc)) from exc
     except Exception as exc:
-        await abort_and_finish_failure(
+        await _stt_pipeline()["abort_and_finish_failure"](
             job=job,
             logger=logger,
             exc=exc,
