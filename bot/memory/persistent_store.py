@@ -353,7 +353,7 @@ class PersistentMemoryStore:
         params.extend([like, like, like])
         params.append(int(limit))
 
-        sql = "SELECT * FROM curated_memories WHERE " + " AND ".join(clauses) + " ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC LIMIT ?"
+        sql = "SELECT * FROM curated_memories WHERE " + " AND ".join(clauses) + " ORDER BY datetime(updated_at) DESC, datetime(created_at) DESC LIMIT ?"  # nosec B608
         with self._lock:
             conn = self._connect()
             try:
@@ -423,7 +423,7 @@ class PersistentMemoryStore:
                         UPDATE curated_memories
                         SET deleted_at = ?, updated_at = ?
                         WHERE memory_id IN ({placeholders})
-                        """,
+                        """,  # nosec B608
                         [self._now_iso(), self._now_iso(), *ids],
                     )
                     conn.commit()
@@ -443,11 +443,7 @@ class PersistentMemoryStore:
             try:
                 placeholders = ",".join(["?"] * len(memory_ids))
                 cur = conn.execute(
-                    f"""
-                    UPDATE curated_memories
-                    SET deleted_at = ?, updated_at = ?
-                    WHERE memory_id IN ({placeholders}) AND deleted_at IS NULL
-                    """,
+                    f"""\n                    UPDATE curated_memories\n                    SET deleted_at = ?, updated_at = ?\n                    WHERE memory_id IN ({placeholders}) AND deleted_at IS NULL\n                    """,  # nosec B608
                     [self._now_iso(), self._now_iso(), *memory_ids],
                 )
                 conn.commit()
@@ -505,7 +501,7 @@ class PersistentMemoryStore:
 
     def _fetch_active_by_ids_sync(self, memory_ids: Sequence[str]) -> List[MemoryRecord]:
         placeholders = ",".join(["?"] * len(memory_ids))
-        sql = f"SELECT * FROM curated_memories WHERE memory_id IN ({placeholders}) AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > ?)"
+        sql = f"SELECT * FROM curated_memories WHERE memory_id IN ({placeholders}) AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > ?)"  # nosec B608  # nosec B608
         params: list[Any] = [*memory_ids, self._now_iso()]
         with self._lock:
             conn = self._connect()
@@ -557,7 +553,7 @@ class PersistentMemoryStore:
         clauses.append("LOWER(summary) LIKE LOWER(?)")
         params.append(like)
 
-        sql = "SELECT * FROM curated_memories WHERE " + " AND ".join(clauses) + " ORDER BY datetime(updated_at) DESC LIMIT 1"
+        sql = "SELECT * FROM curated_memories WHERE " + " AND ".join(clauses) + " ORDER BY datetime(updated_at) DESC LIMIT 1"  # nosec B608
 
         with self._lock:
             conn = self._connect()

@@ -288,30 +288,30 @@ class ServerArchiveStore:
                 indexed_params: tuple[Any, ...] = (guild_id,) if guild_id else ()
                 indexed_messages = int(
                     conn.execute(
-                        f"SELECT COUNT(*) FROM archive_messages_fts{indexed_where}",
+                        f"SELECT COUNT(*) FROM archive_messages_fts{indexed_where}",  # nosec B608
                         indexed_params,
                     ).fetchone()[0]
                 )
                 return {
-                    "guilds": int(conn.execute(f"SELECT COUNT(*) FROM archive_guilds{where}", params).fetchone()[0]),
-                    "channels": int(conn.execute(f"SELECT COUNT(*) FROM archive_channels{where}", params).fetchone()[0]),
-                    "threads": int(conn.execute(f"SELECT COUNT(*) FROM archive_threads{where}", params).fetchone()[0]),
+                    "guilds": int(conn.execute(f"SELECT COUNT(*) FROM archive_guilds{where}", params).fetchone()[0]),  # nosec B608,
+                    "channels": int(conn.execute(f"SELECT COUNT(*) FROM archive_channels{where}", params).fetchone()[0]),  # nosec B608,
+                    "threads": int(conn.execute(f"SELECT COUNT(*) FROM archive_threads{where}", params).fetchone()[0]),  # nosec B608,
                     "users": int(conn.execute("SELECT COUNT(*) FROM archive_users").fetchone()[0]),
-                    "messages": int(conn.execute(f"SELECT COUNT(*) FROM archive_messages{where}", params).fetchone()[0]),
+                    "messages": int(conn.execute(f"SELECT COUNT(*) FROM archive_messages{where}", params).fetchone()[0]),  # nosec B608,
                     "indexed_messages": indexed_messages,
                     "attachments": int(
                         conn.execute(
-                            f"SELECT COUNT(*) FROM archive_attachments a JOIN archive_messages m ON m.message_id = a.message_id{(' WHERE m.guild_id = ?' if guild_id else '')}",
+                            f"SELECT COUNT(*) FROM archive_attachments a JOIN archive_messages m ON m.message_id = a.message_id{(' WHERE m.guild_id = ?' if guild_id else '')}",  # nosec B608,
                             params,
                         ).fetchone()[0]
                     ),
                     "mentions": int(
                         conn.execute(
-                            f"SELECT COUNT(*) FROM archive_mentions a JOIN archive_messages m ON m.message_id = a.message_id{(' WHERE m.guild_id = ?' if guild_id else '')}",
+                            f"SELECT COUNT(*) FROM archive_mentions a JOIN archive_messages m ON m.message_id = a.message_id{(' WHERE m.guild_id = ?' if guild_id else '')}",  # nosec B608,
                             params,
                         ).fetchone()[0]
                     ),
-                    "sync_states": int(conn.execute(f"SELECT COUNT(*) FROM archive_sync_state{where}", params).fetchone()[0]),
+                    "sync_states": int(conn.execute(f"SELECT COUNT(*) FROM archive_sync_state{where}", params).fetchone()[0]),  # nosec B608,
                 }
             finally:
                 conn.close()

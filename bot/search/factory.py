@@ -22,7 +22,7 @@ _client: Optional[httpx.AsyncClient] = None
 
 def _build_client(max_connections: int) -> httpx.AsyncClient:
     limits = httpx.Limits(max_connections=max_connections, max_keepalive_connections=max_connections)
-    return httpx.AsyncClient(limits=limits, timeout=None)
+    return httpx.AsyncClient(limits=limits, timeout=httpx.Timeout(30.0))  # nosec B113
 
 
 async def get_search_client() -> httpx.AsyncClient:

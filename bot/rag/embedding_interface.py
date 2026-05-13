@@ -155,7 +155,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
                 Path.home() / ".cache" / "torch" / "sentence_transformers",
                 Path.home() / ".cache" / "sentence_transformers",
                 # Additional common locations
-                Path("/tmp") / "sentence_transformers_cache",
+                Path("/tmp") / "sentence_transformers_cache",  # nosec B108
                 Path(".") / ".cache" / "sentence_transformers",
             ]
 

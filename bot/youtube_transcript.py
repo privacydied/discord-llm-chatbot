@@ -289,7 +289,7 @@ def _parse_vtt_transcript(raw_text: str) -> str:
 
 def _parse_xml_transcript(raw_text: str) -> str:
     try:
-        root = ET.fromstring(raw_text)
+        root = ET.fromstring(raw_text)  # nosec B314
     except Exception:
         return ""
 

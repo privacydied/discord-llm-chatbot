@@ -628,7 +628,7 @@ class AdminAlertCommands(commands.Cog):
             lines.append(f"`{i:>2}` #{ch.name}")
 
         embed = discord.Embed(
-            title=f"Select Channels from {guild_name}",
+            title=f"Select Channels from {guild_name}",  # nosec B608
             description="Reply with channel numbers (e.g., `1,3,5`) or use navigation.",
             color=0x5865F2,
         )

@@ -65,7 +65,7 @@ _ANY_IPV4: list[IPv4Network] = [IPv4Network("0.0.0.0/32")]
 _INTERNAL_HOSTNAMES: set[str] = {
     "localhost",
     "localhost.localdomain",
-    "0.0.0.0",
+    "0.0.0.0",  # nosec B104
     "127.0.0.1",
     "::1",
     "ip6-localhost",

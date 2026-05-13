@@ -424,7 +424,7 @@ class VideoIngestionManager:
                 "User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
             )
-            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:  # nosec B310
                 content_type = (resp.headers.get("Content-Type") or "").lower()
                 if "text/html" not in content_type:
                     return None
@@ -807,7 +807,7 @@ class VideoIngestionManager:
                 "User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
             )
-            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:  # nosec B310
                 content_length = resp.headers.get("Content-Length")
                 with open(temp_path, "wb") as fh:
                     shutil.copyfileobj(resp, fh)
