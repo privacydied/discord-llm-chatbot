@@ -22,9 +22,12 @@ from dataclasses import dataclass
 from enum import Enum
 
 from bot.utils.logging import get_logger
-from bot.config import load_config
+from bot.config import load_config, _low_resource_int
 
 logger = get_logger(__name__)
+
+# Resource caps [Phase 12-16]
+_MAX_ARTIFACT_COUNT = _low_resource_int("VISION_MAX_ARTIFACT_COUNT", 50, 10)
 
 
 class FileFormat(Enum):
@@ -219,8 +222,9 @@ class VisionArtifactCache:
                         self._stats.compression_ratio * 0.9 + compression_ratio * 0.1
                     )
 
-                # Check cache size limits and evict if needed
+                # Check cache size and count limits, evict if needed [Phase 12-16]
                 await self._enforce_size_limits()
+                await self._enforce_count_limits()
 
                 self.logger.info(
                     f"Artifact cached - hash: {content_hash[:8]}, original_size: {len(content)}, compressed_size: {len(processed_content)}, format: {file_format.value}, discord_optimized: {discord_optimized}"
@@ -452,6 +456,19 @@ class VisionArtifactCache:
             if await self.delete_artifact(lru_hash):
                 self._stats.eviction_count += 1
                 self.logger.debug(f"Evicted LRU artifact: {lru_hash[:8]}")
+
+    async def _enforce_count_limits(self) -> None:
+        """Enforce cache artifact count cap with LRU eviction [Phase 12-16]"""
+        while self._stats.total_files >= _MAX_ARTIFACT_COUNT and self._access_order:
+            lru_hash = self._access_order[0]
+            if await self.delete_artifact(lru_hash):
+                self._stats.eviction_count += 1
+                self.logger.debug(
+                    "artifact_cache:evict_count hash=%s files=%d max=%d",
+                    lru_hash[:8],
+                    self._stats.total_files,
+                    _MAX_ARTIFACT_COUNT,
+                )
 
     def _update_lru_order(self, content_hash: str) -> None:
         """Update LRU access order [CMV]"""

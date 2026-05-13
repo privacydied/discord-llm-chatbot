@@ -405,11 +405,14 @@ def load_config():
         "SERVER_ARCHIVE_DB_PATH": os.getenv(
             "SERVER_ARCHIVE_DB_PATH", "./data/server_archive.db"
         ),
-        "SERVER_ARCHIVE_QUEUE_MAX": _safe_int(
-            os.getenv("SERVER_ARCHIVE_QUEUE_MAX"), "1000", "SERVER_ARCHIVE_QUEUE_MAX"
+        "SERVER_ARCHIVE_QUEUE_MAX": _low_resource_int(
+            "SERVER_ARCHIVE_QUEUE_MAX", 1000, 200
         ),
-        "SERVER_ARCHIVE_BATCH_SIZE": _safe_int(
-            os.getenv("SERVER_ARCHIVE_BATCH_SIZE"), "100", "SERVER_ARCHIVE_BATCH_SIZE"
+        "SERVER_ARCHIVE_BATCH_SIZE": _low_resource_int(
+            "SERVER_ARCHIVE_BATCH_SIZE", 100, 20
+        ),
+        "SERVER_ARCHIVE_DISTILL_INTERVAL_S": _low_resource_int(
+            "SERVER_ARCHIVE_DISTILL_INTERVAL_S", 900, 3600
         ),
         "SERVER_ARCHIVE_SEARCH_LIMIT": _safe_int(
             os.getenv("SERVER_ARCHIVE_SEARCH_LIMIT"),
@@ -966,6 +969,43 @@ def load_config():
         # TTS warmup — skip pre-warm in low-resource mode
         "TTS_SKIP_WARMUP": _low_resource_bool(
             "TTS_SKIP_WARMUP", False, True
+        ),
+        # --- Resource caps [Phase 12-16] ---
+        "MULTIMODAL_MAX_ITEMS": _low_resource_int(
+            "MULTIMODAL_MAX_ITEMS", 5, 2
+        ),
+        "MULTIMODAL_MAX_TOTAL_BYTES": _low_resource_int(
+            "MULTIMODAL_MAX_TOTAL_BYTES", 50 * 1024 * 1024, 10 * 1024 * 1024
+        ),
+        "MULTIMODAL_CONCURRENCY": _low_resource_int(
+            "MULTIMODAL_CONCURRENCY", 3, 1
+        ),
+        "IMAGE_MAX_DIMENSION": _low_resource_int(
+            "IMAGE_MAX_DIMENSION", 2048, 1024
+        ),
+        "PDF_MAX_PAGES": _low_resource_int(
+            "PDF_MAX_PAGES", 20, 5
+        ),
+        "VIDEO_MAX_DURATION_S": _low_resource_float(
+            "VIDEO_MAX_DURATION_S", 300.0, 60.0
+        ),
+        "TTS_MAX_CHARS": _low_resource_int(
+            "TTS_MAX_CHARS", 4000, 2000
+        ),
+        "TTS_SKIP_LONG_RESPONSES": _low_resource_bool(
+            "TTS_SKIP_LONG_RESPONSES", False, True
+        ),
+        "VL_MAX_IMAGES": _low_resource_int(
+            "VL_MAX_IMAGES", 5, 2
+        ),
+        "VL_MAX_IMAGE_DIMENSION": _low_resource_int(
+            "VL_MAX_IMAGE_DIMENSION", 2048, 1024
+        ),
+        "SCREENSHOT_MAX_BYTES": _low_resource_int(
+            "SCREENSHOT_MAX_BYTES", 5 * 1024 * 1024, 1 * 1024 * 1024
+        ),
+        "STT_MAX_AUDIO_DURATION_S": _low_resource_float(
+            "STT_MAX_AUDIO_DURATION_S", 300.0, 60.0
         ),
         # RAG document parser workers
         "RAG_DOCUMENT_WORKERS": _low_resource_int(

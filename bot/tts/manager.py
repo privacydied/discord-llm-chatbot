@@ -13,6 +13,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from ..config import _low_resource_int, _low_resource_bool
+
 # Import KokoroDirect here so tests can patch 'bot.tts_manager_fixed.KokoroDirect'
 from .kokoro_direct import KokoroDirect
 
@@ -21,6 +23,10 @@ logger = logging.getLogger(__name__)
 # Defaults aligned with asset manager [CMV]
 DEFAULT_MODEL_PATH = "tts/kokoro-v1.0.onnx"
 DEFAULT_VOICES_PATH = "tts/voices-v1.0.bin"
+
+# Resource caps [Phase 12-16]
+_TTS_MAX_CHARS = _low_resource_int("TTS_MAX_CHARS", 4000, 2000)
+_TTS_SKIP_LONG_RESPONSES = _low_resource_bool("TTS_SKIP_LONG_RESPONSES", False, True)
 
 
 class TTSManager:
@@ -169,6 +175,25 @@ class TTSManager:
             self.load_model()
         if not self.kokoro:
             raise RuntimeError("TTS engine not available")  # [REH]
+
+        # Enforce TTS text length cap [Phase 12-16]
+        if len(text) > _TTS_MAX_CHARS:
+            if _TTS_SKIP_LONG_RESPONSES:
+                logger.info(
+                    "tts:skip_long_response len=%d max=%d",
+                    len(text),
+                    _TTS_MAX_CHARS,
+                )
+                raise RuntimeError(
+                    f"TTS text exceeds {_TTS_MAX_CHARS} chars; skipped (TTS_SKIP_LONG_RESPONSES=True)"
+                )
+            else:
+                logger.warning(
+                    "tts:trim_text len=%d max=%d",
+                    len(text),
+                    _TTS_MAX_CHARS,
+                )
+                text = text[:_TTS_MAX_CHARS]
 
         chosen_voice = voice or self.voice
         logger.debug(

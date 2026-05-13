@@ -15,8 +15,8 @@ from typing import Dict, Any, List, Optional
 import aiohttp
 
 from ..utils.logging import get_logger
-from .failure_classifier import FailureClassification
 from ..config import load_config
+from .failure_classifier import FailureClassification
 from ..exceptions import InferenceError
 
 logger = get_logger(__name__)
@@ -50,6 +50,9 @@ class MultimodalSTTFallbackProvider:
         )
         self._max_retries = int(
             self.config.get("STT_MULTIMODAL_FALLBACK_MAX_RETRIES", 1)
+        )
+        self._max_audio_duration_s = float(
+            self.config.get("STT_MAX_AUDIO_DURATION_S", 300.0)
         )
         self._models = self._load_fallback_models()
 
@@ -109,6 +112,9 @@ class MultimodalSTTFallbackProvider:
         start_time = time.time()
 
         try:
+            # Cap audio duration before remote fallback [Phase 12-16]
+            self._check_audio_duration(audio_path)
+
             # Check if fallback is enabled
             if not self.config.get("STT_MULTIMODAL_FALLBACK_ENABLED", False):
                 raise InferenceError("Multimodal fallback is disabled")
@@ -404,6 +410,39 @@ class MultimodalSTTFallbackProvider:
         import base64
 
         return base64.b64encode(audio_bytes).decode("utf-8")
+
+    def _check_audio_duration(self, audio_path: Path) -> None:
+        """Enforce max audio duration cap before remote fallback [Phase 12-16].
+
+        Falls back to a size-based heuristic when no duration reader is available.
+        """
+        import struct
+
+        duration_s: Optional[float] = None
+        try:
+            # Try WAV header sample rate + data chunk size
+            with open(audio_path, "rb") as f:
+                header = f.read(44)
+                if header[:4] == b"RIFF" and len(header) >= 44:
+                    sample_rate = struct.unpack_from("<I", header, 24)[0]
+                    total_size = struct.unpack_from("<I", header, 4)[0]
+                    # WAV data is typically ~44 bytes header + raw PCM
+                    raw_bytes = max(total_size + 8 - 44, 0)  # +8 for RIFF header
+                    if sample_rate > 0:
+                        # rough estimate assuming 1 channel, 16-bit
+                        duration_s = raw_bytes / (sample_rate * 2)
+        except Exception:
+            pass
+
+        if duration_s is not None and duration_s > self._max_audio_duration_s:
+            logger.warning(
+                "stt:audio_duration_exceeded duration=%.1fs max=%.1fs",
+                duration_s,
+                self._max_audio_duration_s,
+            )
+            raise InferenceError(
+                f"Audio duration {duration_s:.1f}s exceeds cap of {self._max_audio_duration_s}s"
+            )
 
     async def close(self) -> None:
         """Clean up resources."""

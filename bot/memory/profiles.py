@@ -28,6 +28,34 @@ server_lock = threading.Lock()
 # Initialize caches
 user_cache: Dict[str, Dict] = {}
 server_cache: Dict[str, Dict] = {}
+
+# Dirty flags: set True when any profile is mutated, cleared after successful save
+_users_dirty: bool = False
+_servers_dirty: bool = False
+_dirty_lock = threading.Lock()
+
+
+def _mark_dirty(scope: str) -> None:
+    """Mark a profile scope as dirty (needs saving)."""
+    with _dirty_lock:
+        if scope == "user":
+            globals()["_users_dirty"] = True
+        elif scope == "server":
+            globals()["_servers_dirty"] = True
+
+
+def _consume_dirty(scope: str) -> bool:
+    """Check and atomically clear the dirty flag. Returns True if was dirty."""
+    with _dirty_lock:
+        if scope == "user":
+            val = globals()["_users_dirty"]
+            globals()["_users_dirty"] = False
+            return val
+        elif scope == "server":
+            val = globals()["_servers_dirty"]
+            globals()["_servers_dirty"] = False
+            return val
+    return False
 # Legacy/test aliases
 user_profiles = user_cache
 server_profiles = server_cache
@@ -565,7 +593,10 @@ def load_all_profiles():
 
 
 def save_all_profiles() -> bool:
-    """Save all user profiles from memory cache to disk."""
+    """Save all user profiles from memory cache to disk. Skips if not dirty."""
+    if not _consume_dirty("user"):
+        return True
+
     success = True
 
     with user_cache_lock:
@@ -618,7 +649,10 @@ def load_all_server_profiles() -> None:
 
 
 def save_all_server_profiles() -> bool:
-    """Save all server profiles from memory cache to disk."""
+    """Save all server profiles from memory cache to disk. Skips if not dirty."""
+    if not _consume_dirty("server"):
+        return True
+
     success = True
 
     with server_lock:
@@ -683,6 +717,7 @@ def add_memory(
         # Check for duplicates (case-insensitive)
         if not any(mem.lower() == memory_lower for mem in profile["memories"]):
             profile["memories"].append(memory_text)
+            _mark_dirty("user")
 
             # Enforce memory limit
             from bot.config import load_config
@@ -725,6 +760,7 @@ def add_memory(
             # Check for duplicates in server memories (exact match) [SFT]
             if server_memory not in server_profile["memories"]:
                 server_profile["memories"].append(server_memory)
+                _mark_dirty("server")
 
                 # Enforce server memory limit
                 from bot.config import load_config

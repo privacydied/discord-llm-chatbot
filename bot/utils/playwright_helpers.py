@@ -8,6 +8,7 @@ extraction is unavailable -- there is no local-browser fallback.
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from typing import Optional
 
@@ -97,8 +98,6 @@ def _pw_server_url() -> Optional[str]:
 
     Accepts http:// or ws:// URLs and normalises to ws://.
     """
-    import os
-
     raw = os.getenv("PW_SERVER_URL", "").strip()
     if not raw:
         return None

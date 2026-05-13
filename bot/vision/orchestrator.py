@@ -21,7 +21,7 @@ from typing import Dict, Optional, Any
 import inspect
 
 from bot.utils.logging import get_logger
-from bot.config import load_config
+from bot.config import load_config, _low_resource_int
 from .types import (
     VisionRequest,
     VisionJob,
@@ -38,6 +38,10 @@ from .money import Money
 from .pricing_loader import get_pricing_table
 
 logger = get_logger(__name__)
+
+# Resource caps [Phase 12-16]
+_VL_MAX_IMAGES = _low_resource_int("VL_MAX_IMAGES", 5, 2)
+_VL_MAX_IMAGE_DIMENSION = _low_resource_int("VL_MAX_IMAGE_DIMENSION", 2048, 1024)
 
 
 class VisionOrchestrator:
@@ -379,6 +383,17 @@ class VisionOrchestrator:
             if not hasattr(self.gateway, "_startup_complete"):
                 await self.gateway.startup()
                 self.gateway._startup_complete = True
+
+            # Cap images before sending to VL [Phase 12-16]
+            if hasattr(job.request, "images") and job.request.images:
+                capped_images = job.request.images[:_VL_MAX_IMAGES]
+                if len(capped_images) < len(job.request.images):
+                    self.logger.warning(
+                        "vision:images_capped from=%d to=%d",
+                        len(job.request.images),
+                        _VL_MAX_IMAGES,
+                    )
+                job.request.images = capped_images
 
             # Transition to running state
             job.transition_to(VisionJobState.RUNNING, "Starting generation")

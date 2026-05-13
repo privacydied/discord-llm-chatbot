@@ -15,7 +15,13 @@ from .media_capability import media_detector, ProbeResult
 from .media_ingestion_helpers import build_media_context, sanitize_metadata
 from .action import BotAction
 
+from ..config import _low_resource_int
+
 logger = get_logger(__name__)
+
+# Resource caps for multimodal ingestion [Phase 12-16]
+_MULTIMODAL_MAX_ITEMS = _low_resource_int("MULTIMODAL_MAX_ITEMS", 5, 2)
+_MULTIMODAL_MAX_TOTAL_BYTES = _low_resource_int("MULTIMODAL_MAX_TOTAL_BYTES", 50 * 1024 * 1024, 10 * 1024 * 1024)
 
 try:
     from .hear import hear_infer_from_url
@@ -58,6 +64,34 @@ MEDIA_SPEEDUP_FACTOR = float(os.getenv("MEDIA_SPEEDUP_FACTOR", "1.5"))
 
 # Global semaphore for media download concurrency control
 _media_download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_MEDIA_DOWNLOADS)
+
+
+def _apply_multimodal_caps(
+    items, *, max_items: int = _MULTIMODAL_MAX_ITEMS, max_total_bytes: int = _MULTIMODAL_MAX_TOTAL_BYTES
+):
+    """Apply resource caps to a list of attachment-like items.
+
+    Returns (capped_items, clipped_count) where clipped_count is how many
+    items were removed due to the cap.  Size is estimated via a 'size' attr
+    or len() fallback.
+    """
+    capped: list = []
+    running_bytes = 0
+    for item in items:
+        if len(capped) >= max_items:
+            break
+        try:
+            item_size = getattr(item, "size", None)
+            if item_size is None:
+                item_size = len(item) if hasattr(item, "__len__") else 0
+        except Exception:
+            item_size = 0
+        if running_bytes + item_size > max_total_bytes:
+            break
+        capped.append(item)
+        running_bytes += item_size
+    clipped = len(items) - len(capped)
+    return capped, clipped
 
 
 @dataclass
