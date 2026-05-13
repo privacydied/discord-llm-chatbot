@@ -2644,11 +2644,6 @@ class LLMBot(commands.Bot):
             # --- Context autosave ---
             self.memory_save_task = setup_memory_save_task(self)
             self.memory_save_task.start()
-            registry.register(
-                getattr(self.memory_save_task, "_current_loop", self.memory_save_task),
-                name="memory_save",
-                feature="memory",
-            )
 
             # --- Server archive ingest ---
             archive_enabled = bool(
