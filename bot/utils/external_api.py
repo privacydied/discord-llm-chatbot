@@ -249,7 +249,14 @@ async def _playwright_screenshot(url: str) -> str | None:
 
     from .playwright_helpers import connect_browser as _pw_connect_browser
 
-    vp = os.getenv("SCREENSHOT_PW_VIEWPORT", "1280x1024")
+    vp = os.getenv("SCREENSHOT_PW_VIEWPORT", "")
+
+    # Phase 15: Use low-resource screenshot dimensions when in low-resource mode
+    if not vp:
+        from ..config import _low_resource_int
+        default_w = _low_resource_int("SCREENSHOT_LOW_RESOURCE_WIDTH", 1280, 1280)
+        default_h = _low_resource_int("SCREENSHOT_LOW_RESOURCE_HEIGHT", 1024, 720)
+        vp = f"{default_w}x{default_h}"
     ua = os.getenv("SCREENSHOT_PW_USER_AGENT", "")
     timeout_ms = int(os.getenv("SCREENSHOT_PW_TIMEOUT_MS", "15000"))
 

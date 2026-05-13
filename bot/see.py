@@ -4,6 +4,7 @@ Centralized vision-language inference module (see)
 
 import logging
 import os
+from pathlib import Path
 from .action import BotAction
 from .ai_backend import generate_vl_response
 from .config import load_config
@@ -11,12 +12,64 @@ from .retry_utils import is_retryable_error, VISION_RETRY_CONFIG
 
 logger = logging.getLogger(__name__)
 
+# Phase 15: VL resource caps
+VL_MAX_IMAGES = 5  # overridden by config VL_MAX_IMAGES
+VL_MAX_TOTAL_BYTES = 20 * 1024 * 1024  # 20 MB default; overridden by MULTIMODAL_MAX_TOTAL_BYTES
+IMAGE_MAX_DIMENSION = 2048  # overridden by config IMAGE_MAX_DIMENSION
+
+
+def _load_vl_caps():
+    """Load VL caps from config (cached per call, cheap)."""
+    config = load_config()
+    return {
+        "vl_max_images": config.get("VL_MAX_IMAGES", VL_MAX_IMAGES),
+        "vl_max_total_bytes": config.get("MULTIMODAL_MAX_TOTAL_BYTES", VL_MAX_TOTAL_BYTES),
+        "image_max_dimension": config.get("IMAGE_MAX_DIMENSION", IMAGE_MAX_DIMENSION),
+    }
+
+
+def _downsample_image(image_path: str, max_dimension: int) -> str:
+    """Downsample an image so its longest side <= max_dimension.
+
+    Returns the path to the downsampled image (a temp JPEG), or the original
+    path if downsizing was not needed.
+    """
+    try:
+        from PIL import Image
+
+        with Image.open(image_path) as img:
+            w, h = img.size
+            if w <= max_dimension and h <= max_dimension:
+                return image_path
+
+            ratio = max_dimension / max(w, h)
+            new_w = max(1, int(w * ratio))
+            new_h = max(1, int(h * ratio))
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+
+            tmp_dir = Path("temp")
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            tmp_path = tmp_dir / f"vl_downsample_{os.path.basename(image_path)}.jpg"
+            img.convert("RGB").save(str(tmp_path), "JPEG", quality=85)
+            logger.info(
+                "vl.downsample original=%dx%d resized=%dx%d path=%s",
+                w, h, new_w, new_h, tmp_path,
+            )
+            return str(tmp_path)
+    except Exception:
+        logger.warning("vl.downsample failed, using original image %s", image_path, exc_info=True)
+        return image_path
+
 
 async def see_infer(
     image_path: str, prompt: str = None, model_override: str | None = None
 ) -> BotAction:
     """Generate response from image path and prompt"""
     logger.debug(f"Processing image at path: {image_path}")
+
+    caps = _load_vl_caps()
+    max_dimension = caps["image_max_dimension"]
+    max_total_bytes = caps["vl_max_total_bytes"]
 
     if not os.path.exists(image_path):
         logger.error(f"Image file not found: {image_path}")
@@ -28,7 +81,28 @@ async def see_infer(
             content="📁 The uploaded image could not be found. Please try uploading the image again."
         )
 
+    # Phase 15: Check file size before processing
+    try:
+        file_size = os.path.getsize(image_path)
+        if file_size > max_total_bytes:
+            logger.warning(
+                "vl.reject reason=too_large size=%d max=%d path=%s",
+                file_size, max_total_bytes, image_path,
+            )
+            logger.info(
+                "vl.final status=error exhausted=true reason=too_large path=%s",
+                image_path,
+            )
+            return BotAction(
+                content="📏 The image is too large. Please try uploading a smaller image."
+            )
+    except OSError:
+        pass
+
+    # Phase 15: Downsample large images before VL
     image_path_str = str(image_path)
+    image_path_str = _downsample_image(image_path_str, max_dimension)
+
     mime_type = (
         "image/jpeg"
         if image_path_str.lower().endswith((".jpg", ".jpeg"))
@@ -59,10 +133,10 @@ async def see_infer(
 
     try:
         logger.debug(
-            f"Calling VL backend with prompt length: {len(prompt)} chars and image: {image_path}"
+            f"Calling VL backend with prompt length: {len(prompt)} chars and image: {image_path_str}"
         )
         response = await generate_vl_response(
-            image_url=image_path,
+            image_url=image_path_str,
             user_prompt=prompt,
             model_override=model_override if model_override else None,
         )

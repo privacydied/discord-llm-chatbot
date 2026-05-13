@@ -147,3 +147,43 @@ async def connect_browser(browser_type: BrowserType) -> Optional[Browser]:
             "Playwright remote server unreachable at %s: %s", ws_url, exc
         )
         return None
+
+
+# Phase 16: Resource blocking patterns for text-only extraction.
+# Blocks heavy/unnecessary resources to reduce bandwidth and memory.
+_PW_BLOCKED_RESOURCE_TYPES = frozenset([
+    "image",
+    "font",
+    "media",         # audio/video
+    "stylesheets",   # CSS (not needed for text extraction)
+    "websocket",
+    "manifest",
+    "other",
+])
+
+
+async def create_text_only_context(
+    browser: Browser,
+    block_resources: bool = True,
+    extra_route_handler=None,
+) -> object:
+    """Create a browser context optimized for text-only extraction.
+
+    Blocks images, fonts, media, stylesheets, and other heavy resources
+    to save bandwidth and memory.  Returns a BrowserContext.
+
+    If block_resources=False, creates a normal context without blocking.
+    """
+    if not block_resources:
+        return await browser.new_context()
+
+    ctx = await browser.new_context()
+
+    async def _block_route(route):
+        if route.request.resource_type in _PW_BLOCKED_RESOURCE_TYPES:
+            await route.abort()
+        else:
+            await route.continue_()
+
+    await ctx.route("**/*", _block_route)
+    return ctx

@@ -971,6 +971,17 @@ def load_config():
             "TTS_SKIP_WARMUP", False, True
         ),
         # Vision parse-fallback: conservative cost when usage parsing fails [Phase 17-23]
+        "VL_MAX_TOTAL_BYTES": _low_resource_int(
+            "VL_MAX_TOTAL_BYTES", 20 * 1024 * 1024, 5 * 1024 * 1024
+        ),
+        # Screenshot low-resource dimensions [Phase 15]
+        "SCREENSHOT_LOW_RESOURCE_WIDTH": _low_resource_int(
+            "SCREENSHOT_LOW_RESOURCE_WIDTH", 1920, 1280
+        ),
+        "SCREENSHOT_LOW_RESOURCE_HEIGHT": _low_resource_int(
+            "SCREENSHOT_LOW_RESOURCE_HEIGHT", 1080, 720
+        ),
+        # Vision budget: conservative charge when provider cost parse fails [Phase 15]
         "VISION_BUDGET_PARSE_FALLBACK_COST_USD": _safe_float(
             os.getenv("VISION_BUDGET_PARSE_FALLBACK_COST_USD"),
             "0.02",
