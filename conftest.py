@@ -7,7 +7,6 @@ assets when they are absent (e.g. CI runners that don't store the 340 MB model).
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Sequence  # noqa: F401
 
