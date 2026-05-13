@@ -362,7 +362,6 @@ async def sync_thread_archive(
         return 0
     guild_id = _id(getattr(guild, "id", None))
     thread_id = _id(getattr(thread, "id", None))
-    parent_id = _id(getattr(thread, "parent_id", None)) or thread_id
     if not guild_id or not thread_id:
         return 0
     return await _sync_history_scope(

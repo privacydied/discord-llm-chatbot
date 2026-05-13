@@ -384,9 +384,6 @@ class TTSManager:
                 )
             )
 
-        output_format = str(
-            meta.get("tts_output_format") or meta.get("output_format") or "wav"
-        )
         audio_path = await self.generate_tts(
             text,
             getattr(self, "voice", None),

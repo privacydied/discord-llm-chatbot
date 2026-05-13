@@ -169,7 +169,6 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
         profile_path = config["USER_PROFILE_DIR"] / f"{user_id}.json"
 
         # Use persistence layer with recovery
-        default = default_profile(user_id, username)
         profile = load_json_with_recovery(
             profile_path,
             default_data=None,  # We handle default separately

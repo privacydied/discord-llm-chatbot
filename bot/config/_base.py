@@ -332,11 +332,13 @@ def load_config():
             "256",
             "PERSISTENT_MEMORY_QUEUE_MAX",
         ),
-        "PERSISTENT_MEMORY_WORKERS": _safe_int(
-            os.getenv("PERSISTENT_MEMORY_WORKERS"), "1", "PERSISTENT_MEMORY_WORKERS"
+        "PERSISTENT_MEMORY_WORKERS": _low_resource_int(
+            "PERSISTENT_MEMORY_WORKERS", 1, 1
         ),
-        "PERSISTENT_MEMORY_TOP_K": _safe_int(
-            os.getenv("PERSISTENT_MEMORY_TOP_K"), "6", "PERSISTENT_MEMORY_TOP_K"
+        "PERSISTENT_MEMORY_TOP_K": _low_resource_int(
+            "PERSISTENT_MEMORY_TOP_K",
+            6,
+            3,
         ),
         "PERSISTENT_MEMORY_MAX_PROMPT_CHARS": _safe_int(
             os.getenv("PERSISTENT_MEMORY_MAX_PROMPT_CHARS"),
@@ -431,10 +433,10 @@ def load_config():
             "200",
             "MEMORY_DISTILLER_BATCH_SIZE",
         ),
-        "MEMORY_DISTILLER_INTERVAL_SECONDS": _safe_int(
-            os.getenv("MEMORY_DISTILLER_INTERVAL_SECONDS"),
-            "900",
+        "MEMORY_DISTILLER_INTERVAL_SECONDS": _low_resource_int(
             "MEMORY_DISTILLER_INTERVAL_SECONDS",
+            900,
+            3600,
         ),
         "MEMORY_DISTILLER_WINDOW_MESSAGES": _safe_int(
             os.getenv("MEMORY_DISTILLER_WINDOW_MESSAGES"),
@@ -612,10 +614,10 @@ def load_config():
         # Optional JSONPath-like comma-separated selectors for result extraction
         "CUSTOM_SEARCH_RESULT_PATHS": os.getenv("CUSTOM_SEARCH_RESULT_PATHS", ""),
         # Shared HTTP pool
-        "SEARCH_POOL_MAX_CONNECTIONS": _safe_int(
-            os.getenv("SEARCH_POOL_MAX_CONNECTIONS"),
-            "10",
+        "SEARCH_POOL_MAX_CONNECTIONS": _low_resource_int(
             "SEARCH_POOL_MAX_CONNECTIONS",
+            10,
+            3,
         ),
         # Circuit breaker (search)
         "SEARCH_BREAKER_FAILURE_WINDOW": _safe_int(
@@ -840,8 +842,8 @@ def load_config():
             "VISION_FORCE_OPENROUTER_THRESHOLD",
         ),
         # Concurrency and performance limits
-        "VISION_MAX_CONCURRENT_JOBS": _safe_int(
-            os.getenv("VISION_MAX_CONCURRENT_JOBS"), "3", "VISION_MAX_CONCURRENT_JOBS"
+        "VISION_MAX_CONCURRENT_JOBS": _low_resource_int(
+            "VISION_MAX_CONCURRENT_JOBS", 3, 1
         ),
         "VISION_MAX_USER_CONCURRENT_JOBS": _safe_int(
             os.getenv("VISION_MAX_USER_CONCURRENT_JOBS"),
@@ -921,8 +923,49 @@ def load_config():
         # Cache TTL for successful transcripts (seconds)
         "STT_CACHE_TTL": _safe_int(os.getenv("STT_CACHE_TTL"), "600", "STT_CACHE_TTL"),
         # Local provider concurrency controls
-        "STT_LOCAL_CONCURRENCY": _safe_int(
-            os.getenv("STT_LOCAL_CONCURRENCY"), "2", "STT_LOCAL_CONCURRENCY"
+        "STT_LOCAL_CONCURRENCY": _low_resource_int(
+            "STT_LOCAL_CONCURRENCY", 2, 1
+        ),
+        # ---------------------------------------------------------------
+        # LOW_RESOURCE_MODE-adjusted settings (env vars always override)
+        # ---------------------------------------------------------------
+        # RAG / Embedding lazy-load toggle — when true, skip eager model init
+        "RAG_DISABLE_EAGER_LOAD": _low_resource_bool(
+            "RAG_DISABLE_EAGER_LOAD", False, True
+        ),
+        # TTS warmup — skip pre-warm in low-resource mode
+        "TTS_SKIP_WARMUP": _low_resource_bool(
+            "TTS_SKIP_WARMUP", False, True
+        ),
+        # RAG document parser workers
+        "RAG_DOCUMENT_WORKERS": _low_resource_int(
+            "RAG_DOCUMENT_WORKERS", 4, 1
+        ),
+        # HTTP / aiohttp connector pool size (shared)
+        "HTTP_POOL_MAX_CONNECTIONS": _low_resource_int(
+            "HTTP_POOL_MAX_CONNECTIONS", 50, 10
+        ),
+        # Playwright concurrency (browser instances)
+        "PLAYWRIGHT_MAX_CONCURRENT": _low_resource_int(
+            "PLAYWRIGHT_MAX_CONCURRENT", 3, 1
+        ),
+        # Discord internal message cache
+        "DISCORD_MESSAGE_CACHE_MAX": _low_resource_int(
+            "DISCORD_MESSAGE_CACHE_MAX", 256, 64
+        ),
+        # TTS synthesis concurrency
+        "TTS_CONCURRENCY": _low_resource_int(
+            "TTS_CONCURRENCY", 4, 1
+        ),
+        # Concurrency manager pool sizes
+        "ROUTER_MAX_CONCURRENCY_LIGHT": _low_resource_int(
+            "ROUTER_MAX_CONCURRENCY_LIGHT", 8, 4
+        ),
+        "ROUTER_MAX_CONCURRENCY_NETWORK": _low_resource_int(
+            "ROUTER_MAX_CONCURRENCY_NETWORK", 32, 8
+        ),
+        "ROUTER_MAX_CONCURRENCY_HEAVY": _low_resource_int(
+            "ROUTER_MAX_CONCURRENCY_HEAVY", 2, 1
         ),
         # MULTIMODAL STT FALLBACK CONFIGURATION [CA][REH]
         # Enable multimodal fallback when primary STT fails
@@ -1024,3 +1067,40 @@ def invalidate_config_cache() -> None:
 
 # Force English IPA route (bypass tokenizer env and disable autodiscovery)
 KOKORO_FORCE_IPA_EN = True
+
+
+# ---------------------------------------------------------------------------
+# LOW_RESOURCE_MODE — conservative defaults when memory / CPU is constrained
+# ---------------------------------------------------------------------------
+_low_resource_mode_env = _parse_bool_str(
+    _clean_env_value(os.getenv("LOW_RESOURCE_MODE")),
+    False,
+)
+
+
+def _low_resource_int(env_key: str, normal: int, low: int) -> int:
+    """Return the env var value if set; otherwise pick low vs normal based on LOW_RESOURCE_MODE."""
+    raw = _clean_env_value(os.getenv(env_key))
+    if raw is not None:
+        try:
+            return int(raw.split("#")[0].strip())
+        except (ValueError, AttributeError):
+            pass
+    return low if _low_resource_mode_env else normal
+
+
+def _low_resource_float(env_key: str, normal: float, low: float) -> float:
+    raw = _clean_env_value(os.getenv(env_key))
+    if raw is not None:
+        try:
+            return float(raw.split("#")[0].strip())
+        except (ValueError, AttributeError):
+            pass
+    return low if _low_resource_mode_env else normal
+
+
+def _low_resource_bool(env_key: str, normal: bool, low: bool) -> bool:
+    raw = _clean_env_value(os.getenv(env_key))
+    if raw is not None:
+        return _parse_bool_str(raw, normal)
+    return low if _low_resource_mode_env else normal

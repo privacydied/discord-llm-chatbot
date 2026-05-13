@@ -1,20 +1,36 @@
 import io
-import numpy as np
-import logging
-import tempfile
-import os
-from typing import Optional, Dict, List, Tuple, Any
-from pathlib import Path
-from enum import Enum
-import shutil
 import importlib
+import logging
+import os
+import shutil
+import tempfile
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
 
 from bot.tts.helpers import maybe_onnx_session
 
-import onnxruntime as ort
-import soundfile as sf
-
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Lazy accessors for onnxruntime and soundfile — defer import until first use.
+# ---------------------------------------------------------------------------
+def _ort():
+    """Lazy accessor for onnxruntime module."""
+    if "_ort_mod" not in globals():
+        import onnxruntime as _o
+        globals()["_ort_mod"] = _o
+    return globals()["_ort_mod"]
+
+
+def _sf():
+    """Lazy accessor for soundfile module."""
+    if "_sf_mod" not in globals():
+        import soundfile as _s
+        globals()["_sf_mod"] = _s
+    return globals()["_sf_mod"]
 
 # Public constant for sample rate expected by tests and shim module
 SAMPLE_RATE = 24000
@@ -164,20 +180,21 @@ class KokoroDirect:
             raise FileNotFoundError(f"ONNX model not found: {self.model_path}")
 
         # Configure session options for optimal performance
-        session_options = ort.SessionOptions()
+        _ort_mod = _ort()
+        session_options = _ort_mod.SessionOptions()
         session_options.graph_optimization_level = (
-            ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+            _ort_mod.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
         )
         session_options.enable_cpu_mem_arena = True
 
         # Configure providers (prefer CUDA if available)
         providers = []
-        if ort.get_device() == "GPU":
+        if _ort_mod.get_device() == "GPU":
             providers.append(("CUDAExecutionProvider", {}))
         providers.append(("CPUExecutionProvider", {}))
 
         try:
-            self.sess = ort.InferenceSession(
+            self.sess = _ort_mod.InferenceSession(
                 self.model_path, session_options, providers=providers
             )
             self.onnx_session = self.sess  # Alias for compatibility
@@ -411,7 +428,7 @@ class KokoroDirect:
         if isinstance(result, tuple) and len(result) == 2:
             audio, sr = result
             buffer = io.BytesIO()
-            sf.write(
+            _sf().write(
                 buffer,
                 np.asarray(audio, dtype=np.float32),
                 int(sr),
@@ -421,7 +438,7 @@ class KokoroDirect:
 
         if isinstance(result, np.ndarray):
             buffer = io.BytesIO()
-            sf.write(
+            _sf().write(
                 buffer,
                 result.astype(np.float32),
                 24000,
@@ -698,7 +715,7 @@ class KokoroDirect:
         """Initialize or re-initialize ONNX session (backward compatibility)."""
         # Always (re)initialize to honor test-time patches of onnxruntime.InferenceSession
         try:
-            self.sess = ort.InferenceSession(
+            self.sess = _ort().InferenceSession(
                 self.model_path, providers=["CPUExecutionProvider"]
             )
             self.onnx_session = self.sess
@@ -1062,7 +1079,7 @@ class KokoroDirect:
             audio = audio * (0.8912509381337456 / peak)  # 10 ** (-1/20)
 
         # Save as WAV using the public sample rate constant
-        sf.write(wav_path, audio, SAMPLE_RATE, format="WAV", subtype="PCM_16")
+        _sf().write(wav_path, audio, SAMPLE_RATE, format="WAV", subtype="PCM_16")
 
     def __del__(self):
         """Clean up resources."""

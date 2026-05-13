@@ -89,10 +89,6 @@ class ResultAggregator:
         if not self.results:
             return original_text
 
-        # Separate successful and failed items early
-        successful = [r for r in self.results if r.success]
-        failed = [r for r in self.results if not r.success]
-
         # Build the aggregated prompt
         parts = []
 

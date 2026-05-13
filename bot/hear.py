@@ -1,5 +1,4 @@
-"""
-Centralised speech-to-text pipeline optimised for CPU-only deployments.
+"""Centralised speech-to-text pipeline optimised for CPU-only deployments.
 
 Stages:
     yt-dlp download (URL inputs only)
@@ -38,7 +37,6 @@ from typing import (
     Union,
 )
 
-import numpy as np
 import psutil
 
 from .exceptions import InferenceError
@@ -49,35 +47,95 @@ from .video_ingest import (
     fetch_and_prepare_url_audio,
 )
 from .config import load_config
-
-from .stt_module.failure_classifier import STTFailureClassifier
-from .stt_module.multimodal_fallback import multimodal_fallback_provider
-from .stt_pipeline import (
-    abort_and_finish_failure,
-    build_url_transcript_result,
-    create_stt_job,
-    ffmpeg_bin_has_aac,
-    ffmpeg_candidates_from_env,
-    ffmpeg_supports_aac_decoder,
-    prepare_url_download_for_stt,
-    log_stt_job_complete,
-    load_stt_runtime_compat,
-    parse_stt_max_ram_mb,
-    preprocess_and_transcribe,
-    run_stitch_stage,
-    try_youtube_transcript_first,
-)
 from .youtube_transcript import is_youtube_shorts, resolve_youtube_transcript
 
 if TYPE_CHECKING:
+    import numpy as np
     import discord
     from faster_whisper import WhisperModel
     from .stt import ModelSpec
-
+    from .stt_module.failure_classifier import STTFailureClassifier
+    from .stt_module.multimodal_fallback import multimodal_fallback_provider
+    from .stt_pipeline import (
+        abort_and_finish_failure as _abort_and_finish_failure,
+        build_url_transcript_result as _build_url_transcript_result,
+        create_stt_job as _create_stt_job,
+        ffmpeg_bin_has_aac as _ffmpeg_bin_has_aac,
+        ffmpeg_candidates_from_env as _ffmpeg_candidates_from_env,
+        ffmpeg_supports_aac_decoder as _ffmpeg_supports_aac_decoder,
+        prepare_url_download_for_stt as _prepare_url_download_for_stt,
+        log_stt_job_complete as _log_stt_job_complete,
+        load_stt_runtime_compat as _load_stt_runtime_compat,
+        parse_stt_max_ram_mb as _parse_stt_max_ram_mb,
+        preprocess_and_transcribe as _preprocess_and_transcribe,
+        run_stitch_stage as _run_stitch_stage,
+        try_youtube_transcript_first as _try_youtube_transcript_first,
+    )
 
 logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
+# Lazy accessors for heavy imports (numpy, .stt_pipeline, .stt_module).
+# These defer numpy / heavy ML stack imports until first STT call.
+# Do NOT reference these symbols at module top level.
+# ---------------------------------------------------------------------------
+
+def _np() -> Any:
+    """Lazy accessor — deferred numpy load [IV][REH]."""
+    if "_numpy_mod" not in globals():
+        import numpy as _n
+        globals()["_numpy_mod"] = _n
+    return globals()["_numpy_mod"]
+
+
+def _stt_pipeline():
+    """Lazy accessor — deferred .stt_pipeline load [IV][REH]."""
+    if "_stt_pl" not in globals():
+        from .stt_pipeline import (
+            abort_and_finish_failure,
+            build_url_transcript_result,
+            create_stt_job,
+            ffmpeg_bin_has_aac,
+            ffmpeg_candidates_from_env,
+            ffmpeg_supports_aac_decoder,
+            prepare_url_download_for_stt,
+            log_stt_job_complete,
+            load_stt_runtime_compat,
+            parse_stt_max_ram_mb,
+            preprocess_and_transcribe,
+            run_stitch_stage,
+            try_youtube_transcript_first,
+        )
+        globals()["_stt_pl"] = {
+            "abort_and_finish_failure": abort_and_finish_failure,
+            "build_url_transcript_result": build_url_transcript_result,
+            "create_stt_job": create_stt_job,
+            "ffmpeg_bin_has_aac": ffmpeg_bin_has_aac,
+            "ffmpeg_candidates_from_env": ffmpeg_candidates_from_env,
+            "ffmpeg_supports_aac_decoder": ffmpeg_supports_aac_decoder,
+            "prepare_url_download_for_stt": prepare_url_download_for_stt,
+            "log_stt_job_complete": log_stt_job_complete,
+            "load_stt_runtime_compat": load_stt_runtime_compat,
+            "parse_stt_max_ram_mb": parse_stt_max_ram_mb,
+            "preprocess_and_transcribe": preprocess_and_transcribe,
+            "run_stitch_stage": run_stitch_stage,
+            "try_youtube_transcript_first": try_youtube_transcript_first,
+        }
+    return globals()["_stt_pl"]
+
+
+def _stt_module():
+    """Lazy accessor — deferred .stt_module load [IV][REH]."""
+    if "_stt_mod" not in globals():
+        from .stt_module.failure_classifier import STTFailureClassifier as _fc
+        from .stt_module.multimodal_fallback import multimodal_fallback_provider as _fp
+        globals()["_stt_mod"] = {
+            "STTFailureClassifier": _fc,
+            "multimodal_fallback_provider": _fp,
+        }
+    return globals()["_stt_mod"]
+
+
 # Lazy accessors for stt_manager and ModelSpec.
 # These defer torch/faster_whisper import until first STT call.
 # Do NOT reference stt_manager or ModelSpec at module top level.
@@ -137,7 +195,14 @@ MAX_CHUNK_MULTIPLIER = 1.25
 MAX_CHUNK_ABS_LIMIT = 512
 MEMORY_ABORT_THRESHOLD_MB = 900
 
-STT_MAX_RAM_MB = parse_stt_max_ram_mb()
+STT_MAX_RAM_MB: Optional[int] = None
+try:
+    _stt_max_ram_raw = os.getenv("STT_MAX_RAM_MB")
+    STT_MAX_RAM_MB = int(_stt_max_ram_raw) if _stt_max_ram_raw else None
+    if STT_MAX_RAM_MB is not None and STT_MAX_RAM_MB <= 0:
+        STT_MAX_RAM_MB = None
+except Exception:
+    pass
 
 # Backward-compatible cache symbols retained for tests and monkeypatching.
 _FFMPEG_BIN_CACHE: Optional[str] = None
@@ -145,7 +210,7 @@ _FFMPEG_BIN_HAS_AAC: Optional[bool] = None
 
 
 def _ffmpeg_supports_aac_decoder(ffmpeg_bin: str) -> bool:
-    return ffmpeg_supports_aac_decoder(ffmpeg_bin)
+    return _stt_pipeline()["ffmpeg_supports_aac_decoder"](ffmpeg_bin)
 
 
 def _resolve_ffmpeg_bin() -> str:
@@ -153,7 +218,7 @@ def _resolve_ffmpeg_bin() -> str:
     if _FFMPEG_BIN_CACHE:
         return _FFMPEG_BIN_CACHE
 
-    for candidate in ffmpeg_candidates_from_env():
+    for candidate in _stt_pipeline()["ffmpeg_candidates_from_env"]():
         ffmpeg_bin: Optional[str] = None
         if os.path.sep in candidate:
             candidate_path = Path(candidate)
@@ -616,7 +681,8 @@ class CachedPCMStream(BasePCMStream):
         if not self._path.exists():
             raise FileNotFoundError(f"Cached PCM missing: {self._path}")
         # Memory-map for efficient slicing without loading entire file.
-        mem = np.memmap(
+        np_mod = _np()
+        mem = np_mod.memmap(
             str(self._path),
             dtype="<i2",
             mode="r",
@@ -1324,7 +1390,7 @@ async def _preprocess_audio(
     ffmpeg_bin = _resolve_ffmpeg_bin()
     aac_decoder_available = _FFMPEG_BIN_HAS_AAC
     if aac_decoder_available is None:
-        aac_decoder_available = ffmpeg_bin_has_aac()
+        aac_decoder_available = _stt_pipeline()["ffmpeg_bin_has_aac"]()
     if aac_decoder_available is False and source_path.suffix.lower() in {
         ".mp4",
         ".m4a",
@@ -1403,11 +1469,12 @@ async def _preprocess_audio(
 # ---------------------------------------------------------------------------
 
 
-def _pop_samples(frames: deque[np.ndarray], sample_count: int) -> np.ndarray:
+def _pop_samples(frames: deque["np.ndarray"], sample_count: int) -> "np.ndarray":
     """Remove up to sample_count samples from the frame deque."""
+    np_mod = _np()
     if sample_count <= 0:
-        return np.empty((0,), dtype=np.float32)
-    parts: List[np.ndarray] = []
+        return np_mod.empty((0,), dtype=np_mod.float32)
+    parts: List["np.ndarray"] = []
     remaining = sample_count
     while frames and remaining > 0:
         head = frames[0]
@@ -1420,10 +1487,10 @@ def _pop_samples(frames: deque[np.ndarray], sample_count: int) -> np.ndarray:
             frames[0] = head[remaining:]
             remaining = 0
     if not parts:
-        return np.empty((0,), dtype=np.float32)
+        return np_mod.empty((0,), dtype=np_mod.float32)
     if len(parts) == 1:
         return parts[0]
-    return np.concatenate(parts)
+    return np_mod.concatenate(parts)
 
 
 def _drain_frames(frames: deque[np.ndarray]) -> np.ndarray:

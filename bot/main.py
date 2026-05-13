@@ -21,6 +21,17 @@ from bot.tasks import spawn_background_tasks
 from bot.utils.logging import init_logging, get_logger, shutdown_logging_and_exit
 from bot.shutdown import setup_signal_handlers
 
+# ---------------------------------------------------------------------------
+# Phase 3: Thread caps — MUST run before heavy ML modules are initialized.
+# Use setdefault so explicit user env vars take priority.
+# These are set after the standard imports above; heavy ML libs (torch, numpy)
+# are not imported transitively by the modules imported above, so this is safe.
+# ---------------------------------------------------------------------------
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 
 async def main(bot_ref: Optional[Dict[str, LLMBot]] = None) -> NoReturn:
     """Main bot execution function with enhanced error handling and CLI support."""
@@ -60,12 +71,15 @@ async def main(bot_ref: Optional[Dict[str, LLMBot]] = None) -> NoReturn:
         shutdown_logging_and_exit(1)
 
     intents = create_bot_intents()
+
+    # Discord message cache size — respect LOW_RESOURCE_MODE default
+    _max_msgs = int(config.get("DISCORD_MESSAGE_CACHE_MAX", 256))
     bot = LLMBot(
         config=config,
         command_prefix=get_prefix,
         intents=intents,
         help_command=None,
-        max_messages=256,  # Limit internal message cache to reduce memory
+        max_messages=_max_msgs,
     )
     if bot_ref is not None:
         bot_ref["bot"] = bot

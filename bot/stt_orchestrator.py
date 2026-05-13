@@ -25,9 +25,19 @@ from typing import Optional, Dict, Any, List, Tuple
 
 from .utils.logging import get_logger
 from .config import load_config
-from .stt import stt_manager  # Leverage existing local STT
 
 logger = get_logger(__name__)
+
+# ---------------------------------------------------------------------------
+# Lazy accessor for stt_manager — defers torch/faster_whisper import until
+# first STT call or when STT_ENABLE=false fallback path is taken.
+# ---------------------------------------------------------------------------
+def _stt_manager():
+    """Lazy accessor — deferred torch/faster_whisper load."""
+    if "_stt_mgr" not in globals():
+        from .stt import stt_manager as _sm
+        globals()["_stt_mgr"] = _sm
+    return globals()["_stt_mgr"]
 
 # Constants [CMV]
 DEFAULT_MODE = "single"  # single | cascade_primary_then_fallbacks | parallel_first_acceptable | parallel_best_of | hybrid_draft_then_finalize
@@ -73,7 +83,7 @@ class LocalWhisperProvider(AbstractSTTProvider):
         try:
             async with self._sema:
                 # We ignore deadline_ms for now; future: enforce via timeout.
-                text = await stt_manager.transcribe_async(audio_path)
+                text = await _stt_manager().transcribe_async(audio_path)
             latency_ms = int((time.time() - start) * 1000)
             # No confidence available from current local path
             return TranscriptResult(
@@ -168,7 +178,7 @@ class STTOrchestrator:
 
         if not self.enabled:
             logger.debug("[STT-Orch] Disabled — using legacy stt_manager path")
-            return await stt_manager.transcribe_async(audio_path)
+            return await _stt_manager().transcribe_async(audio_path)
 
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
