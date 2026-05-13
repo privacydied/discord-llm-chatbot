@@ -1481,15 +1481,16 @@ def _pop_samples(frames: deque["np.ndarray"], sample_count: int) -> "np.ndarray"
     return np_mod.concatenate(parts)
 
 
-def _drain_frames(frames: deque[np.ndarray]) -> np.ndarray:
+def _drain_frames(frames: deque["np.ndarray"]) -> "np.ndarray":
     """Drain and concatenate all remaining frames."""
+    np_mod = _np()
     if not frames:
-        return np.empty((0,), dtype=np.float32)
+        return np_mod.empty((0,), dtype=np_mod.float32)
     if len(frames) == 1:
         return frames.popleft()
     parts = list(frames)
     frames.clear()
-    return np.concatenate(parts)
+    return np_mod.concatenate(parts)
 
 
 def _segments_to_dict(
