@@ -16,7 +16,6 @@ async def see_infer(
     image_path: str, prompt: str = None, model_override: str | None = None
 ) -> BotAction:
     """Generate response from image path and prompt"""
-    logger.info("👁️ Vision-language inference started.")
     logger.debug(f"Processing image at path: {image_path}")
 
     if not os.path.exists(image_path):

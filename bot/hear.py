@@ -2083,7 +2083,7 @@ async def _transcribe_with_model(
                         job.enter_aborting(
                             "memory_guard", len(chunk_records), current_end
                         )
-                    gc.collect()
+                    gc.collect()  # noqa — explicit idle-unload after memory abort, not per-request
                     break
                 if (time.perf_counter() - start_time) > whisper_budget:
                     aborted_reason = "time_budget"
@@ -2139,7 +2139,7 @@ async def _transcribe_with_model(
                         raise InferenceError(
                             f"No speech detected (prob={info.no_speech_prob:.3f})"
                         )
-                    logger.info(
+                    logger.debug(
                         "whisper.chunk idx=%s len_s=%.2f",
                         chunk_idx,
                         chunk_end_s - chunk_start_s,
@@ -2175,7 +2175,7 @@ async def _transcribe_with_model(
                             job.enter_aborting(
                                 "memory_guard", len(chunk_records), current_end
                             )
-                        gc.collect()
+                        gc.collect()  # noqa — explicit idle-unload, not per-request
                     if (
                         aborted_reason is None
                         and (time.perf_counter() - start_time) > whisper_budget

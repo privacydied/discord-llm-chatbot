@@ -19,6 +19,20 @@ from .logging import get_logger
 
 logger = get_logger(__name__)
 
+# Local warning suppressor for Playwright-specific rate limiting [Phase 18]
+_pw_warn_last: float = 0.0
+_PW_WARN_COOLDOWN: float = 60.0
+
+
+def _rate_limit_warn(msg: str, *args) -> None:
+    """Log warning at most once per _PW_WARN_COOLDOWN seconds."""
+    global _pw_warn_last
+    now = time.monotonic()
+    if now - _pw_warn_last < _PW_WARN_COOLDOWN:
+        return
+    _pw_warn_last = now
+    logger.warning(msg, *args)
+
 
 # ---- Cached health state --------------------------------------------------
 
@@ -84,7 +98,7 @@ async def check_playwright_health() -> bool:
         _pw_consecutive_failures += 1
         _pw_health_available = False
         _pw_health_last_check = now
-        logger.warning(
+        _rate_limit_warn(
             "playwright:health_check consecutive_failures=%d error=%s",
             _pw_consecutive_failures,
             type(exc).__name__,
@@ -128,5 +142,8 @@ async def connect_browser(browser_type: BrowserType) -> Optional[Browser]:
         logger.info("Connected to remote Playwright server")
         return browser
     except Exception as exc:
-        logger.warning(f"Playwright remote server unreachable at {ws_url}: {exc}")
+        # Rate-limit repeated Playwright connection warnings [Phase 18]
+        _rate_limit_warn(
+            "Playwright remote server unreachable at %s: %s", ws_url, exc
+        )
         return None

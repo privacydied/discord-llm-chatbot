@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import json
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -27,6 +28,33 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.text import Text
 from rich.panel import Panel
+
+# ---- Repeated-warning suppressor [Phase 18] ----
+# Caps identical warning messages to once per SUPPRESS_WINDOW seconds.
+_SUPPRESS_WINDOW: float = 60.0
+_warning_last_seen: Dict[str, float] = {}
+
+
+def _is_warning_suppressed(msg: str) -> bool:
+    """Return True if this warning was already logged within the suppress window."""
+    now = time.monotonic()
+    prev = _warning_last_seen.get(msg)
+    if prev is not None and (now - prev) < _SUPPRESS_WINDOW:
+        return True
+    _warning_last_seen[msg] = now
+    return False
+
+
+class SuppressingLogger(logging.Logger):
+    """Logger subclass that rate-limits repeated warning/critical messages."""
+
+    def warning(self, msg, *args, **kwargs):
+        if _is_warning_suppressed(msg):
+            return
+        super().warning(msg, *args, **kwargs)
+
+    def warn(self, msg, *args, **kwargs):
+        self.warning(msg, *args, **kwargs)
 
 
 def _rich_tracebacks_supported() -> bool:
@@ -271,6 +299,9 @@ def create_structured_logger(name: str, subsys: Optional[str] = None) -> logging
     """Create logger with structured logging helpers. [CA]"""
     logger = logging.getLogger(name)
 
+    # Install SuppressingLogger for repeated-warning suppression [Phase 18]
+    logger.__class__ = SuppressingLogger
+
     # Add convenience methods for structured logging
     def info_event(event: str, detail: Optional[Dict[str, Any]] = None, **kwargs):
         """Log info event with structured data. [CA]"""
@@ -311,6 +342,8 @@ __all__ = [
     "StructuredJsonFormatter",
     "initialize_logging",
     "create_structured_logger",
+    "SuppressingLogger",
+    "_is_warning_suppressed",
 ]
 
 
