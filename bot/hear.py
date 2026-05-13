@@ -1984,7 +1984,8 @@ async def _transcribe_with_model(
                     samples_buffered += tail.shape[0]
                 tail = None
 
-            frame = np.frombuffer(frame_bytes, dtype="<i2").astype(np.float32) / 32768.0
+            np_mod = _np()
+            frame = np_mod.frombuffer(frame_bytes, dtype="<i2").astype(np_mod.float32) / 32768.0
             if frame.size == 0:
                 continue
 
@@ -2622,7 +2623,8 @@ async def _run_whisper_with_fallback(
 
     except Exception as primary_error:
         # Classify the failure to determine if fallback should be attempted
-        failure = STTFailureClassifier.classify_failure(
+        _fc = _stt_module()["STTFailureClassifier"]
+        failure = _fc.classify_failure(
             error=primary_error, pre_result=pre, audio_path=pre.source_path
         )
 
@@ -2641,7 +2643,7 @@ async def _run_whisper_with_fallback(
                 "Please try sending your message as text."
             ) from primary_error
 
-        if not STTFailureClassifier.should_attempt_fallback(
+        if not _fc.should_attempt_fallback(
             classification=failure,
             has_audio_data=pre.duration_in > 0,
             pre_duration=pre.duration_in,
