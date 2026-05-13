@@ -159,5 +159,6 @@ cache/stt_pcm/*
 cache/stt_transcripts/*
 .kokoro_espeak_tmp/*
 CLAUDE.md
-tests/output/test_output.wav
+*.wav
 cache/youtube_transcripts/*
+scripts/*.py
