@@ -220,15 +220,18 @@ _PUBLIC_DISCLOSURE_SENSITIVE_PATTERNS = [
     r"\b(?:big|small|huge|tiny|flat)\s+(?:boobs?|chest|dick|cock|penis|ass)\b",
     # Drugs / medication / substance claims
     r"\b(?:coke|cocaine|crack|heroin|meth|mdma|molly|ecstasy|lsd|acid)\b",
-    r"\b(?:xanax|valium|adderall|oxycontin|percocet|tramadol)\b",
+    r"\b(?:xanax|xanny|xanex|valium|adderall|oxycontin|percocet|tramadol)\b",
+    r"\b(?:ativan|clonazepam|diazepam|alprazolam|lorazepam)\b",
+    r"\b(?:morphine|fentanyl|opiate|opioid)\b",
     r"\b(?:weed|marijuana|cannabis|bong|joint|dabs|k2)\b",
     r"\b(?:shrooms|psilocybin|ketamine|special\s*k)\b",
+    r"\b(?:blow|snow|bop|smack|scag|tina)\b",
     r"\b(?:drug|high|stoned|sober|addict|addiction|overdose)\b",
     # Medical / mental-health claims
     r"\b(?:depression|depressed|anxious|anxiety|ptsd|bipolar|schizophrenia)\b",
     r"\b(?:autism|autistic|adhd|ocd|bpd|disorder)\b",
     r"\b(?:cancer|diabetes|epilepsy|hiv|aids|heart\s*disease)\b",
-    r"\b(?:suicid|self.harm|selfharm)\b",
+    r"\b(?:suicid|suicide|self.harm|selfharm)\b",
     r"\b(?:therapy|therapist|psychiatrist|medication|pills)\b",
     # Protected identity claims
     r"\b(?:race|racial|ethnic|ethnicity)\b",
