@@ -1,8 +1,6 @@
 # Architecture
 
-> **Fill me in**
-> - [ ] Verify component names and paths.
-> - [ ] Expand on external service details.
+> Last updated: 2026-05-13 — decomposed router components, multimodal pipeline, TTS/STT engines.
 
 ## Overview
 The bot is built on `discord.py` 2.x and structured for reliability and observability.

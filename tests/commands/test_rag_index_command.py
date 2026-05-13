@@ -29,7 +29,7 @@ def rag_cog(fake_bot, monkeypatch):
     monkeypatch.setattr(
         rag_module.asyncio,
         "create_task",
-        lambda coro: (coro.close(), None)[1],
+        lambda coro, **kw: (coro.close(), None)[1],
     )
     return RAGCommands(fake_bot)
 

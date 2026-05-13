@@ -282,9 +282,17 @@ class SLOMonitor:
         # Execute registered callbacks
         for callback in self.alert_callbacks.get(alert_level, []):
             try:
-                asyncio.create_task(callback(alert))
+                _task = asyncio.create_task(callback(alert))
+                _task.add_done_callback(
+                    lambda t, cb=callback: logger.error(
+                        f"Alert callback {cb.__name__} failed: {t.exception()}",
+                        exc_info=t.exception(),
+                    )
+                    if t.done() and not t.cancelled() and t.exception()
+                    else None
+                )
             except Exception as e:
-                logger.error(f"❌ Alert callback error: {e}")
+                logger.error(f"❌ Alert callback scheduling error: {e}")
 
     def register_alert_callback(self, alert_level: AlertLevel, callback: Callable):
         """Register callback for alert level [REH]."""

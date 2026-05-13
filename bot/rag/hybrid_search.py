@@ -320,7 +320,12 @@ class HybridRAGSearch:
         logger.info(
             "[RAG] Vector index not loaded, triggering background lazy load for first search..."
         )
-        asyncio.create_task(self._load_vector_index())
+        _task = asyncio.create_task(self._load_vector_index(), name="rag-vector-index-lazy-load")
+        _task.add_done_callback(
+            lambda t: logger.error(f"vector index load failed: {t.exception()}", exc_info=t.exception())
+            if t.done() and not t.cancelled() and t.exception()
+            else None
+        )
         return False
 
     async def search(

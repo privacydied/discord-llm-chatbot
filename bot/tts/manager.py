@@ -8,15 +8,26 @@ registry bootstrap, lazy ``KokoroDirect`` loading, and a synchronous
 
 from __future__ import annotations
 
+import asyncio
 import os
 import logging
+import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 from ..config import _low_resource_int, _low_resource_bool
 
-# Import KokoroDirect here so tests can patch 'bot.tts_manager_fixed.KokoroDirect'
-from .kokoro_direct import KokoroDirect
+if TYPE_CHECKING:
+    from .kokoro_direct import KokoroDirect
+
+# ---------- Lazy accessor to defer heavy numpy / onnxruntime import ----------
+
+def _kokoro_direct():
+    """Lazy accessor — deferred KokoroDirect load (carries numpy)."""
+    if "_kokoro_cls" not in globals():
+        from .kokoro_direct import KokoroDirect as _kd
+        globals()["_kokoro_cls"] = _kd
+    return globals()["_kokoro_cls"]
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +38,10 @@ DEFAULT_VOICES_PATH = "tts/voices-v1.0.bin"
 # Resource caps [Phase 12-16]
 _TTS_MAX_CHARS = _low_resource_int("TTS_MAX_CHARS", 4000, 2000)
 _TTS_SKIP_LONG_RESPONSES = _low_resource_bool("TTS_SKIP_LONG_RESPONSES", False, True)
+
+# Warmup configuration
+_TTS_SKIP_WARMUP = _low_resource_bool("TTS_SKIP_WARMUP", False, True)
+_WARMUP_TIMEOUT = 60  # seconds budget for warmup synthesis
 
 
 class TTSManager:
@@ -53,7 +68,8 @@ class TTSManager:
         self.available: bool = False
 
         # Internal state
-        self.kokoro: Optional[KokoroDirect] = None
+        self.kokoro: Optional["KokoroDirect"] = None
+        self._warmup_status: str = "not_started"
 
         # Best‑effort tokenizer registry init (safe if patched in tests)
         try:
@@ -131,8 +147,15 @@ class TTSManager:
         )
         return model_path, voices_path
 
-    def _load_kokoro(self, model_path: str, voices_path: str) -> KokoroDirect:
-        """Create KokoroDirect instance. Broken out for test patching."""
+    def _load_kokoro(self, model_path: str, voices_path: str) -> "KokoroDirect":
+        """Create KokoroDirect instance. Broken out for test patching.
+
+        Resolves KokoroDirect through the module so that
+        ``@patch('bot.tts.manager.KokoroDirect')`` works correctly.
+        """
+        import bot.tts.manager as _mgr  # type: ignore[import-not-checked]
+
+        KokoroDirect = getattr(_mgr, "KokoroDirect", _kokoro_direct())
         logger.info(
             "Loading KokoroDirect",
             extra={
@@ -143,6 +166,97 @@ class TTSManager:
             },
         )
         return KokoroDirect(model_path=model_path, voices_path=voices_path)
+
+    # ----- Warmup -----
+    @property
+    def warmup_status(self) -> str:
+        """Return current warmup state: 'not_started', 'running', 'complete', or 'failed'."""
+        return self._warmup_status
+
+    def get_status(self) -> Dict[str, Any]:
+        """Return a dict of TTS subsystem status for !status display and diagnostics."""
+        return {
+            "available": self.available,
+            "engine": self.backend,
+            "loaded": self.kokoro is not None,
+            "warmup_status": self._warmup_status,
+        }
+
+    def start_warmup(self, loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
+        """Schedule TTS warmup as a non-blocking background task.
+
+        If TTS_SKIP_WARMUP is True (default in LOW_RESOURCE_MODE), warmup is skipped
+        entirely.  Otherwise a trivial ``"ready"`` string is synthesised through the
+        normal KokoroDirect pipeline to warm the ONNX model cache before real user
+        requests arrive.  The operation runs in the default ThreadPoolExecutor, is
+        non-fatal, and uses a 60-second budget.
+        """
+        if _TTS_SKIP_WARMUP:
+            logger.info(
+                "TTS warmup skipped (TTS_SKIP_WARMUP=True)",
+                extra={"subsys": "tts", "event": "manager.warmup.skip"},
+            )
+            return
+
+        event_loop = loop or asyncio.get_running_loop()
+
+        def _run_warmup() -> None:
+            import concurrent.futures
+
+            logger.info(
+                "TTS warmup started",
+                extra={"subsys": "tts", "event": "manager.warmup.start"},
+            )
+            self._warmup_status = "running"
+            try:
+                # Reuse the existing lazy-load path
+                self.load_model()
+                if not self.kokoro:
+                    raise RuntimeError("TTS engine not available for warmup")
+
+                warmup_path = Path(tempfile.mkdtemp()) / "warmup.wav"
+
+                # Run synthesis in a dedicated sub-executor so we can enforce the
+                # 60 s budget without leaking background threads on timeout.
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                    fut = ex.submit(
+                        lambda p=warmup_path: self.kokoro.create(  # type: ignore[union-attr]
+                            "ready", self.voice, out_path=p,
+                        ),
+                    )
+                    fut.result(timeout=_WARMUP_TIMEOUT)
+
+                # Discard the generated audio
+                try:
+                    warmup_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+                self._warmup_status = "complete"
+                logger.info(
+                    "TTS warmup completed successfully",
+                    extra={"subsys": "tts", "event": "manager.warmup.done"},
+                )
+
+            except concurrent.futures.TimeoutError:
+                self._warmup_status = "failed"
+                logger.warning(
+                    "TTS warmup timed out after %ds",
+                    _WARMUP_TIMEOUT,
+                    extra={"subsys": "tts", "event": "manager.warmup.timeout",
+                           "timeout_s": _WARMUP_TIMEOUT},
+                )
+            except Exception as exc:
+                self._warmup_status = "failed"
+                logger.warning(
+                    "TTS warmup failed: %s",
+                    exc,
+                    extra={"subsys": "tts", "event": "manager.warmup.fail",
+                           "error": str(exc)},
+                )
+                # Non-fatal: do not re-raise
+
+        event_loop.run_in_executor(None, _run_warmup)
 
     # ----- Public API -----
     def load_model(self) -> None:
@@ -201,6 +315,15 @@ class TTSManager:
             extra={"subsys": "tts", "event": "manager.generate"},
         )
         return self.kokoro.create(text, chosen_voice, out_path=out_path)
+
+
+# Lazy re-export for KokoroDirect so external modules can still do
+# ``from bot.tts.manager import KokoroDirect`` without triggering the
+# heavy numpy/onnxruntime import chain at module load time.
+def __getattr__(name):
+    if name == "KokoroDirect":
+        return _kokoro_direct()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = ["TTSManager", "KokoroDirect"]

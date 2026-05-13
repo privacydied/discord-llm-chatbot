@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -16,6 +17,8 @@ from bot.server_archive import (
     start_server_archive_service,
 )
 from bot.server_archive.search import sanitize_snippet
+
+logger = logging.getLogger(__name__)
 
 
 class ArchiveCommands(commands.Cog):
@@ -186,7 +189,12 @@ class ArchiveCommands(commands.Cog):
                 "Archive sync is already running for this guild.", mention_author=False
             )
             return
-        asyncio.create_task(service.sync_guild(guild), name=f"archive-sync-{guild.id}")
+        _sync_task = asyncio.create_task(service.sync_guild(guild), name=f"archive-sync-{guild.id}")
+        _sync_task.add_done_callback(
+            lambda t: logger.error(f"archive sync failed: {t.exception()}", exc_info=t.exception())
+            if t.done() and not t.cancelled() and t.exception()
+            else None
+        )
         await ctx.reply("Archive sync started for this guild.", mention_author=False)
 
     @commands.guild_only()
@@ -217,8 +225,13 @@ class ArchiveCommands(commands.Cog):
                 mention_author=False,
             )
             return
-        asyncio.create_task(
+        _sync_task = asyncio.create_task(
             service.sync_channel(target), name=f"archive-sync-channel-{key}"
+        )
+        _sync_task.add_done_callback(
+            lambda t: logger.error(f"archive channel sync failed: {t.exception()}", exc_info=t.exception())
+            if t.done() and not t.cancelled() and t.exception()
+            else None
         )
         await ctx.reply(
             "Archive sync started for the target channel/thread.", mention_author=False

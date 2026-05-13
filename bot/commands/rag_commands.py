@@ -106,10 +106,17 @@ class RAGCommands(commands.Cog):
         """
         self.bot = bot
         self.hybrid_search = None
+        self._init_task = None
         self.admin_ids = bot.admin_ids if hasattr(bot, "admin_ids") else []
 
         # Initialize hybrid search on startup
-        asyncio.create_task(self._init_hybrid_search())
+        self._init_task = asyncio.create_task(self._init_hybrid_search(), name="rag-init-hybrid-search")
+        if self._init_task is not None:
+            self._init_task.add_done_callback(
+                lambda t: logger.error(f"hybrid search init failed: {t.exception()}", exc_info=t.exception())
+                if not t.cancelled() and t.exception()
+                else None
+            )
 
     async def _init_hybrid_search(self):
         """Initialize hybrid search."""
@@ -121,6 +128,12 @@ class RAGCommands(commands.Cog):
 
     async def cog_unload(self):
         """Cleanup on cog unload."""
+        if self._init_task and not self._init_task.done():
+            self._init_task.cancel()
+            try:
+                await self._init_task
+            except asyncio.CancelledError:
+                pass
         if self.hybrid_search:
             await self.hybrid_search.close()
 

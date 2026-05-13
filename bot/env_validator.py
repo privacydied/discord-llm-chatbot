@@ -16,6 +16,8 @@ try:
 except ImportError:
     use_enhanced_utils = False
 
+from bot.utils.logging import get_logger
+
 logger = logging.getLogger(__name__)
 
 # Required environment variables by category
@@ -181,8 +183,8 @@ if __name__ == "__main__":
 
     # Run validation
     if validate_on_startup():
-        print("Environment validation passed")
+        get_logger(__name__).info("Environment validation passed")
         exit(0)
     else:
-        print("Environment validation failed")
+        get_logger(__name__).error("Environment validation failed")
         exit(1)

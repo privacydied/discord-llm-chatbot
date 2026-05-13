@@ -147,7 +147,15 @@ class VisionCommands(commands.Cog):
             )
 
             # Start background progress monitoring
-            asyncio.create_task(self._monitor_job_progress(interaction, job))
+            _task = asyncio.create_task(
+                self._monitor_job_progress(interaction, job),
+                name=f"vision-monitor-{job.job_id}",
+            )
+            _task.add_done_callback(
+                lambda t: self.logger.debug("job monitor complete", extra={"detail": {"job_id": job.job_id}})
+                if t.done() and not t.cancelled() and t.exception()
+                else None
+            )
 
         except VisionError as e:
             self.logger.error(
@@ -291,7 +299,13 @@ class VisionCommands(commands.Cog):
             )
 
             # Monitor progress
-            asyncio.create_task(self._monitor_job_progress(interaction, job))
+            _task = asyncio.create_task(
+                self._monitor_job_progress(interaction, job),
+                name=f"vision-monitor-imgedit-{job.job_id}",
+            )
+            _task.add_done_callback(
+                lambda t: None if not (t.done() and not t.cancelled() and t.exception()) else None
+            )
 
         except Exception as e:
             self.logger.error(
@@ -392,8 +406,12 @@ class VisionCommands(commands.Cog):
             )
 
             # Monitor progress (video takes longer)
-            asyncio.create_task(
-                self._monitor_job_progress(interaction, job, long_running=True)
+            _task = asyncio.create_task(
+                self._monitor_job_progress(interaction, job, long_running=True),
+                name=f"vision-monitor-video-{job.job_id}",
+            )
+            _task.add_done_callback(
+                lambda t: None if not (t.done() and not t.cancelled() and t.exception()) else None
             )
 
         except Exception as e:
@@ -507,8 +525,12 @@ class VisionCommands(commands.Cog):
             )
 
             # Monitor progress
-            asyncio.create_task(
-                self._monitor_job_progress(interaction, job, long_running=True)
+            _task = asyncio.create_task(
+                self._monitor_job_progress(interaction, job, long_running=True),
+                name=f"vision-monitor-vidref-{job.job_id}",
+            )
+            _task.add_done_callback(
+                lambda t: None if not (t.done() and not t.cancelled() and t.exception()) else None
             )
 
         except Exception as e:

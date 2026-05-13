@@ -343,7 +343,35 @@ class ConfigValidator:
         # TTS V8 experimental backend — warn unless explicitly opted in [item 12]
         self._validate_tts_v8_experimental()
 
+        # TEXT_FALLBACK ladder — warn on duplicate entries
+        self._validate_text_fallback_ladder()
+
         return errors
+
+    def _validate_text_fallback_ladder(self) -> None:
+        """Log a warning if TEXT_FALLBACK_MODELS contains duplicates."""
+        try:
+            from bot.config import load_config
+
+            cfg = load_config()
+            raw = cfg.get("TEXT_FALLBACK_MODELS", "")
+            if not raw:
+                return
+            models = [m.strip() for m in raw.split(",") if m.strip()]
+            seen: set[str] = set()
+            duplicates: list[str] = []
+            for m in models:
+                if m in seen and m not in duplicates:
+                    duplicates.append(m)
+                seen.add(m)
+            if duplicates:
+                self.logger.warning(
+                    "config:text_fallback_duplicates models=%s",
+                    ", ".join(duplicates),
+                )
+        except Exception:
+            pass
+
 
     def _validate_vision_fallback_ladder(self) -> None:
         """Log a warning if VISION_IMAGE_FALLBACK_MODELS contains duplicates."""
