@@ -340,6 +340,9 @@ class ConfigValidator:
         # Timeout ladder vs fallback ladder mismatch [Phase 17-23]
         self._validate_timeout_ladder_mismatch()
 
+        # TTS V8 experimental backend — warn unless explicitly opted in [item 12]
+        self._validate_tts_v8_experimental()
+
         return errors
 
     def _validate_vision_fallback_ladder(self) -> None:
@@ -386,6 +389,24 @@ class ConfigValidator:
                     model_count,
                     timeout_count,
                 )
+        except Exception:
+            pass
+
+    def _validate_tts_v8_experimental(self) -> None:
+        """Warn if TTS_BACKEND=kokoro-v8 without explicit experimental opt-in."""
+        try:
+            backend = os.getenv("TTS_BACKEND", "")
+            if backend == "kokoro-v8":
+                allow_experimental = os.getenv(
+                    "TTS_ALLOW_EXPERIMENTAL", "false"
+                ).lower() in ("true", "1", "yes")
+                if not allow_experimental:
+                    self.logger.warning(
+                        "config:tts_backend_experimental "
+                        "TTS_BACKEND=kokoro-v8 is experimental and not production-ready. "
+                        "Set TTS_ALLOW_EXPERIMENTAL=true to acknowledge this, "
+                        "or use TTS_BACKEND=kokoro-onnx (recommended)."
+                    )
         except Exception:
             pass
 
