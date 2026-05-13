@@ -198,7 +198,7 @@ class KokoroDirect:
         session_options.graph_optimization_level = (
             _ort_mod.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
         )
-        session_options.enable_cpu_mem_arena = True
+        session_options.enable_cpu_mem_arena = False
 
         # Configure providers (prefer CUDA if available)
         providers = []
