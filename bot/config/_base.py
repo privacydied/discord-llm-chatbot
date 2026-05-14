@@ -782,6 +782,40 @@ def load_config():
             "1",
             "STT_MULTIMODAL_FALLBACK_MAX_RETRIES",
         ),
+        # DASHBOARD SETTINGS [PA]
+        "DASHBOARD_ENABLED": _parse_bool_str(_clean_env_value(os.getenv("DASHBOARD_ENABLED")), False),
+        "DASHBOARD_HOST": _clean_env_value(os.getenv("DASHBOARD_HOST", "127.0.0.1")),
+        "DASHBOARD_PORT": _safe_int(os.getenv("DASHBOARD_PORT"), "8011", "DASHBOARD_PORT"),
+        "DASHBOARD_PUBLIC_BIND": _parse_bool_str(_clean_env_value(os.getenv("DASHBOARD_PUBLIC_BIND")), False),
+        "DASHBOARD_AUTH_TOKEN": _clean_env_value(os.getenv("DASHBOARD_AUTH_TOKEN")),
+        "DASHBOARD_SESSION_SECRET": _clean_env_value(os.getenv("DASHBOARD_SESSION_SECRET")),
+        "DASHBOARD_OWNER_IDS": _clean_env_value(os.getenv("DASHBOARD_OWNER_IDS", "")),
+        "DASHBOARD_RATE_LIMIT_SENDS_PER_MINUTE": _safe_int(
+            os.getenv("DASHBOARD_RATE_LIMIT_SENDS_PER_MINUTE"),
+            "5",
+            "DASHBOARD_RATE_LIMIT_SENDS_PER_MINUTE",
+        ),
+        "DASHBOARD_AUDIT_DB_PATH": os.getenv("DASHBOARD_AUDIT_DB_PATH", "./data/dashboard_audit.db"),
+        "DASHBOARD_DM_ARCHIVE_ENABLED": _parse_bool_str(_clean_env_value(os.getenv("DASHBOARD_DM_ARCHIVE_ENABLED")), True),
+        "DASHBOARD_DM_RETENTION_DAYS": _safe_int(
+            os.getenv("DASHBOARD_DM_RETENTION_DAYS"),
+            "90",
+            "DASHBOARD_DM_RETENTION_DAYS",
+        ),
+        "DASHBOARD_AUDIT_RETENTION_DAYS": _safe_int(
+            os.getenv("DASHBOARD_AUDIT_RETENTION_DAYS"),
+            "180",
+            "DASHBOARD_AUDIT_RETENTION_DAYS",
+        ),
+        "DASHBOARD_MAX_MESSAGE_CHARS": _safe_int(
+            os.getenv("DASHBOARD_MAX_MESSAGE_CHARS"),
+            "1800",
+            "DASHBOARD_MAX_MESSAGE_CHARS",
+        ),
+        "DASHBOARD_SHOW_MESSAGE_PREVIEWS": _parse_bool_str(
+            _clean_env_value(os.getenv("DASHBOARD_SHOW_MESSAGE_PREVIEWS")),
+            True,
+        ),
     }
 
     # Deprecation warnings for legacy config keys [SFT]

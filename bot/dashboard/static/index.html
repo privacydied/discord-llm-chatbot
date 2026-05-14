@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+
+<!-- Login Page -->
+<div id="login-page">
+  <h2>Dashboard Login</h2>
+  <form id="login-form">
+    <input type="password" id="auth-token-input" placeholder="Auth token" autocomplete="off" required>
+    <button type="submit">Login</button>
+  </form>
+  <div id="login-error"></div>
+</div>
+
+<!-- Dashboard Page -->
+<div id="dashboard-page">
+  <header>
+    <h1>Bot Dashboard</h1>
+    <nav>
+      <button data-section="overview" class="active">Overview</button>
+      <button data-section="guilds">Guilds</button>
+      <button data-section="dms">DMs</button>
+      <button data-section="audit">Audit</button>
+      <button data-section="send">Send</button>
+    </nav>
+    <div>
+      <label class="toggle"><input type="checkbox" id="auto-refresh-toggle"> Auto-refresh (10s)</label>
+      <button id="logout-btn" style="margin-left:12px;background:none;border:1px solid #333;color:#e0e0e0;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Overview -->
+    <div id="overview-section" class="section active">
+      <h2 style="margin-bottom:16px;font-size:14px;">Overview</h2>
+      <div class="cards">
+        <div class="card"><div class="label">Status</div><div class="value" id="summary-status">—</div></div>
+        <div class="card"><div class="label">Bot</div><div class="value" id="summary-bot" style="font-size:14px;">—</div></div>
+        <div class="card"><div class="label">Uptime</div><div class="value" id="summary-uptime">—</div></div>
+        <div class="card"><div class="label">Guilds</div><div class="value" id="summary-guilds">—</div></div>
+        <div class="card"><div class="label">Users</div><div class="value" id="summary-users">—</div></div>
+        <div class="card"><div class="label">Cogs</div><div class="value" id="summary-cogs">—</div></div>
+        <div class="card"><div class="label">Latency</div><div class="value" id="summary-latency">—</div></div>
+        <div class="card"><div class="label">Audit Events</div><div class="value" id="summary-audit-count">—</div></div>
+      </div>
+    </div>
+
+    <!-- Guilds -->
+    <div id="guilds-section" class="section">
+      <h2 style="margin-bottom:16px;font-size:14px;">Guild Inventory</h2>
+      <div class="filters">
+        <input type="text" id="guild-search" placeholder="Search by name or ID" style="width:250px;">
+        <button class="btn" onclick="loadGuilds(1)">Search</button>
+      </div>
+      <table>
+        <thead><tr><th>Guild ID</th><th>Name</th><th>Members</th><th>Channels</th><th>Permissions</th></tr></thead>
+        <tbody id="guilds-tbody"></tbody>
+      </table>
+      <div id="guilds-pagination" class="pagination"></div>
+    </div>
+
+    <!-- DMs -->
+    <div id="dms-section" class="section">
+      <h2 style="margin-bottom:16px;font-size:14px;">DM Threads (bot-visible)</h2>
+      <table>
+        <thead><tr><th>Channel</th><th>User</th><th>Messages</th><th>Last</th><th>Time</th><th></th></tr></thead>
+        <tbody id="dms-tbody"></tbody>
+      </table>
+      <div id="dms-pagination" class="pagination"></div>
+    </div>
+
+    <!-- DM Thread Detail -->
+    <div id="dm-thread-section" style="display:none;">
+      <h2 style="margin-bottom:16px;font-size:14px;">Thread Detail <button onclick="document.getElementById('dm-thread-section').style.display='none'" style="background:none;border:none;color:#e94560;cursor:pointer;">close</button></h2>
+      <table>
+        <thead><tr><th>Dir</th><th>Preview</th><th>Time</th></tr></thead>
+        <tbody id="dm-thread-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Audit Log -->
+    <div id="audit-section" class="section">
+      <h2 style="margin-bottom:16px;font-size:14px;">Audit Log</h2>
+      <div class="filters">
+        <select id="audit-filter-event">
+          <option value="">All events</option>
+          <option value="dashboard.login.success">Login success</option>
+          <option value="dashboard.login.failure">Login failure</option>
+          <option value="dashboard.send.dm">Send DM</option>
+          <option value="dashboard.send.guild_message">Send guild msg</option>
+          <option value="dashboard.start">Start</option>
+          <option value="dashboard.stop">Stop</option>
+        </select>
+        <input type="text" id="audit-filter-actor" placeholder="Actor ID" style="width:100px;">
+        <select id="audit-filter-result">
+          <option value="">All results</option>
+          <option value="success">Success</option>
+          <option value="failed">Failed</option>
+          <option value="pending">Pending</option>
+          <option value="rate_limited">Rate limited</option>
+        </select>
+        <button id="audit-filter-btn" class="btn">Filter</button>
+      </div>
+      <table>
+        <thead><tr><th>Result</th><th>Event</th><th>Actor</th><th>Target</th><th>Preview</th><th>Time</th></tr></thead>
+        <tbody id="audit-tbody"></tbody>
+      </table>
+      <div id="audit-pagination" class="pagination"></div>
+    </div>
+
+    <!-- Send Message -->
+    <div id="send-section" class="section">
+      <h2 style="margin-bottom:16px;font-size:14px;">Send as Bot</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+        <!-- Send DM -->
+        <div>
+          <h3 style="margin-bottom:12px;font-size:13px;">Send DM</h3>
+          <div class="form-group">
+            <label>User ID</label>
+            <input type="text" id="send-dm-user-id" placeholder="Discord user ID">
+          </div>
+          <div class="form-group">
+            <label>Message</label>
+            <textarea id="send-dm-content" placeholder="Message content..."></textarea>
+          </div>
+          <button id="send-dm-btn" class="btn">Send DM</button>
+          <div id="send-dm-result" class=""></div>
+        </div>
+        <!-- Send Guild Message -->
+        <div>
+          <h3 style="margin-bottom:12px;font-size:13px;">Send Guild/Channel Message</h3>
+          <div class="form-group">
+            <label>Guild ID</label>
+            <input type="text" id="send-guild-id" placeholder="Guild ID">
+          </div>
+          <div class="form-group">
+            <label>Channel ID</label>
+            <input type="text" id="send-guild-channel-id" placeholder="Text channel ID">
+          </div>
+          <div class="form-group">
+            <label>Message</label>
+            <textarea id="send-guild-content" placeholder="Message content..."></textarea>
+          </div>
+          <button id="send-guild-btn" class="btn">Send</button>
+          <div id="send-guild-result" class=""></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="/static/dashboard.js"></script>
+</body>
+</html>

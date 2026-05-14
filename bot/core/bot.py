@@ -2283,6 +2283,13 @@ class LLMBot(commands.Bot):
         if not await self.message_processor.on_message(message):
             return
 
+        # Archive DMs for dashboard (best-effort, non-blocking)
+        if isinstance(message.channel, discord.DMChannel):
+            try:
+                self._track_background_task(asyncio.create_task(self._record_dm_message(message)))
+            except Exception:
+                pass
+
         # --- SSOT gate: check gating before enqueuing heavy work [IV] ---
         try:
             if self.router is not None and not self._is_long_running_admin_command(message):
@@ -2393,8 +2400,68 @@ class LLMBot(commands.Bot):
                 registry.register(archive_start_task, name="server_archive", feature="server_archive")
             else:
                 self.logger.info("Server archive disabled — skipping ingest workers")
+
+            # --- Dashboard server ---
+            self._track_background_task(asyncio.create_task(self._start_dashboard(), name="dashboard_start"))
         except Exception as e:
             self.logger.error(f"Failed to set up background tasks: {e}", exc_info=True)
+
+    async def _start_dashboard(self) -> None:
+        """Start the dashboard server if enabled. Called as a background task."""
+        try:
+            from bot.dashboard import load_dashboard_config, DashboardServer, AuditStore, DMStore
+            from bot.dashboard.services import DashboardServices
+
+            cfg = load_dashboard_config()
+            if not cfg.enabled:
+                self.logger.debug("Dashboard not enabled, skipping")
+                return
+
+            audit_store = AuditStore(db_path=cfg.audit_db_path, retention_days=cfg.audit_retention_days)
+            await audit_store.initialize()
+
+            dm_store = DMStore(
+                db_path="./data/dashboard_dms.db",
+                retention_days=cfg.dm_retention_days,
+            )
+            if cfg.dm_archive_enabled:
+                await dm_store.initialize()
+            else:
+                dm_store._initialized = True  # Skip DM operations
+
+            services = DashboardServices(
+                bot=self,
+                config=cfg,
+                audit_store=audit_store,
+                dm_store=dm_store,
+            )
+
+            server = DashboardServer(
+                config=cfg,
+                services=services,
+                audit_store=audit_store,
+                dm_store=dm_store,
+            )
+            await server.start()
+            self._dashboard_server = server
+
+            # Record dashboard start event
+            await audit_store.record(
+                event_type="dashboard.start",
+                result="success",
+                metadata={"host": cfg.host, "port": cfg.port, "public_bind": cfg.public_bind},
+            )
+        except Exception as e:
+            self.logger.error(f"Dashboard startup failed: {e}", exc_info=True)
+
+    async def _record_dm_message(self, message) -> None:
+        """Record an incoming DM to the bot via dashboard DM store."""
+        server = getattr(self, "_dashboard_server", None)
+        if server is None:
+            return
+        services = getattr(server, "_services", None) if server.app else None
+        if services:
+            await services.record_dm_message(message)
 
     async def setup_tts(self) -> None:
         """Set up TTS manager if configured."""
@@ -2672,6 +2739,14 @@ class LLMBot(commands.Bot):
                 await stop_server_archive_service()
             except Exception as e:
                 self.logger.warning(f"Error stopping server archive service: {e}")
+
+            # Stop dashboard server
+            try:
+                dashboard = getattr(self, "_dashboard_server", None)
+                if dashboard:
+                    await dashboard.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping dashboard server: {e}")
 
             # Close Vision Orchestrator (if initialized either on bot or via router fallback)
             try:
