@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from aiohttp import web
@@ -82,7 +83,8 @@ async def test_index_no_auth_returns_html(client: TestClient) -> None:
     resp = await client.get("/")
     assert resp.status == 200
     text = await resp.text()
-    assert "Dashboard Login" in text
+    assert "Bot Console" in text
+    assert "auth-token-input" in text
 
 
 @pytest.mark.asyncio
@@ -186,9 +188,48 @@ async def test_dashboard_disabled_no_server(config: DashboardConfig) -> None:
     audit_store = AuditStore(db_path="/tmp/test_disabled_audit.db", retention_days=180)
     dm_store = DMStore(db_path="/tmp/test_disabled_dms.db", retention_days=90)
     services = DashboardServices(bot=None, config=disabled_config, audit_store=audit_store, dm_store=dm_store)
-    server = DashboardServer(config=disabled_config, services=services, audit_store=audit_store, dm_store=dm_store)
+    server = DashboardServer(
+        config=disabled_config, services=services, audit_store=audit_store, dm_store=dm_store,
+        message_store=MagicMock(), backfill_store=MagicMock(), backfill_service=MagicMock(),
+    )
 
     # Should not raise, just log and return
     await server.start()
     assert not server.is_running
     await server.stop()  # Should be safe to call
+
+
+@pytest.mark.asyncio
+async def test_hot_reload_updates_rate_limit(
+    services: DashboardServices,
+    audit_store: AuditStore,
+    dm_store: DMStore,
+) -> None:
+    """Hot-reload changes the rate limit at runtime."""
+    cfg = DashboardConfig(
+        enabled=True,
+        auth_token="old-token",
+        owner_ids={123},
+        rate_limit_sends_per_minute=5,
+        max_message_chars=100,
+    )
+    server = DashboardServer(
+        config=cfg, services=services, audit_store=audit_store, dm_store=dm_store,
+        message_store=MagicMock(), backfill_store=MagicMock(), backfill_service=MagicMock(),
+    )
+
+    new_cfg = DashboardConfig(
+        enabled=True,
+        auth_token="new-token",
+        owner_ids={123, 456},
+        rate_limit_sends_per_minute=10,
+        max_message_chars=2000,
+        audit_retention_days=365,
+    )
+    await server.hot_reload_config(new_cfg)
+
+    assert server._config.auth_token == "new-token"
+    assert server._config.owner_ids == {123, 456}
+    assert services._rate_limiter._sends_per_minute == 10
+    assert services._config.max_message_chars == 2000
+    assert audit_store._retention_days == 365

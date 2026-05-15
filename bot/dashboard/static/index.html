@@ -3,157 +3,127 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard</title>
+  <title>Bot Console</title>
+  <link rel="icon" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/dashboard.css">
 </head>
 <body>
-
-<!-- Login Page -->
+<!-- ===== LOGIN ===== -->
 <div id="login-page">
-  <h2>Dashboard Login</h2>
-  <form id="login-form">
-    <input type="password" id="auth-token-input" placeholder="Auth token" autocomplete="off" required>
-    <button type="submit">Login</button>
-  </form>
-  <div id="login-error"></div>
+  <div class="login-card">
+    <div class="login-icon">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="12" fill="#5865F2"/><text x="24" y="30" text-anchor="middle" fill="white" font-size="20" font-weight="700" font-family="sans-serif">B</text></svg>
+    </div>
+    <h1>Bot Console</h1>
+    <p class="login-sub">Owner authentication required</p>
+    <form id="login-form">
+      <input type="password" id="auth-token-input" placeholder="Auth token" autocomplete="off" required>
+      <button type="submit" id="login-btn">Log In</button>
+    </form>
+    <div id="login-error" class="hidden"></div>
+  </div>
 </div>
 
-<!-- Dashboard Page -->
-<div id="dashboard-page">
-  <header>
-    <h1>Bot Dashboard</h1>
-    <nav>
-      <button data-section="overview" class="active">Overview</button>
-      <button data-section="guilds">Guilds</button>
-      <button data-section="dms">DMs</button>
-      <button data-section="audit">Audit</button>
-      <button data-section="send">Send</button>
-    </nav>
-    <div>
-      <label class="toggle"><input type="checkbox" id="auto-refresh-toggle"> Auto-refresh (10s)</label>
-      <button id="logout-btn" style="margin-left:12px;background:none;border:1px solid #333;color:#e0e0e0;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">Logout</button>
-    </div>
-  </header>
+<!-- ===== DASHBOARD ===== -->
+<div id="dashboard-page" class="hidden">
 
-  <main>
-    <!-- Overview -->
-    <div id="overview-section" class="section active">
-      <h2 style="margin-bottom:16px;font-size:14px;">Overview</h2>
-      <div class="cards">
-        <div class="card"><div class="label">Status</div><div class="value" id="summary-status">—</div></div>
-        <div class="card"><div class="label">Bot</div><div class="value" id="summary-bot" style="font-size:14px;">—</div></div>
-        <div class="card"><div class="label">Uptime</div><div class="value" id="summary-uptime">—</div></div>
-        <div class="card"><div class="label">Guilds</div><div class="value" id="summary-guilds">—</div></div>
-        <div class="card"><div class="label">Users</div><div class="value" id="summary-users">—</div></div>
-        <div class="card"><div class="label">Cogs</div><div class="value" id="summary-cogs">—</div></div>
-        <div class="card"><div class="label">Latency</div><div class="value" id="summary-latency">—</div></div>
-        <div class="card"><div class="label">Audit Events</div><div class="value" id="summary-audit-count">—</div></div>
-      </div>
+  <!-- Guild Rail -->
+  <nav id="guild-rail">
+    <div class="guild-item guild-home" data-view="home" title="Home">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
     </div>
-
-    <!-- Guilds -->
-    <div id="guilds-section" class="section">
-      <h2 style="margin-bottom:16px;font-size:14px;">Guild Inventory</h2>
-      <div class="filters">
-        <input type="text" id="guild-search" placeholder="Search by name or ID" style="width:250px;">
-        <button class="btn" onclick="loadGuilds(1)">Search</button>
-      </div>
-      <table>
-        <thead><tr><th>Guild ID</th><th>Name</th><th>Members</th><th>Channels</th><th>Permissions</th></tr></thead>
-        <tbody id="guilds-tbody"></tbody>
-      </table>
-      <div id="guilds-pagination" class="pagination"></div>
+    <div class="guild-divider"></div>
+    <div id="guild-list"></div>
+    <div class="guild-spacer"></div>
+    <div class="guild-item guild-bottom" data-view="backfill" title="Backfill" id="nav-backfill">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     </div>
-
-    <!-- DMs -->
-    <div id="dms-section" class="section">
-      <h2 style="margin-bottom:16px;font-size:14px;">DM Threads (bot-visible)</h2>
-      <table>
-        <thead><tr><th>Channel</th><th>User</th><th>Messages</th><th>Last</th><th>Time</th><th></th></tr></thead>
-        <tbody id="dms-tbody"></tbody>
-      </table>
-      <div id="dms-pagination" class="pagination"></div>
+    <div class="guild-item guild-bottom" data-view="audit" title="Audit Log" id="nav-audit">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
     </div>
+  </nav>
 
-    <!-- DM Thread Detail -->
-    <div id="dm-thread-section" style="display:none;">
-      <h2 style="margin-bottom:16px;font-size:14px;">Thread Detail <button onclick="document.getElementById('dm-thread-section').style.display='none'" style="background:none;border:none;color:#e94560;cursor:pointer;">close</button></h2>
-      <table>
-        <thead><tr><th>Dir</th><th>Preview</th><th>Time</th></tr></thead>
-        <tbody id="dm-thread-tbody"></tbody>
-      </table>
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div id="sidebar-header">
+      <input type="text" id="sidebar-search" placeholder="Search channels..." class="hidden">
+      <span id="sidebar-title">Home</span>
     </div>
+    <div id="sidebar-content"></div>
+  </aside>
 
-    <!-- Audit Log -->
-    <div id="audit-section" class="section">
-      <h2 style="margin-bottom:16px;font-size:14px;">Audit Log</h2>
-      <div class="filters">
-        <select id="audit-filter-event">
-          <option value="">All events</option>
-          <option value="dashboard.login.success">Login success</option>
-          <option value="dashboard.login.failure">Login failure</option>
-          <option value="dashboard.send.dm">Send DM</option>
-          <option value="dashboard.send.guild_message">Send guild msg</option>
-          <option value="dashboard.start">Start</option>
-          <option value="dashboard.stop">Stop</option>
-        </select>
-        <input type="text" id="audit-filter-actor" placeholder="Actor ID" style="width:100px;">
-        <select id="audit-filter-result">
-          <option value="">All results</option>
-          <option value="success">Success</option>
-          <option value="failed">Failed</option>
-          <option value="pending">Pending</option>
-          <option value="rate_limited">Rate limited</option>
-        </select>
-        <button id="audit-filter-btn" class="btn">Filter</button>
-      </div>
-      <table>
-        <thead><tr><th>Result</th><th>Event</th><th>Actor</th><th>Target</th><th>Preview</th><th>Time</th></tr></thead>
-        <tbody id="audit-tbody"></tbody>
-      </table>
-      <div id="audit-pagination" class="pagination"></div>
-    </div>
-
-    <!-- Send Message -->
-    <div id="send-section" class="section">
-      <h2 style="margin-bottom:16px;font-size:14px;">Send as Bot</h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
-        <!-- Send DM -->
+  <!-- Main Content -->
+  <main id="main-content">
+    <div id="content-header">
+      <div id="content-header-left">
+        <div id="content-avatar" class="avatar hidden"></div>
         <div>
-          <h3 style="margin-bottom:12px;font-size:13px;">Send DM</h3>
-          <div class="form-group">
-            <label>User ID</label>
-            <input type="text" id="send-dm-user-id" placeholder="Discord user ID">
-          </div>
-          <div class="form-group">
-            <label>Message</label>
-            <textarea id="send-dm-content" placeholder="Message content..."></textarea>
-          </div>
-          <button id="send-dm-btn" class="btn">Send DM</button>
-          <div id="send-dm-result" class=""></div>
-        </div>
-        <!-- Send Guild Message -->
-        <div>
-          <h3 style="margin-bottom:12px;font-size:13px;">Send Guild/Channel Message</h3>
-          <div class="form-group">
-            <label>Guild ID</label>
-            <input type="text" id="send-guild-id" placeholder="Guild ID">
-          </div>
-          <div class="form-group">
-            <label>Channel ID</label>
-            <input type="text" id="send-guild-channel-id" placeholder="Text channel ID">
-          </div>
-          <div class="form-group">
-            <label>Message</label>
-            <textarea id="send-guild-content" placeholder="Message content..."></textarea>
-          </div>
-          <button id="send-guild-btn" class="btn">Send</button>
-          <div id="send-guild-result" class=""></div>
+          <div id="content-name"></div>
+          <div id="content-meta" class="text-muted"></div>
         </div>
       </div>
+      <div id="content-header-right">
+        <span id="content-status" class="hidden"></span>
+        <button id="refresh-btn" title="Refresh" class="icon-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <button id="logout-btn" title="Logout" class="icon-btn" style="margin-left:4px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="messages-container">
+      <div id="messages-loading" class="hidden">
+        <div class="spinner"></div>
+        <span>Loading messages...</span>
+      </div>
+      <div id="messages-error" class="empty-state hidden">
+        <p>Failed to load messages</p>
+        <button id="retry-btn" class="btn btn-sm">Retry</button>
+      </div>
+      <div id="messages-list"></div>
+      <button id="jump-to-latest" class="load-btn hidden" style="position:sticky;bottom:8px;margin:0 auto">Jump to latest ↓</button>
+      <div id="messages-end" class="hidden">
+        <button id="load-older-btn" class="load-btn hidden">Load older messages</button>
+        <div id="messages-empty" class="empty-state hidden">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <p>No messages yet</p>
+          <p class="text-muted small">Archived messages will appear here</p>
+        </div>
+        <div id="backfill-prompt" class="empty-state hidden">
+          <p>Older messages not archived</p>
+          <button id="backfill-channel-btn" class="btn btn-sm">Backfill this channel</button>
+        </div>
+      </div>
+    </div>
+    <div id="composer-container" class="hidden">
+      <div id="reply-preview" class="hidden">
+        <span id="reply-label">Replying to</span>
+        <span id="reply-author"></span>
+        <span id="reply-preview-text"></span>
+        <button id="reply-cancel" class="icon-btn" title="Cancel reply">&times;</button>
+      </div>
+      <div id="composer-inner">
+        <textarea id="composer-input" placeholder="Message..." rows="1"></textarea>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+          <span id="char-count" class="char-count hidden"></span>
+          <button id="composer-send" class="btn btn-send" disabled title="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="composer-status" class="text-muted small"></div>
     </div>
   </main>
+
+  <!-- Details Panel -->
+  <aside id="details-panel" class="hidden">
+    <div id="details-content"></div>
+  </aside>
 </div>
+
+<!-- Toast -->
+<div id="toast-container"></div>
 
 <script src="/static/dashboard.js"></script>
 </body>

@@ -275,14 +275,13 @@ class DMStore:
             try:
                 total = conn.execute("SELECT COUNT(DISTINCT channel_id) FROM dm_messages WHERE deleted_at IS NULL").fetchone()[0]
 
+                # channel_id in a DM IS the other user's Discord ID (recipient).
+                # We just need the latest message info per channel.
                 rows = conn.execute(
                     """
                     SELECT
                         dm.channel_id,
-                        (SELECT author_id FROM dm_messages m2
-                         WHERE m2.channel_id = dm.channel_id
-                         AND m2.author_id != 'BOT_PLACEHOLDER'
-                         ORDER BY m2.created_at DESC LIMIT 1) AS other_user_id,
+                        dm.channel_id AS other_user_id,
                         du.username,
                         du.global_name,
                         du.display_name,
@@ -295,12 +294,7 @@ class DMStore:
                          WHERE m4.channel_id = dm.channel_id
                          ORDER BY m4.created_at DESC LIMIT 1) AS last_direction
                     FROM dm_messages dm
-                    LEFT JOIN dm_users du ON du.user_id = (
-                        SELECT author_id FROM dm_messages m5
-                        WHERE m5.channel_id = dm.channel_id
-                        AND m5.author_id != 'BOT_PLACEHOLDER'
-                        ORDER BY m5.created_at DESC LIMIT 1
-                    )
+                    LEFT JOIN dm_users du ON du.user_id = dm.channel_id
                     WHERE dm.deleted_at IS NULL
                     GROUP BY dm.channel_id
                     ORDER BY last_message_at DESC

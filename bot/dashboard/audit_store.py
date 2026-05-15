@@ -30,6 +30,21 @@ EVENT_DASHBOARD_ALERT_SEND = "dashboard.alert.send"
 EVENT_DASHBOARD_CONFIG_RELOAD = "dashboard.config.reload"
 EVENT_DASHBOARD_START = "dashboard.start"
 EVENT_DASHBOARD_STOP = "dashboard.stop"
+EVENT_DASHBOARD_CHANNEL_VIEW = "dashboard.channel.view"
+EVENT_DASHBOARD_DM_VIEW = "dashboard.dm.view"
+EVENT_DASHBOARD_SEND_REQUESTED = "dashboard.message.send.requested"
+EVENT_DASHBOARD_SEND_SUCCESS = "dashboard.message.send.success"
+EVENT_DASHBOARD_SEND_FAILURE = "dashboard.message.send.failure"
+EVENT_DASHBOARD_REPLY_REQUESTED = "dashboard.message.reply.requested"
+EVENT_DASHBOARD_REPLY_SUCCESS = "dashboard.message.reply.success"
+EVENT_DASHBOARD_REPLY_FAILURE = "dashboard.message.reply.failure"
+EVENT_DASHBOARD_BACKFILL_REQUESTED = "dashboard.backfill.requested"
+EVENT_DASHBOARD_BACKFILL_STARTED = "dashboard.backfill.started"
+EVENT_DASHBOARD_BACKFILL_COMPLETED = "dashboard.backfill.completed"
+EVENT_DASHBOARD_BACKFILL_FAILED = "dashboard.backfill.failed"
+EVENT_DASHBOARD_BACKFILL_CANCELLED = "dashboard.backfill.cancelled"
+EVENT_DASHBOARD_AUTH_FAILURE = "dashboard.auth.failure"
+EVENT_DASHBOARD_AUTH_SUCCESS = "dashboard.auth.success"
 
 # Max preview chars for message content in audit logs
 _MAX_PREVIEW_CHARS = 200
@@ -338,6 +353,11 @@ class AuditStore:
         cutoff = (datetime.now(timezone.utc) - timedelta(days=self._retention_days)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         return await asyncio.to_thread(self._cleanup_sync, cutoff)
 
+    async def get_single_event(self, event_id: str) -> Optional[dict]:
+        """Fetch a single audit event by its UUID. Returns the event dict or None."""
+        await self.initialize()
+        return await asyncio.to_thread(self._get_single_event_sync, event_id)
+
     def _cleanup_sync(self, cutoff: str) -> int:
         with self._lock:
             conn = self._connect()
@@ -345,5 +365,32 @@ class AuditStore:
                 cur = conn.execute("DELETE FROM audit_events WHERE created_at < ?", (cutoff,))
                 conn.commit()
                 return cur.rowcount
+            finally:
+                conn.close()
+
+    def _get_single_event_sync(self, event_id: str) -> Optional[dict]:
+        """Thread-safe sync helper: fetch one audit event by audit_id."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute("SELECT * FROM audit_events WHERE audit_id = ?", (event_id,)).fetchone()
+                if row is None:
+                    return None
+                return {
+                    "audit_id": row["audit_id"],
+                    "event_type": row["event_type"],
+                    "actor_user_id": row["actor_user_id"],
+                    "actor_source_ip": row["actor_source_ip"],
+                    "target_user_id": row["target_user_id"],
+                    "target_guild_id": row["target_guild_id"],
+                    "target_channel_id": row["target_channel_id"],
+                    "message_id": row["message_id"],
+                    "result": row["result"],
+                    "error_code": row["error_code"],
+                    "content_preview": row["content_preview"],
+                    "content_hash": row["content_hash"],
+                    "metadata": json.loads(row["metadata_json"]),
+                    "created_at": row["created_at"],
+                }
             finally:
                 conn.close()

@@ -82,9 +82,11 @@ vendor/*
 .temp/
 temp/
 
-# IDE specific files
+# IDE / AI tool specific files
 .idea/
 .vscode/
+.clinerules/
+.cursor/
 *.swp
 *.swo
 .DS_Store

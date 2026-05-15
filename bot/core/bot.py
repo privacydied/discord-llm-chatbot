@@ -729,6 +729,26 @@ class LLMBot(commands.Bot):
                                     self._track_background_task(task)
                                 except Exception as e:
                                     self.logger.debug(f"HTTP client restart failed: {e}")
+                            # Hot-reload dashboard config
+                            if any(k.startswith("DASHBOARD_") for k in upper):
+                                try:
+                                    dashboard_server = getattr(self, "_dashboard_server", None)
+                                    if dashboard_server is not None:
+                                        from bot.dashboard.config import load_dashboard_config
+
+                                        new_dash_cfg = load_dashboard_config()
+                                        await dashboard_server.hot_reload_config(new_dash_cfg)
+                                        # Audit-log the reload
+                                        if dashboard_server._audit_store:
+                                            await dashboard_server._audit_store.record(
+                                                event_type="dashboard.config.reload",
+                                                result="success",
+                                                metadata={"trigger": "sighup"},
+                                            )
+                                    else:
+                                        self.logger.debug("Dashboard hot-reload skipped: server not running")
+                                except Exception as e:
+                                    self.logger.debug(f"Dashboard hot-reload failed: {e}")
                         except Exception:
                             pass
                         # Breadcrumb
@@ -2279,16 +2299,18 @@ class LLMBot(commands.Bot):
         """Delegate early filtering to MessageProcessor, then handle
         SSOT gate / readiness / long-running commands before enqueue.
         """
-        # Early filtering returns False for messages that should be dropped
-        if not await self.message_processor.on_message(message):
-            return
-
-        # Archive DMs for dashboard (best-effort, non-blocking)
+        # Archive DMs for dashboard (best-effort, non-blocking) — before
+        # the early-return gate so DMs are captured even if filtered out
+        # by the message processor (empty content, alert-suppressed, etc.)
         if isinstance(message.channel, discord.DMChannel):
             try:
                 self._track_background_task(asyncio.create_task(self._record_dm_message(message)))
             except Exception:
                 pass
+
+        # Early filtering returns False for messages that should be dropped
+        if not await self.message_processor.on_message(message):
+            return
 
         # --- SSOT gate: check gating before enqueuing heavy work [IV] ---
         try:
@@ -2409,8 +2431,9 @@ class LLMBot(commands.Bot):
     async def _start_dashboard(self) -> None:
         """Start the dashboard server if enabled. Called as a background task."""
         try:
-            from bot.dashboard import load_dashboard_config, DashboardServer, AuditStore, DMStore
+            from bot.dashboard import load_dashboard_config, DashboardServer, AuditStore, DMStore, MessageStore
             from bot.dashboard.services import DashboardServices
+            from bot.dashboard.backfill import BackfillJobStore, BackfillService
 
             cfg = load_dashboard_config()
             if not cfg.enabled:
@@ -2436,11 +2459,34 @@ class LLMBot(commands.Bot):
                 dm_store=dm_store,
             )
 
+            message_store = MessageStore(
+                db_path=cfg.message_db_path or "./data/dashboard_messages.db",
+                retention_days=cfg.message_retention_days or cfg.dm_retention_days,
+            )
+            if cfg.dm_archive_enabled or cfg.guild_archive_enabled:
+                await message_store.initialize()
+
+            backfill_store = BackfillJobStore(
+                db_path=cfg.backfill_db_path or "./data/dashboard_backfill.db",
+            )
+            await backfill_store.initialize()
+
+            backfill_service = BackfillService(
+                bot=self,
+                message_store=message_store,
+                job_store=backfill_store,
+                audit_store=audit_store,
+                sleep_between_channels=cfg.backfill_sleep_ms / 1000.0 if cfg.backfill_sleep_ms else 0.5,
+            )
+
             server = DashboardServer(
                 config=cfg,
                 services=services,
                 audit_store=audit_store,
                 dm_store=dm_store,
+                message_store=message_store,
+                backfill_store=backfill_store,
+                backfill_service=backfill_service,
             )
             await server.start()
             self._dashboard_server = server

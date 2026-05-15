@@ -120,7 +120,7 @@ async def test_send_dm_records_audit(services: DashboardServices) -> None:
     assert result["total"] >= 1
     # Check that the event type is recorded
     event_types = [e["event_type"] for e in result["events"]]
-    assert "dashboard.send.dm" in event_types
+    assert "dashboard.message.send.requested" in event_types
 
 
 @pytest.mark.asyncio
@@ -135,4 +135,4 @@ async def test_send_guild_message_records_audit(services: DashboardServices) -> 
 
     result = await services._audit_store.query(page=1, page_size=10)
     event_types = [e["event_type"] for e in result["events"]]
-    assert "dashboard.send.guild_message" in event_types
+    assert "dashboard.message.send.requested" in event_types
