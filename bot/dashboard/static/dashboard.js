@@ -1127,6 +1127,32 @@
     `;
     container.appendChild(auditCard);
 
+    // --- Playwright Status Card ---
+    const pwCard = createElement("div", { className: "home-card" });
+    let pwStatusColor = "yellow";
+    let pwStatusText = "checking...";
+    if (data.playwright_available === true) {
+      pwStatusColor = "green";
+      pwStatusText = "Connected";
+    } else if (data.playwright_available === false) {
+      if (data.playwright_degraded) {
+        pwStatusColor = "red";
+        pwStatusText = "Degraded";
+      } else {
+        pwStatusColor = "red";
+        pwStatusText = "Unavailable";
+      }
+    } else {
+      pwStatusColor = "yellow";
+      pwStatusText = "Not configured";
+    }
+    pwCard.innerHTML = `
+      <div class="card-label">PLAYWRIGHT</div>
+      <div class="card-value ${pwStatusColor}">${esc(pwStatusText)}</div>
+      <div class="card-sub">Browser automation</div>
+    `;
+    container.appendChild(pwCard);
+
     // --- Cogs Card ---
     if (data.cog_count !== undefined) {
       const cogCard = createElement("div", { className: "home-card" });

@@ -26,6 +26,8 @@ from .dm_store import DMStore
 from .message_store import MessageStore
 from .services import DashboardServices
 
+from bot.utils.playwright_helpers import get_playwright_health
+
 logger = get_logger(__name__)
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -238,6 +240,9 @@ class DashboardRoutes:
             except Exception:
                 pass
 
+        # Check Playwright status
+        pw_health = get_playwright_health()
+
         overview = {
             **summary,
             "total_guilds": summary.get("guild_count", 0),
@@ -251,6 +256,8 @@ class DashboardRoutes:
             "bot_user_id": bot_user_id,
             "guilds": guilds,
             "recent_errors": recent_errors,
+            "playwright_available": pw_health.get("available"),
+            "playwright_degraded": pw_health.get("degraded", False),
         }
         return _json_response(overview)
 
