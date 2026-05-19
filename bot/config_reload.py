@@ -123,6 +123,15 @@ def _file_digest(p: Path) -> Optional[str]:
         return None
 
 
+async def _file_digest_async(p: Path) -> Optional[str]:
+    """Offload blocking I/O+hash to a thread so the event loop stays responsive."""
+    try:
+        data = await asyncio.to_thread(p.read_bytes)
+        return (await asyncio.to_thread(hashlib.sha256, data)).hexdigest()
+    except Exception:
+        return None
+
+
 # Sensitive keys that should be redacted in logs
 SENSITIVE_KEYS = {
     "DISCORD_TOKEN",
@@ -460,7 +469,9 @@ def _sighup_handler(signum: int, frame) -> None:
 async def _file_watcher_loop() -> None:
     """Main file watcher loop with proper debouncing."""
     env_paths = _candidate_env_paths()
-    last_digests: Dict[Path, Optional[str]] = {p: _file_digest(p) for p in env_paths}
+    last_digests: Dict[Path, Optional[str]] = {}
+    for p in env_paths:
+        last_digests[p] = await _file_digest_async(p)
     # Track per-file mtime for quick-noop skip [Phase 17-23]
     last_mtime: Dict[Path, float] = {}
     for p in env_paths:
@@ -489,7 +500,7 @@ async def _file_watcher_loop() -> None:
                 for p in _candidate_env_paths():
                     try:
                         prev = last_digests.get(p)
-                        dig = _file_digest(p) if p.exists() else None
+                        dig = await _file_digest_async(p) if p.exists() else None
                         # mtime guard: skip reload if mtime unchanged and digest matches [Phase 17-23]
                         try:
                             cur_mtime = p.stat().st_mtime if p.exists() else 0.0
