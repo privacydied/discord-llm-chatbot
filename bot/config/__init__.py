@@ -6,8 +6,13 @@ here for backward compatibility.
 
 Public API (from bot.config import ...):
     load_config
+    load_config_candidate
+    validate_config_candidate
+    get_last_good_config
     get_vl_model_ladder
     invalidate_config_cache
+    get_config_cache
+    get_cache_timestamp
     load_system_prompts
     audit_env_file
     validate_required_env
@@ -22,11 +27,14 @@ from __future__ import annotations
 # Core config loading + helpers (extracted from flat bot/config.py)
 from ._base import (
     load_config,
+    load_config_candidate,
+    validate_config_candidate,
+    get_last_good_config,
     get_vl_model_ladder,
     invalidate_config_cache,
+    get_config_cache,
+    get_cache_timestamp,
     KOKORO_FORCE_IPA_EN,
-    _config_cache,  # noqa: F401 — exposed for invalidation/test introspection
-    _cache_timestamp,  # noqa: F401 — exposed for invalidation/test introspection
     # Context trimming limits
     CONTEXT_MAX_MESSAGES,
     CONTEXT_MAX_CHARS_PER_MESSAGE,
@@ -51,8 +59,13 @@ from bot.exceptions import ConfigurationError
 
 __all__ = [
     "load_config",
+    "load_config_candidate",
+    "validate_config_candidate",
+    "get_last_good_config",
     "get_vl_model_ladder",
     "invalidate_config_cache",
+    "get_config_cache",
+    "get_cache_timestamp",
     "load_system_prompts",
     "audit_env_file",
     "validate_required_env",

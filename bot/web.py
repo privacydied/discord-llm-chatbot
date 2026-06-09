@@ -179,7 +179,7 @@ async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes
             logging.debug(f"web.fetch request url={url[:200]} timeout_s={timeout} ua_present={bool(headers.get('User-Agent'))}")
             response = await client.get(url)
             # Validate redirect target for SSRF
-            validate_redirect_response(response)
+            await validate_redirect_response(response)
             response.raise_for_status()  # Raise exception for 4xx/5xx responses
             content = await response.aread()
             content_type = response.headers.get("Content-Type", "application/octet-stream")

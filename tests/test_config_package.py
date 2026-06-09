@@ -234,7 +234,7 @@ class TestInvalidateConfigCache:
 
     def test_invalidate_config_cache_clears_cache(self):
         """After invalidating, load_config should rebuild the config."""
-        from bot.config import load_config, invalidate_config_cache
+        from bot.config import load_config, invalidate_config_cache, get_config_cache, get_cache_timestamp
 
         # Populate cache
         cfg1 = load_config()
@@ -244,10 +244,8 @@ class TestInvalidateConfigCache:
         invalidate_config_cache()
 
         # Verify cache globals are reset to None/0
-        import bot.config as cfg_mod
-
-        assert cfg_mod._config_cache is None
-        assert cfg_mod._cache_timestamp == 0.0
+        assert get_config_cache() is None
+        assert get_cache_timestamp() == 0.0
 
     def test_invalidated_reload_produces_fresh_object(self, monkeypatch):
         """After cache invalidation, a new load_config call picks up env changes."""

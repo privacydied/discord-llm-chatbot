@@ -14,7 +14,12 @@ from typing import Dict, Any, Optional, Set, Callable, List
 from datetime import datetime
 from dotenv import dotenv_values, load_dotenv
 
-from .config import load_config
+from .config import (
+    load_config,
+    load_config_candidate,
+    validate_config_candidate,
+    invalidate_config_cache,
+)
 from .utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +41,9 @@ _reload_callbacks: Set[Callable[[Dict[str, Any], Dict[str, Any]], None]] = set()
 _file_watcher_task: Optional[asyncio.Task] = None
 _last_reload_time: float = 0
 _watcher_lock: Optional[asyncio.Lock] = None
+_reload_debounce_lock = threading.Lock()
+_last_reload_call_time: float = 0
+RELOAD_DEBOUNCE_S = 0.5  # Minimum time between reload calls
 
 
 def _candidate_env_paths() -> List[Path]:
@@ -220,9 +228,28 @@ def _infer_subsystems(changes: Dict[str, Any]) -> Set[str]:
     return impacted
 
 
+def _debounce_reload() -> bool:
+    """Debounce rapid reload calls. Returns True if reload should proceed, False if debounced."""
+    global _last_reload_call_time
+
+    with _reload_debounce_lock:
+        current_time = time.time()
+        if current_time - _last_reload_call_time < RELOAD_DEBOUNCE_S:
+            logger.debug(f"Reload debounced (last call {current_time - _last_reload_call_time:.2f}s ago)")
+            return False
+        _last_reload_call_time = current_time
+        return True
+
+
 def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
     """
     Reload environment variables from .env file and update configuration.
+
+    Transactional reload flow:
+    1. Load candidate config from .env file (no global state mutation)
+    2. Validate candidate config (required vars, provider-specific requirements)
+    3. If valid: apply dotenv, invalidate cache, load new config, update globals, run callbacks
+    4. If invalid: keep previous config intact, don't mutate os.environ, don't run callbacks
 
     Returns:
         Dictionary with reload results including success status, changes, and version
@@ -231,10 +258,20 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
 
     with _config_lock:
         try:
-            # Compute current env digest (preload) to support idempotency
+            # Debounce rapid reload calls
+            proceed = _debounce_reload()
+            if not proceed:
+                return {
+                    "success": False,
+                    "error": "Reload debounced (too soon since last call)",
+                    "version": _config_version,
+                    "debounced": True,
+                }
+
             # Choose target path
             target_path = (env_path or _preferred_env_path()).resolve()
             env_before = _file_digest(target_path) if target_path.exists() else None
+
             logger.info(
                 "config.reload.started",
                 extra={
@@ -246,42 +283,81 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                 },
             )
 
-            # Store old config for comparison
+            # Store old config for comparison (last known good)
             old_config = _current_config.copy()
             old_version = _config_version
 
-            # Reload .env file. python-dotenv does not remove deleted keys, so
-            # sync through our tracker instead of calling load_dotenv directly.
-            if target_path.exists():
-                _sync_dotenv_file(target_path)
-                logger.debug(f"📁 Reloaded .env from {target_path}")
-            else:
-                _sync_dotenv_file(target_path)
-                logger.warning(f"⚠️ .env file not found at {target_path}")
+            # Step 1: Load candidate config from .env file WITHOUT mutating global state
+            if not target_path.exists():
+                logger.warning(
+                    "config.reload.candidate_missing",
+                    extra={
+                        "event": "config.reload.candidate_missing",
+                        "detail": {"path": str(target_path), "reason": "file_not_found"},
+                    },
+                )
+                # Don't call _sync_dotenv_file on missing file - that would remove keys from os.environ
+                return {
+                    "success": False,
+                    "error": f".env file not found at {target_path}",
+                    "version": old_version,
+                    "rejected": True,
+                    "previous_config_kept": True,
+                }
 
-            # Load new configuration
-            try:
-                # Invalidate cached snapshot so load_config reflects new env immediately
-                from .config import invalidate_config_cache
+            candidate_config = load_config_candidate(target_path)
 
-                invalidate_config_cache()
-            except Exception:
-                pass
+            logger.info(
+                "config.reload.candidate_loaded",
+                extra={
+                    "event": "config.reload.candidate_loaded",
+                    "detail": {
+                        "path": str(target_path),
+                        "text_backend": candidate_config.get("TEXT_BACKEND"),
+                    },
+                },
+            )
 
-            new_config = load_config()
+            # Step 2: Validate candidate config
+            is_valid, missing_vars = validate_config_candidate(candidate_config)
 
-            env_after = _file_digest(target_path) if target_path.exists() else None
-
-            # Validate critical required variables
-            required_vars = ["DISCORD_TOKEN", "PROMPT_FILE", "VL_PROMPT_FILE"]
-            missing_vars = [var for var in required_vars if not new_config.get(var)]
-            if missing_vars:
-                logger.error(f"❌ Critical variables missing after reload: {missing_vars}")
+            if not is_valid:
+                logger.warning(
+                    "config.reload.rejected",
+                    extra={
+                        "event": "config.reload.rejected",
+                        "detail": {
+                            "path": str(target_path),
+                            "reason": "validation_failed",
+                            "missing_vars": missing_vars,
+                            "previous_config_kept": True,
+                        },
+                    },
+                )
                 return {
                     "success": False,
                     "error": f"Missing required variables: {missing_vars}",
                     "version": old_version,
+                    "rejected": True,
+                    "missing_vars": missing_vars,
+                    "previous_config_kept": True,
                 }
+
+            # Step 3: Candidate is valid - now apply changes
+            # Sync dotenv file to os.environ (this mutates process env)
+            _sync_dotenv_file(target_path)
+            logger.debug(f"📁 Reloaded .env from {target_path}")
+
+            # Invalidate cached snapshot so load_config reflects new env immediately
+            try:
+                invalidate_config_cache()
+            except Exception:
+                pass
+
+            # Load new configuration from updated os.environ
+            new_config = load_config()
+
+            env_after = _file_digest(target_path) if target_path.exists() else None
 
             # Generate new version
             new_version = _generate_config_version(new_config)
@@ -298,7 +374,10 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
             try:
                 redacted_added = _redact_sensitive_values(changes.get("added", {}))
                 redacted_removed = _redact_sensitive_values(changes.get("removed", {}))
-                redacted_modified = {k: ("[REDACTED]" if any(s in k.upper() for s in SENSITIVE_KEYS) else v) for k, v in changes.get("modified", {}).items()}
+                redacted_modified = {
+                    k: ("[REDACTED]" if any(s in k.upper() for s in SENSITIVE_KEYS) else v)
+                    for k, v in changes.get("modified", {}).items()
+                }
                 logger.info(
                     "config.reload.diff",
                     extra={
@@ -340,9 +419,9 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
             try:
                 subsystems: Set[str] = _infer_subsystems(changes)
                 logger.info(
-                    "config.reload.applied",
+                    "config.reload.committed",
                     extra={
-                        "event": "config.reload.applied",
+                        "event": "config.reload.committed",
                         "detail": {
                             "subsystems": sorted(list(subsystems)),
                             "old_version": old_version,
@@ -390,7 +469,9 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
                         _task = asyncio.create_task(restart_janitor())
-                        _task.add_done_callback(lambda t: logger.error(f"Janitor restart task failed: {t.exception()}") if t.exception() else None)
+                        _task.add_done_callback(
+                            lambda t: logger.error(f"Janitor restart task failed: {t.exception()}") if t.exception() else None
+                        )
                     else:
                         loop.run_until_complete(restart_janitor())
                 except Exception as e:
@@ -411,13 +492,13 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                     "config.reload.rollback",
                     extra={
                         "event": "config.reload.rollback",
-                        "detail": {"reason": str(e)[:200]},
+                        "detail": {"reason": str(e)[:200], "previous_config_kept": True},
                     },
                 )
             except Exception:
                 pass
             logger.error(f"❌ Configuration reload failed: {e}", exc_info=True)
-            return {"success": False, "error": str(e), "version": _config_version}
+            return {"success": False, "error": str(e), "version": _config_version, "previous_config_kept": True}
 
 
 def get_current_config() -> Dict[str, Any]:
@@ -678,7 +759,17 @@ def manual_reload_command() -> str:
             else:
                 return f"✅ Configuration reloaded (no changes detected)\n🔖 Version: {result['new_version']}"
         else:
-            return f"❌ Configuration reload failed: {result.get('error', 'Unknown error')}"
+            if result.get("debounced"):
+                return "⏱️ Configuration reload debounced (too soon since last reload)"
+            elif result.get("rejected"):
+                missing_vars = result.get("missing_vars", [])
+                if missing_vars:
+                    missing_str = ", ".join(missing_vars)
+                    return f"❌ Configuration reload rejected: missing required variables ({missing_str}). Previous config kept active."
+                else:
+                    return f"❌ Configuration reload rejected: {result.get('error', 'Unknown error')}. Previous config kept active."
+            else:
+                return f"❌ Configuration reload failed: {result.get('error', 'Unknown error')}"
 
     except Exception as e:
         logger.error(f"❌ Manual reload command failed: {e}", exc_info=True)
