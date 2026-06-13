@@ -211,7 +211,7 @@ class MessageProcessor:
             ctx = typing_factory()
             await ctx.__aenter__()
             entered = True
-        except discord.HTTPException:
+        except Exception:  # Catch ALL exceptions (network, DNS, HTTP) to suppress typing
             self._typing_suppressed_until[channel_key] = now + 300.0
             yield
             return
