@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 from .spec_select import select_initial_model_spec
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 async def preprocess_and_transcribe(
@@ -20,8 +23,8 @@ async def preprocess_and_transcribe(
     downgrade_threshold_s: float = 120.0,
     preprocess_audio_with_retry: Callable[..., Awaitable[Any]],
     run_whisper_with_fallback: Callable[..., Awaitable[Any]],
-    language: Optional[str] = None,
-) -> Tuple[Any, Any]:
+    language: str | None = None,
+) -> tuple[Any, Any]:
     """Run preprocess + model selection + whisper for one STT source."""
     pre = await preprocess_audio_with_retry(
         source_path=source_path,

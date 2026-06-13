@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict
-
 from .memory.profiles import get_server_profile, save_server_profile
 
 FEATURE_ALIASES = {
@@ -26,7 +24,7 @@ FEATURE_ALIASES = {
     "knowledge": "rag",
 }
 
-FEATURE_DEFAULTS: Dict[str, bool] = {
+FEATURE_DEFAULTS: dict[str, bool] = {
     "stt": True,
     "tts": True,
     "vision": True,
@@ -42,7 +40,7 @@ def normalize_feature_name(name: str) -> str:
     return FEATURE_ALIASES.get(key, key)
 
 
-def get_server_feature_toggles(guild_id: int | str) -> Dict[str, bool]:
+def get_server_feature_toggles(guild_id: int | str) -> dict[str, bool]:
     profile = get_server_profile(guild_id)
     custom_data = dict(profile.get("custom_data") or {})
     toggles = dict(FEATURE_DEFAULTS)
@@ -54,10 +52,11 @@ def get_server_feature_toggles(guild_id: int | str) -> Dict[str, bool]:
     return toggles
 
 
-def set_server_feature_toggle(guild_id: int | str, feature: str, enabled: bool) -> Dict[str, bool]:
+def set_server_feature_toggle(guild_id: int | str, feature: str, enabled: bool) -> dict[str, bool]:
     normalized = normalize_feature_name(feature)
     if normalized not in FEATURE_DEFAULTS:
-        raise KeyError(f"Unknown feature toggle: {feature}")
+        msg = f"Unknown feature toggle: {feature}"
+        raise KeyError(msg)
 
     profile = get_server_profile(guild_id)
     custom_data = dict(profile.get("custom_data") or {})

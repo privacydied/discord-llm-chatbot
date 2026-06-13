@@ -1,5 +1,4 @@
-"""
-Compatibility package for tests expecting `bot.types` to be a module that
+"""Compatibility package for tests expecting `bot.types` to be a module that
 provides Command/ParsedCommand/ResponseMessage/InputModality/OutputModality
 and a `money` submodule exposing Money.
 
@@ -14,7 +13,7 @@ from typing import Optional
 
 # Re-export InputModality from the dedicated modality module to maintain
 # backward compatibility for legacy imports (e.g., tests importing from bot.types)
-from ..modality import InputModality  # noqa: F401
+from bot.modality import InputModality
 
 
 class Command(Enum):
@@ -56,8 +55,8 @@ class ParsedCommand:
 class ResponseMessage:
     """Data class to hold response content."""
 
-    text: Optional[str] = None
-    audio_path: Optional[Path] = None
+    text: str | None = None
+    audio_path: Path | None = None
 
 
 class OutputModality(Enum):
@@ -73,9 +72,9 @@ class OutputModality(Enum):
 
 __all__ = [
     "Command",
-    "ParsedCommand",
-    "ResponseMessage",
     "InputModality",
     "OutputModality",
+    "ParsedCommand",
+    "ResponseMessage",
     "money",
 ]

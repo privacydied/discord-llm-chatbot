@@ -1,9 +1,9 @@
 """Ollama API integration for the Discord bot."""
 
-import asyncio
 import json
+from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from typing import Any
 
 import aiohttp
 
@@ -41,7 +41,7 @@ user_rate_limits = {}
 class OllamaClient:
     """Client for interacting with the Ollama API."""
 
-    def __init__(self, base_url: str = None, api_key: str = None):
+    def __init__(self, base_url: str | None = None, api_key: str | None = None) -> None:
         """Initialize the Ollama client."""
         self.base_url = base_url or _get_ollama_base_url()
         self.api_key = api_key
@@ -86,18 +86,17 @@ class OllamaClient:
     async def generate(
         self,
         prompt: str,
-        model: str = None,
-        max_tokens: int = None,
-        temperature: float = None,
-        top_p: float = None,
-        frequency_penalty: float = None,
-        presence_penalty: float = None,
-        stop: List[str] = None,
-        user_id: str = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        frequency_penalty: float | None = None,
+        presence_penalty: float | None = None,
+        stop: list[str] | None = None,
+        user_id: str | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
-        """
-        Generate text using the Ollama API.
+    ) -> dict[str, Any]:
+        """Generate text using the Ollama API.
 
         Args:
             prompt: The prompt to generate text from
@@ -113,6 +112,7 @@ class OllamaClient:
 
         Returns:
             Dictionary with the generated text and metadata
+
         """
         # Apply defaults
         model = model or _get_ollama_model()
@@ -125,7 +125,8 @@ class OllamaClient:
 
         # Check rate limit
         if user_id and not await self.check_rate_limit(user_id):
-            raise OllamaAPIError("Rate limit exceeded. Please try again later.")
+            msg = "Rate limit exceeded. Please try again later."
+            raise OllamaAPIError(msg)
 
         # Prepare the request payload
         payload = {
@@ -151,7 +152,8 @@ class OllamaClient:
             async with self.session.post(url, json=payload) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    raise OllamaAPIError(f"API request failed with status {response.status}: {error_text}")
+                    msg = f"API request failed with status {response.status}: {error_text}"
+                    raise OllamaAPIError(msg)
 
                 # Parse the response
                 response_data = await response.json()
@@ -172,32 +174,35 @@ class OllamaClient:
                     "raw_response": response_data,
                 }
 
-        except asyncio.TimeoutError:
-            raise OllamaAPIError("Request timed out. The server is taking too long to respond.")
+        except TimeoutError:
+            msg = "Request timed out. The server is taking too long to respond."
+            raise OllamaAPIError(msg)
         except aiohttp.ClientError as e:
-            raise OllamaAPIError(f"Network error: {str(e)}")
+            msg = f"Network error: {e!s}"
+            raise OllamaAPIError(msg)
         except Exception as e:
             logger.error(f"Error in Ollama generate: {e}", exc_info=True)
-            raise OllamaAPIError(f"An error occurred: {str(e)}")
+            msg = f"An error occurred: {e!s}"
+            raise OllamaAPIError(msg)
 
     async def generate_stream(
         self,
         prompt: str,
-        model: str = None,
-        max_tokens: int = None,
-        temperature: float = None,
-        top_p: float = None,
-        frequency_penalty: float = None,
-        presence_penalty: float = None,
-        stop: List[str] = None,
-        user_id: str = None,
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+        frequency_penalty: float | None = None,
+        presence_penalty: float | None = None,
+        stop: list[str] | None = None,
+        user_id: str | None = None,
         **kwargs,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Generate text using the Ollama API with streaming.
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Generate text using the Ollama API with streaming.
 
         Yields:
             Dictionaries with partial results and metadata
+
         """
         # Apply defaults
         model = model or _get_ollama_model()
@@ -210,7 +215,8 @@ class OllamaClient:
 
         # Check rate limit
         if user_id and not await self.check_rate_limit(user_id):
-            raise OllamaAPIError("Rate limit exceeded. Please try again later.")
+            msg = "Rate limit exceeded. Please try again later."
+            raise OllamaAPIError(msg)
 
         # Prepare the request payload
         payload = {
@@ -237,7 +243,8 @@ class OllamaClient:
             async with self.session.post(url, json=payload) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    raise OllamaAPIError(f"API request failed with status {response.status}: {error_text}")
+                    msg = f"API request failed with status {response.status}: {error_text}"
+                    raise OllamaAPIError(msg)
 
                 # Process the streaming response
                 buffer = ""
@@ -272,15 +279,18 @@ class OllamaClient:
                         logger.error(f"Error processing chunk: {e}", exc_info=True)
                         continue
 
-        except asyncio.TimeoutError:
-            raise OllamaAPIError("Request timed out. The server is taking too long to respond.")
+        except TimeoutError:
+            msg = "Request timed out. The server is taking too long to respond."
+            raise OllamaAPIError(msg)
         except aiohttp.ClientError as e:
-            raise OllamaAPIError(f"Network error: {str(e)}")
+            msg = f"Network error: {e!s}"
+            raise OllamaAPIError(msg)
         except Exception as e:
             logger.error(f"Error in Ollama generate_stream: {e}", exc_info=True)
-            raise OllamaAPIError(f"An error occurred: {str(e)}")
+            msg = f"An error occurred: {e!s}"
+            raise OllamaAPIError(msg)
 
-    async def list_models(self) -> List[Dict[str, Any]]:
+    async def list_models(self) -> list[dict[str, Any]]:
         """List available models from the Ollama API."""
         try:
             await self.ensure_session()
@@ -290,7 +300,8 @@ class OllamaClient:
             async with self.session.get(url) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    raise OllamaAPIError(f"API request failed with status {response.status}: {error_text}")
+                    msg = f"API request failed with status {response.status}: {error_text}"
+                    raise OllamaAPIError(msg)
 
                 # Parse the response
                 response_data = await response.json()
@@ -298,9 +309,10 @@ class OllamaClient:
 
         except Exception as e:
             logger.error(f"Error listing models: {e}", exc_info=True)
-            raise OllamaAPIError(f"Failed to list models: {str(e)}")
+            msg = f"Failed to list models: {e!s}"
+            raise OllamaAPIError(msg)
 
-    async def get_model_info(self, model_name: str) -> Optional[Dict[str, Any]]:
+    async def get_model_info(self, model_name: str) -> dict[str, Any] | None:
         """Get information about a specific model."""
         try:
             models = await self.list_models()
@@ -321,16 +333,15 @@ ollama_client = OllamaClient()
 async def generate_response(
     prompt: str,
     context: str = "",
-    system_prompt: Optional[str] = None,
-    user_id: str = None,
-    guild_id: str = None,
-    temperature: float = None,
-    max_tokens: int = None,
+    system_prompt: str | None = None,
+    user_id: str | None = None,
+    guild_id: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     stream: bool = False,
     **kwargs,
-) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
-    """
-    Generate a response using the Ollama API with context and user preferences.
+) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+    """Generate a response using the Ollama API with context and user preferences.
 
     Args:
         prompt: The user's input prompt
@@ -344,6 +355,7 @@ async def generate_response(
 
     Returns:
         Dictionary with the generated text and metadata, or an async generator for streaming
+
     """
     try:
         # Get user preferences if user_id is provided
@@ -378,14 +390,17 @@ async def generate_response(
             config = load_config()
             prompt_file_path = config.get("PROMPT_FILE")
             if not prompt_file_path:
-                raise OllamaAPIError("PROMPT_FILE not configured in environment variables")
+                msg = "PROMPT_FILE not configured in environment variables"
+                raise OllamaAPIError(msg)
             try:
-                with open(prompt_file_path, "r", encoding="utf-8") as pf:
+                with open(prompt_file_path, encoding="utf-8") as pf:
                     base_system_prompt = pf.read().strip()
             except FileNotFoundError:
-                raise OllamaAPIError(f"Prompt file not found: {prompt_file_path}")
+                msg = f"Prompt file not found: {prompt_file_path}"
+                raise OllamaAPIError(msg)
             except Exception as e:
-                raise OllamaAPIError(f"Error reading prompt file {prompt_file_path}: {e}")
+                msg = f"Error reading prompt file {prompt_file_path}: {e}"
+                raise OllamaAPIError(msg)
 
             final_system_prompt = f"""{base_system_prompt}\n\nContext: {context}\n\nServer Context: {server_context}"""
 
@@ -407,22 +422,22 @@ async def generate_response(
                 user_id=user_id,
                 **kwargs,
             )
-        else:
-            return await ollama_client.generate(
-                prompt=user_prompt,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                user_id=user_id,
-                **kwargs,
-            )
+        return await ollama_client.generate(
+            prompt=user_prompt,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            user_id=user_id,
+            **kwargs,
+        )
 
     except Exception as e:
         logger.error(f"Error in generate_response: {e}", exc_info=True)
-        raise OllamaAPIError(f"Failed to generate response: {str(e)}")
+        msg = f"Failed to generate response: {e!s}"
+        raise OllamaAPIError(msg)
 
 
 # Cleanup function to close the client
-async def cleanup():
+async def cleanup() -> None:
     """Clean up resources."""
     await ollama_client.close()

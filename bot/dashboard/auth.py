@@ -12,14 +12,17 @@ from __future__ import annotations
 import hashlib
 import secrets
 import time
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
 from bot.utils.logging import get_logger
 
-from .audit_store import AuditStore
-from .config import DashboardConfig
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from .audit_store import AuditStore
+    from .config import DashboardConfig
 
 logger = get_logger(__name__)
 
@@ -46,7 +49,7 @@ class SessionStore:
         }
         return session_id
 
-    def get(self, session_id: str) -> Optional[dict[str, Any]]:
+    def get(self, session_id: str) -> dict[str, Any] | None:
         session = self._sessions.get(session_id)
         if session is None:
             return None
@@ -100,7 +103,7 @@ def _check_bearer_auth(request: web.Request, auth_token: str) -> bool:
     return False
 
 
-def _check_session_auth(request: web.Request, session_store: SessionStore) -> Optional[dict[str, Any]]:
+def _check_session_auth(request: web.Request, session_store: SessionStore) -> dict[str, Any] | None:
     """Check session cookie. Returns session data or None."""
     cookie = request.cookies.get(COOKIE_NAME)
     if not cookie:
@@ -160,8 +163,8 @@ def csrf_required(handler: Callable) -> Callable:
             try:
                 form = await request.post()
                 csrf_token = form.get(CSRF_FIELD, "")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to parse form data for CSRF token: {e}")
 
         if csrf_token != session.get("csrf_token"):
             return web.json_response({"error": "csrf_invalid"}, status=403)
@@ -180,7 +183,8 @@ async def login_handler(request: web.Request) -> web.Response:
     # Check body for auth_token
     try:
         body = await request.json()
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to parse JSON body: {e}")
         body = {}
 
     provided_token = body.get("auth_token", "") or request.headers.get("Authorization", "").replace("Bearer ", "").strip()
@@ -214,7 +218,7 @@ async def login_handler(request: web.Request) -> web.Response:
         {
             "success": True,
             "csrf_token": csrf_token,
-        }
+        },
     )
     response.set_cookie(
         COOKIE_NAME,

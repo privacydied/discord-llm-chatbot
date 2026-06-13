@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Vision Types Standalone Test - Test without bot package imports
+"""Vision Types Standalone Test - Test without bot package imports.
 
 Direct testing of vision types without going through bot package
 to avoid Discord dependency issues.
@@ -14,14 +13,12 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
-def test_direct_types_import():
-    """Test importing vision types directly"""
+def test_direct_types_import() -> None:
+    """Test importing vision types directly."""
     sys.path.insert(0, str(project_root / "bot" / "vision"))
 
     # Import the enums and classes directly from vision/types.py
-    from bot.vision.types import VisionTask, VisionProvider, VisionJobState
-    from bot.vision.types import VisionError, VisionErrorType
-    from bot.vision.types import VisionRequest, VisionResponse, VisionJob
+    from bot.vision.types import VisionError, VisionErrorType, VisionJob, VisionJobState, VisionProvider, VisionRequest, VisionResponse, VisionTask
 
     _ = (
         VisionTask,
@@ -35,9 +32,9 @@ def test_direct_types_import():
     )
 
 
-def test_enum_values():
-    """Test enum values work correctly"""
-    from bot.vision.types import VisionTask, VisionProvider, VisionJobState
+def test_enum_values() -> None:
+    """Test enum values work correctly."""
+    from bot.vision.types import VisionJobState, VisionProvider, VisionTask
 
     # Test VisionTask
     assert VisionTask.TEXT_TO_IMAGE.value == "text_to_image"

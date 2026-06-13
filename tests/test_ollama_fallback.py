@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
+from typing import Never
 from unittest.mock import patch
 
 import pytest
@@ -31,7 +31,7 @@ def _full_config(overrides=None):
     return d
 
 
-def test_ollama_provider_config_defaults():
+def test_ollama_provider_config_defaults() -> None:
     """Ollama provider config has correct default values."""
     pc = ProviderConfig("ollama", "llama3", timeout=45.0, max_attempts=1)
     assert pc.name == "ollama"
@@ -39,21 +39,20 @@ def test_ollama_provider_config_defaults():
     assert pc.timeout == 45.0
 
 
-def test_circuit_state_isolated():
+def test_circuit_state_isolated() -> None:
     """Circuit breaker state for ollama must not affect openrouter."""
     config = _full_config()
-    with patch("bot.enhanced_retry.load_config", return_value=config):
-        with patch.dict(os.environ, {}, clear=False):
-            # Clear the TEXT_FALLBACK env vars to use defaults
-            mgr = EnhancedRetryManager()
-            mgr._record_failure("ollama:llama3")
-            mgr._record_failure("ollama:llama3")
-            assert not mgr._is_provider_available("ollama:llama3")
-            assert mgr._is_provider_available("openrouter:whatever")
+    with patch("bot.enhanced_retry.load_config", return_value=config), patch.dict(os.environ, {}, clear=False):
+        # Clear the TEXT_FALLBACK env vars to use defaults
+        mgr = EnhancedRetryManager()
+        mgr._record_failure("ollama:llama3")
+        mgr._record_failure("ollama:llama3")
+        assert not mgr._is_provider_available("ollama:llama3")
+        assert mgr._is_provider_available("openrouter:whatever")
 
 
 @pytest.mark.asyncio
-async def test_run_with_fallback_ollama_success():
+async def test_run_with_fallback_ollama_success() -> None:
     """run_with_fallback succeeds when ollama is the only provider."""
     config = _full_config()
     with patch("bot.enhanced_retry.load_config", return_value=config):
@@ -62,7 +61,7 @@ async def test_run_with_fallback_ollama_success():
             ProviderConfig("ollama", "llama3", timeout=5.0, max_attempts=1),
         ]
 
-        async def _fake_ok():
+        async def _fake_ok() -> str:
             return "Hello from Ollama"
 
         rr = await mgr.run_with_fallback("text", lambda pc: _fake_ok, per_item_budget=10.0)
@@ -72,7 +71,7 @@ async def test_run_with_fallback_ollama_success():
 
 
 @pytest.mark.asyncio
-async def test_run_with_fallback_ollama_timeout():
+async def test_run_with_fallback_ollama_timeout() -> None:
     """run_with_fallback fails when ollama times out and no fallback exists."""
     config = _full_config()
     with patch("bot.enhanced_retry.load_config", return_value=config):
@@ -81,8 +80,8 @@ async def test_run_with_fallback_ollama_timeout():
             ProviderConfig("ollama", "llama3", timeout=5.0, max_attempts=1),
         ]
 
-        async def _fail_timeout():
-            raise asyncio.TimeoutError()
+        async def _fail_timeout() -> Never:
+            raise TimeoutError
 
         rr = await mgr.run_with_fallback("text", lambda pc: _fail_timeout, per_item_budget=10.0)
         assert not rr.success
@@ -90,7 +89,7 @@ async def test_run_with_fallback_ollama_timeout():
 
 
 @pytest.mark.asyncio
-async def test_run_with_fallback_ollama_connection_error():
+async def test_run_with_fallback_ollama_connection_error() -> None:
     """run_with_fallback fails when ollama connection is refused."""
     config = _full_config()
     with patch("bot.enhanced_retry.load_config", return_value=config):
@@ -99,15 +98,16 @@ async def test_run_with_fallback_ollama_connection_error():
             ProviderConfig("ollama", "llama3", timeout=5.0, max_attempts=1),
         ]
 
-        async def _fail_conn():
-            raise ConnectionError("refused")
+        async def _fail_conn() -> Never:
+            msg = "refused"
+            raise ConnectionError(msg)
 
         rr = await mgr.run_with_fallback("text", lambda pc: _fail_conn, per_item_budget=10.0)
         assert not rr.success
 
 
 @pytest.mark.asyncio
-async def test_run_with_fallback_ollama_no_fallback_available():
+async def test_run_with_fallback_ollama_no_fallback_available() -> None:
     """When ollama fails and no fallback exists, error should identify ollama as last provider."""
     config = _full_config()
     with patch("bot.enhanced_retry.load_config", return_value=config):
@@ -116,8 +116,9 @@ async def test_run_with_fallback_ollama_no_fallback_available():
             ProviderConfig("ollama", "llama3", timeout=5.0, max_attempts=1),
         ]
 
-        async def _fail():
-            raise ConnectionError("nope")
+        async def _fail() -> Never:
+            msg = "nope"
+            raise ConnectionError(msg)
 
         rr = await mgr.run_with_fallback("text", lambda pc: _fail, per_item_budget=10.0)
         assert not rr.success

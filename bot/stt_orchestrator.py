@@ -1,5 +1,4 @@
-"""
-STT Orchestrator: multi-provider asynchronous speech-to-text with caching and basic modes.
+"""STT Orchestrator: multi-provider asynchronous speech-to-text with caching and basic modes.
 
 Initial modes implemented:
 - single (default): call primary provider only (wraps existing stt_manager)
@@ -20,11 +19,13 @@ import asyncio
 import hashlib
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
+from typing import TYPE_CHECKING, Any
 
-from .utils.logging import get_logger
 from .config import load_config
+from .utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -53,10 +54,10 @@ class TranscriptResult:
     provider: str
     text: str
     latency_ms: int
-    confidence: Optional[float] = None
-    cost_usd: Optional[float] = None
+    confidence: float | None = None
+    cost_usd: float | None = None
     success: bool = True
-    detail: Optional[str] = None
+    detail: str | None = None
     cache_hit: bool = False  # [PA] Instrumentation: track if result came from cache
 
     def acceptable(self, min_conf: float) -> bool:
@@ -67,17 +68,17 @@ class TranscriptResult:
 class AbstractSTTProvider:
     name: str = "abstract"
 
-    def __init__(self, concurrency: int = 2):
+    def __init__(self, concurrency: int = 2) -> None:
         self._sema = asyncio.Semaphore(concurrency)
 
-    async def transcribe(self, audio_path: Path, deadline_ms: Optional[int], config: Dict[str, Any]) -> TranscriptResult:
+    async def transcribe(self, audio_path: Path, deadline_ms: int | None, config: dict[str, Any]) -> TranscriptResult:
         raise NotImplementedError
 
 
 class LocalWhisperProvider(AbstractSTTProvider):
     name: str = "local_whisper"
 
-    async def transcribe(self, audio_path: Path, deadline_ms: Optional[int], config: Dict[str, Any]) -> TranscriptResult:
+    async def transcribe(self, audio_path: Path, deadline_ms: int | None, config: dict[str, Any]) -> TranscriptResult:
         start = time.time()
         try:
             async with self._sema:
@@ -95,7 +96,7 @@ class LocalWhisperProvider(AbstractSTTProvider):
             )
         except Exception as e:
             latency_ms = int((time.time() - start) * 1000)
-            logger.error(f"[{self.name}] transcription failed: {e}")
+            logger.exception(f"[{self.name}] transcription failed: {e}")
             return TranscriptResult(
                 provider=self.name,
                 text="",
@@ -109,10 +110,10 @@ class LocalWhisperProvider(AbstractSTTProvider):
 
 class STTOrchestrator:
     def __init__(self) -> None:
-        self._providers: List[AbstractSTTProvider] = []
-        self._singleflight: Dict[str, asyncio.Future] = {}
-        self._cache: Dict[str, Tuple[float, TranscriptResult]] = {}
-        self._locks: Dict[str, asyncio.Lock] = {}
+        self._providers: list[AbstractSTTProvider] = []
+        self._singleflight: dict[str, asyncio.Future] = {}
+        self._cache: dict[str, tuple[float, TranscriptResult]] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
         self._reload_config()
 
     def _reload_config(self) -> None:
@@ -126,7 +127,7 @@ class STTOrchestrator:
         local_conc = int(cfg.get("STT_LOCAL_CONCURRENCY", 2))
 
         # Build providers list
-        providers: List[AbstractSTTProvider] = []
+        providers: list[AbstractSTTProvider] = []
         for p in active:
             p = (p or "").strip().lower()
             if p in ("local", "local_whisper", "whisper", "faster_whisper"):
@@ -153,7 +154,7 @@ class STTOrchestrator:
             self._locks[key] = lock
         return lock
 
-    def _cache_get(self, key: str) -> Optional[TranscriptResult]:
+    def _cache_get(self, key: str) -> TranscriptResult | None:
         ent = self._cache.get(key)
         if not ent:
             return None
@@ -168,8 +169,7 @@ class STTOrchestrator:
         self._cache[key] = (time.time(), res)
 
     async def transcribe(self, audio_path: Path) -> str:
-        """
-        Main entry. Returns transcript text.
+        """Main entry. Returns transcript text.
         Obeys STT_ENABLE and falls back to stt_manager when disabled.
         """
         # Reload config periodically could be added; for now rely on cached config utility [PA]
@@ -180,7 +180,8 @@ class STTOrchestrator:
             return await _stt_manager().transcribe_async(audio_path)
 
         if not audio_path.exists():
-            raise FileNotFoundError(f"Audio file not found: {audio_path}")
+            msg = f"Audio file not found: {audio_path}"
+            raise FileNotFoundError(msg)
 
         cache_key = self._hash_audio_file(audio_path)
         cached = self._cache_get(cache_key)
@@ -293,7 +294,7 @@ class STTOrchestrator:
 
     async def _run_cascade(self, audio_path: Path) -> TranscriptResult:
         logger.info("[STT-Orch] cascade providers")
-        last_error: Optional[TranscriptResult] = None
+        last_error: TranscriptResult | None = None
         for idx, p in enumerate(self._providers):
             logger.info(f"[STT-Orch] cascade try {idx + 1}/{len(self._providers)}: {p.name}")
             res = await p.transcribe(audio_path, deadline_ms=None, config={})

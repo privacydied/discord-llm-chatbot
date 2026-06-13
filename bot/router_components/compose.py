@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
 from bot.evidence import EvidenceBundle
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def format_x_tweet_with_transcription(
     *,
-    base_text: Optional[str],
+    base_text: str | None,
     url: str,
-    stt_res: Dict[str, Any],
-    tweet_data: Optional[Dict[str, Any]],
-    extract_primary_tweet_id: Optional[Callable[[str], Optional[str]]] = None,
+    stt_res: dict[str, Any],
+    tweet_data: dict[str, Any] | None,
+    extract_primary_tweet_id: Callable[[str], str | None] | None = None,
 ) -> str:
     """Assemble a single evidence bundle for a tweet using caption + STT."""
     bundle = EvidenceBundle(source_platform="x", source_url=url)
@@ -142,7 +145,7 @@ def format_x_tweet_with_transcription(
 
 def format_x_tweet_result(
     *,
-    api_data: Dict[str, Any],
+    api_data: dict[str, Any],
     url: str,
     canonicalize_status_url: Callable[[str], str],
 ) -> str:
@@ -182,7 +185,7 @@ def format_x_tweet_result(
         except Exception:
             photo_count = 0
 
-        parts: List[str] = []
+        parts: list[str] = []
         if text:
             parts.append(text)
         if photo_count:
@@ -233,9 +236,9 @@ def build_visual_analysis_anchor_prompt(base_system_prompt: str) -> str:
 
 def compose_x_tweet_with_visual_facts(
     *,
-    user_text: Optional[str],
-    tweet_caption: Optional[str],
-    vl_notes: Optional[str],
+    user_text: str | None,
+    tweet_caption: str | None,
+    vl_notes: str | None,
 ) -> str:
     """Compose text-flow input for image tweets with caption + VL facts."""
     clean_user = (user_text or "").strip()
@@ -245,7 +248,7 @@ def compose_x_tweet_with_visual_facts(
     if not clean_caption and not clean_vl:
         return clean_user
 
-    lines: List[str] = []
+    lines: list[str] = []
     if clean_user:
         lines.append(clean_user)
         lines.append("")

@@ -6,29 +6,28 @@ Phase 18: Logging reductions — prevent repeated warning spam.
 import logging
 import time
 
-
 from bot.logging_enforcer import SuppressingLogger, _is_warning_suppressed, _warning_last_seen
 
 
 class TestIsWarningSuppressed:
     """Test the module-level suppression gate used by SuppressingLogger."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         _warning_last_seen.clear()
 
-    def test_first_call_not_suppressed(self):
+    def test_first_call_not_suppressed(self) -> None:
         assert _is_warning_suppressed("first msg") is False
 
-    def test_same_msg_immediately_suppressed(self):
+    def test_same_msg_immediately_suppressed(self) -> None:
         assert _is_warning_suppressed("dup") is False
         assert _is_warning_suppressed("dup") is True
 
-    def test_different_msgs_not_suppressed(self):
+    def test_different_msgs_not_suppressed(self) -> None:
         assert _is_warning_suppressed("a") is False
         assert _is_warning_suppressed("b") is False
         assert _is_warning_suppressed("c") is False
 
-    def test_suppression_expires_after_window(self):
+    def test_suppression_expires_after_window(self) -> None:
 
         assert _is_warning_suppressed("expires") is False
         # Simulate time passage by injecting a past timestamp
@@ -41,9 +40,9 @@ class TestIsWarningSuppressed:
 class TestSuppressingLogger:
     """Test the SuppressingLogger subclass exists and is a logger."""
 
-    def test_is_logger_subclass(self):
+    def test_is_logger_subclass(self) -> None:
         assert issubclass(SuppressingLogger, logging.Logger)
 
-    def test_can_be_instantiated(self):
+    def test_can_be_instantiated(self) -> None:
         logger = SuppressingLogger("test_sl_instantiated")
         assert logger.name == "test_sl_instantiated"

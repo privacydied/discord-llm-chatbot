@@ -1,11 +1,12 @@
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from bot.memory import service as memory_service
 
 
 @pytest.mark.asyncio
-async def test_get_memory_service_initializes_global_without_unboundlocal(monkeypatch):
+async def test_get_memory_service_initializes_global_without_unboundlocal(monkeypatch) -> None:
     monkeypatch.setattr(memory_service, "_memory_service", None)
     monkeypatch.setattr(memory_service.CuratedMemoryService, "start", AsyncMock(return_value=None))
 
@@ -18,7 +19,7 @@ async def test_get_memory_service_initializes_global_without_unboundlocal(monkey
 
 
 @pytest.mark.asyncio
-async def test_get_memory_service_reuses_existing_instance(monkeypatch):
+async def test_get_memory_service_reuses_existing_instance(monkeypatch) -> None:
     monkeypatch.setattr(memory_service, "_memory_service", None)
     monkeypatch.setattr(memory_service.CuratedMemoryService, "start", AsyncMock(return_value=None))
 

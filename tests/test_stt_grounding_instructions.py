@@ -1,10 +1,11 @@
 """Tests for STT grounding instructions to prevent "I can't process audio" responses."""
 
-from bot.router_components.compose import format_x_tweet_with_transcription
 import re
 
+from bot.router_components.compose import format_x_tweet_with_transcription
 
-def test_stt_grounding_instructions_added_when_transcript_present():
+
+def test_stt_grounding_instructions_added_when_transcript_present() -> None:
     """When STT transcript is present, grounding instructions should be added."""
     result = format_x_tweet_with_transcription(
         base_text=None,
@@ -20,7 +21,7 @@ def test_stt_grounding_instructions_added_when_transcript_present():
     assert "do NOT claim the audio cannot be processed" in result
 
 
-def test_stt_grounding_instructions_in_caption_transcript_case():
+def test_stt_grounding_instructions_in_caption_transcript_case() -> None:
     """Grounding instructions should be added for caption+transcript combinations."""
     result = format_x_tweet_with_transcription(
         base_text=None,
@@ -36,7 +37,7 @@ def test_stt_grounding_instructions_in_caption_transcript_case():
     assert "transcribed by STT" in result
 
 
-def test_no_grounding_when_empty_transcript():
+def test_no_grounding_when_empty_transcript() -> None:
     """Grounding instructions should not be added for empty transcripts."""
     result = format_x_tweet_with_transcription(
         base_text=None,
@@ -49,7 +50,7 @@ def test_no_grounding_when_empty_transcript():
     assert "[STT GROUNDING]" not in result
 
 
-def test_no_grounding_for_caption_only():
+def test_no_grounding_for_caption_only() -> None:
     """Grounding instructions should not be added when only caption is present (no transcript)."""
     result = format_x_tweet_with_transcription(
         base_text=None,
@@ -62,7 +63,7 @@ def test_no_grounding_for_caption_only():
     assert "[STT GROUNDING]" not in result
 
 
-def test_tuple_transcript_handled_correctly():
+def test_tuple_transcript_handled_correctly() -> None:
     """Tuple-shaped transcription should be handled with grounding added."""
     result = format_x_tweet_with_transcription(
         base_text=None,
@@ -77,7 +78,7 @@ def test_tuple_transcript_handled_correctly():
     assert "[STT GROUNDING]" in result
 
 
-def test_grounding_includes_key_instructions():
+def test_grounding_includes_key_instructions() -> None:
     """Grounding should include all critical instructions to prevent 'cannot access' responses."""
     result = format_x_tweet_with_transcription(
         base_text=None,
@@ -95,7 +96,7 @@ def test_grounding_includes_key_instructions():
     assert "Do not ask the user to provide the audio" in result
 
 
-def test_grounding_included_as_instruction_section():
+def test_grounding_included_as_instruction_section() -> None:
     """Grounding should be added as an instruction section in the evidence."""
     result = format_x_tweet_with_transcription(
         base_text=None,
@@ -110,7 +111,7 @@ def test_grounding_included_as_instruction_section():
     assert grounding_match is not None
 
 
-def test_grounding_preserves_non_english_transcript():
+def test_grounding_preserves_non_english_transcript() -> None:
     """Grounding should work with non-English transcripts (Arabic, etc.)."""
     result = format_x_tweet_with_transcription(
         base_text=None,

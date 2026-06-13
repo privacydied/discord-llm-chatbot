@@ -1,19 +1,17 @@
-"""
-Web content extraction and processing for the Discord bot.
-"""
+"""Web content extraction and processing for the Discord bot."""
 
 import logging
-from typing import Any, Dict, Optional, Tuple
-from urllib.parse import urlparse, urljoin
-import httpx
-from bs4 import BeautifulSoup
+from typing import Any
+from urllib.parse import urljoin, urlparse
+
 import discord
+import httpx
 import trafilatura
+from bs4 import BeautifulSoup
 from trafilatura.settings import use_config
 
 # Import bot modules
 from .utils.external_api import _is_private_hostname
-
 
 # Configure trafilatura for better content extraction
 trafilatura_config = use_config()
@@ -69,30 +67,26 @@ IGNORE_EXTENSIONS = {
 }
 
 
-def get_domain_info(url: str) -> Dict[str, str]:
-    """
-    Extract domain information from a URL.
+def get_domain_info(url: str) -> dict[str, str]:
+    """Extract domain information from a URL.
 
     Args:
         url: The URL to analyze
 
     Returns:
         Dictionary with domain information
+
     """
     try:
         parsed = urlparse(url)
         domain = parsed.netloc.lower()
 
         # Remove www. prefix if present
-        if domain.startswith("www."):
-            domain = domain[4:]
+        domain = domain.removeprefix("www.")
 
         # Get domain without subdomains
         domain_parts = domain.split(".")
-        if len(domain_parts) > 2:
-            main_domain = ".".join(domain_parts[-2:])
-        else:
-            main_domain = domain
+        main_domain = ".".join(domain_parts[-2:]) if len(domain_parts) > 2 else domain
 
         # Check for domain-specific rules
         domain_type = "website"
@@ -126,7 +120,7 @@ def get_domain_info(url: str) -> Dict[str, str]:
             "fragment": parsed.fragment,
         }
     except Exception as e:
-        logging.error(f"Error parsing URL {url}: {e}")
+        logging.exception(f"Error parsing URL {url}: {e}")
         return {
             "domain": "unknown",
             "main_domain": "unknown",
@@ -135,9 +129,8 @@ def get_domain_info(url: str) -> Dict[str, str]:
         }
 
 
-async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes, str]]:
-    """
-    Fetch the content of a URL using httpx.
+async def fetch_url_content(url: str, timeout: int = 15) -> tuple[bytes, str] | None:
+    """Fetch the content of a URL using httpx.
 
     Validates the URL (scheme, SSRF, DNS) before fetching.
     Validates redirect target after redirects.
@@ -197,7 +190,7 @@ async def fetch_url_content(url: str, timeout: int = 15) -> Optional[Tuple[bytes
         return None
 
 
-async def _fetch_url_content_detail(url: str, timeout: int = 15) -> Tuple[Optional[Tuple[bytes, str]], Optional[str]]:
+async def _fetch_url_content_detail(url: str, timeout: int = 15) -> tuple[tuple[bytes, str] | None, str | None]:
     """Fetch URL content and return (payload, error_message)."""
     try:
         payload = await fetch_url_content(url, timeout=timeout)
@@ -208,9 +201,8 @@ async def _fetch_url_content_detail(url: str, timeout: int = 15) -> Tuple[Option
         return None, f"fetch_exception: {e.__class__.__name__}"
 
 
-def extract_metadata(html: str, url: str) -> Dict[str, str]:
-    """
-    Extract metadata from HTML content.
+def extract_metadata(html: str, url: str) -> dict[str, str]:
+    """Extract metadata from HTML content.
 
     Args:
         html: The HTML content
@@ -218,6 +210,7 @@ def extract_metadata(html: str, url: str) -> Dict[str, str]:
 
     Returns:
         Dictionary with extracted metadata
+
     """
     metadata = {
         "title": "",
@@ -246,7 +239,7 @@ def extract_metadata(html: str, url: str) -> Dict[str, str]:
                     "image": og_props.get("image", ""),
                     "site_name": og_props.get("site_name", ""),
                     "type": og_props.get("type", "website"),
-                }
+                },
             )
 
         # Fall back to standard metadata
@@ -276,13 +269,12 @@ def extract_metadata(html: str, url: str) -> Dict[str, str]:
         return metadata
 
     except Exception as e:
-        logging.error(f"Error extracting metadata from {url}: {e}")
+        logging.exception(f"Error extracting metadata from {url}: {e}")
         return metadata
 
 
-def extract_main_content(html: str, url: str) -> Dict[str, str]:
-    """
-    Extract the main content from HTML using trafilatura.
+def extract_main_content(html: str, url: str) -> dict[str, str]:
+    """Extract the main content from HTML using trafilatura.
 
     Args:
         html: The HTML content
@@ -290,6 +282,7 @@ def extract_main_content(html: str, url: str) -> Dict[str, str]:
 
     Returns:
         Dictionary with extracted content and metadata
+
     """
     try:
         # Use trafilatura to extract main content
@@ -312,7 +305,7 @@ def extract_main_content(html: str, url: str) -> Dict[str, str]:
         data = json.loads(result)
 
         # Extract relevant fields
-        content = {
+        return {
             "title": data.get("title", ""),
             "author": data.get("author", ""),
             "date": data.get("date", ""),
@@ -328,27 +321,25 @@ def extract_main_content(html: str, url: str) -> Dict[str, str]:
             "word_count": len(data.get("text", "").split()),
         }
 
-        return content
 
     except Exception as e:
-        logging.error(f"Error extracting text from HTML: {e}")
+        logging.exception(f"Error extracting text from HTML: {e}")
         return {"content": "", "text": ""}
 
 
-def should_extract_text(content_type: str) -> Dict[str, bool]:
-    """
-    Determine if text extraction should be performed based on the content type.
+def should_extract_text(content_type: str) -> dict[str, bool]:
+    """Determine if text extraction should be performed based on the content type.
 
     Args:
         content_type: The content type
 
     Returns:
         A dictionary with a single key 'should_extract' indicating whether text extraction should be performed
+
     """
     if content_type.startswith("text/html"):
         return {"should_extract": True}
-    else:
-        return {"should_extract": False}
+    return {"should_extract": False}
 
 
 def strip_boilerplate(text: str) -> str:
@@ -374,7 +365,7 @@ def strip_boilerplate(text: str) -> str:
     return "\n".join(line for line in text.splitlines() if not (len(line.split()) < 15 and any(keyword in line.lower() for keyword in BLOCKLIST)))
 
 
-async def process_url(url: str) -> Dict[str, Any]:
+async def process_url(url: str) -> dict[str, Any]:
     """Process a URL, using smart routing for Twitter/X.com URLs and falling back to text extraction."""
     domain_info = get_domain_info(url)
     # Screenshot fallback removed; screenshots are command-gated via !ss
@@ -401,11 +392,10 @@ async def process_url(url: str) -> Dict[str, Any]:
                     "error": None,
                     "route_to_ytdlp": True,
                 }
-            else:
-                logging.info(f"📝 No media in Twitter URL {url}. Proceeding with text extraction (no auto-screenshot).")
+            logging.info(f"📝 No media in Twitter URL {url}. Proceeding with text extraction (no auto-screenshot).")
 
         except Exception as e:
-            logging.error(f"❌ Smart routing failed for {url}: {e}. Continuing with text extraction.")
+            logging.exception(f"❌ Smart routing failed for {url}: {e}. Continuing with text extraction.")
 
     # 2. Attempt screenshot if forced (legacy behavior for non-smart domains)
     # 'force_screenshot' is ignored; screenshots are gated by explicit command.
@@ -465,14 +455,14 @@ async def process_url(url: str) -> Dict[str, Any]:
 
 
 async def get_url_preview(url: str) -> discord.Embed:
-    """
-    Create a Discord embed preview for a URL.
+    """Create a Discord embed preview for a URL.
 
     Args:
         url: The URL to create a preview for
 
     Returns:
         A Discord Embed object
+
     """
     try:
         domain_info = get_domain_info(url)
@@ -493,10 +483,9 @@ async def get_url_preview(url: str) -> discord.Embed:
         logging.error(f"Error creating URL preview for {url}: {e}", exc_info=True)
 
         # Fallback to a simple embed
-        embed = discord.Embed(
+        return discord.Embed(
             title="Link Preview",
             url=url,
             description=f"[Click to open]({url})\n\n*Preview unavailable*",
             color=discord.Color.blue(),
         )
-        return embed

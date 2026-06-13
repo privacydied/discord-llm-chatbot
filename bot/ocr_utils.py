@@ -3,7 +3,6 @@
 import importlib.util
 import logging
 import shutil
-from typing import Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -12,12 +11,12 @@ OCR_READY = False
 OCR_WARNING_SHOWN = False
 
 
-def check_ocr_dependencies() -> Tuple[bool, Dict[str, bool]]:
-    """
-    Check if OCR dependencies are available.
+def check_ocr_dependencies() -> tuple[bool, dict[str, bool]]:
+    """Check if OCR dependencies are available.
 
     Returns:
         Tuple of (OCR_READY, details_dict)
+
     """
     global OCR_READY
 
@@ -58,11 +57,11 @@ def check_ocr_dependencies() -> Tuple[bool, Dict[str, bool]]:
 
 
 def get_ocr_status_message() -> str:
-    """
-    Get a user-friendly message about OCR status.
+    """Get a user-friendly message about OCR status.
 
     Returns:
         A message suitable for displaying to users
+
     """
     global OCR_WARNING_SHOWN
 
@@ -76,15 +75,12 @@ def get_ocr_status_message() -> str:
 
 
 def is_ocr_warning_needed() -> bool:
-    """
-    Check if an OCR warning needs to be shown.
+    """Check if an OCR warning needs to be shown.
 
     Returns:
         True if warning should be shown, False otherwise
+
     """
     global OCR_WARNING_SHOWN
 
-    if OCR_READY or OCR_WARNING_SHOWN:
-        return False
-
-    return True
+    return not (OCR_READY or OCR_WARNING_SHOWN)

@@ -1,12 +1,10 @@
-"""
-Tests for STT pipeline improvements.
-"""
+"""Tests for STT pipeline improvements."""
 
 from bot.hear import (
-    _transcript_cache_key,
-    _join_segments,
-    _find_overlap_len,
     STT_PIPELINE_VERSION,
+    _find_overlap_len,
+    _join_segments,
+    _transcript_cache_key,
 )
 from bot.stt import ModelSpec
 
@@ -14,7 +12,7 @@ from bot.stt import ModelSpec
 class TestTranscriptCacheKey:
     """Test transcript cache key versioning."""
 
-    def test_cache_key_includes_pipeline_version(self):
+    def test_cache_key_includes_pipeline_version(self) -> None:
         """Cache key generation should include pipeline version."""
         spec = ModelSpec("tiny", "int8")
         key1 = _transcript_cache_key("audio123", spec, vad_enabled=True)
@@ -23,13 +21,13 @@ class TestTranscriptCacheKey:
         assert isinstance(key1, str)
         assert len(key1) == 24  # We truncate to 24 chars
 
-    def test_cache_key_changes_with_different_versions(self):
+    def test_cache_key_changes_with_different_versions(self) -> None:
         """Changing pipeline version changes the cache key."""
         # This test documents the expected behavior
         assert STT_PIPELINE_VERSION.startswith("stt-")
         assert "lang-aware" in STT_PIPELINE_VERSION.lower() or "stitch" in STT_PIPELINE_VERSION.lower()
 
-    def test_cache_key_includes_task_and_language(self):
+    def test_cache_key_includes_task_and_language(self) -> None:
         """Cache key should include task and language parameters."""
         spec = ModelSpec("tiny", "int8")
         key1 = _transcript_cache_key("audio123", spec, task="transcribe", language=None)
@@ -38,7 +36,7 @@ class TestTranscriptCacheKey:
         # Different task/language should produce different keys
         assert key1 != key2
 
-    def test_cache_key_with_explicit_language(self):
+    def test_cache_key_with_explicit_language(self) -> None:
         """Cache key with explicit language differs from auto."""
         spec = ModelSpec("tiny", "int8")
         key_auto = _transcript_cache_key("audio123", spec, language=None)
@@ -46,81 +44,81 @@ class TestTranscriptCacheKey:
         key_en = _transcript_cache_key("audio123", spec, language="en")
 
         # All three should be different
-        assert len(set([key_auto, key_ar, key_en])) == 3
+        assert len({key_auto, key_ar, key_en}) == 3
 
 
 class TestJoinSegments:
     """Test the timestamp-aware segment joining."""
 
-    def test_empty_segments(self):
+    def test_empty_segments(self) -> None:
         """Empty segments list returns empty string."""
         text, meta = _join_segments([])
         assert text == ""
         assert meta.get("confidence_status") == "unknown"
 
-    def test_single_segment(self):
+    def test_single_segment(self) -> None:
         """Single segment just returns its text."""
         segments = [{"start": 0.0, "end": 1.0, "text": "Hello world"}]
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         assert text == "Hello world"
 
-    def test_sorts_by_timestamp(self):
+    def test_sorts_by_timestamp(self) -> None:
         """Segments are sorted by timestamp before joining."""
         segments = [
             {"start": 5.0, "end": 6.0, "text": "world", "chunk_idx": 1},
             {"start": 0.0, "end": 1.0, "text": "Hello", "chunk_idx": 0},
         ]
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         assert text == "Hello world"
 
-    def test_removes_empty_text(self):
+    def test_removes_empty_text(self) -> None:
         """Empty text segments are filtered out."""
         segments = [
             {"start": 0.0, "end": 1.0, "text": "Hello", "chunk_idx": 0},
             {"start": 1.0, "end": 2.0, "text": "", "chunk_idx": 0},
             {"start": 2.0, "end": 3.0, "text": "world", "chunk_idx": 0},
         ]
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         assert text == "Hello world"
 
-    def test_removes_whitespace_only(self):
+    def test_removes_whitespace_only(self) -> None:
         """Whitespace-only text is filtered out."""
         segments = [
             {"start": 0.0, "end": 1.0, "text": "Hello", "chunk_idx": 0},
             {"start": 1.0, "end": 2.0, "text": " ", "chunk_idx": 0},
             {"start": 2.0, "end": 3.0, "text": "world", "chunk_idx": 0},
         ]
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         assert text == "Hello world"
 
-    def test_overlapping_segments_filtered(self):
+    def test_overlapping_segments_filtered(self) -> None:
         """Highly overlapping segments (>50% overlap) are filtered."""
         segments = [
             {"start": 0.0, "end": 2.0, "text": "Hello world", "chunk_idx": 0},
             {"start": 1.0, "end": 3.0, "text": "world how are", "chunk_idx": 1},
         ]
         # Second segment overlaps by 50% (1 second of 2)
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         assert "Hello" in text
         # The second segment should be mostly skipped
 
-    def test_exact_consecutive_duplicate_removed(self):
+    def test_exact_consecutive_duplicate_removed(self) -> None:
         """Exact consecutive duplicates are removed."""
         segments = [
             {"start": 0.0, "end": 1.0, "text": "Hello", "chunk_idx": 0},
             {"start": 1.0, "end": 2.0, "text": "Hello", "chunk_idx": 1},
         ]
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         assert text == "Hello"  # Not "Hello Hello"
 
-    def test_legitimate_repeated_phrases_preserved(self):
+    def test_legitimate_repeated_phrases_preserved(self) -> None:
         """Non-consecutive repeated phrases are preserved."""
         segments = [
             {"start": 0.0, "end": 1.0, "text": "Hello", "chunk_idx": 0},
             {"start": 1.0, "end": 2.0, "text": "there", "chunk_idx": 0},
             {"start": 3.0, "end": 4.0, "text": "Hello", "chunk_idx": 1},
         ]
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         # "Hello" appears twice but is legitimate repetition
         assert text.count("Hello") == 2
 
@@ -128,28 +126,28 @@ class TestJoinSegments:
 class TestFindOverlapLen:
     """Test the overlap detection function."""
 
-    def test_no_overlap(self):
+    def test_no_overlap(self) -> None:
         """No overlap returns 0."""
         result = _find_overlap_len("hello world", "foo bar")
         assert result == 0
 
-    def test_prefix_suffix_overlap(self):
+    def test_prefix_suffix_overlap(self) -> None:
         """Detects word boundary overlaps."""
         result = _find_overlap_len("hello world", "world how are")
         assert result > 0  # Should find "world" overlap
 
-    def test_short_overlap_ignored(self):
+    def test_short_overlap_ignored(self) -> None:
         """Short overlaps (< 3 chars) are ignored."""
         result = _find_overlap_len("hello a", "a world")
         assert result == 0  # "a" is too short
 
-    def test_empty_strings(self):
+    def test_empty_strings(self) -> None:
         """Empty strings return 0."""
         assert _find_overlap_len("", "hello") == 0
         assert _find_overlap_len("hello", "") == 0
         assert _find_overlap_len("", "") == 0
 
-    def test_no_word_boundary_no_overlap(self):
+    def test_no_word_boundary_no_overlap(self) -> None:
         """Overlaps not at word boundaries may be ignored."""
         # This documents the behavior
         result = _find_overlap_len("helloooo", "oooworld")

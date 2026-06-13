@@ -1,19 +1,20 @@
-from pathlib import Path
-import sys
 import asyncio
 import logging
+import sys
 import types
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 
 class _FakeAsyncClient:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         pass
 
     async def __aenter__(self):
-        raise RuntimeError("httpx is not available in tests")
+        msg = "httpx is not available in tests"
+        raise RuntimeError(msg)
 
     async def __aexit__(self, exc_type, exc, tb):
         return False
@@ -30,16 +31,17 @@ sys.modules.setdefault(
 
 
 class _FakeClientTimeout:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         pass
 
 
 class _FakeClientSession:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         pass
 
     async def __aenter__(self):
-        raise RuntimeError("aiohttp is not available in tests")
+        msg = "aiohttp is not available in tests"
+        raise RuntimeError(msg)
 
     async def __aexit__(self, exc_type, exc, tb):
         return False
@@ -81,7 +83,7 @@ bot_action_stub = types.ModuleType("bot.action")
 
 
 class _FakeBotAction:
-    def __init__(self, content: str | None = None, meta: dict | None = None):
+    def __init__(self, content: str | None = None, meta: dict | None = None) -> None:
         self.content = content or ""
         self.meta = meta or {}
         self.audio_path: str | None = None
@@ -90,13 +92,15 @@ class _FakeBotAction:
 bot_action_stub.BotAction = _FakeBotAction
 sys.modules.setdefault("bot.action", bot_action_stub)
 
-from bot.tts.interface import TTSManager
-from bot.tts.errors import SynthesisError
+from typing import Never
+
 from bot.tts.engines.kokoro import KokoroONNXEngine
+from bot.tts.errors import SynthesisError
+from bot.tts.interface import TTSManager
 
 
 class _DummyKokoro:
-    def __init__(self, model_path=None, voices_path=None):
+    def __init__(self, model_path=None, voices_path=None) -> None:
         self.model_path = model_path
         self.voices_path = voices_path
 
@@ -104,7 +108,7 @@ class _DummyKokoro:
         return b"ok"
 
 
-def test_default_engine_prefers_kokoro_when_assets_available(monkeypatch, tmp_path):
+def test_default_engine_prefers_kokoro_when_assets_available(monkeypatch, tmp_path) -> None:
     tts_dir = tmp_path / "tts"
     tts_dir.mkdir()
     model_file = tts_dir / "kokoro-v1.0.onnx"
@@ -133,9 +137,10 @@ def test_default_engine_prefers_kokoro_when_assets_available(monkeypatch, tmp_pa
         asyncio.run(manager.close())
 
 
-def test_missing_assets_raise_synthesis_error(monkeypatch, tmp_path):
-    async def failing_ensure(_out_dir: Path):
-        raise RuntimeError("download failed")
+def test_missing_assets_raise_synthesis_error(monkeypatch, tmp_path) -> None:
+    async def failing_ensure(_out_dir: Path) -> Never:
+        msg = "download failed"
+        raise RuntimeError(msg)
 
     monkeypatch.setenv("TTS_ENGINE", "kokoro-onnx")
     monkeypatch.delenv("TTS_MODEL_PATH", raising=False)
@@ -154,7 +159,7 @@ def test_missing_assets_raise_synthesis_error(monkeypatch, tmp_path):
         asyncio.run(manager.close())
 
 
-def test_runtime_engine_error_propagates(monkeypatch, tmp_path):
+def test_runtime_engine_error_propagates(monkeypatch, tmp_path) -> None:
     tts_dir = tmp_path / "tts"
     tts_dir.mkdir()
     model_file = tts_dir / "kokoro-v1.0.onnx"
@@ -163,12 +168,13 @@ def test_runtime_engine_error_propagates(monkeypatch, tmp_path):
     voices_file.write_bytes(b"v")
 
     class ExplodingEngine:
-        def __init__(self, model_path=None, voices_path=None):
+        def __init__(self, model_path=None, voices_path=None) -> None:
             self.model_path = model_path
             self.voices_path = voices_path
 
         def synthesize(self, text: str) -> bytes:
-            raise RuntimeError("boom")
+            msg = "boom"
+            raise RuntimeError(msg)
 
     async def ensure_paths(_out_dir: Path):
         return model_file, voices_file
@@ -190,7 +196,7 @@ def test_runtime_engine_error_propagates(monkeypatch, tmp_path):
         asyncio.run(manager.close())
 
 
-def test_kokoro_english_falls_back_when_g2p_missing(monkeypatch, tmp_path):
+def test_kokoro_english_falls_back_when_g2p_missing(monkeypatch, tmp_path) -> None:
     model_file = tmp_path / "model.onnx"
     voices_file = tmp_path / "voices.bin"
     model_file.write_bytes(b"m")
@@ -199,7 +205,8 @@ def test_kokoro_english_falls_back_when_g2p_missing(monkeypatch, tmp_path):
     from bot.tts.eng_g2p_local import G2PUnavailableError
 
     def raising_text_to_ipa(_text: str) -> str:
-        raise G2PUnavailableError("cmudict missing")
+        msg = "cmudict missing"
+        raise G2PUnavailableError(msg)
 
     async def fake_registry(self, text: str) -> bytes:
         return b"registry"
@@ -213,20 +220,21 @@ def test_kokoro_english_falls_back_when_g2p_missing(monkeypatch, tmp_path):
     assert audio == b"registry"
 
 
-def test_process_propagates_synthesis_error(monkeypatch):
+def test_process_propagates_synthesis_error(monkeypatch) -> None:
     monkeypatch.setenv("TTS_ENGINE", "stub")
 
     manager = TTSManager()
     try:
 
-        async def failing_generate(self, text: str, out_path=None, timeout=None):
-            raise SynthesisError("forced failure")
+        async def failing_generate(self, text: str, out_path=None, timeout=None) -> Never:
+            msg = "forced failure"
+            raise SynthesisError(msg)
 
         monkeypatch.setattr(TTSManager, "generate_tts", failing_generate, raising=False)
 
         action = bot_action_stub.BotAction(content="hello world")
 
-        async def _invoke():
+        async def _invoke() -> None:
             await manager.process(action)
 
         with pytest.raises(SynthesisError):

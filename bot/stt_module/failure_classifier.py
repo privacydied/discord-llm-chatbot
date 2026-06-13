@@ -1,5 +1,4 @@
-"""
-STT Failure Classification System.
+"""STT Failure Classification System.
 
 Categorizes transcription failures to determine when multimodal fallback should be attempted.
 Provides clear failure classification for debugging and fallback decision logic.
@@ -9,10 +8,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional, Any
+from typing import TYPE_CHECKING, Any
 
-from ..utils.logging import get_logger
+from bot.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -86,11 +87,10 @@ class STTFailureClassifier:
     def classify_failure(
         cls,
         error: Exception,
-        pre_result: Optional[Any] = None,
-        audio_path: Optional[Path] = None,
+        pre_result: Any | None = None,
+        audio_path: Path | None = None,
     ) -> FailureClassification:
-        """
-        Classify a STT failure to determine if multimodal fallback should be attempted.
+        """Classify a STT failure to determine if multimodal fallback should be attempted.
 
         Args:
             error: The exception that caused the failure
@@ -99,6 +99,7 @@ class STTFailureClassifier:
 
         Returns:
             FailureClassification object with detailed categorization
+
         """
         error_str = str(error).lower()
         error_type = type(error).__name__.lower()
@@ -119,7 +120,7 @@ class STTFailureClassifier:
         return cls._create_classification("whisper_runtime", error, error_str)
 
     @classmethod
-    def _classify_file_failure(cls, audio_path: Path) -> Optional[FailureClassification]:
+    def _classify_file_failure(cls, audio_path: Path) -> FailureClassification | None:
         """Classify failures based on file inspection."""
         try:
             # Check file size
@@ -186,7 +187,6 @@ class STTFailureClassifier:
     @classmethod
     def _create_classification(cls, category: str, error: Exception, error_str: str) -> FailureClassification:
         """Create a failure classification with appropriate severity and recoverability."""
-
         # Determine severity and recoverability based on category
         if category in ["extraction", "timeout", "memory"]:
             severity = "soft"
@@ -202,7 +202,7 @@ class STTFailureClassifier:
             category=category,
             severity=severity,
             recoverable=recoverable,
-            detail=f"{error.__class__.__name__}: {str(error)}",
+            detail=f"{error.__class__.__name__}: {error!s}",
             confidence_score=cls._calculate_confidence(category, error_str),
         )
 
@@ -234,8 +234,7 @@ class STTFailureClassifier:
         has_audio_data: bool = True,
         pre_duration: float = 0.0,
     ) -> bool:
-        """
-        Determine if multimodal fallback should be attempted based on failure classification.
+        """Determine if multimodal fallback should be attempted based on failure classification.
 
         Args:
             classification: The classified failure
@@ -244,9 +243,10 @@ class STTFailureClassifier:
 
         Returns:
             True if fallback should be attempted, False otherwise
+
         """
         # Never attempt fallback for these categories
-        if classification.category in ["extraction"] and classification.severity == "hard":
+        if classification.category == "extraction" and classification.severity == "hard":
             return False
 
         # Never attempt fallback if no audio data available

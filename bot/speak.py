@@ -1,12 +1,12 @@
-"""
-Centralized TTS inference module (speak)
-"""
+"""Centralized TTS inference module (speak)."""
 
+import contextlib
 import logging
 from pathlib import Path
-from .tts.interface import TTSManager
-from .tts.errors import SynthesisError
+
 from .exceptions import TTSAudioError
+from .tts.errors import SynthesisError
+from .tts.interface import TTSManager
 
 logger = logging.getLogger(__name__)
 
@@ -42,24 +42,26 @@ async def speak_infer(text: str) -> Path:
 
         if not out_path.exists():
             logger.error(f"TTS output file does not exist: {out_path}")
-            raise TTSAudioError("Speech synthesis failed: Output file does not exist")
+            msg = "Speech synthesis failed: Output file does not exist"
+            raise TTSAudioError(msg)
 
         if out_path.stat().st_size == 0:
             logger.error(f"TTS output file is empty: {out_path}")
-            raise TTSAudioError("Speech synthesis failed: Output file is empty")
+            msg = "Speech synthesis failed: Output file is empty"
+            raise TTSAudioError(msg)
 
         logger.debug(f"TTS synthesis successful: {out_path}, size: {out_path.stat().st_size} bytes, type: {content_type}")
         return out_path
     except SynthesisError as exc:
         status = manager.get_status()
         reason = status.get("degraded_reason") or str(exc)
-        logger.error(f"🔊 TTS inference failed: {reason}")
-        raise TTSAudioError(f"Speech synthesis failed: {reason}")
+        logger.exception(f"🔊 TTS inference failed: {reason}")
+        msg = f"Speech synthesis failed: {reason}"
+        raise TTSAudioError(msg)
     except Exception as e:
-        logger.error(f"🔊 TTS inference failed: {str(e)}")
-        raise TTSAudioError(f"Speech synthesis failed: {str(e)}")
+        logger.exception(f"🔊 TTS inference failed: {e!s}")
+        msg = f"Speech synthesis failed: {e!s}"
+        raise TTSAudioError(msg)
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await manager.close()
-        except Exception:
-            pass

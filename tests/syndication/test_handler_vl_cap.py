@@ -6,7 +6,7 @@ from bot.syndication.handler import handle_twitter_syndication_to_vl
 
 
 class _FakeResp:
-    def __init__(self, status=200, payload=b"img"):
+    def __init__(self, status=200, payload=b"img") -> None:
         self.status = status
         self._payload = payload
 
@@ -32,7 +32,7 @@ class _FakeSession:
 
 
 @pytest.mark.asyncio
-async def test_syndication_vl_caps_to_one_image_by_default(monkeypatch):
+async def test_syndication_vl_caps_to_one_image_by_default(monkeypatch) -> None:
     # Keep global cap high to prove X-specific cap defaults to 1.
     monkeypatch.setenv("VL_MAX_IMAGES", "4")
     monkeypatch.delenv("X_SYNDICATION_VL_MAX_IMAGES", raising=False)
@@ -68,7 +68,7 @@ async def test_syndication_vl_caps_to_one_image_by_default(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_syndication_vl_cap_respects_x_env_override(monkeypatch):
+async def test_syndication_vl_cap_respects_x_env_override(monkeypatch) -> None:
     monkeypatch.setenv("VL_MAX_IMAGES", "4")
     monkeypatch.setenv("X_SYNDICATION_VL_MAX_IMAGES", "2")
     monkeypatch.setattr("aiohttp.ClientSession", _FakeSession)

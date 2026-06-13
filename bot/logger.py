@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Dict, Any
+from typing import Any
 
 from discord.ext import commands
 
@@ -10,17 +10,17 @@ logger = logging.getLogger(__name__)
 def log_command(
     ctx: commands.Context,
     event: str,
-    detail: Optional[Dict[str, Any]] = None,
+    detail: dict[str, Any] | None = None,
     success: bool = True,
-):
-    """
-    Logs a command execution with structured context.
+) -> None:
+    """Logs a command execution with structured context.
 
     Args:
         ctx: The command context from discord.py.
         event: A string describing the event (e.g., 'add_memory').
         detail: An optional dictionary for additional structured details.
         success: A boolean indicating if the command was successful.
+
     """
     guild_id = ctx.guild.id if ctx.guild else "DM"
     user_id = ctx.author.id

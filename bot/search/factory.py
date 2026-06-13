@@ -1,23 +1,24 @@
-"""
-Factory to create search providers and manage shared HTTP client.
-[CA][RM][CMV]
+"""Factory to create search providers and manage shared HTTP client.
+[CA][RM][CMV].
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import httpx
 
-from bot.utils.logging import get_logger
 from bot.config import load_config
-from .base import SearchProvider
+from bot.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from .base import SearchProvider
 
 logger = get_logger(__name__)
 
 _client_lock = asyncio.Lock()
-_client: Optional[httpx.AsyncClient] = None
+_client: httpx.AsyncClient | None = None
 
 
 def _build_client(max_connections: int) -> httpx.AsyncClient:
@@ -56,12 +57,11 @@ def get_search_provider() -> SearchProvider:
         from .providers.ddg import DDGSearchProvider  # local import to avoid cycle
 
         return DDGSearchProvider()
-    elif provider == "custom":
+    if provider == "custom":
         from .providers.custom import CustomSearchProvider  # type: ignore
 
         return CustomSearchProvider()  # pragma: no cover (stubbed unless provided)
-    else:
-        logger.warning(f"Unknown SEARCH_PROVIDER '{provider}', falling back to ddg")
-        from .providers.ddg import DDGSearchProvider
+    logger.warning(f"Unknown SEARCH_PROVIDER '{provider}', falling back to ddg")
+    from .providers.ddg import DDGSearchProvider
 
-        return DDGSearchProvider()
+    return DDGSearchProvider()

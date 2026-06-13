@@ -1,5 +1,4 @@
-"""
-Multimodal STT Fallback Provider.
+"""Multimodal STT Fallback Provider.
 
 Provides fallback transcription using multimodal models when faster-whisper fails.
 Uses OpenRouter-compatible models that are different from vision models.
@@ -10,14 +9,18 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import TYPE_CHECKING, Any
+
 import aiohttp
 
-from ..utils.logging import get_logger
-from ..config import load_config
-from .failure_classifier import FailureClassification
-from ..exceptions import InferenceError
+from bot.config import load_config
+from bot.exceptions import InferenceError
+from bot.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .failure_classifier import FailureClassification
 
 logger = get_logger(__name__)
 
@@ -30,10 +33,10 @@ class FallbackTranscriptResult:
     provider: str
     confidence: float
     is_fallback: bool = True
-    failure_context: Optional[str] = None
+    failure_context: str | None = None
     processing_time_ms: float = 0.0
-    error: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    error: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class MultimodalSTTFallbackProvider:
@@ -41,14 +44,14 @@ class MultimodalSTTFallbackProvider:
 
     def __init__(self) -> None:
         self.config = load_config()
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         self._timeout = float(self.config.get("STT_MULTIMODAL_FALLBACK_TIMEOUT_S", 30.0))
         self._min_confidence = float(self.config.get("STT_MULTIMODAL_FALLBACK_MIN_CONFIDENCE", 0.5))
         self._max_retries = int(self.config.get("STT_MULTIMODAL_FALLBACK_MAX_RETRIES", 1))
         self._max_audio_duration_s = float(self.config.get("STT_MAX_AUDIO_DURATION_S", 300.0))
         self._models = self._load_fallback_models()
 
-    def _load_fallback_models(self) -> List[Dict[str, Any]]:
+    def _load_fallback_models(self) -> list[dict[str, Any]]:
         """Load fallback model configuration from environment."""
         models_config = self.config.get("STT_MULTIMODAL_FALLBACK_MODELS", "")
         if not models_config:
@@ -74,7 +77,7 @@ class MultimodalSTTFallbackProvider:
                     "provider": provider,
                     "timeout": self._timeout,
                     "max_retries": self._max_retries,
-                }
+                },
             )
 
         logger.info(f"Loaded {len(models)} multimodal fallback models: {[m['name'] for m in models]}")
@@ -83,12 +86,11 @@ class MultimodalSTTFallbackProvider:
     async def transcribe_with_fallback(
         self,
         audio_path: Path,
-        pre_result: Optional[Any] = None,
-        failure_reason: Optional[FailureClassification] = None,
-        model_config: Optional[Dict[str, Any]] = None,
+        pre_result: Any | None = None,
+        failure_reason: FailureClassification | None = None,
+        model_config: dict[str, Any] | None = None,
     ) -> FallbackTranscriptResult:
-        """
-        Attempt multimodal transcription when primary STT fails.
+        """Attempt multimodal transcription when primary STT fails.
 
         Args:
             audio_path: Path to the audio file
@@ -98,6 +100,7 @@ class MultimodalSTTFallbackProvider:
 
         Returns:
             FallbackTranscriptResult with the transcription
+
         """
         start_time = time.time()
 
@@ -107,7 +110,8 @@ class MultimodalSTTFallbackProvider:
 
             # Check if fallback is enabled
             if not self.config.get("STT_MULTIMODAL_FALLBACK_ENABLED", False):
-                raise InferenceError("Multimodal fallback is disabled")
+                msg = "Multimodal fallback is disabled"
+                raise InferenceError(msg)
 
             # Try each model in sequence
             last_error = None
@@ -135,7 +139,8 @@ class MultimodalSTTFallbackProvider:
                     continue
 
             # All models failed
-            raise InferenceError(f"All multimodal fallback models failed. Last error: {last_error}")
+            msg = f"All multimodal fallback models failed. Last error: {last_error}"
+            raise InferenceError(msg)
 
         except Exception as e:
             # Return error result
@@ -150,12 +155,11 @@ class MultimodalSTTFallbackProvider:
     async def _try_single_model(
         self,
         audio_path: Path,
-        pre_result: Optional[Any],
-        model_info: Dict[str, Any],
-        failure_reason: Optional[FailureClassification],
-    ) -> Optional[FallbackTranscriptResult]:
+        pre_result: Any | None,
+        model_info: dict[str, Any],
+        failure_reason: FailureClassification | None,
+    ) -> FallbackTranscriptResult | None:
         """Try transcription with a single model."""
-
         for attempt in range(model_info.get("max_retries", self._max_retries) + 1):
             try:
                 if attempt > 0:
@@ -178,9 +182,8 @@ class MultimodalSTTFallbackProvider:
 
         return None
 
-    async def _transcribe_with_whisper_model(self, audio_path: Path, model_info: Dict[str, Any]) -> FallbackTranscriptResult:
+    async def _transcribe_with_whisper_model(self, audio_path: Path, model_info: dict[str, Any]) -> FallbackTranscriptResult:
         """Transcribe using a Whisper model via API."""
-
         # For Whisper models, we can use the audio file directly
         audio_data = await self._read_audio_bytes(audio_path)
 
@@ -201,18 +204,17 @@ class MultimodalSTTFallbackProvider:
                 confidence=0.8,  # Default confidence for Whisper
                 metadata={"response_length": len(text) if text else 0},
             )
-        else:
-            raise InferenceError(f"Unsupported provider for Whisper model: {model_info['provider']}")
+        msg = f"Unsupported provider for Whisper model: {model_info['provider']}"
+        raise InferenceError(msg)
 
     async def _transcribe_with_multimodal_model(
         self,
         audio_path: Path,
-        pre_result: Optional[Any],
-        model_info: Dict[str, Any],
-        failure_reason: Optional[FailureClassification],
+        pre_result: Any | None,
+        model_info: dict[str, Any],
+        failure_reason: FailureClassification | None,
     ) -> FallbackTranscriptResult:
         """Transcribe using a multimodal model that can process audio."""
-
         # Read audio data
         audio_data = await self._read_audio_bytes(audio_path)
         audio_base64 = self._encode_audio_base64(audio_data)
@@ -233,7 +235,7 @@ class MultimodalSTTFallbackProvider:
                                 "audio_url": {"url": f"data:audio/wav;base64,{audio_base64}"},
                             },
                         ],
-                    }
+                    },
                 ],
                 "temperature": 0.0,  # For more deterministic output
                 "max_tokens": 1000,
@@ -251,23 +253,23 @@ class MultimodalSTTFallbackProvider:
                 confidence=confidence,
                 metadata={"response_length": len(text) if text else 0},
             )
-        else:
-            raise InferenceError(f"Unsupported provider for multimodal model: {model_info['provider']}")
+        msg = f"Unsupported provider for multimodal model: {model_info['provider']}"
+        raise InferenceError(msg)
 
     async def _call_openrouter_api(
         self,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         endpoint_type: str,  # "audio" or "chat"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Call OpenRouter API with the given payload."""
-
         if not self._session:
             timeout = aiohttp.ClientTimeout(total=self._timeout)
             self._session = aiohttp.ClientSession(timeout=timeout)
 
         api_key = self.config.get("OPENAI_API_KEY")
         if not api_key:
-            raise InferenceError("OpenRouter API key not configured")
+            msg = "OpenRouter API key not configured"
+            raise InferenceError(msg)
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -296,13 +298,14 @@ class MultimodalSTTFallbackProvider:
                     return await response.json()
 
         except aiohttp.ClientError as e:
-            raise InferenceError(f"OpenRouter API error: {e}")
-        except asyncio.TimeoutError:
-            raise InferenceError(f"OpenRouter API timeout after {self._timeout}s")
+            msg = f"OpenRouter API error: {e}"
+            raise InferenceError(msg)
+        except TimeoutError:
+            msg = f"OpenRouter API timeout after {self._timeout}s"
+            raise InferenceError(msg)
 
-    def _build_multimodal_prompt(self, failure_reason: Optional[FailureClassification]) -> str:
+    def _build_multimodal_prompt(self, failure_reason: FailureClassification | None) -> str:
         """Build a prompt for multimodal models that includes context about the failure."""
-
         base_prompt = "You are a transcription assistant. The user has sent an audio message. Please transcribe the spoken content as accurately as possible. If the audio is unclear, provide your best interpretation."
 
         if failure_reason:
@@ -316,9 +319,8 @@ class MultimodalSTTFallbackProvider:
 
         return base_prompt
 
-    def _extract_text_from_response(self, response: Dict[str, Any]) -> str:
+    def _extract_text_from_response(self, response: dict[str, Any]) -> str:
         """Extract text from various API response formats."""
-
         if "choices" in response and len(response["choices"]) > 0:
             choice = response["choices"][0]
             if "message" in choice and "content" in choice["message"]:
@@ -330,9 +332,8 @@ class MultimodalSTTFallbackProvider:
 
         return ""
 
-    def _calculate_confidence(self, text: str, failure_reason: Optional[FailureClassification]) -> float:
+    def _calculate_confidence(self, text: str, failure_reason: FailureClassification | None) -> float:
         """Calculate confidence score for the fallback result."""
-
         base_confidence = 0.6  # Default confidence for fallback
 
         # Adjust based on text length
@@ -357,7 +358,8 @@ class MultimodalSTTFallbackProvider:
             with open(audio_path, "rb") as f:
                 return f.read()
         except Exception as e:
-            raise InferenceError(f"Failed to read audio file: {e}")
+            msg = f"Failed to read audio file: {e}"
+            raise InferenceError(msg)
 
     def _encode_audio_base64(self, audio_bytes: bytes) -> str:
         """Encode audio data as base64."""
@@ -372,7 +374,7 @@ class MultimodalSTTFallbackProvider:
         """
         import struct
 
-        duration_s: Optional[float] = None
+        duration_s: float | None = None
         try:
             # Try WAV header sample rate + data chunk size
             with open(audio_path, "rb") as f:
@@ -394,7 +396,8 @@ class MultimodalSTTFallbackProvider:
                 duration_s,
                 self._max_audio_duration_s,
             )
-            raise InferenceError(f"Audio duration {duration_s:.1f}s exceeds cap of {self._max_audio_duration_s}s")
+            msg = f"Audio duration {duration_s:.1f}s exceeds cap of {self._max_audio_duration_s}s"
+            raise InferenceError(msg)
 
     async def close(self) -> None:
         """Clean up resources."""

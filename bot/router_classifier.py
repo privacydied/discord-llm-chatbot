@@ -1,5 +1,4 @@
-"""
-Fast classification system for router speed optimization. [PA][CA]
+"""Fast classification system for router speed optimization. [PA][CA].
 
 This module provides zero-I/O classification and planning using pre-compiled regex tables
 and deterministic routing logic. All classification happens without network calls or heavy CPU.
@@ -17,20 +16,19 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from .modality import InputModality, InputItem
+from .modality import InputItem, InputModality
 from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 # Pre-compiled regex patterns for fast classification [PA]
-_COMPILED_PATTERNS: Dict[str, re.Pattern] = {}
+_COMPILED_PATTERNS: dict[str, re.Pattern] = {}
 
 
 def _compile_patterns() -> None:
-    """Compile all regex patterns at module load time. [PA]"""
+    """Compile all regex patterns at module load time. [PA]."""
     global _COMPILED_PATTERNS
 
     if _COMPILED_PATTERNS:
@@ -80,7 +78,7 @@ def _compile_patterns() -> None:
 
 
 # Host-to-modality mapping for O(1) lookups [PA]
-_HOST_MODALITY_MAP: Dict[str, InputModality] = {
+_HOST_MODALITY_MAP: dict[str, InputModality] = {
     # Twitter/X domains
     "twitter.com": InputModality.GENERAL_URL,  # Will be upgraded to Tweet flow
     "x.com": InputModality.GENERAL_URL,  # Will be upgraded to Tweet flow
@@ -104,24 +102,24 @@ _HOST_MODALITY_MAP: Dict[str, InputModality] = {
 
 @dataclass
 class ClassificationResult:
-    """Result of fast classification without I/O. [CA]"""
+    """Result of fast classification without I/O. [CA]."""
 
     modality: InputModality
-    host: Optional[str] = None
+    host: str | None = None
     is_twitter: bool = False
     is_direct_image: bool = False
     is_direct_pdf: bool = False
     is_video_capable: bool = False
     is_spa_host: bool = False
-    extracted_id: Optional[str] = None  # Tweet ID, video ID, etc.
+    extracted_id: str | None = None  # Tweet ID, video ID, etc.
     confidence: float = 1.0
 
 
 @dataclass
 class PlanResult:
-    """Result of zero-I/O planning phase. [CA]"""
+    """Result of zero-I/O planning phase. [CA]."""
 
-    items: List[Tuple[InputItem, ClassificationResult]]
+    items: list[tuple[InputItem, ClassificationResult]]
     streaming_eligible: bool
     streaming_reason: str
     text_content: str
@@ -132,9 +130,9 @@ class PlanResult:
 
 
 class FastClassifier:
-    """Fast, zero-I/O classifier for router optimization. [PA][CA]"""
+    """Fast, zero-I/O classifier for router optimization. [PA][CA]."""
 
-    def __init__(self, bot_user_id: Optional[int] = None):
+    def __init__(self, bot_user_id: int | None = None) -> None:
         """Initialize fast classifier with bot user ID for mention detection."""
         _compile_patterns()
 
@@ -143,14 +141,13 @@ class FastClassifier:
             _COMPILED_PATTERNS["bot_mention"] = re.compile(rf"<@!?{bot_user_id}>", re.IGNORECASE)
 
     def classify_url(self, url: str) -> ClassificationResult:
-        """Classify a single URL without any I/O. [PA][IV]"""
+        """Classify a single URL without any I/O. [PA][IV]."""
         try:
             parsed = urlparse(url)
             host = parsed.netloc.lower()
 
             # Remove www. prefix for consistent mapping
-            if host.startswith("www."):
-                host = host[4:]
+            host = host.removeprefix("www.")
 
             # Check for Twitter/X URLs first (highest priority)
             if _COMPILED_PATTERNS["twitter_status"].match(url):
@@ -243,7 +240,7 @@ class FastClassifier:
             return ClassificationResult(modality=InputModality.GENERAL_URL, confidence=0.1)
 
     def classify_attachment(self, attachment) -> ClassificationResult:
-        """Classify a Discord attachment without I/O. [PA][IV]"""
+        """Classify a Discord attachment without I/O. [PA][IV]."""
         try:
             filename = attachment.filename.lower()
 
@@ -273,8 +270,8 @@ class FastClassifier:
             logger.warning(f"Attachment classification failed: {e}")
             return ClassificationResult(modality=InputModality.SINGLE_IMAGE, confidence=0.1)
 
-    def extract_inline_searches(self, text: str) -> List[str]:
-        """Extract inline search directives from text. [PA][IV]"""
+    def extract_inline_searches(self, text: str) -> list[str]:
+        """Extract inline search directives from text. [PA][IV]."""
         try:
             matches = _COMPILED_PATTERNS["inline_search"].findall(text)
             return [match.strip() for match in matches]
@@ -283,7 +280,7 @@ class FastClassifier:
             return []
 
     def has_command_prefix(self, text: str) -> bool:
-        """Check if text starts with a command prefix. [PA][IV]"""
+        """Check if text starts with a command prefix. [PA][IV]."""
         try:
             # Remove bot mention first
             if _COMPILED_PATTERNS.get("bot_mention"):
@@ -294,8 +291,8 @@ class FastClassifier:
             logger.warning(f"Command prefix check failed: {e}")
             return False
 
-    def plan_message(self, message, items: List[InputItem]) -> PlanResult:
-        """Create execution plan for message without any I/O. [PA][CA]"""
+    def plan_message(self, message, items: list[InputItem]) -> PlanResult:
+        """Create execution plan for message without any I/O. [PA][CA]."""
         start_time = time.time()
 
         try:
@@ -401,11 +398,11 @@ class FastClassifier:
 
 
 # Module-level classifier instance
-_classifier_instance: Optional[FastClassifier] = None
+_classifier_instance: FastClassifier | None = None
 
 
-def get_classifier(bot_user_id: Optional[int] = None) -> FastClassifier:
-    """Get or create the module-level classifier instance. [CA]"""
+def get_classifier(bot_user_id: int | None = None) -> FastClassifier:
+    """Get or create the module-level classifier instance. [CA]."""
     global _classifier_instance
 
     if _classifier_instance is None:
@@ -415,6 +412,6 @@ def get_classifier(bot_user_id: Optional[int] = None) -> FastClassifier:
 
 
 def warm_classifier() -> None:
-    """Warm up the classifier by compiling patterns. [PA]"""
+    """Warm up the classifier by compiling patterns. [PA]."""
     _compile_patterns()
     logger.info("🔥 Fast classifier warmed up")

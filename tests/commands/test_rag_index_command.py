@@ -48,14 +48,14 @@ def ctx(fake_bot):
 
 
 @pytest.mark.asyncio
-async def test_rag_cog_registers_index_command(rag_cog):
+async def test_rag_cog_registers_index_command(rag_cog) -> None:
     names = {cmd.name for cmd in rag_cog.get_commands()}
     assert "index" in names
     assert "rag" in names
 
 
 @pytest.mark.asyncio
-async def test_index_message_content_indexes_direct_text(rag_cog, fake_bot, fake_search, ctx):
+async def test_index_message_content_indexes_direct_text(rag_cog, fake_bot, fake_search, ctx) -> None:
     fake_bot.hybrid_search = fake_search
     await rag_cog.index_message_content.callback(rag_cog, ctx, text="hello world")
 
@@ -68,7 +68,7 @@ async def test_index_message_content_indexes_direct_text(rag_cog, fake_bot, fake
 
 
 @pytest.mark.asyncio
-async def test_index_message_content_honors_rag_disable(rag_cog, fake_bot, fake_search, ctx, monkeypatch):
+async def test_index_message_content_honors_rag_disable(rag_cog, fake_bot, fake_search, ctx, monkeypatch) -> None:
     fake_bot.hybrid_search = fake_search
     monkeypatch.setattr(
         "bot.commands.rag_commands.is_server_feature_enabled",
@@ -83,7 +83,7 @@ async def test_index_message_content_honors_rag_disable(rag_cog, fake_bot, fake_
 
 
 @pytest.mark.asyncio
-async def test_index_message_content_indexes_url_and_attachment(rag_cog, fake_bot, fake_search, ctx, monkeypatch):
+async def test_index_message_content_indexes_url_and_attachment(rag_cog, fake_bot, fake_search, ctx, monkeypatch) -> None:
     fake_bot.hybrid_search = fake_search
     ctx.message.attachments = [SimpleNamespace(filename="notes.pdf")]
 

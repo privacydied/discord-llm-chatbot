@@ -13,10 +13,11 @@ Provides:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from bot.utils.logging import get_logger
 
@@ -49,10 +50,10 @@ class _RateLimiter:
         self._windows: dict[str, list[float]] = defaultdict(list)
         self._lock = asyncio.Lock()
 
-    def _bucket_key(self, actor_id: Optional[int], target_id: Optional[int]) -> str:
+    def _bucket_key(self, actor_id: int | None, target_id: int | None) -> str:
         return f"{actor_id}:{target_id}"
 
-    async def check_and_consume(self, actor_id: Optional[int], target_id: Optional[int]) -> tuple[bool, str]:
+    async def check_and_consume(self, actor_id: int | None, target_id: int | None) -> tuple[bool, str]:
         """Check rate limit and consume a token if available. Returns (allowed, reason)."""
         key = self._bucket_key(actor_id, target_id)
         async with self._lock:
@@ -75,12 +76,12 @@ class DashboardServices:
 
     def __init__(
         self,
-        bot: Optional["DiscordBot"],
-        config: "DashboardConfig",
-        audit_store: "AuditStore",
-        dm_store: "DMStore",
-        message_store: Optional["MessageStore"] = None,
-        backfill_service: Optional["BackfillService"] = None,
+        bot: DiscordBot | None,
+        config: DashboardConfig,
+        audit_store: AuditStore,
+        dm_store: DMStore,
+        message_store: MessageStore | None = None,
+        backfill_service: BackfillService | None = None,
     ) -> None:
         self._bot = bot
         self._config = config
@@ -89,23 +90,23 @@ class DashboardServices:
         self._message_store = message_store
         self._backfill_service = backfill_service
         self._rate_limiter = _RateLimiter(config.rate_limit_sends_per_minute)
-        self._summary_cache: Optional[dict[str, Any]] = None
+        self._summary_cache: dict[str, Any] | None = None
         self._summary_cache_time: float = 0
         self._summary_lock = asyncio.Lock()
 
     @property
-    def bot(self) -> Optional["DiscordBot"]:
+    def bot(self) -> DiscordBot | None:
         return self._bot
 
     @property
-    def message_store(self) -> Optional["MessageStore"]:
+    def message_store(self) -> MessageStore | None:
         return self._message_store
 
     @property
-    def backfill_service(self) -> Optional["BackfillService"]:
+    def backfill_service(self) -> BackfillService | None:
         return self._backfill_service
 
-    def get_message_store(self) -> Optional["MessageStore"]:
+    def get_message_store(self) -> MessageStore | None:
         """Get the message store instance."""
         return self._message_store
 
@@ -139,10 +140,8 @@ class DashboardServices:
             # Estimate total visible users
             total_users = 0
             for g in bot.guilds:
-                try:
+                with contextlib.suppress(Exception):
                     total_users += g.member_count or 0
-                except Exception:
-                    pass
 
             # Cog count
             cog_count = len(bot.cogs) if bot.cogs else 0
@@ -153,10 +152,8 @@ class DashboardServices:
             # Channel count
             channel_count = 0
             for g in bot.guilds:
-                try:
+                with contextlib.suppress(Exception):
                     channel_count += len(list(g.channels)) if g.channels else 0
-                except Exception:
-                    pass
 
             # Audit event count
             try:
@@ -171,8 +168,8 @@ class DashboardServices:
                 if self._message_store:
                     result = await self._message_store.search_messages(query="", page=1, page_size=1)
                     archived_count = result.get("total", 0)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to get archived message count: {e}")
 
             # DM count
             dm_count = 0
@@ -180,8 +177,8 @@ class DashboardServices:
                 if self._dm_store:
                     dm_result = await self._dm_store.list_threads(page=1, page_size=1)
                     dm_count = dm_result.get("total", 0)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to get DM count: {e}")
 
             # Feature flags
             feature_flags = {
@@ -228,7 +225,7 @@ class DashboardServices:
         page: int = 1,
         page_size: int = 50,
         max_page_size: int = 200,
-        search: Optional[str] = None,
+        search: str | None = None,
     ) -> dict[str, Any]:
         """Get guild inventory from bot cache."""
         bot = self._bot
@@ -262,7 +259,7 @@ class DashboardServices:
                 perm_summary = "unknown"
                 if g.text_channels:
                     try:
-                        ch = list(g.text_channels)[0]
+                        ch = next(iter(g.text_channels))
                         perms = ch.permissions_for(g.me)
                         features = []
                         if perms.send_messages:
@@ -276,8 +273,8 @@ class DashboardServices:
                         if perms.administrator:
                             features.append("admin")
                         perm_summary = ",".join(features) if features else "none"
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Failed to get permissions for guild {g.id}: {e}")
 
                 guilds.append(
                     {
@@ -293,7 +290,7 @@ class DashboardServices:
                         "features": list(g.features) if g.features else [],
                         "icon_url": str(g.icon.url) if g.icon else None,
                         "banner_url": str(g.banner.url) if g.banner else None,
-                    }
+                    },
                 )
             except Exception as e:
                 logger.warning("Failed to collect guild info for %s: %s", g.id, e)
@@ -310,9 +307,9 @@ class DashboardServices:
         self,
         target_user_id: int,
         content: str,
-        actor_id: Optional[int] = None,
-        source_ip: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        actor_id: int | None = None,
+        source_ip: str | None = None,
+        user_agent: str | None = None,
     ) -> dict[str, Any]:
         """Send a DM as the bot. Owner-only, rate-limited, audited."""
         # Audit: requested
@@ -466,9 +463,9 @@ class DashboardServices:
         guild_id: int,
         channel_id: int,
         content: str,
-        actor_id: Optional[int] = None,
-        source_ip: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        actor_id: int | None = None,
+        source_ip: str | None = None,
+        user_agent: str | None = None,
     ) -> dict[str, Any]:
         """Send a message to a guild channel where bot has permission."""
         # Audit: requested
@@ -609,9 +606,9 @@ class DashboardServices:
         self,
         channel_id: int,
         content: str,
-        actor_id: Optional[int] = None,
-        source_ip: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        actor_id: int | None = None,
+        source_ip: str | None = None,
+        user_agent: str | None = None,
     ) -> dict[str, Any]:
         """Reply within a DM channel (channel_id is the DM channel's ID)."""
         bot = self._bot
@@ -627,8 +624,8 @@ class DashboardServices:
                     if private_ch.id == channel_id:
                         channel = private_ch
                         break
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to iterate private channels: {e}")
 
         if channel is None or not hasattr(channel, "recipient"):
             return {"success": False, "error": "DM channel not found", "status": "channel_not_found"}
@@ -651,9 +648,9 @@ class DashboardServices:
         message_id: int,
         channel_id: int,
         content: str,
-        actor_id: Optional[int] = None,
-        source_ip: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        actor_id: int | None = None,
+        source_ip: str | None = None,
+        user_agent: str | None = None,
     ) -> dict[str, Any]:
         """Reply to a guild message with MessageReference if possible."""
         # Audit: requested
@@ -718,10 +715,8 @@ class DashboardServices:
 
             # Try to fetch the original message for MessageReference
             original_msg = None
-            try:
+            with contextlib.suppress(Exception):
                 original_msg = await asyncio.wait_for(channel.fetch_message(message_id), timeout=10.0)
-            except Exception:
-                pass
 
             # Build reply
             if original_msg:
@@ -819,8 +814,8 @@ class DashboardServices:
                     perms = channel.permissions_for(guild.me)
                     if not perms.read_message_history:
                         return {"messages": [], "error": "no read_message_history permission"}
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to check permissions for channel {channel.id}: {e}")
 
             messages = []
             try:
@@ -849,7 +844,7 @@ class DashboardServices:
                                 "description": e.description[:300] if e.description else None,
                                 "url": e.url,
                                 "color": e.color.value if e.color else None,
-                            }
+                            },
                         )
 
                 msg_dict = {
@@ -952,7 +947,7 @@ class DashboardServices:
                                 "title": e.title,
                                 "description": e.description[:300] if e.description else None,
                                 "url": e.url,
-                            }
+                            },
                         )
 
                 msg_dict = {
@@ -1087,7 +1082,7 @@ class DashboardServices:
                                     "type": str(e.type),
                                     "title": e.title,
                                     "url": e.url,
-                                }
+                                },
                             )
                     await self._message_store.insert_message(
                         discord_message_id=message.id,
@@ -1170,7 +1165,7 @@ class DashboardServices:
                             "title": e.title,
                             "description": e.description[:200] if e.description else None,
                             "url": e.url,
-                        }
+                        },
                     )
 
             await self._message_store.insert_message(
@@ -1201,7 +1196,7 @@ class DashboardServices:
 def _uptime(bot) -> int:
     """Calculate bot uptime in seconds."""
     if bot and hasattr(bot, "ready_at") and bot.ready_at:
-        return int((datetime.now(timezone.utc) - bot.ready_at).total_seconds())
+        return int((datetime.now(UTC) - bot.ready_at).total_seconds())
     return 0
 
 
@@ -1224,4 +1219,4 @@ def _format_uptime(seconds: int) -> str:
 
 
 def _iso_now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

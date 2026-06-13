@@ -1,10 +1,10 @@
-import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import discord
+import pytest
 
-from bot.router import Router, ResponseMessage
 from bot.command_parser import ParsedCommand
+from bot.router import ResponseMessage, Router
 from bot.types import Command
 
 
@@ -37,7 +37,7 @@ def router(mock_bot, mock_flows):
 
 
 @pytest.mark.asyncio
-async def test_dispatch_text_only_message(router, mock_bot, mock_flows):
+async def test_dispatch_text_only_message(router, mock_bot, mock_flows) -> None:
     """Verify that a simple text message is dispatched to the text processor."""
     message = MagicMock(spec=discord.Message)
     message.id = 111
@@ -61,7 +61,7 @@ async def test_dispatch_text_only_message(router, mock_bot, mock_flows):
 
 
 @pytest.mark.asyncio
-async def test_dispatch_ping_command(router, mock_bot):
+async def test_dispatch_ping_command(router, mock_bot) -> None:
     """Verify that a !ping command is handled directly."""
     message = MagicMock(spec=discord.Message)
     message.id = 222
@@ -79,7 +79,7 @@ async def test_dispatch_ping_command(router, mock_bot):
 
 
 @pytest.mark.asyncio
-async def test_dispatch_tts_command(router, mock_bot, mock_flows):
+async def test_dispatch_tts_command(router, mock_bot, mock_flows) -> None:
     """Verify a TTS command is dispatched to the TTS generator."""
     message = MagicMock(spec=discord.Message)
     message.id = 333
@@ -97,7 +97,7 @@ async def test_dispatch_tts_command(router, mock_bot, mock_flows):
 
 
 @pytest.mark.asyncio
-async def test_dispatch_image_attachment(router, mock_bot, mock_flows):
+async def test_dispatch_image_attachment(router, mock_bot, mock_flows) -> None:
     """Verify an image attachment is dispatched to the attachment processor."""
     message = MagicMock(spec=discord.Message)
     message.id = 444
@@ -122,7 +122,7 @@ async def test_dispatch_image_attachment(router, mock_bot, mock_flows):
 
 
 @pytest.mark.asyncio
-async def test_process_document_txt(router):
+async def test_process_document_txt(router) -> None:
     """Verify that the router can correctly process a .txt file."""
     import tempfile
 
@@ -141,7 +141,7 @@ async def test_process_document_txt(router):
 
 
 @pytest.mark.asyncio
-async def test_process_document_docx(router):
+async def test_process_document_docx(router) -> None:
     """Verify that the router can correctly process a .docx file by mocking the docx library."""
     # Mock the docx.Document object
     mock_doc = MagicMock()
@@ -163,7 +163,7 @@ async def test_process_document_docx(router):
 
 
 @pytest.mark.asyncio
-async def test_process_document_pdf(router):
+async def test_process_document_pdf(router) -> None:
     """Verify that the router can correctly process a .pdf file by mocking the PDFProcessor."""
     # Ensure the router's PDF processor is mocked
     router.pdf_processor = MagicMock()

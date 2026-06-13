@@ -1,5 +1,4 @@
-"""
-Retry utilities for handling transient errors with exponential backoff.
+"""Retry utilities for handling transient errors with exponential backoff.
 Implements robust error handling patterns for external API calls.
 """
 
@@ -7,11 +6,14 @@ import asyncio
 import logging
 import random
 import re
-from typing import Any, Callable, Dict, List, Type, Optional
+from collections.abc import Callable
 from functools import wraps
-from .exceptions import APIError, InferenceError
-import httpx
+from typing import Any
+
 import aiohttp
+import httpx
+
+from .exceptions import APIError, InferenceError
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +28,9 @@ class RetryConfig:
         max_delay: float = 60.0,
         exponential_base: float = 2.0,
         jitter: bool = True,
-        retryable_exceptions: Optional[List[Type[Exception]]] = None,
-        retryable_status_codes: Optional[List[int]] = None,
-    ):
+        retryable_exceptions: list[type[Exception]] | None = None,
+        retryable_status_codes: list[int] | None = None,
+    ) -> None:
         self.max_attempts = max_attempts
         self.base_delay = base_delay
         self.max_delay = max_delay
@@ -50,8 +52,7 @@ class RetryConfig:
 
 
 def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
-    """
-    Determine if an error is retryable based on configuration.
+    """Determine if an error is retryable based on configuration.
 
     Args:
         error: The exception that occurred
@@ -59,6 +60,7 @@ def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
 
     Returns:
         True if the error should be retried, False otherwise
+
     """
     error_str = str(error).lower()
 
@@ -66,8 +68,8 @@ def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
         retryable_flag = getattr(error, "retryable", None)
         if retryable_flag is False:
             return False
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"Failed to check retryable flag: {exc}")
 
     # 1) Direct type match
     if any(isinstance(error, exc_type) for exc_type in config.retryable_exceptions):
@@ -97,15 +99,11 @@ def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
         "no choices in response",
         "empty response from api",
     ]
-    if any(pattern in error_str for pattern in transient_patterns):
-        return True
-
-    return False
+    return bool(any(pattern in error_str for pattern in transient_patterns))
 
 
-def classify_vl_error(exc: Exception) -> Dict[str, Any]:
-    """
-    Classify VL provider errors to drive retry and fallback behavior.
+def classify_vl_error(exc: Exception) -> dict[str, Any]:
+    """Classify VL provider errors to drive retry and fallback behavior.
     Returns a dict with keys: kind, code, retryable, provider_permanent, retry_after_hint.
     """
     reason = "unknown"
@@ -161,10 +159,7 @@ def classify_vl_error(exc: Exception) -> Dict[str, Any]:
         reason = "server_error"
         retryable = True
     elif status_code in (401, 403):
-        if "moderation" in lower_msg or "requires moderation" in lower_msg:
-            reason = "moderation"
-        else:
-            reason = "forbidden"
+        reason = "moderation" if "moderation" in lower_msg or "requires moderation" in lower_msg else "forbidden"
         provider_permanent = True
     elif status_code == 404:
         reason = "unsupported"
@@ -204,8 +199,7 @@ def classify_vl_error(exc: Exception) -> Dict[str, Any]:
 
 
 def calculate_delay(attempt: int, config: RetryConfig) -> float:
-    """
-    Calculate delay for exponential backoff with jitter.
+    """Calculate delay for exponential backoff with jitter.
 
     Args:
         attempt: Current attempt number (0-based)
@@ -213,6 +207,7 @@ def calculate_delay(attempt: int, config: RetryConfig) -> float:
 
     Returns:
         Delay in seconds
+
     """
     delay = config.base_delay * (config.exponential_base**attempt)
     delay = min(delay, config.max_delay)
@@ -220,14 +215,13 @@ def calculate_delay(attempt: int, config: RetryConfig) -> float:
     if config.jitter:
         # Add jitter to prevent thundering herd
         jitter_range = delay * 0.1
-        delay += random.uniform(-jitter_range, jitter_range)
+        delay += random.uniform(-jitter_range, jitter_range)  # nosec B311
 
     return max(0, delay)
 
 
 async def retry_async(func: Callable, config: RetryConfig, *args, **kwargs) -> Any:
-    """
-    Execute an async function with retry logic.
+    """Execute an async function with retry logic.
 
     Args:
         func: Async function to execute
@@ -240,6 +234,7 @@ async def retry_async(func: Callable, config: RetryConfig, *args, **kwargs) -> A
 
     Raises:
         The last exception encountered if all retries fail
+
     """
     last_exception = None
 
@@ -258,10 +253,10 @@ async def retry_async(func: Callable, config: RetryConfig, *args, **kwargs) -> A
 
             if not is_retryable_error(e, config):
                 logger.debug(f"❌ Non-retryable error in {func.__name__}: {e}")
-                raise e
+                raise
 
             if attempt == config.max_attempts - 1:
-                logger.error(f"❌ All {config.max_attempts} retry attempts failed for {func.__name__}")
+                logger.exception(f"❌ All {config.max_attempts} retry attempts failed for {func.__name__}")
                 break
 
             # Base exponential backoff
@@ -277,8 +272,8 @@ async def retry_async(func: Callable, config: RetryConfig, *args, **kwargs) -> A
                         bounded_ra = min(ra, config.max_delay)
                         delay = max(delay, bounded_ra)
                         extra_note = f" (respecting Retry-After={bounded_ra:.2f}s)"
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"Failed to parse Retry-After header: {exc}")
             logger.warning(f"⚠️ Attempt {attempt + 1} failed for {func.__name__}: {e}. Retrying in {delay:.2f}s...{extra_note}")
 
             await asyncio.sleep(delay)
@@ -287,15 +282,15 @@ async def retry_async(func: Callable, config: RetryConfig, *args, **kwargs) -> A
     raise last_exception
 
 
-def with_retry(config: Optional[RetryConfig] = None):
-    """
-    Decorator to add retry logic to async functions.
+def with_retry(config: RetryConfig | None = None):
+    """Decorator to add retry logic to async functions.
 
     Args:
         config: Retry configuration. If None, uses default config.
 
     Returns:
         Decorated function with retry logic
+
     """
     if config is None:
         config = RetryConfig()

@@ -1,8 +1,8 @@
-"""
-Centralized text inference module (brain)
-"""
+"""Centralized text inference module (brain)."""
 
-from typing import Optional
+
+import contextlib
+
 from .action import BotAction
 from .ai_backend import generate_response
 from .exceptions import InferenceError
@@ -12,8 +12,8 @@ from .vl.postprocess import sanitize_model_output
 logger = get_logger(__name__)
 
 
-async def brain_infer(prompt: str, context: str = "", system_prompt: Optional[str] = None) -> BotAction:
-    """Generate text response using configured AI backend with graceful error handling [REH]"""
+async def brain_infer(prompt: str, context: str = "", system_prompt: str | None = None) -> BotAction:
+    """Generate text response using configured AI backend with graceful error handling [REH]."""
     try:
         logger.info("🧠 Brain inference started")
         response = await generate_response(prompt=prompt, context=context, system_prompt=system_prompt, stream=False)
@@ -53,9 +53,10 @@ async def brain_infer(prompt: str, context: str = "", system_prompt: Optional[st
                 return BotAction(content="I didn’t get a usable reply. Could you rephrase or add more detail?")
         else:
             logger.error(f"Unexpected response format: {response}")
-            raise InferenceError("Unexpected response format from AI backend")
+            msg = "Unexpected response format from AI backend"
+            raise InferenceError(msg)
     except Exception as e:
-        logger.error(f"🧠 Brain inference failed: {str(e)}")
+        logger.exception(f"🧠 Brain inference failed: {e!s}")
 
         # Provide user-friendly error message based on error type [REH]
         error_str = str(e).lower()
@@ -68,7 +69,7 @@ async def brain_infer(prompt: str, context: str = "", system_prompt: Optional[st
         elif "rate limit" in error_str or "quota" in error_str:
             user_message = "⏱️ The AI service is currently rate-limited. Please wait a moment and try again."
         elif "providers unavailable via openrouter" in error_str or ("404" in error_str and "no endpoints" in error_str) or ("404" in error_str and "endpoint" in error_str and "openrouter" in error_str):
-            try:
+            with contextlib.suppress(Exception):
                 logger.info(
                     "text.model_pool_unavailable",
                     extra={
@@ -76,8 +77,6 @@ async def brain_infer(prompt: str, context: str = "", system_prompt: Optional[st
                         "detail": {"reason": "provider_unavailable_openrouter"},
                     },
                 )
-            except Exception:
-                pass
             user_message = "🤖 The AI model pool I'm using is temporarily unavailable. This is an issue with the upstream provider, not your message. Please try again in a little while."
         elif "timeout" in error_str:
             user_message = "⏰ The AI service timed out. Please try again with a shorter message."

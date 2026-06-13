@@ -1,5 +1,4 @@
-"""
-Test Vision Orchestrator V2 with Money type and quota logic [REH][CMV]
+"""Test Vision Orchestrator V2 with Money type and quota logic [REH][CMV].
 
 Tests the orchestrator's integration with:
 - Budget manager v2 with Money type
@@ -9,31 +8,32 @@ Tests the orchestrator's integration with:
 - Atomic budget operations
 """
 
-import pytest
+from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import Mock, AsyncMock, patch
-from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
+
+from bot.vision.budget_manager_v2 import BudgetResult
 from bot.vision.money import Money
 from bot.vision.orchestrator_v2 import VisionOrchestratorV2
+from bot.vision.safety_filter import SafetyLevel, SafetyResult
 from bot.vision.types import (
-    VisionRequest,
-    VisionResponse,
-    VisionJob,
-    VisionJobState,
     VisionError,
     VisionErrorType,
+    VisionJob,
+    VisionJobState,
     VisionProvider,
+    VisionRequest,
+    VisionResponse,
     VisionTask,
 )
-from bot.vision.safety_filter import SafetyResult, SafetyLevel
-from bot.vision.budget_manager_v2 import BudgetResult
 
 
 @pytest.fixture
 async def orchestrator():
-    """Create orchestrator with mocked dependencies"""
+    """Create orchestrator with mocked dependencies."""
     config = {
         "VISION_MAX_CONCURRENT_JOBS": 10,
         "VISION_MAX_USER_CONCURRENT_JOBS": 2,
@@ -77,8 +77,8 @@ async def orchestrator():
 
 
 @pytest.mark.asyncio
-async def test_submit_job_with_money_estimation(orchestrator):
-    """Test job submission with Money-based cost estimation"""
+async def test_submit_job_with_money_estimation(orchestrator) -> None:
+    """Test job submission with Money-based cost estimation."""
     # Setup
     request = VisionRequest(
         user_id="test_user",
@@ -128,8 +128,8 @@ async def test_submit_job_with_money_estimation(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_quota_check_includes_reserved_amounts(orchestrator):
-    """Test that quota checks properly include reserved amounts"""
+async def test_quota_check_includes_reserved_amounts(orchestrator) -> None:
+    """Test that quota checks properly include reserved amounts."""
     # Setup
     request = VisionRequest(
         user_id="test_user",
@@ -169,8 +169,8 @@ async def test_quota_check_includes_reserved_amounts(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_job_completion_with_actual_usage_parsing(orchestrator):
-    """Test job completion with actual usage parsing and budget finalization"""
+async def test_job_completion_with_actual_usage_parsing(orchestrator) -> None:
+    """Test job completion with actual usage parsing and budget finalization."""
     # Setup
     job_id = "test-job-123"
     request = VisionRequest(
@@ -221,8 +221,8 @@ async def test_job_completion_with_actual_usage_parsing(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_job_failure_releases_reservation(orchestrator):
-    """Test that job failure properly releases budget reservation"""
+async def test_job_failure_releases_reservation(orchestrator) -> None:
+    """Test that job failure properly releases budget reservation."""
     # Setup
     job_id = "test-job-456"
     request = VisionRequest(
@@ -266,8 +266,8 @@ async def test_job_failure_releases_reservation(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_job_cancellation_releases_reservation(orchestrator):
-    """Test that job cancellation properly releases budget reservation"""
+async def test_job_cancellation_releases_reservation(orchestrator) -> None:
+    """Test that job cancellation properly releases budget reservation."""
     # Setup
     request = VisionRequest(
         user_id="test_user",
@@ -308,8 +308,8 @@ async def test_job_cancellation_releases_reservation(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_cost_estimation_fallback(orchestrator):
-    """Test cost estimation fallback when pricing table fails"""
+async def test_cost_estimation_fallback(orchestrator) -> None:
+    """Test cost estimation fallback when pricing table fails."""
     # Setup
     request = VisionRequest(
         user_id="test_user",
@@ -342,8 +342,8 @@ async def test_cost_estimation_fallback(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_job_limits(orchestrator):
-    """Test per-user concurrent job limits"""
+async def test_concurrent_job_limits(orchestrator) -> None:
+    """Test per-user concurrent job limits."""
     # Setup
     user_id = "test_user"
 
@@ -362,8 +362,8 @@ async def test_concurrent_job_limits(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_expired_job_cleanup(orchestrator):
-    """Test that expired jobs are cleaned up and reservations released"""
+async def test_expired_job_cleanup(orchestrator) -> None:
+    """Test that expired jobs are cleaned up and reservations released."""
     # Setup expired job
     job_id = "expired-job"
     request = VisionRequest(
@@ -377,7 +377,7 @@ async def test_expired_job_cleanup(orchestrator):
         job_id=job_id,
         request=request,
         state=VisionJobState.RUNNING,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
 
     # Mock job as expired
@@ -399,8 +399,8 @@ async def test_expired_job_cleanup(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_money_precision_in_budget_operations(orchestrator):
-    """Test that Money type maintains precision in all budget operations"""
+async def test_money_precision_in_budget_operations(orchestrator) -> None:
+    """Test that Money type maintains precision in all budget operations."""
     # Setup with precise decimal values
     request = VisionRequest(
         user_id="test_user",
@@ -439,8 +439,8 @@ async def test_money_precision_in_budget_operations(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_integration_with_provider_usage_parser(orchestrator):
-    """Test integration with ProviderUsageParser for actual cost extraction"""
+async def test_integration_with_provider_usage_parser(orchestrator) -> None:
+    """Test integration with ProviderUsageParser for actual cost extraction."""
     # Setup
     job_id = "integration-test"
     request = VisionRequest(

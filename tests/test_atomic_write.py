@@ -14,6 +14,7 @@ import asyncio
 import os
 import tempfile
 from pathlib import Path
+from typing import Never
 from unittest.mock import patch
 
 import pytest
@@ -34,7 +35,7 @@ def tmp_dir():
 
 
 @pytest.mark.asyncio
-async def test_write_and_read_roundtrip(tmp_dir):
+async def test_write_and_read_roundtrip(tmp_dir) -> None:
     path = tmp_dir / "test.json"
     data = {"key": "value", "number": 42}
 
@@ -45,7 +46,7 @@ async def test_write_and_read_roundtrip(tmp_dir):
 
 
 @pytest.mark.asyncio
-async def test_creates_parent_directories(tmp_dir):
+async def test_creates_parent_directories(tmp_dir) -> None:
     path = tmp_dir / "a" / "b" / "c" / "data.json"
     data = {"nested": True}
 
@@ -56,7 +57,7 @@ async def test_creates_parent_directories(tmp_dir):
 
 
 @pytest.mark.asyncio
-async def test_overwrites_existing(tmp_dir):
+async def test_overwrites_existing(tmp_dir) -> None:
     path = tmp_dir / "overwrite.json"
 
     await write_json_atomic(path, {"v": 1})
@@ -70,12 +71,12 @@ async def test_overwrites_existing(tmp_dir):
 # ------------------------------------------------------------------ #
 
 
-def test_read_missing_file_returns_default(tmp_dir):
+def test_read_missing_file_returns_default(tmp_dir) -> None:
     path = tmp_dir / "does_not_exist.json"
     assert read_json_safe(path, default={"fallback": True}) == {"fallback": True}
 
 
-def test_read_corrupt_json_returns_default(tmp_dir, caplog):
+def test_read_corrupt_json_returns_default(tmp_dir, caplog) -> None:
     path = tmp_dir / "corrupt.json"
     path.write_text("{not valid json!!!", encoding="utf-8")
 
@@ -84,7 +85,7 @@ def test_read_corrupt_json_returns_default(tmp_dir, caplog):
     assert "Corrupt JSON" in caplog.text
 
 
-def test_read_empty_file_returns_default(tmp_dir, caplog):
+def test_read_empty_file_returns_default(tmp_dir, caplog) -> None:
     path = tmp_dir / "empty.json"
     path.write_text("", encoding="utf-8")
 
@@ -93,7 +94,7 @@ def test_read_empty_file_returns_default(tmp_dir, caplog):
     assert "Empty JSON file" in caplog.text
 
 
-def test_read_whitespace_only_returns_default(tmp_dir):
+def test_read_whitespace_only_returns_default(tmp_dir) -> None:
     path = tmp_dir / "ws.json"
     path.write_text("  \n  \t  ", encoding="utf-8")
 
@@ -106,12 +107,12 @@ def test_read_whitespace_only_returns_default(tmp_dir):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_writes_same_file_no_corruption(tmp_dir):
+async def test_concurrent_writes_same_file_no_corruption(tmp_dir) -> None:
     """10 concurrent writers to the same file should never leave corrupt JSON."""
     path = tmp_dir / "concurrent.json"
     iterations = 10
 
-    async def writer(n: int):
+    async def writer(n: int) -> None:
         await write_json_atomic(path, {"iteration": n, "items": list(range(n))})
 
     await asyncio.gather(*(writer(i) for i in range(iterations)))
@@ -125,12 +126,12 @@ async def test_concurrent_writes_same_file_no_corruption(tmp_dir):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_writes_same_file_final_value_valid(tmp_dir):
+async def test_concurrent_writes_same_file_final_value_valid(tmp_dir) -> None:
     """After many concurrent writes, the final file must hold one complete write."""
     path = tmp_dir / "race.json"
     n_writers = 20
 
-    async def writer(n: int):
+    async def writer(n: int) -> None:
         await write_json_atomic(path, {"writer": n, "value": "x" * 1000})
 
     await asyncio.gather(*(writer(i) for i in range(n_writers)))
@@ -142,15 +143,15 @@ async def test_concurrent_writes_same_file_final_value_valid(tmp_dir):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_writes_different_files_no_interference(tmp_dir):
+async def test_concurrent_writes_different_files_no_interference(tmp_dir) -> None:
     """Writes to different paths must not corrupt each other."""
     paths = [tmp_dir / f"f_{i}.json" for i in range(5)]
     data = [{"id": i, "data": [i] * 10} for i in range(5)]
 
-    tasks = [write_json_atomic(p, d) for p, d in zip(paths, data)]
+    tasks = [write_json_atomic(p, d) for p, d in zip(paths, data, strict=False)]
     await asyncio.gather(*tasks)
 
-    for p, d in zip(paths, data):
+    for p, d in zip(paths, data, strict=False):
         assert read_json_safe(p) == d
 
 
@@ -159,20 +160,20 @@ async def test_concurrent_writes_different_files_no_interference(tmp_dir):
 # ------------------------------------------------------------------ #
 
 
-def _os_replace_failing_raise(tmp_path: str, final_path: str):
-    raise OSError("simulated replace failure")
+def _os_replace_failing_raise(tmp_path: str, final_path: str) -> Never:
+    msg = "simulated replace failure"
+    raise OSError(msg)
 
 
 @pytest.mark.asyncio
-async def test_temp_file_cleaned_up_on_write_failure(tmp_dir):
+async def test_temp_file_cleaned_up_on_write_failure(tmp_dir) -> None:
     """If os.replace fails, the temp file should be cleaned up."""
     path = tmp_dir / "fail.json"
 
     before_files = set(os.listdir(tmp_dir))
 
-    with patch("bot.atomic_json.os.replace", side_effect=OSError("fail")):
-        with pytest.raises(OSError, match="fail"):
-            await write_json_atomic(path, {"should": "not persist"})
+    with patch("bot.atomic_json.os.replace", side_effect=OSError("fail")), pytest.raises(OSError, match="fail"):
+        await write_json_atomic(path, {"should": "not persist"})
 
     after_files = set(os.listdir(tmp_dir))
     # No leftover .tmp files
@@ -187,9 +188,8 @@ async def test_temp_file_cleaned_up_on_write_failure(tmp_dir):
 
 
 @pytest.mark.asyncio
-async def test_leftover_temp_file_does_not_corrupt_read(tmp_dir):
+async def test_leftover_temp_file_does_not_corrupt_read(tmp_dir) -> None:
     """A stale .tmp file from a previous interrupted write should not affect reads."""
-
     # Simulate a leftover temp file
     final_path = tmp_dir / "data.json"
     tmp_path = tmp_dir / ".data.json.tmp12345"
@@ -209,10 +209,10 @@ async def test_leftover_temp_file_does_not_corrupt_read(tmp_dir):
 
 
 @pytest.mark.asyncio
-async def test_large_write_remains_valid(tmp_dir):
+async def test_large_write_remains_valid(tmp_dir) -> None:
     """A large JSON write must produce valid JSON after fsync."""
     path = tmp_dir / "large.json"
-    data = {"big_list": [i for i in range(10000)], "nested": {"a": [1] * 500}}
+    data = {"big_list": list(range(10000)), "nested": {"a": [1] * 500}}
 
     await write_json_atomic(path, data)
     result = read_json_safe(path)

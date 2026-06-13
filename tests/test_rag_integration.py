@@ -1,29 +1,28 @@
-"""
-Integration tests for the RAG (Retrieval Augmented Generation) system.
-"""
+"""Integration tests for the RAG (Retrieval Augmented Generation) system."""
 
-import pytest
 import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
-import numpy as np
 
-from bot.rag.vector_schema import VectorDocument, HybridSearchConfig, ChunkingResult
+import numpy as np
+import pytest
+
+from bot.rag.bootstrap import RAGBootstrap
+from bot.rag.chroma_backend import ChromaRAGBackend
+from bot.rag.config import load_rag_config, validate_rag_environment
 from bot.rag.embedding_interface import (
     SentenceTransformerEmbedding,
     create_embedding_model,
 )
-from bot.rag.text_chunker import TextChunker, MarkdownChunker
-from bot.rag.chroma_backend import ChromaRAGBackend
-from bot.rag.bootstrap import RAGBootstrap
 from bot.rag.hybrid_search import HybridRAGSearch
-from bot.rag.config import load_rag_config, validate_rag_environment
+from bot.rag.text_chunker import MarkdownChunker, TextChunker
+from bot.rag.vector_schema import ChunkingResult, HybridSearchConfig, VectorDocument
 
 
 class TestVectorSchema:
     """Test vector document schema and configuration."""
 
-    def test_vector_document_creation(self):
+    def test_vector_document_creation(self) -> None:
         """Test VectorDocument creation and serialization."""
         embedding = np.random.rand(384).astype(np.float32)
 
@@ -55,7 +54,7 @@ class TestVectorSchema:
         assert doc2.chunk_text == doc.chunk_text
         assert len(doc2.embedding) == len(doc.embedding)
 
-    def test_hybrid_search_config_validation(self):
+    def test_hybrid_search_config_validation(self) -> None:
         """Test configuration validation."""
         # Valid config
         config = HybridSearchConfig()
@@ -76,7 +75,7 @@ class TestVectorSchema:
 class TestTextChunker:
     """Test text chunking functionality."""
 
-    def test_basic_text_chunking(self):
+    def test_basic_text_chunking(self) -> None:
         """Test basic text chunking."""
         config = HybridSearchConfig(chunk_size=100, chunk_overlap=20, min_chunk_size=30)
         chunker = TextChunker(config)
@@ -89,7 +88,7 @@ class TestTextChunker:
         assert all(len(chunk) >= config.min_chunk_size for chunk in result.chunks)
         assert result.metadata["original_length"] == len(text)
 
-    def test_markdown_chunking(self):
+    def test_markdown_chunking(self) -> None:
         """Test markdown-specific chunking."""
         config = HybridSearchConfig(chunk_size=200, chunk_overlap=30)
         chunker = MarkdownChunker(config)
@@ -114,7 +113,7 @@ More content here to test the chunking behavior.
         # Should preserve header structure
         assert any("# Header 1" in chunk for chunk in result.chunks)
 
-    def test_empty_text_handling(self):
+    def test_empty_text_handling(self) -> None:
         """Test handling of empty or whitespace-only text."""
         config = HybridSearchConfig()
         chunker = TextChunker(config)
@@ -130,7 +129,7 @@ More content here to test the chunking behavior.
 class TestEmbeddingInterface:
     """Test embedding model interfaces."""
 
-    async def test_sentence_transformer_mock(self):
+    async def test_sentence_transformer_mock(self) -> None:
         """Test sentence transformer with mocking."""
         with patch("sentence_transformers.SentenceTransformer") as mock_st:
             # Mock the model
@@ -152,7 +151,7 @@ class TestEmbeddingInterface:
             single_embedding = await embedding_model.encode_single("single test")
             assert single_embedding.shape == (384,)
 
-    async def test_embedding_normalization(self):
+    async def test_embedding_normalization(self) -> None:
         """Test L2 normalization of embeddings."""
         with patch("sentence_transformers.SentenceTransformer") as mock_st:
             # Create unnormalized embeddings
@@ -169,14 +168,13 @@ class TestEmbeddingInterface:
             norms = np.linalg.norm(embeddings, axis=1)
             np.testing.assert_array_almost_equal(norms, [1.0, 1.0], decimal=6)
 
-    async def test_sentence_transformer_load_is_offloaded(self, monkeypatch):
+    async def test_sentence_transformer_load_is_offloaded(self, monkeypatch) -> None:
         """Test that model initialization delegates to asyncio.to_thread."""
         embedding_model = SentenceTransformerEmbedding()
         seen = {}
 
-        def fake_loader():
+        def fake_loader() -> None:
             seen["loader_called"] = True
-            return None
 
         async def fake_to_thread(func, *args, **kwargs):
             seen["func"] = func
@@ -194,7 +192,7 @@ class TestEmbeddingInterface:
         assert seen["args"] == ()
         assert seen["kwargs"] == {}
 
-    def test_embedding_factory(self):
+    def test_embedding_factory(self) -> None:
         """Test embedding model factory function."""
         # Test sentence-transformers creation
         model = create_embedding_model("sentence-transformers")
@@ -208,66 +206,64 @@ class TestEmbeddingInterface:
 class TestChromaBackend:
     """Test ChromaDB backend functionality."""
 
-    async def test_chroma_backend_initialization(self):
+    async def test_chroma_backend_initialization(self) -> None:
         """Test ChromaDB backend initialization with mocking."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with patch("chromadb.PersistentClient") as mock_client_class:
-                # Mock ChromaDB client and collection
-                mock_client = MagicMock()
-                mock_collection = MagicMock()
-                mock_collection.count.return_value = 0
-                mock_client.get_or_create_collection.return_value = mock_collection
-                mock_client_class.return_value = mock_client
+        with tempfile.TemporaryDirectory() as temp_dir, patch("chromadb.PersistentClient") as mock_client_class:
+            # Mock ChromaDB client and collection
+            mock_client = MagicMock()
+            mock_collection = MagicMock()
+            mock_collection.count.return_value = 0
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
 
-                # Mock embedding model
-                mock_embedding = AsyncMock()
-                mock_embedding.get_embedding_dimension.return_value = 384
-                mock_embedding.encode.return_value = np.random.rand(1, 384).astype(np.float32)
+            # Mock embedding model
+            mock_embedding = AsyncMock()
+            mock_embedding.get_embedding_dimension.return_value = 384
+            mock_embedding.encode.return_value = np.random.rand(1, 384).astype(np.float32)
 
-                backend = ChromaRAGBackend(db_path=temp_dir, embedding_model=mock_embedding)
+            backend = ChromaRAGBackend(db_path=temp_dir, embedding_model=mock_embedding)
 
-                await backend.initialize()
+            await backend.initialize()
 
-                assert backend._initialized
-                assert backend.client == mock_client
-                assert backend.collection == mock_collection
+            assert backend._initialized
+            assert backend.client == mock_client
+            assert backend.collection == mock_collection
 
-    async def test_document_addition_mock(self):
+    async def test_document_addition_mock(self) -> None:
         """Test document addition with mocked ChromaDB."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with patch("chromadb.PersistentClient") as mock_client_class:
-                # Setup mocks
-                mock_client = MagicMock()
-                mock_collection = MagicMock()
-                mock_client.get_or_create_collection.return_value = mock_collection
-                mock_client_class.return_value = mock_client
+        with tempfile.TemporaryDirectory() as temp_dir, patch("chromadb.PersistentClient") as mock_client_class:
+            # Setup mocks
+            mock_client = MagicMock()
+            mock_collection = MagicMock()
+            mock_client.get_or_create_collection.return_value = mock_collection
+            mock_client_class.return_value = mock_client
 
-                mock_embedding = AsyncMock()
-                mock_embedding.get_embedding_dimension.return_value = 384
-                mock_embedding.encode.return_value = np.random.rand(2, 384).astype(np.float32)
+            mock_embedding = AsyncMock()
+            mock_embedding.get_embedding_dimension.return_value = 384
+            mock_embedding.encode.return_value = np.random.rand(2, 384).astype(np.float32)
 
-                backend = ChromaRAGBackend(db_path=temp_dir, embedding_model=mock_embedding)
+            backend = ChromaRAGBackend(db_path=temp_dir, embedding_model=mock_embedding)
 
-                await backend.initialize()
+            await backend.initialize()
 
-                # Test document addition
-                documents = await backend.add_document(
-                    source_id="test_doc",
-                    text="This is a test document with enough content to be chunked into multiple pieces.",
-                    metadata={"filename": "test.txt"},
-                    file_type="text",
-                )
+            # Test document addition
+            documents = await backend.add_document(
+                source_id="test_doc",
+                text="This is a test document with enough content to be chunked into multiple pieces.",
+                metadata={"filename": "test.txt"},
+                file_type="text",
+            )
 
-                assert len(documents) > 0
-                assert all(isinstance(doc, VectorDocument) for doc in documents)
-                mock_collection.add.assert_called_once()
+            assert len(documents) > 0
+            assert all(isinstance(doc, VectorDocument) for doc in documents)
+            mock_collection.add.assert_called_once()
 
 
 @pytest.mark.asyncio
 class TestRAGBootstrap:
     """Test RAG bootstrap functionality."""
 
-    async def test_bootstrap_with_mock_files(self):
+    async def test_bootstrap_with_mock_files(self) -> None:
         """Test bootstrap process with mock knowledge base files."""
         with tempfile.TemporaryDirectory() as temp_dir:
             kb_path = Path(temp_dir) / "kb"
@@ -293,7 +289,7 @@ class TestRAGBootstrap:
             # Verify backend was called for each file
             assert mock_backend.add_document.call_count == 2
 
-    async def test_incremental_update(self):
+    async def test_incremental_update(self) -> None:
         """Test incremental update functionality."""
         with tempfile.TemporaryDirectory() as temp_dir:
             kb_path = Path(temp_dir) / "kb"
@@ -325,7 +321,7 @@ class TestRAGBootstrap:
 class TestHybridSearch:
     """Test hybrid search functionality."""
 
-    async def test_hybrid_search_initialization(self):
+    async def test_hybrid_search_initialization(self) -> None:
         """Test hybrid search system initialization."""
         with tempfile.TemporaryDirectory() as temp_dir:
             kb_path = Path(temp_dir) / "kb"
@@ -346,7 +342,7 @@ class TestHybridSearch:
                     # Should initialize successfully with mocked backend
                     assert search_system._initialized
 
-    async def test_search_fallback_behavior(self):
+    async def test_search_fallback_behavior(self) -> None:
         """Test search fallback when RAG is unavailable."""
         search_system = HybridRAGSearch(enable_rag=False)
 
@@ -364,7 +360,7 @@ class TestHybridSearch:
 class TestRAGConfiguration:
     """Test RAG configuration management."""
 
-    def test_config_loading(self):
+    def test_config_loading(self) -> None:
         """Test configuration loading from environment."""
         with patch.dict(
             "os.environ",
@@ -380,7 +376,7 @@ class TestRAGConfiguration:
             assert config.chunk_size == 256
             assert not config.enforce_user_scoping
 
-    def test_environment_validation(self):
+    def test_environment_validation(self) -> None:
         """Test environment validation."""
         with patch.dict(
             "os.environ",
@@ -422,7 +418,7 @@ SYNTHETIC_TEST_QUERIES = [
 class TestRAGRegression:
     """Regression tests for RAG system with synthetic queries."""
 
-    async def test_synthetic_queries(self):
+    async def test_synthetic_queries(self) -> None:
         """Test RAG system with known synthetic queries."""
         # This test would run against a real knowledge base
         # For now, we'll mock the expected behavior
@@ -435,13 +431,13 @@ class TestRAGRegression:
             # Mock search results that should contain expected keywords
             mock_results = []
             if min_results > 0:
-                for i in range(min_results):
+                for _i in range(min_results):
                     mock_results.append(
                         MagicMock(
                             snippet=f"This is about {expected_keywords[0]} and related topics.",
                             score=0.8,
                             search_type="vector",
-                        )
+                        ),
                     )
 
             # In a real test, you would:

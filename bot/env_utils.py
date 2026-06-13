@@ -3,18 +3,17 @@
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # Global config singleton to store resolved paths
-_resolved_paths: Dict[str, Path] = {}
-_resolved_env_snapshots: Dict[str, Tuple[Optional[str], Optional[str], Optional[str]]] = {}
+_resolved_paths: dict[str, Path] = {}
+_resolved_env_snapshots: dict[str, tuple[str | None, str | None, str | None]] = {}
 
 
-def resolve_env(name_new: str, name_legacy: str, default: Optional[str] = None) -> Optional[str]:
-    """
-    Resolve environment variables with preference for new names.
+def resolve_env(name_new: str, name_legacy: str, default: str | None = None) -> str | None:
+    """Resolve environment variables with preference for new names.
 
     Args:
         name_new: New environment variable name
@@ -23,6 +22,7 @@ def resolve_env(name_new: str, name_legacy: str, default: Optional[str] = None) 
 
     Returns:
         Resolved value or default if neither is set
+
     """
     new_value = os.environ.get(name_new)
     legacy_value = os.environ.get(name_legacy)
@@ -61,9 +61,8 @@ def resolve_env(name_new: str, name_legacy: str, default: Optional[str] = None) 
     return default
 
 
-def resolve_path(name_new: str, name_legacy: str, default: Optional[str] = None) -> Optional[Path]:
-    """
-    Resolve environment variables to a Path object with preference for new names.
+def resolve_path(name_new: str, name_legacy: str, default: str | None = None) -> Path | None:
+    """Resolve environment variables to a Path object with preference for new names.
     Stores the result in a singleton to ensure consistent paths across the application.
 
     Args:
@@ -73,6 +72,7 @@ def resolve_path(name_new: str, name_legacy: str, default: Optional[str] = None)
 
     Returns:
         Resolved Path or None if neither is set and no default provided
+
     """
     # Check if we've already resolved this path
     cache_key = f"{name_new}|{name_legacy}"
@@ -101,13 +101,13 @@ def resolve_path(name_new: str, name_legacy: str, default: Optional[str] = None)
     return None
 
 
-def get_config_singleton() -> Dict[str, Any]:
-    """
-    Get a singleton dictionary of all resolved configuration values.
+def get_config_singleton() -> dict[str, Any]:
+    """Get a singleton dictionary of all resolved configuration values.
     This ensures all modules see the same configuration.
 
     Returns:
         Dictionary of resolved configuration values
+
     """
     # This could be expanded to include other configuration sources
     return {"paths": {k: str(v) for k, v in _resolved_paths.items()}}

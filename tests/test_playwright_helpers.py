@@ -1,4 +1,4 @@
-"""Playwright remote-server routing via playwright_helpers.py"""
+"""Playwright remote-server routing via playwright_helpers.py."""
 
 from __future__ import annotations
 
@@ -31,8 +31,9 @@ class TestPlaywrightHelpersConfig:
 class TestPlaywrightHelpersConnectBrowser:
     async def test_connect_browser_uses_remote_when_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("PW_SERVER_URL", "ws://localhost:9999")
-        import bot.utils.playwright_helpers as pwh
         import importlib
+
+        import bot.utils.playwright_helpers as pwh
 
         importlib.reload(pwh)
 
@@ -48,8 +49,9 @@ class TestPlaywrightHelpersConnectBrowser:
     async def test_connect_browser_raises_on_remote_failure(self, monkeypatch: pytest.MonkeyPatch, caplog) -> None:
         monkeypatch.setenv("PW_SERVER_URL", "ws://bad-host:9999")
         caplog.set_level("WARNING")
-        import bot.utils.playwright_helpers as pwh
         import importlib
+
+        import bot.utils.playwright_helpers as pwh
 
         importlib.reload(pwh)
 
@@ -64,8 +66,9 @@ class TestPlaywrightHelpersConnectBrowser:
 
     async def test_connect_browser_returns_none_when_no_server(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("PW_SERVER_URL", raising=False)
-        import bot.utils.playwright_helpers as pwh
         import importlib
+
+        import bot.utils.playwright_helpers as pwh
 
         importlib.reload(pwh)
 

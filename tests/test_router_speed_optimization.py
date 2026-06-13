@@ -1,5 +1,4 @@
-"""
-Integration tests for router speed optimization components. [PA][REH]
+"""Integration tests for router speed optimization components. [PA][REH].
 
 These tests verify the router speed overhaul implementation meets requirements:
 - Zero-I/O planning completed in ≤30ms
@@ -20,35 +19,38 @@ Test categories:
 from __future__ import annotations
 
 import asyncio
-import pytest
 import time
 from unittest.mock import MagicMock
+
+import pytest
 
 # Skip all tests — use real asyncio.sleep, race with async budget monitors
 pytestmark = pytest.mark.skip(reason="Uses real asyncio.sleep; races with async budget monitors; not isolated")
 
-from bot.router_classifier import FastClassifier
-from bot.http_client import SharedHttpClient, RequestConfig
-from bot.concurrency_manager import ConcurrencyManager, PoolType
-from bot.single_flight_cache import SingleFlightCache, CacheFamily
+import contextlib
+
 from bot.budget_manager import (
-    BudgetManager,
     BudgetFamily,
-    SoftBudgetExceeded,
+    BudgetManager,
     HardDeadlineExceeded,
+    SoftBudgetExceeded,
 )
-from bot.modality import InputModality, InputItem
+from bot.concurrency_manager import ConcurrencyManager, PoolType
+from bot.http_client import RequestConfig, SharedHttpClient
+from bot.modality import InputItem, InputModality
+from bot.router_classifier import FastClassifier
+from bot.single_flight_cache import CacheFamily, SingleFlightCache
 
 
 class TestFastClassifier:
-    """Test fast classification with zero I/O. [PA]"""
+    """Test fast classification with zero I/O. [PA]."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up test fixtures."""
         self.classifier = FastClassifier(bot_user_id=12345)
 
-    def test_classify_twitter_urls(self):
-        """Test Twitter URL classification routes to Tweet flow. [CA]"""
+    def test_classify_twitter_urls(self) -> None:
+        """Test Twitter URL classification routes to Tweet flow. [CA]."""
         test_cases = [
             "https://twitter.com/user/status/1234567890",
             "https://x.com/user/status/1234567890",
@@ -62,8 +64,8 @@ class TestFastClassifier:
             assert result.modality == InputModality.GENERAL_URL, "Twitter URLs should route through GENERAL_URL but be flagged as Twitter"
             assert result.confidence > 0.8, "Twitter classification should have high confidence"
 
-    def test_classify_video_urls(self):
-        """Test video URL classification. [PA]"""
+    def test_classify_video_urls(self) -> None:
+        """Test video URL classification. [PA]."""
         test_cases = [
             ("https://youtube.com/watch?v=abc123", True),
             ("https://youtu.be/abc123", True),
@@ -80,8 +82,8 @@ class TestFastClassifier:
             else:
                 assert result.modality == InputModality.GENERAL_URL, f"URL {url} should be general URL"
 
-    def test_classify_direct_images(self):
-        """Test direct image URL classification. [PA]"""
+    def test_classify_direct_images(self) -> None:
+        """Test direct image URL classification. [PA]."""
         test_cases = [
             "https://example.com/image.jpg",
             "https://example.com/image.png",
@@ -93,8 +95,8 @@ class TestFastClassifier:
             assert result.modality == InputModality.SINGLE_IMAGE, f"URL {url} should be classified as image"
             assert result.is_direct_image, "Direct image URLs should be marked as direct images"
 
-    def test_plan_message_performance(self, mock_message):
-        """Test planning completes within 30ms budget. [PA]"""
+    def test_plan_message_performance(self, mock_message) -> None:
+        """Test planning completes within 30ms budget. [PA]."""
         # Create mock items
         items = [
             InputItem(source_type="url", payload="https://twitter.com/user/status/123"),
@@ -109,8 +111,8 @@ class TestFastClassifier:
         assert len(plan_result.items) == 2, "Should classify both items"
         assert plan_result.plan_duration_ms < 30.0, "Internal plan duration should also be <30ms"
 
-    def test_streaming_eligibility_text_only(self, mock_message):
-        """Test text-only messages are never streaming eligible. [CA]"""
+    def test_streaming_eligibility_text_only(self, mock_message) -> None:
+        """Test text-only messages are never streaming eligible. [CA]."""
         mock_message.content = "Hello, this is just text"
 
         plan_result = self.classifier.plan_message(mock_message, [])
@@ -118,8 +120,8 @@ class TestFastClassifier:
         assert not plan_result.streaming_eligible, "Text-only should never be streaming eligible"
         assert plan_result.streaming_reason == "TEXT_ONLY", "Should indicate text-only reason"
 
-    def test_streaming_eligibility_heavy_work(self, mock_message):
-        """Test heavy work enables streaming. [CA]"""
+    def test_streaming_eligibility_heavy_work(self, mock_message) -> None:
+        """Test heavy work enables streaming. [CA]."""
         items = [
             InputItem(source_type="url", payload="https://youtube.com/watch?v=abc"),
             InputItem(source_type="attachment", payload=MagicMock(filename="document.pdf")),
@@ -132,11 +134,11 @@ class TestFastClassifier:
 
 
 class TestSharedHttpClient:
-    """Test shared HTTP client optimization. [PA]"""
+    """Test shared HTTP client optimization. [PA]."""
 
     @pytest.mark.asyncio
-    async def test_client_reuse(self):
-        """Test HTTP client connection reuse. [PA]"""
+    async def test_client_reuse(self) -> None:
+        """Test HTTP client connection reuse. [PA]."""
         config = {
             "HTTP2_ENABLE": True,
             "HTTP_MAX_CONNECTIONS": 10,
@@ -146,7 +148,7 @@ class TestSharedHttpClient:
         async with SharedHttpClient(config) as client:
             # Make multiple requests to same host
             responses = []
-            for i in range(3):
+            for _i in range(3):
                 try:
                     response = await client.get("https://httpbin.org/json")
                     responses.append(response)
@@ -162,8 +164,8 @@ class TestSharedHttpClient:
             assert metrics.requests_total >= 3, "Should track request count"
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker(self):
-        """Test circuit breaker functionality. [REH]"""
+    async def test_circuit_breaker(self) -> None:
+        """Test circuit breaker functionality. [REH]."""
         config = {"HTTP_MAX_CONNECTIONS": 1}
 
         async with SharedHttpClient(config) as client:
@@ -181,7 +183,7 @@ class TestSharedHttpClient:
 
             # Make requests that will fail
             failure_count = 0
-            for i in range(5):
+            for _i in range(5):
                 try:
                     await client.get(
                         "https://nonexistent.example/test",
@@ -195,11 +197,11 @@ class TestSharedHttpClient:
 
 
 class TestConcurrencyManager:
-    """Test bounded concurrency pools. [PA][RM]"""
+    """Test bounded concurrency pools. [PA][RM]."""
 
     @pytest.mark.asyncio
-    async def test_pool_separation(self):
-        """Test LIGHT/NETWORK/HEAVY pools are separate. [RM]"""
+    async def test_pool_separation(self) -> None:
+        """Test LIGHT/NETWORK/HEAVY pools are separate. [RM]."""
         config = {
             "ROUTER_MAX_CONCURRENCY_LIGHT": 2,
             "ROUTER_MAX_CONCURRENCY_NETWORK": 2,
@@ -214,11 +216,11 @@ class TestConcurrencyManager:
         assert manager.pools[PoolType.HEAVY].max_workers == 1
 
         # Test concurrent execution
-        async def light_task():
+        async def light_task() -> str:
             await asyncio.sleep(0.1)
             return "light"
 
-        async def heavy_task():
+        async def heavy_task() -> str:
             await asyncio.sleep(0.1)
             return "heavy"
 
@@ -237,13 +239,13 @@ class TestConcurrencyManager:
         await manager.shutdown_all()
 
     @pytest.mark.asyncio
-    async def test_hierarchical_cancellation(self):
-        """Test cancellation cascades to children. [RM]"""
+    async def test_hierarchical_cancellation(self) -> None:
+        """Test cancellation cascades to children. [RM]."""
         manager = ConcurrencyManager()
 
         cancelled_tasks = []
 
-        async def cancellable_task(task_id: str):
+        async def cancellable_task(task_id: str) -> str | None:
             try:
                 await asyncio.sleep(10)  # Long running task
                 return f"completed_{task_id}"
@@ -264,30 +266,26 @@ class TestConcurrencyManager:
                 parent_submitter.cancel()
 
                 # Wait for cancellation to complete
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await parent_task
-                except asyncio.CancelledError:
-                    pass
 
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await child_task
-                except asyncio.CancelledError:
-                    pass
 
         await manager.shutdown_all()
 
 
 class TestSingleFlightCache:
-    """Test single-flight deduplication and caching. [PA][DRY]"""
+    """Test single-flight deduplication and caching. [PA][DRY]."""
 
     @pytest.mark.asyncio
-    async def test_single_flight_deduplication(self):
-        """Test duplicate requests are deduplicated. [DRY]"""
+    async def test_single_flight_deduplication(self) -> None:
+        """Test duplicate requests are deduplicated. [DRY]."""
         cache = SingleFlightCache()
 
         call_count = 0
 
-        async def expensive_operation():
+        async def expensive_operation() -> str:
             nonlocal call_count
             call_count += 1
             await asyncio.sleep(0.1)  # Simulate work
@@ -315,11 +313,11 @@ class TestSingleFlightCache:
         assert metrics.single_flight_hits >= 2, "Should have single-flight hits"
 
     @pytest.mark.asyncio
-    async def test_cache_hit_miss_tracking(self):
-        """Test cache hit/miss metrics are tracked. [PA]"""
+    async def test_cache_hit_miss_tracking(self) -> None:
+        """Test cache hit/miss metrics are tracked. [PA]."""
         cache = SingleFlightCache()
 
-        async def compute_value():
+        async def compute_value() -> str:
             return "cached_value"
 
         # First call should be cache miss
@@ -338,17 +336,17 @@ class TestSingleFlightCache:
 
 
 class TestBudgetManager:
-    """Test budget and deadline management. [PA][REH]"""
+    """Test budget and deadline management. [PA][REH]."""
 
     @pytest.mark.asyncio
-    async def test_soft_budget_exceeded(self):
-        """Test soft budget violation triggers route switch. [REH]"""
+    async def test_soft_budget_exceeded(self) -> None:
+        """Test soft budget violation triggers route switch. [REH]."""
         manager = BudgetManager()
 
         # Configure very short budget for testing
         manager.budget_configs[BudgetFamily.TWEET_SYNDICATION].soft_budget_ms = 50.0
 
-        async def slow_operation():
+        async def slow_operation() -> str:
             await asyncio.sleep(0.1)  # 100ms, exceeds 50ms budget
             return "slow_result"
 
@@ -361,14 +359,14 @@ class TestBudgetManager:
         assert exc_info.value.elapsed_ms > 50.0
 
     @pytest.mark.asyncio
-    async def test_hard_deadline_exceeded(self):
-        """Test hard deadline violation triggers cancellation. [REH]"""
+    async def test_hard_deadline_exceeded(self) -> None:
+        """Test hard deadline violation triggers cancellation. [REH]."""
         manager = BudgetManager()
 
         # Configure very short deadline for testing
         manager.budget_configs[BudgetFamily.TWEET_SYNDICATION].hard_deadline_ms = 50.0
 
-        async def very_slow_operation():
+        async def very_slow_operation() -> str:
             await asyncio.sleep(0.2)  # 200ms, exceeds 50ms deadline
             return "never_reached"
 
@@ -381,18 +379,18 @@ class TestBudgetManager:
         assert exc_info.value.elapsed_ms > 50.0
 
     @pytest.mark.asyncio
-    async def test_route_switching(self):
-        """Test route switching on soft budget exceeded. [PA]"""
+    async def test_route_switching(self) -> None:
+        """Test route switching on soft budget exceeded. [PA]."""
         manager = BudgetManager()
 
         # Configure short budget for testing
         manager.budget_configs[BudgetFamily.TWEET_SYNDICATION].soft_budget_ms = 50.0
 
-        async def slow_primary():
+        async def slow_primary() -> str:
             await asyncio.sleep(0.1)  # Exceeds budget
             return "primary_result"
 
-        async def fast_fallback():
+        async def fast_fallback() -> str:
             await asyncio.sleep(0.01)  # Fast fallback
             return "fallback_result"
 
@@ -438,18 +436,18 @@ def mock_bot():
 
 
 class TestIntegrationPerformance:
-    """Integration tests for end-to-end performance. [PA]"""
+    """Integration tests for end-to-end performance. [PA]."""
 
     @pytest.mark.asyncio
-    async def test_text_only_fast_path(self, mock_message, mock_bot):
-        """Test text-only messages complete quickly without streaming. [PA]"""
+    async def test_text_only_fast_path(self, mock_message, mock_bot) -> None:
+        """Test text-only messages complete quickly without streaming. [PA]."""
         # This would test the full optimized router flow
         # Skipped for now as it requires full bot integration
         pytest.skip("Requires full bot integration")
 
     @pytest.mark.asyncio
-    async def test_twitter_url_routing(self, mock_message, mock_bot):
-        """Test Twitter URLs always use Tweet flow. [CA]"""
+    async def test_twitter_url_routing(self, mock_message, mock_bot) -> None:
+        """Test Twitter URLs always use Tweet flow. [CA]."""
         # This would test that Twitter URLs never route to GENERAL_URL
         # Skipped for now as it requires full router integration
         pytest.skip("Requires full router integration")

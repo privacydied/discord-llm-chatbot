@@ -1,5 +1,4 @@
-"""
-Discord Voice-Memo Sender using 3-step REST API.
+"""Discord Voice-Memo Sender using 3-step REST API.
 
 Now fully async and non-blocking to avoid event loop stalls that can cause
 Discord heartbeat delays. Provides async APIs and guarded sync wrappers.
@@ -7,13 +6,13 @@ Discord heartbeat delays. Provides async APIs and guarded sync wrappers.
 
 from __future__ import annotations
 
-import os
-import json
 import asyncio
-import tempfile
+import json
 import logging
+import os
+import tempfile
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any
 
 import aiohttp
 
@@ -26,10 +25,9 @@ logger = logging.getLogger(__name__)
 class VoiceMemoError(Exception):
     """Raised when voice memo creation or sending fails."""
 
-    pass
 
 
-async def _probe_duration_async(path: Path) -> Optional[float]:
+async def _probe_duration_async(path: Path) -> float | None:
     """Probe audio duration using ffprobe asynchronously. Returns seconds or None."""
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -53,7 +51,7 @@ async def _probe_duration_async(path: Path) -> Optional[float]:
         data = json.loads(stdout.decode("utf-8", errors="ignore"))
         dur = float(data.get("format", {}).get("duration", 0.0))
         # Match reference rounding behavior
-        return float(int(round(dur)))
+        return float(round(dur))
     except Exception:
         return None
 
@@ -69,16 +67,17 @@ async def wav_bytes_to_voice_memo_async(
     attachments_timeout_s: float = 30.0,
     upload_timeout_s: float = 60.0,
     message_post_timeout_s: float = 30.0,
-) -> Dict[str, Any]:
-    """
-    Convert WAV bytes to Discord voice memo and send (fully async, non-blocking).
+) -> dict[str, Any]:
+    """Convert WAV bytes to Discord voice memo and send (fully async, non-blocking).
 
     Returns Discord message response JSON.
     """
     if not wav_bytes:
-        raise VoiceMemoError("Empty WAV bytes provided")
+        msg = "Empty WAV bytes provided"
+        raise VoiceMemoError(msg)
     if not bot_token:
-        raise VoiceMemoError("Bot token required")
+        msg = "Bot token required"
+        raise VoiceMemoError(msg)
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -122,14 +121,16 @@ async def wav_bytes_to_voice_memo_async(
                 ) as resp:
                     if resp.status >= 400:
                         text = await resp.text()
-                        raise VoiceMemoError(f"Failed to request upload URL: HTTP {resp.status} {text[:200]}")
+                        msg = f"Failed to request upload URL: HTTP {resp.status} {text[:200]}"
+                        raise VoiceMemoError(msg)
                     upload_data = await resp.json()
                 try:
                     upload_info = upload_data["attachments"][0]
                     upload_url = upload_info["upload_url"]
                     uploaded_filename = upload_info.get("upload_filename") or upload_info.get("uploaded_filename")
                 except Exception as e:
-                    raise VoiceMemoError(f"Invalid upload response format: {e}")
+                    msg = f"Invalid upload response format: {e}"
+                    raise VoiceMemoError(msg)
 
                 # Step 2: Upload file to provided URL (no bot Authorization header)
                 ogg_bytes = ogg_path.read_bytes()
@@ -142,7 +143,8 @@ async def wav_bytes_to_voice_memo_async(
                 ) as resp:
                     if resp.status >= 400:
                         text = await resp.text()
-                        raise VoiceMemoError(f"Failed to upload file: HTTP {resp.status} {text[:200]}")
+                        msg = f"Failed to upload file: HTTP {resp.status} {text[:200]}"
+                        raise VoiceMemoError(msg)
 
                 # Step 3: Send message with voice memo flags
                 message_url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
@@ -155,7 +157,7 @@ async def wav_bytes_to_voice_memo_async(
                             "uploaded_filename": uploaded_filename,
                             "duration_secs": float(duration_secs),
                             "waveform": waveform_b64,
-                        }
+                        },
                     ],
                 }
                 async with session.post(
@@ -166,7 +168,8 @@ async def wav_bytes_to_voice_memo_async(
                 ) as resp:
                     if resp.status >= 400:
                         text = await resp.text()
-                        raise VoiceMemoError(f"Failed to send message: HTTP {resp.status} {text[:200]}")
+                        msg = f"Failed to send message: HTTP {resp.status} {text[:200]}"
+                        raise VoiceMemoError(msg)
                     result = await resp.json()
 
             logger.info(
@@ -177,7 +180,8 @@ async def wav_bytes_to_voice_memo_async(
     except Exception as e:
         if isinstance(e, VoiceMemoError):
             raise
-        raise VoiceMemoError(f"Unexpected error: {e}")
+        msg = f"Unexpected error: {e}"
+        raise VoiceMemoError(msg)
 
 
 def wav_bytes_to_voice_memo(
@@ -187,16 +191,16 @@ def wav_bytes_to_voice_memo(
     bitrate: str = "64k",
     vbr: str = "on",
     compression_level: int = 10,
-) -> Dict[str, Any]:
-    """
-    Synchronous wrapper kept for compatibility. Do NOT call from within an async context.
+) -> dict[str, Any]:
+    """Synchronous wrapper kept for compatibility. Do NOT call from within an async context.
     Prefer `wav_bytes_to_voice_memo_async` to avoid blocking the event loop.
     """
     # Disallow running this in an active event loop to prevent blocking
     try:
         loop = asyncio.get_running_loop()
         if loop.is_running():
-            raise VoiceMemoError("wav_bytes_to_voice_memo must not be called in an async context; use wav_bytes_to_voice_memo_async")
+            msg = "wav_bytes_to_voice_memo must not be called in an async context; use wav_bytes_to_voice_memo_async"
+            raise VoiceMemoError(msg)
     except RuntimeError:
         # No running loop, safe to proceed
         pass
@@ -209,34 +213,33 @@ def wav_bytes_to_voice_memo(
             bitrate=bitrate,
             vbr=vbr,
             compression_level=compression_level,
-        )
+        ),
     )
 
 
-async def send_tts_voice_memo_async(channel_id: int, wav_bytes: bytes, bot_token: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Async convenience to send TTS output as a Discord voice memo.
-    """
+async def send_tts_voice_memo_async(channel_id: int, wav_bytes: bytes, bot_token: str | None = None) -> dict[str, Any]:
+    """Async convenience to send TTS output as a Discord voice memo."""
     if bot_token is None:
         bot_token = os.getenv("DISCORD_TOKEN")
         if not bot_token:
-            raise VoiceMemoError("Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable.")
+            msg = "Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable."
+            raise VoiceMemoError(msg)
     return await wav_bytes_to_voice_memo_async(channel_id, wav_bytes, bot_token)
 
 
-def send_tts_voice_memo(channel_id: int, wav_bytes: bytes, bot_token: str | None = None) -> Dict[str, Any]:
-    """
-    Synchronous convenience kept for compatibility. Avoid in async contexts.
-    """
+def send_tts_voice_memo(channel_id: int, wav_bytes: bytes, bot_token: str | None = None) -> dict[str, Any]:
+    """Synchronous convenience kept for compatibility. Avoid in async contexts."""
     if bot_token is None:
         bot_token = os.getenv("DISCORD_TOKEN")
         if not bot_token:
-            raise VoiceMemoError("Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable.")
+            msg = "Bot token required. Provide via bot_token parameter or DISCORD_TOKEN environment variable."
+            raise VoiceMemoError(msg)
     # Guard against blocking the event loop
     try:
         loop = asyncio.get_running_loop()
         if loop.is_running():
-            raise VoiceMemoError("send_tts_voice_memo must not be called in an async context; use send_tts_voice_memo_async")
+            msg = "send_tts_voice_memo must not be called in an async context; use send_tts_voice_memo_async"
+            raise VoiceMemoError(msg)
     except RuntimeError:
         pass
     return asyncio.run(wav_bytes_to_voice_memo_async(channel_id, wav_bytes, bot_token))

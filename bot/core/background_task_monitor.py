@@ -9,20 +9,24 @@ with heartbeat tracking, staleness detection, and configurable restart policies.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
+from concurrent.futures import CancelledError
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, Optional
-from concurrent.futures import CancelledError
+from typing import TYPE_CHECKING, Any
 
-from bot.utils.logging import get_logger
 from bot.metrics import (
-    metrics,
+    METRIC_BACKGROUND_CONSECUTIVE_ERRORS,
     METRIC_BACKGROUND_HEARTBEAT,
     METRIC_BACKGROUND_LAST_HEARTBEAT,
-    METRIC_BACKGROUND_CONSECUTIVE_ERRORS,
     METRIC_BACKGROUND_STALENESS_SECONDS,
+    metrics,
 )
+from bot.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 class RestartPolicy(Enum):
@@ -68,12 +72,12 @@ class TaskState:
 
     config: TaskConfig
     status: TaskStatus = TaskStatus.STARTING
-    task: Optional[asyncio.Task] = None
+    task: asyncio.Task | None = None
     last_heartbeat: float = field(default_factory=time.time)
     start_time: float = field(default_factory=time.time)
     restart_count: int = 0
     consecutive_failures: int = 0
-    last_error: Optional[str] = None
+    last_error: str | None = None
     total_runtime: float = 0.0
 
 
@@ -83,12 +87,13 @@ class HeartbeatWrapper:
     [RAT: REH, RM] - Robust Error Handling, Resource Management
     """
 
-    def __init__(self, task_name: str, monitor: BackgroundTaskMonitor):
+    def __init__(self, task_name: str, monitor: BackgroundTaskMonitor) -> None:
         """Initialize heartbeat wrapper.
 
         Args:
             task_name: Name of the task being wrapped
             monitor: Background task monitor instance
+
         """
         self.task_name = task_name
         self.monitor = monitor
@@ -115,11 +120,11 @@ class HeartbeatWrapper:
                 extra={"subsys": "background_task"},
             )
 
-    def heartbeat(self, message: Optional[str] = None) -> None:
+    def heartbeat(self, message: str | None = None) -> None:
         """Send heartbeat signal to monitor."""
         self.monitor.record_heartbeat(self.task_name, message)
 
-    async def heartbeat_async(self, message: Optional[str] = None) -> None:
+    async def heartbeat_async(self, message: str | None = None) -> None:
         """Send heartbeat signal asynchronously."""
         self.heartbeat(message)
         # Small yield to prevent blocking
@@ -140,16 +145,17 @@ class BackgroundTaskMonitor:
     [RAT: REH, RM] - Robust Error Handling, Resource Management
     """
 
-    def __init__(self, watchdog_interval: float = 10.0):
+    def __init__(self, watchdog_interval: float = 10.0) -> None:
         """Initialize background task monitor.
 
         Args:
             watchdog_interval: Seconds between watchdog checks
+
         """
         self.logger = get_logger(__name__)
-        self.tasks: Dict[str, TaskState] = {}
+        self.tasks: dict[str, TaskState] = {}
         self.watchdog_interval = watchdog_interval
-        self.watchdog_task: Optional[asyncio.Task] = None
+        self.watchdog_task: asyncio.Task | None = None
         self.running = False
         self._shutdown_event = asyncio.Event()
 
@@ -158,9 +164,11 @@ class BackgroundTaskMonitor:
 
         Args:
             config: Task configuration with restart policy and thresholds
+
         """
         if config.name in self.tasks:
-            raise ValueError(f"Task '{config.name}' already registered")
+            msg = f"Task '{config.name}' already registered"
+            raise ValueError(msg)
 
         self.tasks[config.name] = TaskState(config=config)
 
@@ -177,6 +185,7 @@ class BackgroundTaskMonitor:
 
         Returns:
             True if task started successfully
+
         """
         if task_name not in self.tasks:
             self.logger.error(
@@ -238,7 +247,7 @@ class BackgroundTaskMonitor:
     def _wrap_task_function(self, task_state: TaskState) -> Callable[[], Awaitable[None]]:
         """Wrap task function with monitoring, error handling, and cleanup."""
 
-        async def wrapped_task():
+        async def wrapped_task() -> None:
             task_name = task_state.config.name
 
             try:
@@ -293,12 +302,13 @@ class BackgroundTaskMonitor:
 
         return wrapped_task
 
-    def record_heartbeat(self, task_name: str, message: Optional[str] = None) -> None:
+    def record_heartbeat(self, task_name: str, message: str | None = None) -> None:
         """Record a heartbeat from a background task.
 
         Args:
             task_name: Name of task sending heartbeat
             message: Optional heartbeat message
+
         """
         if task_name not in self.tasks:
             self.logger.warning(
@@ -332,6 +342,7 @@ class BackgroundTaskMonitor:
 
         Returns:
             HeartbeatWrapper instance
+
         """
         return HeartbeatWrapper(task_name, self)
 
@@ -359,7 +370,7 @@ class BackgroundTaskMonitor:
                 try:
                     await asyncio.wait_for(self._shutdown_event.wait(), timeout=self.watchdog_interval)
                     break  # Shutdown requested
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue  # Normal timeout, continue monitoring
 
             except Exception as e:
@@ -424,14 +435,13 @@ class BackgroundTaskMonitor:
                 if config.restart_policy != RestartPolicy.NEVER:
                     should_restart = True
                     restart_reason = f"task failed: {task_state.task.exception()}"
-            else:
-                # Task completed normally
-                if config.restart_policy in (
-                    RestartPolicy.ALWAYS,
-                    RestartPolicy.EXPONENTIAL_BACKOFF,
-                ):
-                    should_restart = True
-                    restart_reason = "task completed normally"
+            # Task completed normally
+            elif config.restart_policy in (
+                RestartPolicy.ALWAYS,
+                RestartPolicy.EXPONENTIAL_BACKOFF,
+            ):
+                should_restart = True
+                restart_reason = "task completed normally"
 
         elif staleness > config.staleness_threshold * 2:  # Double the threshold for restart
             should_restart = True
@@ -480,7 +490,7 @@ class BackgroundTaskMonitor:
             task_state.task.cancel()
             try:
                 await asyncio.wait_for(task_state.task, timeout=5.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
+            except (TimeoutError, asyncio.CancelledError):
                 pass  # Expected
 
         # Increment restart counter
@@ -498,6 +508,7 @@ class BackgroundTaskMonitor:
 
         Args:
             timeout: Maximum time to wait for tasks to stop
+
         """
         self.logger.info("🛑 Stopping all background tasks...", extra={"subsys": "background_task"})
 
@@ -508,10 +519,8 @@ class BackgroundTaskMonitor:
         # Stop watchdog first
         if self.watchdog_task and not self.watchdog_task.done():
             self.watchdog_task.cancel()
-            try:
+            with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                 await asyncio.wait_for(self.watchdog_task, timeout=2.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
 
         # Cancel all background tasks
         tasks_to_cancel = []
@@ -532,7 +541,7 @@ class BackgroundTaskMonitor:
                     asyncio.gather(*[task for _, task in tasks_to_cancel], return_exceptions=True),
                     timeout=timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self.logger.warning(
                     f"Some tasks did not stop within {timeout}s timeout",
                     extra={"subsys": "background_task"},
@@ -540,7 +549,7 @@ class BackgroundTaskMonitor:
 
         self.logger.info("✅ All background tasks stopped", extra={"subsys": "background_task"})
 
-    def get_task_status(self, task_name: str) -> Optional[Dict[str, Any]]:
+    def get_task_status(self, task_name: str) -> dict[str, Any] | None:
         """Get status information for a specific task."""
         if task_name not in self.tasks:
             return None
@@ -563,13 +572,13 @@ class BackgroundTaskMonitor:
             "is_running": task_state.task is not None and not task_state.task.done(),
         }
 
-    def get_all_task_statuses(self) -> Dict[str, Dict[str, Any]]:
+    def get_all_task_statuses(self) -> dict[str, dict[str, Any]]:
         """Get status information for all registered tasks."""
-        return {task_name: self.get_task_status(task_name) for task_name in self.tasks.keys()}
+        return {task_name: self.get_task_status(task_name) for task_name in self.tasks}
 
 
 # Global background task monitor instance
-_task_monitor: Optional[BackgroundTaskMonitor] = None
+_task_monitor: BackgroundTaskMonitor | None = None
 
 
 def get_task_monitor() -> BackgroundTaskMonitor:

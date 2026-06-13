@@ -1,5 +1,4 @@
-"""
-Lightweight YouTube transcript resolver (caption-track first).
+"""Lightweight YouTube transcript resolver (caption-track first).
 
 This module is intentionally small and fail-open:
 - It only runs for YouTube URLs.
@@ -10,6 +9,7 @@ This module is intentionally small and fail-open:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import html as html_lib
 import json
 import os
@@ -19,11 +19,14 @@ import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 
 from .http_client import RequestConfig, get_http_client
 from .utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 logger = get_logger(__name__)
 
@@ -88,7 +91,7 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _preferred_langs() -> List[str]:
+def _preferred_langs() -> list[str]:
     raw = (os.getenv("YOUTUBE_TRANSCRIPT_PREFERRED_LANGS") or "en,en-US").strip()
     vals = [part.strip() for part in raw.split(",") if part.strip()]
     return vals or ["en", "en-US"]
@@ -120,7 +123,7 @@ def is_youtube_shorts(url: str) -> bool:
         return False
 
 
-def extract_youtube_video_id(url: str) -> Optional[str]:
+def extract_youtube_video_id(url: str) -> str | None:
     try:
         parsed = urlparse(url)
         host = (parsed.netloc or "").lower()
@@ -162,12 +165,12 @@ def _upsert_query(url: str, key: str, value: str) -> str:
             parsed.params,
             query,
             parsed.fragment,
-        )
+        ),
     )
 
 
 def _iter_caption_urls(base_url: str) -> Iterable[str]:
-    candidate_urls: List[str] = []
+    candidate_urls: list[str] = []
     json3 = _upsert_query(base_url, "fmt", "json3")
     candidate_urls.append(json3)
     if base_url not in candidate_urls:
@@ -178,7 +181,7 @@ def _iter_caption_urls(base_url: str) -> Iterable[str]:
     return candidate_urls
 
 
-def _extract_json_after_marker(text: str, marker: str) -> Optional[Dict[str, Any]]:
+def _extract_json_after_marker(text: str, marker: str) -> dict[str, Any] | None:
     idx = text.find(marker)
     if idx < 0:
         return None
@@ -225,7 +228,7 @@ def _extract_json_after_marker(text: str, marker: str) -> Optional[Dict[str, Any
     return data if isinstance(data, dict) else None
 
 
-def _extract_player_response(html_text: str) -> Optional[Dict[str, Any]]:
+def _extract_player_response(html_text: str) -> dict[str, Any] | None:
     markers = [
         "ytInitialPlayerResponse =",
         "window['ytInitialPlayerResponse'] =",
@@ -240,23 +243,22 @@ def _extract_player_response(html_text: str) -> Optional[Dict[str, Any]]:
 
 def _normalize_transcript_text(text: str) -> str:
     unescaped = html_lib.unescape(text or "")
-    compact = re.sub(r"\s+", " ", unescaped).strip()
-    return compact
+    return re.sub(r"\s+", " ", unescaped).strip()
 
 
-def _parse_json3_transcript(data: Dict[str, Any]) -> str:
+def _parse_json3_transcript(data: dict[str, Any]) -> str:
     events = data.get("events")
     if not isinstance(events, list):
         return ""
 
-    lines: List[str] = []
+    lines: list[str] = []
     for event in events:
         if not isinstance(event, dict):
             continue
         segs = event.get("segs")
         if not isinstance(segs, list):
             continue
-        parts: List[str] = []
+        parts: list[str] = []
         for seg in segs:
             if not isinstance(seg, dict):
                 continue
@@ -270,7 +272,7 @@ def _parse_json3_transcript(data: Dict[str, Any]) -> str:
 
 
 def _parse_vtt_transcript(raw_text: str) -> str:
-    lines: List[str] = []
+    lines: list[str] = []
     for raw_line in raw_text.splitlines():
         line = raw_line.strip()
         if not line:
@@ -293,7 +295,7 @@ def _parse_xml_transcript(raw_text: str) -> str:
     except Exception:
         return ""
 
-    entries: List[str] = []
+    entries: list[str] = []
     for node in root.iter():
         tag = str(node.tag).split("}", 1)[-1].lower()
         if tag not in {"text", "p", "span"}:
@@ -331,7 +333,7 @@ def _parse_caption_payload(raw_text: str) -> str:
     return _parse_xml_transcript(body)
 
 
-def _track_is_asr(track: Dict[str, Any]) -> bool:
+def _track_is_asr(track: dict[str, Any]) -> bool:
     kind = str(track.get("kind") or "").strip().lower()
     if kind == "asr":
         return True
@@ -343,7 +345,7 @@ def _track_is_asr(track: Dict[str, Any]) -> bool:
     return False
 
 
-def _lang_rank(lang: str, preferred: List[str]) -> int:
+def _lang_rank(lang: str, preferred: list[str]) -> int:
     code = (lang or "").strip().lower()
     if not code:
         return len(preferred) + 1
@@ -354,8 +356,8 @@ def _lang_rank(lang: str, preferred: List[str]) -> int:
     return len(preferred)
 
 
-def _sort_tracks(tracks: List[Dict[str, Any]], preferred: List[str]) -> List[Dict[str, Any]]:
-    def _score(track: Dict[str, Any]) -> tuple:
+def _sort_tracks(tracks: list[dict[str, Any]], preferred: list[str]) -> list[dict[str, Any]]:
+    def _score(track: dict[str, Any]) -> tuple:
         lang = str(track.get("languageCode") or "")
         asr = 1 if _track_is_asr(track) else 0
         return (asr, _lang_rank(lang, preferred))
@@ -380,7 +382,7 @@ async def _fetch_text(url: str, timeout_s: float) -> str:
     return resp.text or ""
 
 
-def _find_ytdlp_bin() -> Optional[str]:
+def _find_ytdlp_bin() -> str | None:
     for env_key in ("YOUTUBE_TRANSCRIPT_YTDLP_BIN", "YTDLP_BIN", "YT_DLP_BIN"):
         value = (os.getenv(env_key) or "").strip()
         if value and os.path.isfile(value) and os.access(value, os.X_OK):
@@ -396,7 +398,7 @@ def _find_ytdlp_bin() -> Optional[str]:
     return None
 
 
-def _apply_cookie_args(cmd: List[str]) -> None:
+def _apply_cookie_args(cmd: list[str]) -> None:
     browser = (os.getenv("VIDEO_COOKIES_FROM_BROWSER") or "").strip()
     cookie_file = (os.getenv("VIDEO_COOKIES_FILE") or "").strip()
     if browser:
@@ -406,7 +408,7 @@ def _apply_cookie_args(cmd: List[str]) -> None:
         cmd.extend(["--cookies", cookie_file])
 
 
-def _parse_json_object(stdout: str) -> Optional[Dict[str, Any]]:
+def _parse_json_object(stdout: str) -> dict[str, Any] | None:
     body = (stdout or "").strip()
     if not body:
         return None
@@ -430,12 +432,12 @@ def _parse_json_object(stdout: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-async def _run_ytdlp_probe(url: str, timeout_s: float) -> Optional[Dict[str, Any]]:
+async def _run_ytdlp_probe(url: str, timeout_s: float) -> dict[str, Any] | None:
     ytdlp_bin = _find_ytdlp_bin()
     if not ytdlp_bin:
         return None
 
-    cmd: List[str] = [
+    cmd: list[str] = [
         ytdlp_bin,
         "--dump-single-json",
         "--skip-download",
@@ -457,15 +459,11 @@ async def _run_ytdlp_probe(url: str, timeout_s: float) -> Optional[Dict[str, Any
 
     try:
         stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
-    except asyncio.TimeoutError:
-        try:
+    except TimeoutError:
+        with contextlib.suppress(Exception):
             proc.kill()
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             await proc.communicate()
-        except Exception:
-            pass
         return None
 
     if proc.returncode != 0:
@@ -494,11 +492,11 @@ def _entry_ext_rank(ext: str) -> int:
     return 4
 
 
-def _collect_ytdlp_caption_entries(payload: Dict[str, Any], source_label: str) -> List[Dict[str, str]]:
+def _collect_ytdlp_caption_entries(payload: dict[str, Any], source_label: str) -> list[dict[str, str]]:
     source = payload.get(source_label)
     if not isinstance(source, dict):
         return []
-    out: List[Dict[str, str]] = []
+    out: list[dict[str, str]] = []
     for lang, items in source.items():
         if not isinstance(items, list):
             continue
@@ -515,13 +513,13 @@ def _collect_ytdlp_caption_entries(payload: Dict[str, Any], source_label: str) -
                     "ext": str(item.get("ext") or ""),
                     "protocol": str(item.get("protocol") or ""),
                     "source": source_label,
-                }
+                },
             )
     return out
 
 
-def _sort_ytdlp_caption_entries(entries: List[Dict[str, str]], preferred: List[str]) -> List[Dict[str, str]]:
-    def _score(entry: Dict[str, str]) -> tuple:
+def _sort_ytdlp_caption_entries(entries: list[dict[str, str]], preferred: list[str]) -> list[dict[str, str]]:
+    def _score(entry: dict[str, str]) -> tuple:
         source_rank = 0 if entry.get("source") == "subtitles" else 1
         lang_rank = _lang_rank(entry.get("lang", ""), preferred)
         ext_rank = _entry_ext_rank(entry.get("ext", ""))
@@ -530,8 +528,8 @@ def _sort_ytdlp_caption_entries(entries: List[Dict[str, str]], preferred: List[s
     return sorted(entries, key=_score)
 
 
-def _parse_m3u8_lines(m3u8_text: str, base_url: str, max_segments: int) -> List[str]:
-    urls: List[str] = []
+def _parse_m3u8_lines(m3u8_text: str, base_url: str, max_segments: int) -> list[str]:
+    urls: list[str] = []
     for line in m3u8_text.splitlines():
         row = line.strip()
         if not row or row.startswith("#"):
@@ -561,7 +559,7 @@ async def _resolve_from_caption_url(
         segment_urls = _parse_m3u8_lines(body, base_url=caption_url, max_segments=max_segments)
         if not segment_urls:
             return ""
-        parts: List[str] = []
+        parts: list[str] = []
         current_len = 0
         for seg_url in segment_urls:
             chunk = await _resolve_from_caption_url(
@@ -596,8 +594,8 @@ async def _resolve_via_ytdlp_captions(
     duration_s: float,
     timeout_s: float,
     max_chars: int,
-    preferred_langs: List[str],
-) -> Optional[YouTubeTranscriptResult]:
+    preferred_langs: list[str],
+) -> YouTubeTranscriptResult | None:
     if not _env_bool("YOUTUBE_TRANSCRIPT_YTDLP_FALLBACK", True):
         return None
 
@@ -646,7 +644,7 @@ async def _resolve_via_ytdlp_captions(
     return None
 
 
-def _load_cache(video_id: str, ttl_s: int) -> Optional[YouTubeTranscriptResult]:
+def _load_cache(video_id: str, ttl_s: int) -> YouTubeTranscriptResult | None:
     if ttl_s <= 0:
         return None
     path = _cache_path(video_id)
@@ -697,9 +695,8 @@ def _store_cache(result: YouTubeTranscriptResult) -> None:
         logger.debug("Failed to write YouTube transcript cache", exc_info=True)
 
 
-async def resolve_youtube_transcript(url: str, force_refresh: bool = False) -> Optional[YouTubeTranscriptResult]:
-    """
-    Resolve YouTube transcript from caption tracks (without yt-dlp/audio decode).
+async def resolve_youtube_transcript(url: str, force_refresh: bool = False) -> YouTubeTranscriptResult | None:
+    """Resolve YouTube transcript from caption tracks (without yt-dlp/audio decode).
     Returns None when unavailable or on non-YouTube URLs.
     """
     if not is_youtube_url(url):

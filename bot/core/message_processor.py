@@ -10,14 +10,14 @@ from __future__ import annotations
 import asyncio
 import collections
 import time
-from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Dict
-
-import discord
+from contextlib import asynccontextmanager, suppress
+from typing import TYPE_CHECKING
 
 from bot.utils.logging import get_logger
 
 if TYPE_CHECKING:
+    import discord
+
     from .bot import LLMBot
 
 logger = get_logger(__name__)
@@ -42,14 +42,14 @@ class MessageProcessor:
         self.logger = logger
 
         # Per-user message queues and processor tasks
-        self._user_queues: Dict[str, asyncio.Queue] = {}
-        self._user_processors: Dict[str, asyncio.Task] = {}
+        self._user_queues: dict[str, asyncio.Queue] = {}
+        self._user_processors: dict[str, asyncio.Task] = {}
 
         # Dedup guard – OrderedDict for FIFO eviction
         self._processed_messages: collections.OrderedDict = collections.OrderedDict()
         self._dispatch_lock = asyncio.Lock()
 
-        self._typing_suppressed_until: Dict[int, float] = {}
+        self._typing_suppressed_until: dict[int, float] = {}
 
     # ------------------------------------------------------------------
     # Public entry point – called from LLMBot.on_message
@@ -67,13 +67,13 @@ class MessageProcessor:
         except Exception:
             author_is_self = False
         if author_is_bot or author_is_self:
-            return
+            return None
 
         # Dedup guard under lock
         async with self._dispatch_lock:
             if message.id in self._processed_messages:
                 self.logger.warning(f"Duplicate dispatch prevented for msg_id: {message.id}")
-                return
+                return None
             while len(self._processed_messages) >= _DEDUP_MAX:
                 self._processed_messages.popitem(last=False)
             self._processed_messages[message.id] = True
@@ -83,7 +83,7 @@ class MessageProcessor:
 
         # Skip empty messages
         if (not message.content or not message.content.strip()) and not message.attachments:
-            return
+            return None
 
         # Alert-session suppression — early return gate
         await self._alert_suppression_gate(message)
@@ -123,7 +123,7 @@ class MessageProcessor:
             while True:
                 try:
                     message = await asyncio.wait_for(queue.get(), timeout=_QUEUE_TIMEOUT)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
 
                 try:
@@ -165,8 +165,8 @@ class MessageProcessor:
                 active_session = cog.alert_manager.get_session(message.author.id)
                 if active_session is not None:
                     await self._handle_alert_dm(message, cog)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Alert suppression gate failed: {e}")
 
     async def _handle_alert_dm(self, message: discord.Message, cog) -> None:
         prefixes = await self.bot.get_prefix(message)
@@ -175,20 +175,16 @@ class MessageProcessor:
                 if p and message.content.startswith(p):
                     rest = (message.content[len(p) :] or "").strip()
                     if rest.split(" ", 1)[0].lower() == "alert":
-                        try:
+                        with suppress(Exception):
                             await message.channel.send("⚠️ An alert session is already active.")
-                        except Exception:
-                            pass
                         return
         elif prefixes:
             p = prefixes
             if message.content.startswith(p):
                 rest = (message.content[len(p) :] or "").strip()
                 if rest.split(" ", 1)[0].lower() == "alert":
-                    try:
+                    with suppress(Exception):
                         await message.channel.send("⚠️ An alert session is already active.")
-                    except Exception:
-                        pass
                     return
 
     @asynccontextmanager
@@ -220,10 +216,8 @@ class MessageProcessor:
             yield
         finally:
             if entered and ctx is not None:
-                try:
+                with suppress(Exception):
                     await ctx.__aexit__(None, None, None)
-                except Exception:
-                    pass
 
     # ------------------------------------------------------------------
     # Shutdown
@@ -233,8 +227,6 @@ class MessageProcessor:
         """Cancel all active user-processor tasks."""
         for task in list(self._user_processors.values()):
             task.cancel()
-            try:
+            with suppress(Exception):
                 await task
-            except Exception:
-                pass
         self._user_processors.clear()

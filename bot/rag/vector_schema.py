@@ -1,13 +1,15 @@
-"""
-Vector document schema and configuration for RAG system.
-"""
+"""Vector document schema and configuration for RAG system."""
 
 import hashlib
+import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -17,8 +19,8 @@ class VectorDocument:
     id: str  # UUID for chunk
     source_id: str  # Original file/context identifier
     chunk_text: str  # Actual text content
-    embedding: List[float]  # L2-normalized vector
-    metadata: Dict[str, Any]  # Additional metadata
+    embedding: list[float]  # L2-normalized vector
+    metadata: dict[str, Any]  # Additional metadata
     version_hash: str  # SHA256 of source content
     chunk_index: int  # Position in original document
     confidence_score: float = 1.0  # Quality/relevance score
@@ -32,11 +34,10 @@ class VectorDocument:
         chunk_text: str,
         embedding: np.ndarray,
         chunk_index: int,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
         confidence_score: float = 1.0,
     ) -> "VectorDocument":
-        """
-        Create a new VectorDocument with auto-generated fields.
+        """Create a new VectorDocument with auto-generated fields.
 
         Args:
             source_id: Identifier for the source document
@@ -48,6 +49,7 @@ class VectorDocument:
 
         Returns:
             VectorDocument instance
+
         """
         if metadata is None:
             metadata = {}
@@ -67,7 +69,7 @@ class VectorDocument:
                 "chunk_length": len(chunk_text),
                 "embedding_dim": len(embedding_list),
                 "source_type": metadata.get("source_type", "unknown"),
-            }
+            },
         )
 
         return cls(
@@ -81,7 +83,7 @@ class VectorDocument:
             confidence_score=confidence_score,
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for storage."""
         return {
             "id": self.id,
@@ -97,7 +99,7 @@ class VectorDocument:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "VectorDocument":
+    def from_dict(cls, data: dict[str, Any]) -> "VectorDocument":
         """Create from dictionary."""
         return cls(
             id=data["id"],
@@ -170,35 +172,45 @@ class HybridSearchConfig:
     def validate(self) -> None:
         """Validate configuration parameters."""
         if not 0 <= self.vector_confidence_threshold <= 1:
-            raise ValueError("vector_confidence_threshold must be between 0 and 1")
+            msg = "vector_confidence_threshold must be between 0 and 1"
+            raise ValueError(msg)
 
         if not 0 <= self.vector_weight <= 1:
-            raise ValueError("vector_weight must be between 0 and 1")
+            msg = "vector_weight must be between 0 and 1"
+            raise ValueError(msg)
 
         if not 0 <= self.keyword_weight <= 1:
-            raise ValueError("keyword_weight must be between 0 and 1")
+            msg = "keyword_weight must be between 0 and 1"
+            raise ValueError(msg)
 
         if abs(self.vector_weight + self.keyword_weight - 1.0) > 1e-6:
-            raise ValueError("vector_weight + keyword_weight must equal 1.0")
+            msg = "vector_weight + keyword_weight must equal 1.0"
+            raise ValueError(msg)
 
         if self.chunk_size <= self.chunk_overlap:
-            raise ValueError("chunk_size must be greater than chunk_overlap")
+            msg = "chunk_size must be greater than chunk_overlap"
+            raise ValueError(msg)
 
         if self.min_chunk_size <= 0:
-            raise ValueError("min_chunk_size must be positive")
+            msg = "min_chunk_size must be positive"
+            raise ValueError(msg)
 
         # Validate new RAG performance fields [RAG]
         if self.indexing_queue_size <= 0:
-            raise ValueError("indexing_queue_size must be positive")
+            msg = "indexing_queue_size must be positive"
+            raise ValueError(msg)
 
         if self.indexing_workers <= 0:
-            raise ValueError("indexing_workers must be positive")
+            msg = "indexing_workers must be positive"
+            raise ValueError(msg)
 
         if self.indexing_batch_size <= 0:
-            raise ValueError("indexing_batch_size must be positive")
+            msg = "indexing_batch_size must be positive"
+            raise ValueError(msg)
 
         if self.lazy_load_timeout <= 0:
-            raise ValueError("lazy_load_timeout must be positive")
+            msg = "lazy_load_timeout must be positive"
+            raise ValueError(msg)
 
 
 @dataclass
@@ -209,7 +221,7 @@ class SearchResult:
     similarity_score: float
     search_type: str  # "vector", "keyword", "hybrid"
     rank: int
-    explanation: Optional[str] = None
+    explanation: str | None = None
 
     @property
     def title(self) -> str:
@@ -223,12 +235,12 @@ class SearchResult:
         # Snippet cap from config [Phase 6-9]
         max_snippet = 200
         try:
-            from ..config import load_config as _rag_snippet_config
+            from bot.config import load_config as _rag_snippet_config
 
             _rc = _rag_snippet_config()
             max_snippet = int(_rc.get("RAG_MAX_SNIPPET_CHARS", 200))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Failed to load RAG_MAX_SNIPPET_CHARS: {exc}")
         if len(text) > max_snippet:
             return text[: max_snippet - 3] + "..."
         return text
@@ -238,7 +250,7 @@ class SearchResult:
         """Get source information."""
         return self.document.metadata.get("filename", self.document.source_id)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API responses."""
         return {
             "id": self.document.id,
@@ -258,16 +270,16 @@ class SearchResult:
 class ChunkingResult:
     """Result of document chunking operation."""
 
-    chunks: List[str]
-    metadata: Dict[str, Any]
+    chunks: list[str]
+    metadata: dict[str, Any]
     source_hash: str
 
     @classmethod
     def create(
         cls,
         text: str,
-        chunks: List[str],
-        source_metadata: Optional[Dict[str, Any]] = None,
+        chunks: list[str],
+        source_metadata: dict[str, Any] | None = None,
     ) -> "ChunkingResult":
         """Create chunking result with auto-generated hash."""
         if source_metadata is None:

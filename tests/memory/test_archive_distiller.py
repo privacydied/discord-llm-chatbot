@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Never
 
 import pytest
 import pytest_asyncio
 
+import bot.memory.service as memory_service_module
+import bot.server_archive.service as archive_service_module
 from bot.memory.archive_distiller import MemoryArchiveDistiller
 from bot.memory.service import CuratedMemoryService
-import bot.memory.service as memory_service_module
 from bot.server_archive.models import (
     ArchiveChannel,
     ArchiveGuild,
@@ -16,7 +18,6 @@ from bot.server_archive.models import (
     ArchiveThread,
     ArchiveUser,
 )
-import bot.server_archive.service as archive_service_module
 from bot.server_archive.service import ServerArchiveService
 
 
@@ -33,10 +34,10 @@ class FakeSemanticStore:
     async def search(self, query_text, top_k=3, where=None):
         return []
 
-    async def delete(self, memory_id):
+    async def delete(self, memory_id) -> None:
         return None
 
-    async def delete_many(self, ids):
+    async def delete_many(self, ids) -> None:
         return None
 
 
@@ -113,7 +114,7 @@ async def distiller_env(tmp_path, monkeypatch):
 
 
 def _base_time() -> datetime:
-    return datetime(2026, 5, 9, 1, 0, 0, tzinfo=timezone.utc)
+    return datetime(2026, 5, 9, 1, 0, 0, tzinfo=UTC)
 
 
 LONG_USER_PREFERENCE = "I prefer short replies unless I ask for detail, and I usually want the answer in one concise paragraph with bullets only when they help explain multiple steps."
@@ -162,7 +163,7 @@ async def _insert_messages(archive_service: ServerArchiveService, bundles: list[
 
 
 @pytest.mark.asyncio
-async def test_distiller_ignores_archive_when_disabled(distiller_env):
+async def test_distiller_ignores_archive_when_disabled(distiller_env) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -175,7 +176,7 @@ async def test_distiller_ignores_archive_when_disabled(distiller_env):
                 message_id="m1",
                 content=LONG_USER_PREFERENCE,
                 created_at=_base_time(),
-            )
+            ),
         ],
     )
 
@@ -186,7 +187,7 @@ async def test_distiller_ignores_archive_when_disabled(distiller_env):
 
 
 @pytest.mark.asyncio
-async def test_dry_run_scans_but_does_not_save_memory(distiller_env):
+async def test_dry_run_scans_but_does_not_save_memory(distiller_env) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -199,7 +200,7 @@ async def test_dry_run_scans_but_does_not_save_memory(distiller_env):
                 message_id="m1",
                 content=LONG_USER_PREFERENCE,
                 created_at=_base_time(),
-            )
+            ),
         ],
     )
 
@@ -211,7 +212,7 @@ async def test_dry_run_scans_but_does_not_save_memory(distiller_env):
 
 
 @pytest.mark.asyncio
-async def test_accepted_user_preference_creates_curated_memory(distiller_env):
+async def test_accepted_user_preference_creates_curated_memory(distiller_env) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -224,7 +225,7 @@ async def test_accepted_user_preference_creates_curated_memory(distiller_env):
                 message_id="m1",
                 content=LONG_USER_PREFERENCE,
                 created_at=_base_time(),
-            )
+            ),
         ],
     )
 
@@ -237,7 +238,7 @@ async def test_accepted_user_preference_creates_curated_memory(distiller_env):
 
 
 @pytest.mark.asyncio
-async def test_accepted_project_rule_creates_scoped_memory(distiller_env):
+async def test_accepted_project_rule_creates_scoped_memory(distiller_env) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -250,7 +251,7 @@ async def test_accepted_project_rule_creates_scoped_memory(distiller_env):
                 message_id="m1",
                 content=LONG_PROJECT_RULE,
                 created_at=_base_time(),
-            )
+            ),
         ],
     )
 
@@ -264,7 +265,7 @@ async def test_accepted_project_rule_creates_scoped_memory(distiller_env):
 
 
 @pytest.mark.asyncio
-async def test_debugging_chatter_is_rejected(distiller_env):
+async def test_debugging_chatter_is_rejected(distiller_env) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -276,7 +277,7 @@ async def test_debugging_chatter_is_rejected(distiller_env):
                 message_id="m1",
                 content="I'm debugging the router today and the code is broken.",
                 created_at=_base_time(),
-            )
+            ),
         ],
     )
 
@@ -287,7 +288,7 @@ async def test_debugging_chatter_is_rejected(distiller_env):
 
 
 @pytest.mark.asyncio
-async def test_secrets_are_rejected(distiller_env):
+async def test_secrets_are_rejected(distiller_env) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -299,7 +300,7 @@ async def test_secrets_are_rejected(distiller_env):
                 message_id="m1",
                 content="My API key is sk-12345 and don't repeat it.",
                 created_at=_base_time(),
-            )
+            ),
         ],
     )
 
@@ -310,7 +311,7 @@ async def test_secrets_are_rejected(distiller_env):
 
 
 @pytest.mark.asyncio
-async def test_bot_messages_are_ignored_by_default(distiller_env):
+async def test_bot_messages_are_ignored_by_default(distiller_env) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -323,7 +324,7 @@ async def test_bot_messages_are_ignored_by_default(distiller_env):
                 content=LONG_USER_PREFERENCE,
                 created_at=_base_time(),
                 bot=True,
-            )
+            ),
         ],
     )
 
@@ -334,7 +335,7 @@ async def test_bot_messages_are_ignored_by_default(distiller_env):
 
 
 @pytest.mark.asyncio
-async def test_processed_checkpoint_is_updated(distiller_env):
+async def test_processed_checkpoint_is_updated(distiller_env) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
 
@@ -345,7 +346,7 @@ async def test_processed_checkpoint_is_updated(distiller_env):
                 message_id="m1",
                 content=LONG_USER_PREFERENCE,
                 created_at=_base_time(),
-            )
+            ),
         ],
     )
 
@@ -356,7 +357,7 @@ async def test_processed_checkpoint_is_updated(distiller_env):
 
 
 @pytest.mark.asyncio
-async def test_restart_resumes_from_checkpoint(distiller_env):
+async def test_restart_resumes_from_checkpoint(distiller_env) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -393,7 +394,7 @@ async def test_restart_resumes_from_checkpoint(distiller_env):
 
 
 @pytest.mark.asyncio
-async def test_duplicate_memories_merge_instead_of_inserting_duplicates(distiller_env):
+async def test_duplicate_memories_merge_instead_of_inserting_duplicates(distiller_env) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -422,7 +423,7 @@ async def test_duplicate_memories_merge_instead_of_inserting_duplicates(distille
 
 
 @pytest.mark.asyncio
-async def test_archive_results_are_never_directly_injected_into_prompt(distiller_env):
+async def test_archive_results_are_never_directly_injected_into_prompt(distiller_env) -> None:
     distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -435,7 +436,7 @@ async def test_archive_results_are_never_directly_injected_into_prompt(distiller
                 message_id="m1",
                 content=raw_text,
                 created_at=_base_time(),
-            )
+            ),
         ],
     )
 
@@ -452,7 +453,7 @@ async def test_archive_results_are_never_directly_injected_into_prompt(distiller
 
 
 @pytest.mark.asyncio
-async def test_distiller_failure_does_not_break_normal_message_handling(distiller_env, monkeypatch):
+async def test_distiller_failure_does_not_break_normal_message_handling(distiller_env, monkeypatch) -> None:
     distiller = distiller_env["distiller"]
     archive_service = distiller_env["archive_service"]
     memory_service = distiller_env["memory_service"]
@@ -464,12 +465,13 @@ async def test_distiller_failure_does_not_break_normal_message_handling(distille
                 message_id="m1",
                 content=LONG_USER_PREFERENCE,
                 created_at=_base_time(),
-            )
+            ),
         ],
     )
 
-    def boom(_messages):
-        raise RuntimeError("distiller exploded")
+    def boom(_messages) -> Never:
+        msg = "distiller exploded"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(distiller, "_distill_window", boom)
     result = await distiller.run_once()

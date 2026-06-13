@@ -1,14 +1,13 @@
-"""
-Tests for empty-body messages with attachments and !speak/!say commands with empty input.
-"""
+"""Tests for empty-body messages with attachments and !speak/!say commands with empty input."""
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-import discord
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from bot.router import Router, ResponseMessage
+import discord
+import pytest
+
 from bot.command_parser import Command, ParsedCommand
+from bot.router import ResponseMessage, Router
 
 
 @pytest.fixture
@@ -38,7 +37,7 @@ def router(mock_bot):
 
 
 @pytest.mark.asyncio
-async def test_empty_dm_with_image_attachment(router, mock_bot):
+async def test_empty_dm_with_image_attachment(router, mock_bot) -> None:
     """Test that an empty DM with only an image attachment triggers VL processing."""
     # Create a mock message with empty content but with an image attachment
     message = MagicMock(spec=discord.Message)
@@ -76,7 +75,7 @@ async def test_empty_dm_with_image_attachment(router, mock_bot):
 
 
 @pytest.mark.asyncio
-async def test_speak_command_with_no_text_and_history(router, mock_bot):
+async def test_speak_command_with_no_text_and_history(router, mock_bot) -> None:
     """Test that !speak with no text falls back to previous message and returns audio."""
     from bot.commands.tts_cmds import TTSCommands
 
@@ -118,7 +117,7 @@ async def test_speak_command_with_no_text_and_history(router, mock_bot):
 
 
 @pytest.mark.asyncio
-async def test_speak_command_with_no_text_and_no_history(router, mock_bot):
+async def test_speak_command_with_no_text_and_no_history(router, mock_bot) -> None:
     """Test that !speak with no text and no message history returns an error embed."""
     from bot.commands.tts_cmds import TTSCommands
 
@@ -148,7 +147,7 @@ async def test_speak_command_with_no_text_and_no_history(router, mock_bot):
 
 
 @pytest.mark.asyncio
-async def test_missing_import_smoke_test():
+async def test_missing_import_smoke_test() -> None:
     """Test that the os module is properly imported in openai_backend.py."""
     import importlib.util
     import sys

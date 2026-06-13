@@ -13,9 +13,9 @@ import asyncio
 import json
 import sqlite3
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from bot.utils.logging import get_logger, redact_sensitive_values
 
@@ -26,7 +26,7 @@ _CONTENT_REDACTED_CHARS = 500
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def _make_content_redacted(text: str, max_chars: int = _CONTENT_REDACTED_CHARS) -> str:
@@ -41,7 +41,7 @@ def _to_json(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False, default=str)
 
 
-def _from_json(text: Optional[str]) -> Any:
+def _from_json(text: str | None) -> Any:
     if not text:
         return {} if text is not None else None
     try:
@@ -157,22 +157,22 @@ class MessageStore:
         discord_message_id: int,
         channel_id: int,
         content: str = "",
-        guild_id: Optional[int] = None,
-        channel_name: Optional[str] = None,
-        channel_type: Optional[str] = None,
-        author_id: Optional[int] = None,
-        author_username: Optional[str] = None,
-        author_display_name: Optional[str] = None,
-        author_avatar_url: Optional[str] = None,
+        guild_id: int | None = None,
+        channel_name: str | None = None,
+        channel_type: str | None = None,
+        author_id: int | None = None,
+        author_username: str | None = None,
+        author_display_name: str | None = None,
+        author_avatar_url: str | None = None,
         author_is_bot: bool = False,
         is_own_bot: bool = False,
         direction: str = "inbound",
-        created_at: Optional[str] = None,
-        edited_at: Optional[str] = None,
-        reply_to_message_id: Optional[int] = None,
-        attachments: Optional[list[dict[str, Any]]] = None,
-        embeds: Optional[list[dict[str, Any]]] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        created_at: str | None = None,
+        edited_at: str | None = None,
+        reply_to_message_id: int | None = None,
+        attachments: list[dict[str, Any]] | None = None,
+        embeds: list[dict[str, Any]] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Insert a message, returning True if inserted, False if duplicate."""
         await self.initialize()
@@ -204,19 +204,19 @@ class MessageStore:
         discord_message_id: str,
         channel_id: str,
         content: str,
-        guild_id: Optional[str],
-        channel_name: Optional[str],
-        channel_type: Optional[str],
-        author_id: Optional[str],
-        author_username: Optional[str],
-        author_display_name: Optional[str],
-        author_avatar_url: Optional[str],
+        guild_id: str | None,
+        channel_name: str | None,
+        channel_type: str | None,
+        author_id: str | None,
+        author_username: str | None,
+        author_display_name: str | None,
+        author_avatar_url: str | None,
         author_is_bot: int,
         is_own_bot: int,
         direction: str,
         created_at: str,
-        edited_at: Optional[str],
-        reply_to_message_id: Optional[str],
+        edited_at: str | None,
+        reply_to_message_id: str | None,
         attachments_json: str,
         embeds_json: str,
         metadata_json: str,
@@ -265,12 +265,12 @@ class MessageStore:
             finally:
                 conn.close()
 
-    async def get_message_by_discord_id(self, discord_message_id: int) -> Optional[dict[str, Any]]:
+    async def get_message_by_discord_id(self, discord_message_id: int) -> dict[str, Any] | None:
         """Retrieve a single message by its Discord message ID."""
         await self.initialize()
         return await asyncio.to_thread(self._get_message_by_discord_id_sync, str(discord_message_id))
 
-    def _get_message_by_discord_id_sync(self, discord_message_id: str) -> Optional[dict[str, Any]]:
+    def _get_message_by_discord_id_sync(self, discord_message_id: str) -> dict[str, Any] | None:
         with self._lock:
             conn = self._connect()
             try:
@@ -294,8 +294,8 @@ class MessageStore:
         page: int = 1,
         page_size: int = 50,
         max_page_size: int = 200,
-        before_id: Optional[int] = None,
-        after_id: Optional[int] = None,
+        before_id: int | None = None,
+        after_id: int | None = None,
     ) -> dict[str, Any]:
         """Get messages for a channel, newest first, with cursor-style pagination."""
         await self.initialize()
@@ -329,8 +329,8 @@ class MessageStore:
         channel_id: str,
         page_size: int,
         offset: int,
-        before_id: Optional[str] = None,
-        after_id: Optional[str] = None,
+        before_id: str | None = None,
+        after_id: str | None = None,
     ) -> tuple[list, int]:
         with self._lock:
             conn = self._connect()
@@ -353,7 +353,7 @@ class MessageStore:
 
                 rows = conn.execute(
                     f"SELECT * FROM messages WHERE {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?",  # nosec B608
-                    params + [page_size, offset],
+                    [*params, page_size, offset],
                 ).fetchall()
                 return rows, count
             finally:
@@ -365,9 +365,9 @@ class MessageStore:
         page: int = 1,
         page_size: int = 50,
         max_page_size: int = 200,
-        guild_id: Optional[int] = None,
-        channel_id: Optional[int] = None,
-        author_id: Optional[int] = None,
+        guild_id: int | None = None,
+        channel_id: int | None = None,
+        author_id: int | None = None,
     ) -> dict[str, Any]:
         """Simple LIKE-based search across message content."""
         await self.initialize()
@@ -402,9 +402,9 @@ class MessageStore:
         query: str,
         page_size: int,
         offset: int,
-        guild_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        author_id: Optional[str] = None,
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+        author_id: str | None = None,
     ) -> tuple[list, int]:
         with self._lock:
             conn = self._connect()
@@ -431,7 +431,7 @@ class MessageStore:
 
                 rows = conn.execute(
                     f"SELECT * FROM messages WHERE {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?",  # nosec B608
-                    params + [page_size, offset],
+                    [*params, page_size, offset],
                 ).fetchall()
                 return rows, count
             finally:
@@ -445,11 +445,11 @@ class MessageStore:
         self,
         dm_channel_id: int,
         user_id: int,
-        username: Optional[str] = None,
-        display_name: Optional[str] = None,
-        avatar_url: Optional[str] = None,
-        last_message_id: Optional[int] = None,
-        last_message_at: Optional[str] = None,
+        username: str | None = None,
+        display_name: str | None = None,
+        avatar_url: str | None = None,
+        last_message_id: int | None = None,
+        last_message_at: str | None = None,
         increment_count: bool = True,
     ) -> None:
         """Upsert a DM thread entry, optionally incrementing message_count."""
@@ -470,10 +470,10 @@ class MessageStore:
         self,
         dm_channel_id: str,
         user_id: str,
-        username: Optional[str],
-        display_name: Optional[str],
-        avatar_url: Optional[str],
-        last_message_id: Optional[str],
+        username: str | None,
+        display_name: str | None,
+        avatar_url: str | None,
+        last_message_id: str | None,
         last_message_at: str,
         increment_count: bool,
     ) -> None:
@@ -536,7 +536,7 @@ class MessageStore:
                     "last_message_id": row["last_message_id"],
                     "last_message_at": row["last_message_at"],
                     "message_count": row["message_count"],
-                }
+                },
             )
 
         total_pages = max(1, (total + page_size - 1) // page_size)
@@ -622,7 +622,7 @@ class MessageStore:
     async def cleanup_retention(self) -> int:
         """Soft-delete messages older than retention period. Returns count."""
         await self.initialize()
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=self._retention_days)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        cutoff = (datetime.now(UTC) - timedelta(days=self._retention_days)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         return await asyncio.to_thread(self._cleanup_sync, cutoff)
 
     def _cleanup_sync(self, cutoff: str) -> int:

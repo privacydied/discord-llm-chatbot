@@ -1,11 +1,10 @@
-"""
-Test script to verify the fixed TTS pipeline.
+"""Test script to verify the fixed TTS pipeline.
 Marked as integration — requires TTS binaries (espeak-ng, Kokoro ONNX).
 """
 
+import importlib
 import os
 import sys
-import importlib
 from pathlib import Path
 
 import pytest
@@ -19,12 +18,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
     not os.getenv("TTS_MODEL_PATH"),
     reason="TTS_MODEL_PATH not set; skipping TTS integration test",
 )
-def test_tts_pipeline():
+def test_tts_pipeline() -> None:
     """Test the TTS pipeline with the fixed KokoroDirect class."""
-    KokoroDirect = getattr(
-        importlib.import_module("bot.tts.kokoro_direct"),
-        "KokoroDirect",
-    )
+    KokoroDirect = importlib.import_module("bot.tts.kokoro_direct").KokoroDirect
 
     model_path = os.environ.get("TTS_MODEL_PATH", "tts/onnx/kokoro-v1.0.onnx")
     voices_path = os.environ.get("TTS_VOICES_PATH", "tts/voices/voices-v1.0.bin")

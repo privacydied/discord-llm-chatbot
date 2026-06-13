@@ -1,9 +1,11 @@
 import asyncio
 import types
+from typing import Never
+
 import pytest
 
 from bot.router import Router
-from bot.search.types import SearchResult, SearchCategory
+from bot.search.types import SearchCategory, SearchResult
 
 
 class FakeProvider:
@@ -20,23 +22,23 @@ class FakeProvider:
 
 
 class FakeContextManager:
-    async def get_context_string(self, message):
+    async def get_context_string(self, message) -> str:
         return ""
 
 
 class FakeMetrics:
-    def __init__(self):
+    def __init__(self) -> None:
         self.calls = []
 
-    def increment(self, name, labels=None, value=1):
+    def increment(self, name, labels=None, value=1) -> None:
         self.calls.append(("increment", name, labels or {}, value))
 
-    def inc(self, name, value=1, labels=None):
+    def inc(self, name, value=1, labels=None) -> None:
         self.calls.append(("inc", name, labels or {}, value))
 
 
 class CapturingProvider:
-    def __init__(self, results=None):
+    def __init__(self, results=None) -> None:
         self.calls = []
         self._results = results or [
             SearchResult(title="Result One", url="https://example.com/1", snippet="First snippet"),
@@ -53,7 +55,7 @@ class CapturingProvider:
 
 
 class FakeBot:
-    def __init__(self):
+    def __init__(self) -> None:
         self.config = {
             "SEARCH_PROVIDER": "ddg",
             "SEARCH_MAX_RESULTS": 3,
@@ -68,14 +70,14 @@ class FakeBot:
 
 
 class FakeMessage:
-    def __init__(self, content: str):
+    def __init__(self, content: str) -> None:
         self.id = 42
         self.content = content
         self.mentions = []
 
 
 @pytest.mark.asyncio
-async def test_extract_inline_search_queries():
+async def test_extract_inline_search_queries() -> None:
     bot = FakeBot()
     r = Router(bot)
     text = "Please [search(hello world)] and also [search(another query)] thanks."
@@ -86,11 +88,11 @@ async def test_extract_inline_search_queries():
 
 
 @pytest.mark.asyncio
-async def test_resolve_inline_searches_replaces_with_results(monkeypatch):
+async def test_resolve_inline_searches_replaces_with_results(monkeypatch) -> None:
     # Monkeypatch the provider factory to return our fake provider
     import bot.router as router_mod
 
-    monkeypatch.setattr(router_mod, "get_search_provider", lambda: FakeProvider())
+    monkeypatch.setattr(router_mod, "get_search_provider", FakeProvider)
 
     bot = FakeBot()
     r = Router(bot)
@@ -104,7 +106,7 @@ async def test_resolve_inline_searches_replaces_with_results(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_extract_inline_search_queries_with_category_and_commas():
+async def test_extract_inline_search_queries_with_category_and_commas() -> None:
     bot = FakeBot()
     r = Router(bot)
     text = "A [search(what, is, love, images)] B [search(latest ai, NEWS)] C [search(simple, video)] D [search(a, b, unknowncat)]"
@@ -133,7 +135,7 @@ async def test_extract_inline_search_queries_with_category_and_commas():
 
 
 @pytest.mark.asyncio
-async def test_resolve_inline_searches_passes_category_to_provider(monkeypatch):
+async def test_resolve_inline_searches_passes_category_to_provider(monkeypatch) -> None:
     import bot.router as router_mod
 
     provider = CapturingProvider()
@@ -147,17 +149,17 @@ async def test_resolve_inline_searches_passes_category_to_provider(monkeypatch):
     await r._resolve_inline_searches(msg1.content, msg1)
     assert len(provider.calls) >= 1
     p1 = provider.calls[-1]
-    assert getattr(p1, "category") == SearchCategory.IMAGES
+    assert p1.category == SearchCategory.IMAGES
 
     # Without category -> defaults to TEXT in SearchQueryParams
     msg2 = FakeMessage("[search(another query)]")
     await r._resolve_inline_searches(msg2.content, msg2)
     p2 = provider.calls[-1]
-    assert getattr(p2, "category") == SearchCategory.TEXT
+    assert p2.category == SearchCategory.TEXT
 
 
 @pytest.mark.asyncio
-async def test_inline_search_metrics_labels_include_category_success(monkeypatch):
+async def test_inline_search_metrics_labels_include_category_success(monkeypatch) -> None:
     import bot.router as router_mod
 
     metrics = FakeMetrics()
@@ -186,15 +188,16 @@ async def test_inline_search_metrics_labels_include_category_success(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_inline_search_metrics_labels_include_category_error(monkeypatch):
+async def test_inline_search_metrics_labels_include_category_error(monkeypatch) -> None:
     import bot.router as router_mod
 
     class ErroringProvider:
-        async def search(self, params):
-            raise RuntimeError("boom")
+        async def search(self, params) -> Never:
+            msg_0 = "boom"
+            raise RuntimeError(msg_0)
 
     metrics = FakeMetrics()
-    monkeypatch.setattr(router_mod, "get_search_provider", lambda: ErroringProvider())
+    monkeypatch.setattr(router_mod, "get_search_provider", ErroringProvider)
 
     bot = FakeBot()
     bot.metrics = metrics
@@ -213,7 +216,7 @@ async def test_inline_search_metrics_labels_include_category_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_resolve_inline_searches_no_directives_returns_same_text():
+async def test_resolve_inline_searches_no_directives_returns_same_text() -> None:
     bot = FakeBot()
     r = Router(bot)
     msg = FakeMessage("No directives here.")

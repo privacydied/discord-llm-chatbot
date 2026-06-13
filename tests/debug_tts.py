@@ -1,11 +1,9 @@
 #!/usr/bin/env python
-"""
-Debug script to diagnose TTS initialization issues.
-"""
+"""Debug script to diagnose TTS initialization issues."""
 
+import logging
 import os
 import sys
-import logging
 from pathlib import Path
 
 # Configure logging
@@ -18,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger("debug_tts")
 
 
-def check_file_exists(file_path):
+def check_file_exists(file_path) -> bool:
     """Check if a file exists and log details about it."""
     path = Path(file_path)
     logger.info(f"Checking file: {path}")
@@ -28,22 +26,21 @@ def check_file_exists(file_path):
         logger.info(f"  - Size: {path.stat().st_size} bytes")
         logger.info(f"  - Absolute path: {path.absolute()}")
         return True
+    logger.error(f"❌ File does not exist: {path}")
+    # Check parent directory
+    parent = path.parent
+    if parent.exists():
+        logger.info(f"  - Parent directory exists: {parent}")
+        # List files in parent directory
+        logger.info("  - Files in parent directory:")
+        for item in parent.iterdir():
+            logger.info(f"    - {item.name} ({'dir' if item.is_dir() else 'file'})")
     else:
-        logger.error(f"❌ File does not exist: {path}")
-        # Check parent directory
-        parent = path.parent
-        if parent.exists():
-            logger.info(f"  - Parent directory exists: {parent}")
-            # List files in parent directory
-            logger.info("  - Files in parent directory:")
-            for item in parent.iterdir():
-                logger.info(f"    - {item.name} ({'dir' if item.is_dir() else 'file'})")
-        else:
-            logger.error(f"  - Parent directory does not exist: {parent}")
-        return False
+        logger.error(f"  - Parent directory does not exist: {parent}")
+    return False
 
 
-def main():
+def main() -> int:
     """Main debug function."""
     logger.info("Starting TTS debug script")
 

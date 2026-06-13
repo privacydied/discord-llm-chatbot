@@ -1,15 +1,16 @@
 import json
-import pytest
 from unittest.mock import AsyncMock
 from urllib.parse import quote
 
-from bot.router import Router, XApiClient
-from bot.modality import InputItem
+import pytest
+
 from bot.exceptions import InferenceError
+from bot.modality import InputItem
+from bot.router import Router, XApiClient
 
 
 class DummyBot:
-    def __init__(self):
+    def __init__(self) -> None:
         # Minimal config enabling X API path
         self.config = {
             "X_API_ENABLED": True,
@@ -22,7 +23,7 @@ class DummyBot:
 
 
 @pytest.mark.asyncio
-async def test_x_api_routes_video_to_stt(monkeypatch):
+async def test_x_api_routes_video_to_stt(monkeypatch) -> None:
     bot = DummyBot()
     router = Router(bot)
 
@@ -62,7 +63,7 @@ async def test_x_api_routes_video_to_stt(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_x_api_photo_only_formats_text(monkeypatch):
+async def test_x_api_photo_only_formats_text(monkeypatch) -> None:
     bot = DummyBot()
     router = Router(bot)
 
@@ -94,7 +95,7 @@ async def test_x_api_photo_only_formats_text(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_x_api_text_only_formats_default(monkeypatch):
+async def test_x_api_text_only_formats_default(monkeypatch) -> None:
     bot = DummyBot()
     router = Router(bot)
 
@@ -124,7 +125,7 @@ async def test_x_api_text_only_formats_default(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_x_api_photo_only_routes_to_vl_when_enabled(monkeypatch):
+async def test_x_api_photo_only_routes_to_vl_when_enabled(monkeypatch) -> None:
     bot = DummyBot()
     # Enable photo->VL routing
     bot.config["X_API_ROUTE_PHOTOS_TO_VL"] = True
@@ -159,8 +160,8 @@ async def test_x_api_photo_only_routes_to_vl_when_enabled(monkeypatch):
     monkeypatch.setattr(Router, "_get_x_api_client", _get_client)
 
     # Avoid real network/vision by mocking the helper
-    async def _fake_vl(self, image_url: str, *, prompt=None, model_override=None):
-        return f"desc for {image_url.split('/')[-1]}"
+    async def _fake_vl(self, image_url: str, *, prompt=None, model_override=None) -> str:
+        return f"desc for {image_url.rsplit('/', maxsplit=1)[-1]}"
 
     monkeypatch.setattr(Router, "_vl_describe_image_from_url", _fake_vl, raising=True)
 
@@ -168,12 +169,14 @@ async def test_x_api_photo_only_routes_to_vl_when_enabled(monkeypatch):
     res = await router._handle_general_url(item)
 
     assert "Photos analyzed: 2/2" in res
-    assert "📷 Photo 1/2" in res and "📷 Photo 2/2" in res
-    assert "desc for p1.jpg" in res and "desc for p2.jpg" in res
+    assert "📷 Photo 1/2" in res
+    assert "📷 Photo 2/2" in res
+    assert "desc for p1.jpg" in res
+    assert "desc for p2.jpg" in res
 
 
 @pytest.mark.asyncio
-async def test_sparse_syndication_defers_to_api_video_stt(monkeypatch):
+async def test_sparse_syndication_defers_to_api_video_stt(monkeypatch) -> None:
     bot = DummyBot()
     router = Router(bot)
 
@@ -205,7 +208,7 @@ async def test_sparse_syndication_defers_to_api_video_stt(monkeypatch):
     stt_mock = AsyncMock(return_value={"transcription": "hello world"})
     monkeypatch.setattr(router_mod, "hear_infer_from_url", stt_mock)
 
-    def _fmt(_self, base_text, url, stt_res):
+    def _fmt(_self, base_text, url, stt_res) -> str:
         return f"STT:{(stt_res or {}).get('transcription', '')}"
 
     monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
@@ -220,7 +223,7 @@ async def test_sparse_syndication_defers_to_api_video_stt(monkeypatch):
 @pytest.mark.asyncio
 async def test_video_url_inference_error_degrades_to_caption_only_with_resolved_base_text(
     monkeypatch,
-):
+) -> None:
     bot = DummyBot()
     router = Router(bot)
 
@@ -229,10 +232,10 @@ async def test_video_url_inference_error_degrades_to_caption_only_with_resolved_
     stt_mock = AsyncMock(side_effect=InferenceError("boom"))
     monkeypatch.setattr(router_mod, "hear_infer_from_url", stt_mock)
 
-    async def _fake_resolve_base(_self, _url):
+    async def _fake_resolve_base(_self, _url) -> str:
         return "base text"
 
-    def _fmt(_self, base_text, url, stt_res):
+    def _fmt(_self, base_text, url, stt_res) -> str:
         return f"FMT:{base_text}|{(stt_res or {}).get('transcription', '')}"
 
     monkeypatch.setattr(Router, "_resolve_x_base_text_for_url", _fake_resolve_base)
@@ -248,7 +251,7 @@ async def test_video_url_inference_error_degrades_to_caption_only_with_resolved_
 @pytest.mark.asyncio
 async def test_sparse_syndication_without_api_uses_direct_media_probe_for_stt(
     monkeypatch,
-):
+) -> None:
     bot = DummyBot()
     bot.config["X_API_ENABLED"] = False
     bot.system_prompts = {"vl_prompt": None}
@@ -261,7 +264,7 @@ async def test_sparse_syndication_without_api_uses_direct_media_probe_for_stt(
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _fake_syn)
 
-    async def _fake_get_client(_self):
+    async def _fake_get_client(_self) -> None:
         return None
 
     monkeypatch.setattr(Router, "_get_x_api_client", _fake_get_client)
@@ -276,7 +279,7 @@ async def test_sparse_syndication_without_api_uses_direct_media_probe_for_stt(
     stt_mock = AsyncMock(return_value={"transcription": "hello world"})
     monkeypatch.setattr(router_mod, "hear_infer_from_url", stt_mock)
 
-    def _fmt(_self, base_text, url, stt_res):
+    def _fmt(_self, base_text, url, stt_res) -> str:
         return f"STT:{(stt_res or {}).get('transcription', '')}"
 
     monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
@@ -291,7 +294,7 @@ async def test_sparse_syndication_without_api_uses_direct_media_probe_for_stt(
 @pytest.mark.asyncio
 async def test_sparse_syndication_without_api_uses_direct_media_probe_for_images(
     monkeypatch,
-):
+) -> None:
     bot = DummyBot()
     bot.config["X_API_ENABLED"] = False
     bot.system_prompts = {"vl_prompt": None}
@@ -304,7 +307,7 @@ async def test_sparse_syndication_without_api_uses_direct_media_probe_for_images
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _fake_syn)
 
-    async def _fake_get_client(_self):
+    async def _fake_get_client(_self) -> None:
         return None
 
     monkeypatch.setattr(Router, "_get_x_api_client", _fake_get_client)
@@ -319,7 +322,7 @@ async def test_sparse_syndication_without_api_uses_direct_media_probe_for_images
     monkeypatch.setattr(Router, "_resolve_x_media", _fake_resolve)
     import bot.syndication.handler as syn_handler_mod
 
-    async def _fake_syn_handler(syn_data, url, vl_handler, vl_prompt=None, reply_style="ack+thoughts"):
+    async def _fake_syn_handler(syn_data, url, vl_handler, vl_prompt=None, reply_style="ack+thoughts") -> str:
         assert len((syn_data or {}).get("photos") or []) == 1
         return "VL_OK_SPARSE_IMAGE"
 
@@ -337,7 +340,7 @@ async def test_sparse_syndication_without_api_uses_direct_media_probe_for_images
 
 
 @pytest.mark.asyncio
-async def test_sparse_syndication_unknown_forces_stt_before_text_fallback(monkeypatch):
+async def test_sparse_syndication_unknown_forces_stt_before_text_fallback(monkeypatch) -> None:
     bot = DummyBot()
     bot.config["X_API_ENABLED"] = False
     bot.system_prompts = {"vl_prompt": None}
@@ -350,7 +353,7 @@ async def test_sparse_syndication_unknown_forces_stt_before_text_fallback(monkey
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _fake_syn)
 
-    async def _fake_get_client(_self):
+    async def _fake_get_client(_self) -> None:
         return None
 
     monkeypatch.setattr(Router, "_get_x_api_client", _fake_get_client)
@@ -365,7 +368,7 @@ async def test_sparse_syndication_unknown_forces_stt_before_text_fallback(monkey
     stt_mock = AsyncMock(return_value={"transcription": "forced hello world"})
     monkeypatch.setattr(router_mod, "hear_infer_from_url", stt_mock)
 
-    def _fmt(_self, base_text, url, stt_res):
+    def _fmt(_self, base_text, url, stt_res) -> str:
         return f"STT:{(stt_res or {}).get('transcription', '')}"
 
     monkeypatch.setattr(Router, "_format_x_tweet_with_transcription", _fmt)
@@ -378,7 +381,7 @@ async def test_sparse_syndication_unknown_forces_stt_before_text_fallback(monkey
 
 
 @pytest.mark.asyncio
-async def test_sparse_syndication_tco_article_resolves_to_text(monkeypatch):
+async def test_sparse_syndication_tco_article_resolves_to_text(monkeypatch) -> None:
     bot = DummyBot()
     bot.config["X_API_ENABLED"] = False
     bot.system_prompts = {"vl_prompt": None}
@@ -391,7 +394,7 @@ async def test_sparse_syndication_tco_article_resolves_to_text(monkeypatch):
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _fake_syn)
 
-    async def _fake_get_client(_self):
+    async def _fake_get_client(_self) -> None:
         return None
 
     monkeypatch.setattr(Router, "_get_x_api_client", _fake_get_client)
@@ -402,7 +405,7 @@ async def test_sparse_syndication_tco_article_resolves_to_text(monkeypatch):
             "title": "The TESTOSTERONE Kabbalah",
             "preview_text": "They control everything.",
             "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
-        }
+        },
     )
     monkeypatch.setattr(Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True)
 
@@ -432,7 +435,7 @@ async def test_sparse_syndication_tco_article_resolves_to_text(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fetch_x_article_from_fxtwitter_parses_article_payload(monkeypatch):
+async def test_fetch_x_article_from_fxtwitter_parses_article_payload(monkeypatch) -> None:
     bot = DummyBot()
     router = Router(bot)
 
@@ -451,10 +454,10 @@ async def test_fetch_x_article_from_fxtwitter_parses_article_payload(monkeypatch
                             "blocks": [
                                 {"type": "header-two", "text": "Section A"},
                                 {"type": "unstyled", "text": "Section B"},
-                            ]
+                            ],
                         },
-                    }
-                }
+                    },
+                },
             }
 
     class DummyHttp:
@@ -479,7 +482,7 @@ async def test_fetch_x_article_from_fxtwitter_parses_article_payload(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_hydrate_syndication_article_merges_full_article_blocks(monkeypatch):
+async def test_hydrate_syndication_article_merges_full_article_blocks(monkeypatch) -> None:
     bot = DummyBot()
     router = Router(bot)
 
@@ -498,9 +501,9 @@ async def test_hydrate_syndication_article_merges_full_article_blocks(monkeypatc
                         "type": "unstyled",
                         "text": "Hormonal signaling under chronic stress.",
                     },
-                ]
+                ],
             },
-        }
+        },
     )
     monkeypatch.setattr(Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True)
 
@@ -522,7 +525,7 @@ async def test_hydrate_syndication_article_merges_full_article_blocks(monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch):
+async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch) -> None:
     bot = DummyBot()
     bot.config["X_API_ENABLED"] = False
     bot.system_prompts = {"vl_prompt": None}
@@ -544,7 +547,7 @@ async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch
 
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _fake_syn)
 
-    async def _fake_get_client(_self):
+    async def _fake_get_client(_self) -> None:
         return None
 
     monkeypatch.setattr(Router, "_get_x_api_client", _fake_get_client)
@@ -555,7 +558,7 @@ async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch
             "title": "The TESTOSTERONE Kabbalah",
             "preview_text": "They control everything.",
             "content": {"blocks": [{"text": "Cellular energy production and metabolism."}]},
-        }
+        },
     )
     monkeypatch.setattr(Router, "_fetch_x_article_from_fxtwitter", article_mock, raising=True)
 
@@ -571,7 +574,7 @@ async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch
     captured = {}
     import bot.syndication.handler as syn_handler_mod
 
-    async def _fake_syn_handler(syn_data, url, vl_handler, vl_prompt=None, reply_style="ack+thoughts"):
+    async def _fake_syn_handler(syn_data, url, vl_handler, vl_prompt=None, reply_style="ack+thoughts") -> str:
         captured["text"] = (syn_data or {}).get("text", "")
         return "VL_OK_SPARSE_IMAGE_ARTICLE"
 
@@ -592,7 +595,7 @@ async def test_sparse_image_probe_passes_hydrated_article_text_to_vl(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_resolve_x_media_unwraps_fx_proxy(monkeypatch):
+async def test_resolve_x_media_unwraps_fx_proxy(monkeypatch) -> None:
     bot = DummyBot()
     router = Router(bot)
 
@@ -600,7 +603,7 @@ async def test_resolve_x_media_unwraps_fx_proxy(monkeypatch):
     wrapped_url = f"https://api.fxtwitter.com/2/go?url={quote(target_url, safe='')}"
 
     class DummyResp:
-        def __init__(self, status_code, data):
+        def __init__(self, status_code, data) -> None:
             self.status_code = status_code
             self._data = data
             self.text = json.dumps(data)
@@ -623,12 +626,12 @@ async def test_resolve_x_media_unwraps_fx_proxy(monkeypatch):
                                             "url": wrapped_url,
                                             "content_type": "video/mp4",
                                             "bitrate": 832000,
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    }
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    },
                 }
                 return DummyResp(200, data)
             return DummyResp(404, {})

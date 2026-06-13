@@ -1,14 +1,13 @@
-"""
-Utility functions for the Discord bot.
-"""
+"""Utility functions for the Discord bot."""
 
-import re
-import os
-import mimetypes
-from typing import Optional, List, Tuple, Any, Union
-from pathlib import Path
-import aiohttp
 import logging
+import mimetypes
+import os
+import re
+from pathlib import Path
+from typing import Any
+
+import aiohttp
 
 # Import config
 
@@ -25,12 +24,11 @@ def clean_response(text: str) -> str:
     text = re.sub(r"\n{3,}", "\n\n", text)
 
     # Strip whitespace
-    text = text.strip()
-
-    return text
+    return text.strip()
 
 
-def is_text_file(file_path: Union[str, Path]) -> bool:
+
+def is_text_file(file_path: str | Path) -> bool:
     """Check if a file is a text file based on its extension and content type."""
     if isinstance(file_path, str):
         file_path = Path(file_path)
@@ -73,13 +71,12 @@ def is_text_file(file_path: Union[str, Path]) -> bool:
                 return False
 
         return True
-    except (IOError, UnicodeDecodeError):
+    except (OSError, UnicodeDecodeError):
         return False
 
 
-async def send_in_chunks(channel, text: str, reference=None, chunk_size: int = 2000) -> List[Any]:
-    """
-    Send a long message in chunks to avoid Discord's 2000 character limit.
+async def send_in_chunks(channel, text: str, reference=None, chunk_size: int = 2000) -> list[Any]:
+    """Send a long message in chunks to avoid Discord's 2000 character limit.
 
     Args:
         channel: The Discord channel to send the message to
@@ -89,6 +86,7 @@ async def send_in_chunks(channel, text: str, reference=None, chunk_size: int = 2
 
     Returns:
         List of sent message objects
+
     """
     if not text:
         return []
@@ -162,7 +160,7 @@ async def send_in_chunks(channel, text: str, reference=None, chunk_size: int = 2
                 msg = await channel.send(chunk)
             sent_messages.append(msg)
         except Exception as e:
-            logging.error(f"Error sending message chunk {i + 1}/{len(final_chunks)}: {e}")
+            logging.exception(f"Error sending message chunk {i + 1}/{len(final_chunks)}: {e}")
 
     return sent_messages
 
@@ -171,12 +169,12 @@ async def send_in_chunks(channel, text: str, reference=None, chunk_size: int = 2
 send_chunks = send_in_chunks
 
 
-def extract_mentions(text: str) -> List[Tuple[str, str]]:
-    """
-    Extract user and role mentions from text.
+def extract_mentions(text: str) -> list[tuple[str, str]]:
+    """Extract user and role mentions from text.
 
     Returns:
         List of tuples (mention_type, mention_id)
+
     """
     # User mentions: <@1234567890> or <@!1234567890>
     user_mentions = re.findall(r"<@!?(\d+)>", text)
@@ -185,9 +183,8 @@ def extract_mentions(text: str) -> List[Tuple[str, str]]:
     role_mentions = re.findall(r"<@&(\d+)>", text)
 
     # Format as (type, id) tuples
-    mentions = [("user", uid) for uid in user_mentions] + [("role", rid) for rid in role_mentions]
+    return [("user", uid) for uid in user_mentions] + [("role", rid) for rid in role_mentions]
 
-    return mentions
 
 
 def format_duration(seconds: int) -> str:
@@ -253,9 +250,8 @@ def is_document_file(filename: str) -> bool:
     return get_file_extension(filename) in doc_extensions
 
 
-async def download_file(url: str, save_path: Path, session: Optional[aiohttp.ClientSession] = None) -> bool:
-    """
-    Download a file from a URL and save it to the specified path.
+async def download_file(url: str, save_path: Path, session: aiohttp.ClientSession | None = None) -> bool:
+    """Download a file from a URL and save it to the specified path.
 
     Args:
         url: URL of the file to download
@@ -264,6 +260,7 @@ async def download_file(url: str, save_path: Path, session: Optional[aiohttp.Cli
 
     Returns:
         bool: True if download was successful, False otherwise
+
     """
     close_session = False
     if session is None:
@@ -289,7 +286,7 @@ async def download_file(url: str, save_path: Path, session: Optional[aiohttp.Cli
 
             return True
     except Exception as e:
-        logging.error(f"Error downloading {url}: {e}")
+        logging.exception(f"Error downloading {url}: {e}")
         return False
     finally:
         if close_session and not session.closed:

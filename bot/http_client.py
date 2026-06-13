@@ -1,5 +1,4 @@
-"""
-Shared async HTTP/2 client with optimized pools and DNS cache. [PA][RM]
+"""Shared async HTTP/2 client with optimized pools and DNS cache. [PA][RM].
 
 This module provides a singleton HTTP client optimized for the router's networking needs:
 - HTTP/2 support where safe
@@ -22,10 +21,11 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional, Any, Tuple
+from typing import Any
 from urllib.parse import urlparse
+
 import httpx
-from httpx import AsyncClient, Response, RequestError, HTTPStatusError, TimeoutException
+from httpx import AsyncClient, HTTPStatusError, RequestError, Response, TimeoutException
 
 from .utils.logging import get_logger
 
@@ -34,7 +34,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class RequestConfig:
-    """Configuration for individual HTTP requests. [CMV]"""
+    """Configuration for individual HTTP requests. [CMV]."""
 
     connect_timeout: float = 1.5  # seconds
     read_timeout: float = 5.0  # seconds
@@ -49,7 +49,7 @@ class RequestConfig:
 
 @dataclass
 class HostLimits:
-    """Per-host concurrency and circuit breaker limits. [REH]"""
+    """Per-host concurrency and circuit breaker limits. [REH]."""
 
     max_concurrent: int = 4
     circuit_breaker_failures: int = 5
@@ -59,7 +59,7 @@ class HostLimits:
 
 @dataclass
 class ClientMetrics:
-    """HTTP client metrics for monitoring. [PA]"""
+    """HTTP client metrics for monitoring. [PA]."""
 
     requests_total: int = 0
     requests_success: int = 0
@@ -73,9 +73,9 @@ class ClientMetrics:
 
 
 class CircuitBreaker:
-    """Simple circuit breaker for failing hosts. [REH]"""
+    """Simple circuit breaker for failing hosts. [REH]."""
 
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 15.0):
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 15.0) -> None:
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.failure_count = 0
@@ -88,13 +88,13 @@ class CircuitBreaker:
 
         if self.state == "CLOSED":
             return True
-        elif self.state == "OPEN":
+        if self.state == "OPEN":
             if now - self.last_failure_time > self.recovery_timeout:
                 self.state = "HALF_OPEN"
                 return True
             return False
-        else:  # HALF_OPEN
-            return True
+        # HALF_OPEN
+        return True
 
     def record_success(self) -> None:
         """Record a successful request."""
@@ -113,21 +113,21 @@ class CircuitBreaker:
 
 
 class SharedHttpClient:
-    """Shared async HTTP client with optimizations. [PA][RM]"""
+    """Shared async HTTP client with optimizations. [PA][RM]."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize shared HTTP client with configuration."""
         self.config = config or {}
-        self.client: Optional[AsyncClient] = None
+        self.client: AsyncClient | None = None
         self.metrics = ClientMetrics()
 
         # Per-host state tracking
-        self.host_semaphores: Dict[str, asyncio.Semaphore] = {}
-        self.host_circuit_breakers: Dict[str, CircuitBreaker] = {}
-        self.host_limits: Dict[str, HostLimits] = {}
+        self.host_semaphores: dict[str, asyncio.Semaphore] = {}
+        self.host_circuit_breakers: dict[str, CircuitBreaker] = {}
+        self.host_limits: dict[str, HostLimits] = {}
 
         # DNS cache (simple in-memory)
-        self.dns_cache: Dict[str, Tuple[str, float]] = {}  # host -> (ip, expire_time)
+        self.dns_cache: dict[str, tuple[str, float]] = {}  # host -> (ip, expire_time)
         self.dns_cache_ttl = float(self.config.get("HTTP_DNS_CACHE_TTL_S", 300))
 
         # Default request configuration
@@ -209,28 +209,28 @@ class SharedHttpClient:
             logger.info("🛑 SharedHttpClient stopped")
 
     def _get_host_semaphore(self, host: str) -> asyncio.Semaphore:
-        """Get or create per-host concurrency semaphore. [RM]"""
+        """Get or create per-host concurrency semaphore. [RM]."""
         if host not in self.host_semaphores:
             limits = self.host_limits.get(host, HostLimits())
             self.host_semaphores[host] = asyncio.Semaphore(limits.max_concurrent)
         return self.host_semaphores[host]
 
     def _get_circuit_breaker(self, host: str) -> CircuitBreaker:
-        """Get or create per-host circuit breaker. [REH]"""
+        """Get or create per-host circuit breaker. [REH]."""
         if host not in self.host_circuit_breakers:
             limits = self.host_limits.get(host, HostLimits())
             self.host_circuit_breakers[host] = CircuitBreaker(limits.circuit_breaker_failures, limits.circuit_breaker_cooldown)
         return self.host_circuit_breakers[host]
 
     async def _wait_with_jitter(self, delay: float) -> None:
-        """Wait with jitter to avoid thundering herds. [REH]"""
+        """Wait with jitter to avoid thundering herds. [REH]."""
         import random
 
-        jitter = random.uniform(0.1, 0.3) * delay
+        jitter = random.uniform(0.1, 0.3) * delay  # nosec B311
         await asyncio.sleep(delay + jitter)
 
-    async def request(self, method: str, url: str, config: Optional[RequestConfig] = None, **kwargs) -> Response:
-        """Make HTTP request with retries and circuit breaker. [REH][PA]"""
+    async def request(self, method: str, url: str, config: RequestConfig | None = None, **kwargs) -> Response:
+        """Make HTTP request with retries and circuit breaker. [REH][PA]."""
         if self.client is None:
             await self.start()
 
@@ -242,7 +242,8 @@ class SharedHttpClient:
         circuit_breaker = self._get_circuit_breaker(host)
         if not circuit_breaker.can_request():
             self.metrics.circuit_breaker_trips += 1
-            raise httpx.RequestError(f"Circuit breaker OPEN for {host}")
+            msg = f"Circuit breaker OPEN for {host}"
+            raise httpx.RequestError(msg)
 
         # Get per-host semaphore for concurrency control
         semaphore = self._get_host_semaphore(host)
@@ -272,16 +273,16 @@ class SharedHttpClient:
                     if response.status_code >= 400:
                         if response.status_code >= 500:
                             # Server error - retryable
+                            msg = f"HTTP {response.status_code}"
                             raise HTTPStatusError(
-                                f"HTTP {response.status_code}",
+                                msg,
                                 request=response.request,
                                 response=response,
                             )
-                        else:
-                            # Client error - not retryable
-                            circuit_breaker.record_success()
-                            self.metrics.requests_success += 1
-                            return response
+                        # Client error - not retryable
+                        circuit_breaker.record_success()
+                        self.metrics.requests_success += 1
+                        return response
 
                     # Success
                     circuit_breaker.record_success()
@@ -339,9 +340,9 @@ class SharedHttpClient:
                         logger.info("🌐 HTTP/2 unavailable at runtime; switched to HTTP/1.1 and retrying")
                         # Try again immediately without backoff for this specific condition
                         continue
-                    except Exception:
+                    except Exception as e:
                         # If recreation fails, fall through to normal retry/backoff
-                        pass
+                        logger.debug(f"Failed to recreate HTTP/1.1 client: {e}")
 
                 # Don't retry on the last attempt
                 if attempt == config.max_retries:
@@ -373,15 +374,15 @@ class SharedHttpClient:
         logger.error(f"❌ HTTP request failed after {config.max_retries + 1} attempts: {last_exception}")
         raise last_exception
 
-    async def get(self, url: str, config: Optional[RequestConfig] = None, **kwargs) -> Response:
+    async def get(self, url: str, config: RequestConfig | None = None, **kwargs) -> Response:
         """Make GET request."""
         return await self.request("GET", url, config, **kwargs)
 
-    async def post(self, url: str, config: Optional[RequestConfig] = None, **kwargs) -> Response:
+    async def post(self, url: str, config: RequestConfig | None = None, **kwargs) -> Response:
         """Make POST request."""
         return await self.request("POST", url, config, **kwargs)
 
-    async def head(self, url: str, config: Optional[RequestConfig] = None, **kwargs) -> Response:
+    async def head(self, url: str, config: RequestConfig | None = None, **kwargs) -> Response:
         """Make HEAD request."""
         return await self.request("HEAD", url, config, **kwargs)
 
@@ -390,17 +391,17 @@ class SharedHttpClient:
         return self.metrics
 
     def set_host_limits(self, host: str, limits: HostLimits) -> None:
-        """Configure per-host limits. [CMV]"""
+        """Configure per-host limits. [CMV]."""
         self.host_limits[host] = limits
         logger.info(f"🔧 Set limits for {host}: max_concurrent={limits.max_concurrent}")
 
 
 # Global singleton instance
-_http_client_instance: Optional[SharedHttpClient] = None
+_http_client_instance: SharedHttpClient | None = None
 
 
-async def get_http_client(config: Optional[Dict[str, Any]] = None) -> SharedHttpClient:
-    """Get or create the shared HTTP client instance. [CA]"""
+async def get_http_client(config: dict[str, Any] | None = None) -> SharedHttpClient:
+    """Get or create the shared HTTP client instance. [CA]."""
     global _http_client_instance
 
     if _http_client_instance is None:
@@ -420,6 +421,6 @@ async def cleanup_http_client() -> None:
 
 
 def configure_host_limits(host: str, limits: HostLimits) -> None:
-    """Configure limits for a specific host. [CMV]"""
+    """Configure limits for a specific host. [CMV]."""
     if _http_client_instance is not None:
         _http_client_instance.set_host_limits(host, limits)

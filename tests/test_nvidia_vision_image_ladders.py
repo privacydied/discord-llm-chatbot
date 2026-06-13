@@ -13,7 +13,7 @@ from bot.vision.unified_adapter import UnifiedVisionAdapter
 
 
 class FakeChatCompletions:
-    def __init__(self, create_fn):
+    def __init__(self, create_fn) -> None:
         self._create = create_fn
 
     async def create(self, **kwargs):
@@ -21,17 +21,17 @@ class FakeChatCompletions:
 
 
 class FakeChat:
-    def __init__(self, create_fn):
+    def __init__(self, create_fn) -> None:
         self.completions = FakeChatCompletions(create_fn)
 
 
 class FakeOpenAIClient:
-    def __init__(self, create_fn):
+    def __init__(self, create_fn) -> None:
         self.chat = FakeChat(create_fn)
 
 
 @pytest.mark.asyncio
-async def test_vl_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch, tmp_path):
+async def test_vl_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch, tmp_path) -> None:
     prompt_file = tmp_path / "vl_prompt.txt"
     prompt_file.write_text("You describe images.", encoding="utf-8")
 
@@ -49,7 +49,7 @@ async def test_vl_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch, tm
 
     monkeypatch.setattr("bot.openai_backend.load_config", fake_load_config)
 
-    async def fake_get_base64_image(_path):
+    async def fake_get_base64_image(_path) -> str:
         return "data:image/png;base64,AAAA"
 
     monkeypatch.setattr("bot.openai_backend.get_base64_image", fake_get_base64_image)
@@ -66,7 +66,8 @@ async def test_vl_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch, tm
     async def fake_create(**kwargs):
         model = kwargs["model"]
         if model == "openrouter-vl-a":
-            raise Exception("429 Too Many Requests")
+            msg = "429 Too Many Requests"
+            raise Exception(msg)
 
         class _Usage:
             prompt_tokens = 1
@@ -105,7 +106,7 @@ async def test_vl_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch, tm
 
 
 @pytest.mark.asyncio
-async def test_image_generation_ladder_tries_nvidia_models_in_order(monkeypatch):
+async def test_image_generation_ladder_tries_nvidia_models_in_order(monkeypatch) -> None:
     config = {
         "VISION_API_KEY": "generic-vision-key",
         "NVIDIA_NIM_API_KEY": "nvidia-test-key",
@@ -118,7 +119,7 @@ async def test_image_generation_ladder_tries_nvidia_models_in_order(monkeypatch)
 
     seen_models = []
 
-    async def fake_submit(normalized_request):
+    async def fake_submit(normalized_request) -> str:
         seen_models.append(normalized_request.preferred_model)
         if normalized_request.preferred_model == "black-forest-labs/flux.1-dev":
             raise VisionError(
@@ -153,7 +154,7 @@ async def test_image_generation_ladder_tries_nvidia_models_in_order(monkeypatch)
 @pytest.mark.asyncio
 async def test_nvidia_image_submit_uses_nvidia_endpoint_and_returns_fetchable_result(
     monkeypatch,
-):
+) -> None:
     config = {
         "NVIDIA_NIM_API_KEY": "nvidia-test-key",
         "NVIDIA_NIM_API_BASE": "https://integrate.api.nvidia.com/v1",
@@ -168,7 +169,7 @@ async def test_nvidia_image_submit_uses_nvidia_endpoint_and_returns_fetchable_re
     class FakeResponse:
         status = 200
 
-        async def text(self):
+        async def text(self) -> str:
             return '{"artifacts":[{"base64":"AAAA"}]}'
 
         async def json(self):
@@ -202,7 +203,7 @@ async def test_nvidia_image_submit_uses_nvidia_endpoint_and_returns_fetchable_re
     assert result.assets == ["data:image/jpeg;base64,AAAA"]
 
 
-def test_unified_adapter_update_config_refreshes_hotloaded_vision_fields():
+def test_unified_adapter_update_config_refreshes_hotloaded_vision_fields() -> None:
     adapter = UnifiedVisionAdapter(
         {
             "VISION_API_KEY": "generic-vision-key",
@@ -210,7 +211,7 @@ def test_unified_adapter_update_config_refreshes_hotloaded_vision_fields():
             "VISION_ALLOWED_PROVIDERS": ["novita"],
             "VISION_DEFAULT_PROVIDER": "novita",
             "VISION_MODEL": "novita:qwen-image",
-        }
+        },
     )
 
     adapter.update_config(
@@ -220,7 +221,7 @@ def test_unified_adapter_update_config_refreshes_hotloaded_vision_fields():
             "VISION_ALLOWED_PROVIDERS": "nvidia",
             "VISION_DEFAULT_PROVIDER": "nvidia",
             "VISION_MODEL": "nvidia:black-forest-labs/flux.1-schnell",
-        }
+        },
     )
 
     assert adapter.allowed_providers == ["nvidia"]

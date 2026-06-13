@@ -1,5 +1,4 @@
-"""
-User and server profile management with persistence.
+"""User and server profile management with persistence.
 
 Uses atomic file writes and corruption recovery for safe data storage.
 [REH][SFT] Atomic persistence with backup/recovery
@@ -7,12 +6,11 @@ Uses atomic file writes and corruption recovery for safe data storage.
 
 import copy
 import json
-import os
 import logging
+import os
 import shutil
-from datetime import datetime
-from typing import Dict, Optional
 import threading
+from datetime import datetime
 from pathlib import Path
 
 from bot.memory.persistence import (
@@ -26,8 +24,8 @@ user_cache_lock = threading.Lock()
 server_lock = threading.Lock()
 
 # Initialize caches
-user_cache: Dict[str, Dict] = {}
-server_cache: Dict[str, Dict] = {}
+user_cache: dict[str, dict] = {}
+server_cache: dict[str, dict] = {}
 
 # Dirty flags: set True when any profile is mutated, cleared after successful save
 _users_dirty: bool = False
@@ -51,7 +49,7 @@ def _consume_dirty(scope: str) -> bool:
             val = globals()["_users_dirty"]
             globals()["_users_dirty"] = False
             return val
-        elif scope == "server":
+        if scope == "server":
             val = globals()["_servers_dirty"]
             globals()["_servers_dirty"] = False
             return val
@@ -64,8 +62,8 @@ server_profiles = server_cache
 modified_servers = set()
 
 # Track last save times
-user_profiles_last_saved: Dict[str, float] = {}
-server_profiles_last_saved: Dict[str, float] = {}
+user_profiles_last_saved: dict[str, float] = {}
+server_profiles_last_saved: dict[str, float] = {}
 
 
 def _safe_backup_file(src: Path, dst: Path) -> None:
@@ -86,15 +84,15 @@ def _safe_backup_file(src: Path, dst: Path) -> None:
                     os.chmod(dst, 0o600)
                     dst.unlink()
                 except Exception as e:
-                    logging.error(f"Failed to remove existing backup {dst}: {e}")
+                    logging.exception(f"Failed to remove existing backup {dst}: {e}")
                     # If we cannot remove it, attempting to overwrite would likely fail
                     return
         shutil.copy2(src, dst)
     except Exception as e:
-        logging.error(f"Failed to create backup for {src}: {e}")
+        logging.exception(f"Failed to create backup for {src}: {e}")
 
 
-def ensure_dirs():
+def ensure_dirs() -> None:
     """Ensure all required directories exist."""
     from bot.config import load_config
 
@@ -112,9 +110,9 @@ def ensure_dirs():
 def default_profile(user_id=None, username=None):
     """Create a new user profile with default values."""
     return {
-        "discord_id": user_id if user_id else "",
-        "user_id": user_id if user_id else "",  # alias for legacy tests
-        "username": username if username else "",
+        "discord_id": user_id or "",
+        "user_id": user_id or "",  # alias for legacy tests
+        "username": username or "",
         "memories": [],
         "history": [],
         "preferences": {},
@@ -130,7 +128,7 @@ def default_profile(user_id=None, username=None):
     }
 
 
-def ensure_profile_schema(profile: dict, user_id: Optional[str] = None, username: Optional[str] = None) -> dict:
+def ensure_profile_schema(profile: dict, user_id: str | None = None, username: str | None = None) -> dict:
     """Ensure a user profile has all required fields."""
     if not isinstance(profile, dict):
         profile = {}
@@ -179,7 +177,7 @@ def ensure_profile_schema(profile: dict, user_id: Optional[str] = None, username
     return default
 
 
-def get_profile(user_id: str, username: Optional[str] = None) -> dict:
+def get_profile(user_id: str, username: str | None = None) -> dict:
     """Get or create a user profile, ensuring it has all required fields.
 
     [REH] Corruption recovery via load_json_with_recovery
@@ -211,8 +209,7 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
                 profile = ensure_profile_schema(profile, user_id, username)
                 user_cache[user_id] = profile
                 return profile.copy()
-            else:
-                logging.warning(f"Corrupted profile for user {user_id}: {error_msg}")
+            logging.warning(f"Corrupted profile for user {user_id}: {error_msg}")
                 # Fall through to create new profile
 
         # Create new profile if it doesn't exist or couldn't be loaded
@@ -221,7 +218,7 @@ def get_profile(user_id: str, username: Optional[str] = None) -> dict:
         return profile.copy()
 
 
-def save_profile(profile: dict, force: bool = False, caller_id: Optional[str] = None) -> bool:
+def save_profile(profile: dict, force: bool = False, caller_id: str | None = None) -> bool:
     """Save a user profile to disk using atomic writes with corruption recovery.
 
     [REH] Atomic writes ensure readers see only complete writes
@@ -233,6 +230,7 @@ def save_profile(profile: dict, force: bool = False, caller_id: Optional[str] = 
         caller_id: Optional Discord user ID of the caller. If provided,
                    validates that the profile belongs to the caller to
                    prevent cross-user profile overwrites.
+
     """
     try:
         user_id = str(profile.get("discord_id") or profile.get("user_id") or "")
@@ -298,11 +296,11 @@ def save_profile(profile: dict, force: bool = False, caller_id: Optional[str] = 
         return False
 
 
-def default_server_profile(guild_id: Optional[str] = None) -> dict:
+def default_server_profile(guild_id: str | None = None) -> dict:
     """Create a new server profile with default values."""
     return {
-        "guild_id": guild_id if guild_id else "",
-        "server_id": guild_id if guild_id else "",  # alias for legacy tests
+        "guild_id": guild_id or "",
+        "server_id": guild_id or "",  # alias for legacy tests
         "memories": [],
         "history": [],
         "preferences": {},
@@ -314,7 +312,7 @@ def default_server_profile(guild_id: Optional[str] = None) -> dict:
     }
 
 
-def ensure_server_profile_schema(profile: dict, guild_id: Optional[str] = None) -> dict:
+def ensure_server_profile_schema(profile: dict, guild_id: str | None = None) -> dict:
     """Ensure a server profile has all required fields."""
     if not isinstance(profile, dict):
         profile = {}
@@ -487,7 +485,7 @@ def flush_all_profiles() -> bool:
                 logging.error(f"Failed to save profile for user {user_id}")
         except Exception as e:
             success = False
-            logging.error(f"Error saving profile for user {user_id}: {e}")
+            logging.exception(f"Error saving profile for user {user_id}: {e}")
 
     # Save all modified server profiles
     with server_lock:
@@ -500,7 +498,7 @@ def flush_all_profiles() -> bool:
                 logging.error(f"Failed to save server profile for guild {guild_id}")
         except Exception as e:
             success = False
-            logging.error(f"Error saving server profile for guild {guild_id}: {e}")
+            logging.exception(f"Error saving server profile for guild {guild_id}: {e}")
 
     return success
 
@@ -517,6 +515,7 @@ def load_all_profiles():
         tuple: A tuple containing (user_profiles, server_profiles)
 
     [REH] Corruption recovery on per-profile basis
+
     """
     from bot.config import load_config
 
@@ -587,7 +586,7 @@ def save_all_profiles() -> bool:
                 logging.error(f"Failed to save profile for user {user_id}")
         except Exception as e:
             success = False
-            logging.error(f"Error saving profile for user {user_id}: {e}")
+            logging.exception(f"Error saving profile for user {user_id}: {e}")
 
     return success
 
@@ -608,7 +607,7 @@ def load_all_server_profiles() -> None:
     for profile_file in profile_dir.glob("*.json"):
         try:
             guild_id = profile_file.stem
-            with open(profile_file, "r", encoding="utf-8") as f:
+            with open(profile_file, encoding="utf-8") as f:
                 profile = json.load(f)
 
             # Ensure profile has all required fields
@@ -620,7 +619,7 @@ def load_all_server_profiles() -> None:
             loaded_count += 1
 
         except Exception as e:
-            logging.error(f"Error loading server profile {profile_file}: {e}")
+            logging.exception(f"Error loading server profile {profile_file}: {e}")
 
     logging.info(f"Loaded {loaded_count} server profiles from disk")
 
@@ -642,7 +641,7 @@ def save_all_server_profiles() -> bool:
                 logging.error(f"Failed to save server profile for guild {guild_id}")
         except Exception as e:
             success = False
-            logging.error(f"Error saving server profile for guild {guild_id}: {e}")
+            logging.exception(f"Error saving server profile for guild {guild_id}: {e}")
 
     return success
 
@@ -650,11 +649,10 @@ def save_all_server_profiles() -> bool:
 def add_memory(
     user_id: str,
     memory_text: str,
-    guild_id: Optional[str] = None,
-    username: Optional[str] = None,
+    guild_id: str | None = None,
+    username: str | None = None,
 ) -> bool:
-    """
-    Add a memory for a user and optionally to a server.
+    """Add a memory for a user and optionally to a server.
 
     Args:
         user_id: Discord user ID
@@ -664,6 +662,7 @@ def add_memory(
 
     Returns:
         bool: True if the memory was added successfully, False otherwise
+
     """
     if not user_id or not memory_text or not isinstance(memory_text, str) or not memory_text.strip():
         logging.warning(f"Invalid memory data - user_id: {user_id}, memory_text: {type(memory_text)}")

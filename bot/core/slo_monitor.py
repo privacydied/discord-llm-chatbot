@@ -1,5 +1,4 @@
-"""
-SLO Monitoring System - Track p95 performance metrics with alerts and Rich dashboards.
+"""SLO Monitoring System - Track p95 performance metrics with alerts and Rich dashboards.
 Implements PA (Performance Awareness) and REH (Robust Error Handling) rules.
 """
 
@@ -7,17 +6,19 @@ import asyncio
 import statistics
 import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Callable, Deque
 from enum import Enum
+from typing import Any
 
+from rich.console import Console
 from rich.panel import Panel
 from rich.tree import Tree
-from rich.console import Console
+
+from bot.utils.logging import get_logger
 
 from .phase_constants import PhaseConstants as PC
 from .phase_timing import PipelineTracker
-from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -46,11 +47,11 @@ class SLOTarget:
 class MetricWindow:
     """Time-windowed metric collection."""
 
-    values: Deque[float] = field(default_factory=lambda: deque(maxlen=1000))
-    timestamps: Deque[float] = field(default_factory=lambda: deque(maxlen=1000))
+    values: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
+    timestamps: deque[float] = field(default_factory=lambda: deque(maxlen=1000))
     window_minutes: int = 5
 
-    def add_value(self, value: float, timestamp: float = None):
+    def add_value(self, value: float, timestamp: float | None = None) -> None:
         """Add new metric value with timestamp."""
         if timestamp is None:
             timestamp = time.time()
@@ -64,7 +65,7 @@ class MetricWindow:
             self.values.popleft()
             self.timestamps.popleft()
 
-    def get_percentile(self, percentile: int) -> Optional[float]:
+    def get_percentile(self, percentile: int) -> float | None:
         """Get percentile value from current window."""
         if not self.values:
             return None
@@ -74,7 +75,7 @@ class MetricWindow:
         except (statistics.StatisticsError, IndexError):
             return None
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get comprehensive statistics for window."""
         if not self.values:
             return {"count": 0}
@@ -102,13 +103,13 @@ class AlertHistory:
     metric_name: str
     value: float
     target: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class SLOMonitor:
     """Comprehensive SLO monitoring with alerts and dashboards."""
 
-    def __init__(self, console: Optional[Console] = None):
+    def __init__(self, console: Console | None = None) -> None:
         self.console = console or Console()
 
         # SLO targets from phase constants [CMV]
@@ -124,12 +125,12 @@ class SLOMonitor:
         }
 
         # Metric windows for each target
-        self.metric_windows = {name: MetricWindow() for name in self.targets.keys()}
+        self.metric_windows = {name: MetricWindow() for name in self.targets}
 
         # Alert state tracking
-        self.consecutive_breaches = {name: 0 for name in self.targets.keys()}
-        self.alert_history: List[AlertHistory] = []
-        self.alert_callbacks: Dict[AlertLevel, List[Callable]] = {
+        self.consecutive_breaches = dict.fromkeys(self.targets.keys(), 0)
+        self.alert_history: list[AlertHistory] = []
+        self.alert_callbacks: dict[AlertLevel, list[Callable]] = {
             AlertLevel.INFO: [],
             AlertLevel.WARNING: [],
             AlertLevel.CRITICAL: [],
@@ -149,7 +150,7 @@ class SLOMonitor:
 
         logger.info("📊 SLOMonitor initialized with Rich dashboard support")
 
-    def record_phase_metric(self, phase: str, duration_ms: int, tracker: Optional[PipelineTracker] = None):
+    def record_phase_metric(self, phase: str, duration_ms: int, tracker: PipelineTracker | None = None) -> None:
         """Record phase performance metric [PA]."""
         if phase not in self.metric_windows:
             logger.debug(f"Unknown phase for SLO monitoring: {phase}")
@@ -166,7 +167,7 @@ class SLOMonitor:
         if logger.level <= 10:  # DEBUG level
             self._maybe_refresh_dashboard()
 
-    def record_pipeline_completion(self, tracker: PipelineTracker):
+    def record_pipeline_completion(self, tracker: PipelineTracker) -> None:
         """Record complete pipeline metrics from tracker [PA]."""
         # Record individual phase metrics
         for phase_name, phase_metric in tracker.phases.items():
@@ -177,7 +178,7 @@ class SLOMonitor:
         if tracker.total_duration_ms:
             self.record_phase_metric("pipeline_total", tracker.total_duration_ms, tracker)
 
-    def _check_slo_breach(self, phase: str, duration_ms: int, tracker: Optional[PipelineTracker] = None):
+    def _check_slo_breach(self, phase: str, duration_ms: int, tracker: PipelineTracker | None = None) -> None:
         """Check if measurement breaches SLO target [REH]."""
         target = self.targets[phase]
         is_breach = duration_ms > target.target_ms
@@ -220,8 +221,8 @@ class SLOMonitor:
         value: float,
         target: float,
         consecutive_count: int = 1,
-        tracker: Optional[PipelineTracker] = None,
-    ):
+        tracker: PipelineTracker | None = None,
+    ) -> None:
         """Fire SLO alert with callbacks [REH]."""
         alert = AlertHistory(
             alert_level=alert_level,
@@ -273,24 +274,24 @@ class SLOMonitor:
                         )
                         if t.done() and not t.cancelled() and t.exception()
                         else None
-                    )
+                    ),
                 )
             except Exception as e:
-                logger.error(f"❌ Alert callback scheduling error: {e}")
+                logger.exception(f"❌ Alert callback scheduling error: {e}")
 
-    def register_alert_callback(self, alert_level: AlertLevel, callback: Callable):
+    def register_alert_callback(self, alert_level: AlertLevel, callback: Callable) -> None:
         """Register callback for alert level [REH]."""
         self.alert_callbacks[alert_level].append(callback)
         logger.debug(f"Registered {alert_level.value} alert callback")
 
-    def _maybe_refresh_dashboard(self):
+    def _maybe_refresh_dashboard(self) -> None:
         """Refresh dashboard if interval elapsed [PA]."""
         current_time = time.time()
         if (current_time - self.last_dashboard_update) >= self.dashboard_refresh_interval:
             self._render_debug_dashboard()
             self.last_dashboard_update = current_time
 
-    def _render_debug_dashboard(self):
+    def _render_debug_dashboard(self) -> None:
         """Render Rich dashboard for DEBUG mode [CA]."""
         try:
             dashboard = self._create_slo_dashboard()
@@ -300,7 +301,7 @@ class SLOMonitor:
             self.monitoring_stats["dashboard_renders"] += 1
 
         except Exception as e:
-            logger.error(f"❌ Dashboard render error: {e}")
+            logger.exception(f"❌ Dashboard render error: {e}")
 
     def _create_slo_dashboard(self) -> Panel:
         """Create comprehensive SLO dashboard with Rich components [CA]."""
@@ -355,16 +356,15 @@ class SLOMonitor:
 
         # Create panel with title
         current_time = time.strftime("%Y-%m-%d %H:%M:%S")
-        panel = Panel(
+        return Panel(
             tree,
             title=f"SLO Dashboard - {current_time}",
             border_style="blue",
             padding=(1, 2),
         )
 
-        return panel
 
-    def get_current_slo_status(self) -> Dict[str, Any]:
+    def get_current_slo_status(self) -> dict[str, Any]:
         """Get current SLO status summary [PA]."""
         status = {}
 
@@ -419,7 +419,7 @@ class SLOMonitor:
 
         return "\n".join(report)
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         """Clean up monitoring resources [RM]."""
         self.metric_windows.clear()
         self.alert_history.clear()
@@ -428,7 +428,7 @@ class SLOMonitor:
 
 
 # Global SLO monitor instance [PA]
-_slo_monitor_instance: Optional[SLOMonitor] = None
+_slo_monitor_instance: SLOMonitor | None = None
 
 
 def get_slo_monitor() -> SLOMonitor:
@@ -442,7 +442,7 @@ def get_slo_monitor() -> SLOMonitor:
     return _slo_monitor_instance
 
 
-async def cleanup_slo_monitor():
+async def cleanup_slo_monitor() -> None:
     """Clean up global SLO monitor [RM]."""
     global _slo_monitor_instance
     if _slo_monitor_instance:

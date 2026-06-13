@@ -1,5 +1,4 @@
-"""
-Shared helpers for reading small text attachments (e.g., .txt) from Discord messages.
+"""Shared helpers for reading small text attachments (e.g., .txt) from Discord messages.
 
 This promotes the minimal, battle-tested logic already used by the !img path
 to decode text bytes with size checks and light sanitization.
@@ -8,12 +7,13 @@ to decode text bytes with size checks and light sanitization.
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import TYPE_CHECKING
 
-import discord
+if TYPE_CHECKING:
+    import discord
 
 
-async def read_attachment_text(att: discord.Attachment, limit_bytes: int = 262_144) -> Optional[str]:
+async def read_attachment_text(att: discord.Attachment, limit_bytes: int = 262_144) -> str | None:
     """Read and decode attachment text with size checks and sanitization.
 
     Mirrors the behavior used by the existing !img flow:

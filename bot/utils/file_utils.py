@@ -1,18 +1,14 @@
-"""
-File utility functions for the Discord bot.
-"""
+"""File utility functions for the Discord bot."""
 
 import logging
 import os
-import asyncio
-import aiohttp
 from pathlib import Path
-from typing import Optional
+
+import aiohttp
 
 
 async def download_robust_image(image_ref, local_path: str, max_size_mb: int = 25) -> bool:
-    """
-    Robust image download with fallback candidate chain.
+    """Robust image download with fallback candidate chain.
 
     Each candidate URL is validated against SSRF rules before fetching.
 
@@ -23,11 +19,12 @@ async def download_robust_image(image_ref, local_path: str, max_size_mb: int = 2
 
     Returns:
         bool: True if any candidate succeeded, False otherwise
+
     """
     import aiohttp
-    import asyncio
-    from ..url_safety import UrlSafetyError, validate_url
-    from ..utils.logging import get_logger
+
+    from bot.url_safety import UrlSafetyError, validate_url
+    from bot.utils.logging import get_logger
 
     logger = get_logger(__name__)
 
@@ -92,7 +89,7 @@ async def download_robust_image(image_ref, local_path: str, max_size_mb: int = 2
                     except Exception:
                         pass
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: timeout")
                 continue
             except Exception as e:
@@ -103,9 +100,8 @@ async def download_robust_image(image_ref, local_path: str, max_size_mb: int = 2
     return False
 
 
-async def download_file(url: str, save_path: Path, session: Optional[aiohttp.ClientSession] = None) -> bool:
-    """
-    Download a file from a URL and save it to the specified path.
+async def download_file(url: str, save_path: Path, session: aiohttp.ClientSession | None = None) -> bool:
+    """Download a file from a URL and save it to the specified path.
 
     Validates the URL against SSRF rules before fetching.
 
@@ -116,8 +112,9 @@ async def download_file(url: str, save_path: Path, session: Optional[aiohttp.Cli
 
     Returns:
         bool: True if download was successful, False otherwise
+
     """
-    from ..url_safety import UrlSafetyError, validate_url
+    from bot.url_safety import UrlSafetyError, validate_url
 
     # SSRF validation before fetch
     try:
@@ -172,7 +169,7 @@ async def download_file(url: str, save_path: Path, session: Optional[aiohttp.Cli
             if debug:
                 logging.info(f"IMAGEDL_DEBUG | get | url={url} status=200 bytes={save_path.stat().st_size}")
             return True
-    except asyncio.TimeoutError:
+    except TimeoutError:
         if debug:
             logging.info(f"IMAGEDL_DEBUG | timeout | url={url}")
         try:
@@ -181,10 +178,10 @@ async def download_file(url: str, save_path: Path, session: Optional[aiohttp.Cli
             METRICS.counter("x.syndication.image_fetch_timeout").inc(1)
         except Exception:
             pass
-        logging.error(f"Timeout downloading {url}")
+        logging.exception(f"Timeout downloading {url}")
         return False
     except Exception as e:
-        logging.error(f"Error downloading {url}: {e}")
+        logging.exception(f"Error downloading {url}: {e}")
         return False
     finally:
         if close_session and not session.closed:
@@ -192,14 +189,14 @@ async def download_file(url: str, save_path: Path, session: Optional[aiohttp.Cli
 
 
 def is_text_file(file_path: str) -> bool:
-    """
-    Check if a file is a text file by examining its content.
+    """Check if a file is a text file by examining its content.
 
     Args:
         file_path: Path to the file to check
 
     Returns:
         bool: True if the file is a text file, False otherwise
+
     """
     try:
         with open(file_path, "rb") as f:
@@ -217,5 +214,5 @@ def is_text_file(file_path: str) -> bool:
             except UnicodeDecodeError:
                 return False
     except Exception as e:
-        logging.error(f"Error checking if {file_path} is a text file: {e}")
+        logging.exception(f"Error checking if {file_path} is a text file: {e}")
         return False

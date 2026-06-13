@@ -7,11 +7,10 @@ TXT, MD, HTML, PDF, DOCX, EPUB, and MOBI files.
 import asyncio
 import concurrent.futures
 import re
-import subprocess
+import subprocess  # nosec B404 - required for poppler-utils check
 from pathlib import Path
-from typing import Dict, Optional, Set, Tuple, Union
 
-from ..utils.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -19,7 +18,7 @@ logger = get_logger(__name__)
 class DocumentParserFactory:
     """Factory for creating document parsers based on file type."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._supported_extensions = {
             ".txt",
             ".md",
@@ -32,11 +31,11 @@ class DocumentParserFactory:
             ".mobi",
         }
 
-    def get_supported_extensions(self) -> Set[str]:
+    def get_supported_extensions(self) -> set[str]:
         """Get set of supported file extensions."""
         return self._supported_extensions.copy()
 
-    def get_parser(self, file_path: Union[str, Path]) -> Optional[str]:
+    def get_parser(self, file_path: str | Path) -> str | None:
         """Get parser type for given file path."""
         file_path = Path(file_path)
         extension = file_path.suffix.lower()
@@ -45,7 +44,7 @@ class DocumentParserFactory:
             return extension[1:]  # Remove the dot
         return None
 
-    async def parse_document(self, file_path: Union[str, Path]) -> Tuple[str, Dict]:
+    async def parse_document(self, file_path: str | Path) -> tuple[str, dict]:
         """Parse document and return content and metadata.
 
         Args:
@@ -57,52 +56,55 @@ class DocumentParserFactory:
         Raises:
             ValueError: If file type is not supported
             FileNotFoundError: If file does not exist
+
         """
         file_path = Path(file_path)
 
         if not file_path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+            msg = f"File not found: {file_path}"
+            raise FileNotFoundError(msg)
 
         extension = file_path.suffix.lower()
 
         if extension not in self._supported_extensions:
-            raise ValueError(f"Unsupported file type: {extension}")
+            msg = f"Unsupported file type: {extension}"
+            raise ValueError(msg)
 
         logger.debug(f"Parsing document: {file_path} (type: {extension})")
 
         try:
             if extension in {".txt", ".md", ".markdown"}:
                 return await self._parse_text_file(file_path, extension)
-            elif extension in {".html", ".htm"}:
+            if extension in {".html", ".htm"}:
                 return await self._parse_html_file(file_path)
-            elif extension == ".pdf":
+            if extension == ".pdf":
                 return await self._parse_pdf_file(file_path)
-            elif extension == ".docx":
+            if extension == ".docx":
                 return await self._parse_docx_file(file_path)
-            elif extension == ".epub":
+            if extension == ".epub":
                 return await self._parse_epub_file(file_path)
-            elif extension == ".mobi":
+            if extension == ".mobi":
                 return await self._parse_mobi_file(file_path)
-            else:
-                raise ValueError(f"Parser not implemented for: {extension}")
+            msg = f"Parser not implemented for: {extension}"
+            raise ValueError(msg)
 
         except Exception as e:
-            logger.error(f"Failed to parse {file_path}: {e}")
+            logger.exception(f"Failed to parse {file_path}: {e}")
             raise
 
-    async def _parse_text_file(self, file_path: Path, extension: str) -> Tuple[str, Dict]:
+    async def _parse_text_file(self, file_path: Path, extension: str) -> tuple[str, dict]:
         """Parse plain text or markdown files."""
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
         except UnicodeDecodeError:
             # Fallback to latin-1 encoding
-            with open(file_path, "r", encoding="latin-1") as f:
+            with open(file_path, encoding="latin-1") as f:
                 content = f.read()
 
         metadata = {
             "parser_type": "text",
-            "file_type": extension[1:] if extension.startswith(".") else extension,
+            "file_type": extension.removeprefix("."),
             "char_count": len(content),
             "line_count": len(content.splitlines()),
             "file_size": file_path.stat().st_size,
@@ -118,7 +120,7 @@ class DocumentParserFactory:
 
         return content.strip(), metadata
 
-    async def _parse_html_file(self, file_path: Path) -> Tuple[str, Dict]:
+    async def _parse_html_file(self, file_path: Path) -> tuple[str, dict]:
         """Parse HTML files."""
         try:
             from bs4 import BeautifulSoup
@@ -127,10 +129,10 @@ class DocumentParserFactory:
             return await self._parse_text_file(file_path, ".html")
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 html_content = f.read()
         except UnicodeDecodeError:
-            with open(file_path, "r", encoding="latin-1") as f:
+            with open(file_path, encoding="latin-1") as f:
                 html_content = f.read()
 
         soup = BeautifulSoup(html_content, "html.parser")
@@ -161,7 +163,7 @@ class DocumentParserFactory:
 
         return content.strip(), metadata
 
-    async def _parse_pdf_file(self, file_path: Path) -> Tuple[str, Dict]:
+    async def _parse_pdf_file(self, file_path: Path) -> tuple[str, dict]:
         """Parse PDF files with OCR fallback."""
         content = ""
         metadata = {
@@ -200,8 +202,9 @@ class DocumentParserFactory:
                 content = await self._ocr_pdf_fallback(file_path)
                 metadata["extraction_method"] = "ocr"
             except Exception as e:
-                logger.error(f"OCR fallback failed for {file_path}: {e}")
-                raise ValueError(f"Could not extract text from PDF: {e}")
+                logger.exception(f"OCR fallback failed for {file_path}: {e}")
+                msg = f"Could not extract text from PDF: {e}"
+                raise ValueError(msg)
 
         metadata["char_count"] = len(content)
         metadata["line_count"] = len(content.splitlines())
@@ -229,7 +232,7 @@ class DocumentParserFactory:
             return content
 
         except Exception as e:
-            logger.error(f"PyPDF2 extraction failed: {e}")
+            logger.exception(f"PyPDF2 extraction failed: {e}")
             return ""
 
     def _get_pdf_page_count(self, file_path: Path) -> int:
@@ -250,13 +253,15 @@ class DocumentParserFactory:
         try:
             from pdf2image import convert_from_path
         except ImportError as e:
-            raise ImportError(f"OCR dependencies not available: {e}. Install with: pip install pdf2image")
+            msg = f"OCR dependencies not available: {e}. Install with: pip install pdf2image"
+            raise ImportError(msg)
 
         # Check if poppler-utils is available
         try:
-            subprocess.run(["pdftoppm", "-h"], capture_output=True, check=True)
+            subprocess.run(["pdftoppm", "-h"], capture_output=True, check=True)  # nosec B603, B607
         except (subprocess.CalledProcessError, FileNotFoundError):
-            raise ImportError("poppler-utils not found. Install with: sudo apt-get install poppler-utils")
+            msg = "poppler-utils not found. Install with: sudo apt-get install poppler-utils"
+            raise ImportError(msg)
 
         logger.info(f"Using OCR to extract text from {file_path}")
 
@@ -265,8 +270,9 @@ class DocumentParserFactory:
         try:
             images = await loop.run_in_executor(None, lambda: convert_from_path(str(file_path)))
         except Exception as e:
-            logger.error(f"Failed to convert PDF to images: {e}")
-            raise ValueError(f"Could not convert PDF to images: {e}")
+            logger.exception(f"Failed to convert PDF to images: {e}")
+            msg = f"Could not convert PDF to images: {e}"
+            raise ValueError(msg)
 
         logger.info(f"Processing {len(images)} pages with OCR")
 
@@ -293,9 +299,10 @@ class DocumentParserFactory:
                     elif result:
                         content += result
 
-            except asyncio.TimeoutError:
-                logger.error(f"OCR processing timed out for {file_path}")
-                raise ValueError("OCR processing timed out - PDF may be too large or complex")
+            except TimeoutError:
+                logger.exception(f"OCR processing timed out for {file_path}")
+                msg = "OCR processing timed out - PDF may be too large or complex"
+                raise ValueError(msg)
 
         return content
 
@@ -315,12 +322,13 @@ class DocumentParserFactory:
             logger.warning(f"OCR failed for page {page_num}: {e}")
             return ""
 
-    async def _parse_docx_file(self, file_path: Path) -> Tuple[str, Dict]:
+    async def _parse_docx_file(self, file_path: Path) -> tuple[str, dict]:
         """Parse DOCX files."""
         try:
             from docx import Document
         except ImportError:
-            raise ImportError("python-docx not available. Install with: pip install python-docx")
+            msg = "python-docx not available. Install with: pip install python-docx"
+            raise ImportError(msg)
 
         doc = Document(str(file_path))
 
@@ -340,14 +348,15 @@ class DocumentParserFactory:
 
         return content.strip(), metadata
 
-    async def _parse_epub_file(self, file_path: Path) -> Tuple[str, Dict]:
+    async def _parse_epub_file(self, file_path: Path) -> tuple[str, dict]:
         """Parse EPUB files."""
         try:
             import ebooklib
-            from ebooklib import epub
             from bs4 import BeautifulSoup
+            from ebooklib import epub
         except ImportError:
-            raise ImportError("ebooklib and beautifulsoup4 not available. Install with: pip install ebooklib beautifulsoup4")
+            msg = "ebooklib and beautifulsoup4 not available. Install with: pip install ebooklib beautifulsoup4"
+            raise ImportError(msg)
 
         book = epub.read_epub(str(file_path))
 
@@ -392,7 +401,7 @@ class DocumentParserFactory:
 
         return content.strip(), metadata
 
-    async def _parse_mobi_file(self, file_path: Path) -> Tuple[str, Dict]:
+    async def _parse_mobi_file(self, file_path: Path) -> tuple[str, dict]:
         """Parse MOBI files (basic support)."""
         # MOBI parsing is complex and requires specialized libraries
         # For now, we'll provide basic support by trying to extract readable text
@@ -411,7 +420,8 @@ class DocumentParserFactory:
                     decoded = chunk.decode("utf-8", errors="ignore")
                     if len(decoded) > 20 and decoded.isprintable():
                         text_content += decoded + " "
-                except Exception:
+                except Exception as exc:
+                    logger.debug(f"Failed to decode MOBI chunk: {exc}")
                     continue
 
             # Clean up the extracted text
@@ -429,7 +439,8 @@ class DocumentParserFactory:
             return content, metadata
 
         except Exception as e:
-            raise ValueError(f"Failed to parse MOBI file {file_path}: {e}")
+            msg = f"Failed to parse MOBI file {file_path}: {e}"
+            raise ValueError(msg)
 
 
 # Global factory instance
@@ -437,16 +448,16 @@ document_parser_factory = DocumentParserFactory()
 
 
 # Utility functions for backward compatibility
-def get_supported_extensions() -> Set[str]:
+def get_supported_extensions() -> set[str]:
     """Get supported file extensions."""
     return document_parser_factory.get_supported_extensions()
 
 
-def get_parser(file_path: Union[str, Path]) -> Optional[str]:
+def get_parser(file_path: str | Path) -> str | None:
     """Get parser type for file."""
     return document_parser_factory.get_parser(file_path)
 
 
-async def parse_document(file_path: Union[str, Path]) -> Tuple[str, Dict]:
+async def parse_document(file_path: str | Path) -> tuple[str, dict]:
     """Parse document and return content and metadata."""
     return await document_parser_factory.parse_document(file_path)

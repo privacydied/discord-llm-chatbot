@@ -4,13 +4,14 @@ import pytest
 pytestmark = pytest.mark.skip(reason="Requires Kokoro model and phoneme binaries")
 
 import unittest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 from bot.tts.engines.kokoro import KokoroEngine
 from bot.tts.errors import TTSError
 
 
 class TestKokoroEngine(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.model_path = "test_model_path"
         self.voices_path = "test_voices_path"
         self.tokenizer = "test_tokenizer"
@@ -21,7 +22,7 @@ class TestKokoroEngine(unittest.IsolatedAsyncioTestCase):
         )
 
     @patch("bot.tts.engines.kokoro.Kokoro")
-    def test_load_success(self, mock_kokoro):
+    def test_load_success(self, mock_kokoro) -> None:
         # Setup
         mock_instance = MagicMock()
         mock_kokoro.return_value = mock_instance
@@ -31,20 +32,20 @@ class TestKokoroEngine(unittest.IsolatedAsyncioTestCase):
 
         # Verify
         mock_kokoro.assert_called_once_with(model_path=self.model_path, voices_path=self.voices_path)
-        self.assertEqual(mock_instance.tokenizer, self.tokenizer)
-        self.assertEqual(self.engine.engine, mock_instance)
+        assert mock_instance.tokenizer == self.tokenizer
+        assert self.engine.engine == mock_instance
 
     @patch("bot.tts.engines.kokoro.Kokoro")
-    def test_load_failure(self, mock_kokoro):
+    def test_load_failure(self, mock_kokoro) -> None:
         # Setup
         mock_kokoro.side_effect = Exception("Test error")
 
         # Execute & Verify
-        with self.assertRaises(TTSError):
+        with pytest.raises(TTSError):
             self.engine.load()
 
     @patch("bot.tts.engines.kokoro.Kokoro")
-    async def test_synthesize_success(self, mock_kokoro):
+    async def test_synthesize_success(self, mock_kokoro) -> None:
         # Setup
         mock_instance = MagicMock()
         mock_instance.generate_audio = AsyncMock(return_value=b"audio_data")
@@ -55,11 +56,11 @@ class TestKokoroEngine(unittest.IsolatedAsyncioTestCase):
         result = await self.engine.synthesize("test text", language="es")
 
         # Verify
-        self.assertEqual(result, b"audio_data")
+        assert result == b"audio_data"
         mock_instance.generate_audio.assert_awaited_once_with("test text")
 
     @patch("bot.tts.engines.kokoro.Kokoro")
-    async def test_synthesize_failure(self, mock_kokoro):
+    async def test_synthesize_failure(self, mock_kokoro) -> None:
         # Setup
         mock_instance = MagicMock()
         mock_instance.generate_audio = AsyncMock(side_effect=Exception("Test error"))
@@ -67,7 +68,7 @@ class TestKokoroEngine(unittest.IsolatedAsyncioTestCase):
         self.engine.engine = mock_instance
 
         # Execute & Verify
-        with self.assertRaises(TTSError):
+        with pytest.raises(TTSError):
             await self.engine.synthesize("test text")
 
 

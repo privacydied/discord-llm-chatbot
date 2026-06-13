@@ -1,22 +1,23 @@
-"""
-Integration tests for the Discord bot's core message handling.
+"""Integration tests for the Discord bot's core message handling.
 
 Verifies the complete message processing pipeline from event to response,
 with special focus on the '1 IN > 1 OUT' principle enforcement.
 """
 
-import pytest
-import discord
 import logging
-from unittest.mock import MagicMock, AsyncMock, PropertyMock
 from io import StringIO
+from unittest.mock import AsyncMock, MagicMock, PropertyMock
+
+import discord
+import pytest
+
 from bot.core.bot import LLMBot
 from bot.router import ResponseMessage
 
 
 # Complete mock implementation
 class MockTextChannel:
-    def __init__(self):
+    def __init__(self) -> None:
         self.id = 456
         self.name = "test-channel"
         self.type = "text"
@@ -26,7 +27,7 @@ class MockTextChannel:
 
 
 class MockDMChannel:
-    def __init__(self):
+    def __init__(self) -> None:
         self.id = 789
         self.type = "dm"
         self.send = AsyncMock()
@@ -34,7 +35,7 @@ class MockDMChannel:
 
 
 class MockUser:
-    def __init__(self, id, name, bot=False):
+    def __init__(self, id, name, bot=False) -> None:
         self.id = id
         self.name = name
         self.discriminator = "1234"
@@ -43,7 +44,7 @@ class MockUser:
 
 
 class MockMessage:
-    def __init__(self, bot, is_dm=False):
+    def __init__(self, bot, is_dm=False) -> None:
         self.id = 112233
         self.content = f"<@{bot.user.id}> Hello bot!"
         self.author = MockUser(12345, "TestUser")
@@ -77,7 +78,7 @@ def bot():
     mock_bot.tts_available = True
 
     # Implement actual on_message behavior with error handling
-    async def on_message(message):
+    async def on_message(message) -> None:
         if message.author.bot:
             return
 
@@ -123,7 +124,7 @@ def bot():
                         await message.channel.send(embed=embed)
         except Exception as e:
             # Handle exceptions
-            mock_bot.logger.error(f"Processing error: {str(e)}")
+            mock_bot.logger.exception(f"Processing error: {e!s}")
             embed = discord.Embed(title="Processing Error", description=str(e))
             if message.guild:
                 await message.reply(embed=embed, mention_author=True)
@@ -149,7 +150,7 @@ def mock_dm_message(bot):
 
 # Tests
 @pytest.mark.asyncio
-async def test_message_handler_1_in_1_out(bot, mock_message):
+async def test_message_handler_1_in_1_out(bot, mock_message) -> None:
     """Verify 1 IN > 1 OUT principle with proper message handling."""
     await bot.on_message(mock_message)
 
@@ -161,7 +162,7 @@ async def test_message_handler_1_in_1_out(bot, mock_message):
 
 
 @pytest.mark.asyncio
-async def test_empty_response_handling(bot, mock_message):
+async def test_empty_response_handling(bot, mock_message) -> None:
     """Verify empty responses are converted to error messages."""
     bot.router.dispatch_message.return_value = None
     bot.router.is_duplicate.return_value = False
@@ -170,12 +171,12 @@ async def test_empty_response_handling(bot, mock_message):
 
     # Verify empty response embed was sent
     mock_message.reply.assert_called_once()
-    args, kwargs = mock_message.reply.call_args
+    _args, kwargs = mock_message.reply.call_args
     assert "Empty Response" in kwargs["embed"].title
 
 
 @pytest.mark.asyncio
-async def test_openai_empty_response_handling(bot, mock_message):
+async def test_openai_empty_response_handling(bot, mock_message) -> None:
     """Verify empty responses from OpenAI are converted to error messages."""
     # Mock the brain_infer to return an empty string
     bot.router.dispatch_message = AsyncMock(return_value=ResponseMessage(content=""))
@@ -184,14 +185,14 @@ async def test_openai_empty_response_handling(bot, mock_message):
 
     # Verify error message was sent
     mock_message.reply.assert_called_once()
-    args, kwargs = mock_message.reply.call_args
+    _args, kwargs = mock_message.reply.call_args
     # Check if the call had an embed
     assert "embed" in kwargs
     assert "Empty Response" in kwargs["embed"].title
 
 
 @pytest.mark.asyncio
-async def test_exception_handling(bot, mock_message):
+async def test_exception_handling(bot, mock_message) -> None:
     """Verify exceptions are caught and error messages are sent."""
     bot.router.dispatch_message.side_effect = Exception("Test error")
 
@@ -199,13 +200,13 @@ async def test_exception_handling(bot, mock_message):
 
     # Verify error message was sent
     mock_message.reply.assert_called_once()
-    args, kwargs = mock_message.reply.call_args
+    _args, kwargs = mock_message.reply.call_args
     assert "Processing Error" in kwargs["embed"].title
     assert "Test error" in kwargs["embed"].description
 
 
 @pytest.mark.asyncio
-async def test_duplicate_suppression(bot, mock_message):
+async def test_duplicate_suppression(bot, mock_message) -> None:
     """Verify duplicate messages are suppressed and don't trigger processing."""
     bot.router.is_duplicate.return_value = True
 
@@ -216,7 +217,7 @@ async def test_duplicate_suppression(bot, mock_message):
 
 
 @pytest.mark.asyncio
-async def test_tts_unavailable(bot, mock_message):
+async def test_tts_unavailable(bot, mock_message) -> None:
     """Verify when TTS is unavailable, a single embed is sent."""
     bot.tts_available = False
     bot.router.dispatch_message.return_value = ResponseMessage(content="TTS is currently unavailable. Please try again later.")
@@ -231,7 +232,7 @@ async def test_tts_unavailable(bot, mock_message):
 
 
 @pytest.mark.asyncio
-async def test_normalization_layer(bot, mock_message):
+async def test_normalization_layer(bot, mock_message) -> None:
     """Verify flow results are normalized to ResponseMessage format."""
     bot.router.dispatch_message.return_value = ResponseMessage(content="Raw response")
 
@@ -242,7 +243,7 @@ async def test_normalization_layer(bot, mock_message):
 
 
 @pytest.mark.asyncio
-async def test_message_handler_debug_output(bot):
+async def test_message_handler_debug_output(bot) -> None:
     """Verify debug output captures processing details."""
     # Setup logging capture
     stream = StringIO()
@@ -262,7 +263,7 @@ async def test_message_handler_debug_output(bot):
 
 
 @pytest.mark.asyncio
-async def test_dm_message_processing(bot, mock_dm_message):
+async def test_dm_message_processing(bot, mock_dm_message) -> None:
     """Verify DM messages are processed correctly with proper logging."""
     bot.router.dispatch_message.return_value = ResponseMessage(content="DM response")
 
@@ -276,7 +277,7 @@ async def test_dm_message_processing(bot, mock_dm_message):
 
 
 @pytest.mark.asyncio
-async def test_dm_error_handling(bot, mock_dm_message):
+async def test_dm_error_handling(bot, mock_dm_message) -> None:
     """Verify DM errors are caught and logged properly."""
     bot.router.dispatch_message.side_effect = Exception("DM processing error")
 
@@ -284,13 +285,13 @@ async def test_dm_error_handling(bot, mock_dm_message):
 
     # Verify error message was sent
     mock_dm_message.channel.send.assert_called_once()
-    args, kwargs = mock_dm_message.channel.send.call_args
+    _args, kwargs = mock_dm_message.channel.send.call_args
     assert "Processing Error" in kwargs["embed"].title
     assert "DM processing error" in kwargs["embed"].description
 
 
 @pytest.mark.asyncio
-async def test_dm_metrics_tracking(bot, mock_dm_message):
+async def test_dm_metrics_tracking(bot, mock_dm_message) -> None:
     """Verify DM messages increment metrics counters."""
     bot.router.dispatch_message.return_value = ResponseMessage(content="DM metrics test")
 
@@ -305,7 +306,7 @@ async def test_dm_metrics_tracking(bot, mock_dm_message):
 
 
 @pytest.mark.asyncio
-async def test_dm_logging_output(bot, mock_dm_message):
+async def test_dm_logging_output(bot, mock_dm_message) -> None:
     """Verify DM processing generates proper debug logs."""
     # Setup logging capture
     stream = StringIO()
@@ -321,5 +322,4 @@ async def test_dm_logging_output(bot, mock_dm_message):
 
     # Retrieve logs
     log_output = stream.getvalue()
-    print(log_output)  # For debugging if needed
     assert " === DM MESSAGE PROCESSING STARTED ====" in log_output

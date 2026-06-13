@@ -1,5 +1,4 @@
-"""
-Atomic persistence layer for JSON profile storage.
+"""Atomic persistence layer for JSON profile storage.
 
 This module provides atomic write operations, corruption recovery,
 and optional file-level locking for safe concurrent access.
@@ -15,16 +14,15 @@ import logging
 import os
 import shutil
 import tempfile
+from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Any, Dict, Optional
-from contextlib import contextmanager
+from typing import Any, Never
 
 logger = logging.getLogger(__name__)
 
 
 def _validate_json(data: Any) -> bool:
-    """
-    Validate that data can be serialized to JSON.
+    """Validate that data can be serialized to JSON.
 
     [REH] Pre-serialization validation to catch errors before writing
     [SFT] Prevents writing corrupt/incomplete data
@@ -33,19 +31,18 @@ def _validate_json(data: Any) -> bool:
         json.dumps(data)
         return True
     except (TypeError, ValueError) as e:
-        logger.error(f"JSON validation failed: {e}")
+        logger.exception(f"JSON validation failed: {e}")
         return False
 
 
 def _atomic_write_file(
     target_path: Path,
-    data: Dict[str, Any],
+    data: dict[str, Any],
     indent: int = 2,
     ensure_ascii: bool = False,
     fsync: bool = True,
 ) -> bool:
-    """
-    Atomically write JSON data to a file.
+    """Atomically write JSON data to a file.
 
     Strategy:
     1. Write to a temp file in the same directory as target
@@ -65,6 +62,7 @@ def _atomic_write_file(
     [REH] Atomic rename guarantees readers see either old or new version
     [PA] fsync ensures data reaches physical storage
     [SFT] Temp file in same filesystem guarantees atomic rename
+
     """
     if not _validate_json(data):
         logger.error(f"Cannot write invalid JSON to {target_path}")
@@ -115,30 +113,25 @@ def _atomic_write_file(
         return True
 
     except OSError as e:
-        logger.error(f"Atomic write failed for {target_path}: {e}")
+        logger.exception(f"Atomic write failed for {target_path}: {e}")
         return False
 
     except Exception as e:
-        logger.error(f"Unexpected error during atomic write to {target_path}: {e}")
+        logger.exception(f"Unexpected error during atomic write to {target_path}: {e}")
         return False
 
     finally:
         # Cleanup
         if temp_fd is not None:
-            try:
+            with suppress(OSError):
                 os.close(temp_fd)
-            except OSError:
-                pass
         if temp_path is not None and temp_path.exists():
-            try:
+            with suppress(OSError):
                 temp_path.unlink()
-            except OSError:
-                pass
 
 
 def _create_backup(src: Path, dst: Path, max_retries: int = 3) -> bool:
-    """
-    Create a backup copy with retry logic.
+    """Create a backup copy with retry logic.
 
     [REH] Handles permission errors by attempting chmod removal
     [PA] Limited retries with error logging
@@ -156,7 +149,7 @@ def _create_backup(src: Path, dst: Path, max_retries: int = 3) -> bool:
                         os.chmod(dst, 0o600)
                         dst.unlink()
                     except Exception as e:
-                        logger.error(f"Cannot remove existing backup {dst}: {e}")
+                        logger.exception(f"Cannot remove existing backup {dst}: {e}")
                         return False
             shutil.copy2(src, dst)
             return True
@@ -168,13 +161,13 @@ def _create_backup(src: Path, dst: Path, max_retries: int = 3) -> bool:
 
 
 def _restore_from_backup(src: Path, dst: Path) -> bool:
-    """
-    Restore a file from its backup.
+    """Restore a file from its backup.
 
     Returns:
         True if restoration was successful, False otherwise.
 
     [REH] Corruption recovery entry point
+
     """
     src = Path(src)
     dst = Path(dst)
@@ -185,30 +178,28 @@ def _restore_from_backup(src: Path, dst: Path) -> bool:
 
     try:
         # Validate backup before restoring
-        with open(src, "r", encoding="utf-8") as f:
+        with open(src, encoding="utf-8") as f:
             data = json.load(f)
 
         # Write atomically
         if _atomic_write_file(dst, data, fsync=True):
             logger.info(f"Successfully restored {dst} from backup {src}")
             return True
-        else:
-            logger.error(f"Failed to atomically restore {dst} from backup")
-            return False
+        logger.error(f"Failed to atomically restore {dst} from backup")
+        return False
 
     except json.JSONDecodeError as e:
-        logger.error(f"Backup file {src} is corrupted: {e}")
+        logger.exception(f"Backup file {src} is corrupted: {e}")
         return False
 
     except Exception as e:
-        logger.error(f"Failed to restore {dst} from backup {src}: {e}")
+        logger.exception(f"Failed to restore {dst} from backup {src}: {e}")
         return False
 
 
 @contextmanager
-def _file_lock(path: Path, exclusive: bool = True, timeout: Optional[float] = None):
-    """
-    Context manager for advisory file locking using fcntl.
+def _file_lock(path: Path, exclusive: bool = True, timeout: float | None = None):
+    """Context manager for advisory file locking using fcntl.
 
     Args:
         path: Path to lock (uses .lock file)
@@ -221,6 +212,7 @@ def _file_lock(path: Path, exclusive: bool = True, timeout: Optional[float] = No
     [REH] Advisory locking for concurrent access safety
     [PA] Non-blocking option available with timeout
     [SFT] Lock file is separate from data file
+
     """
     path = Path(path)
     lock_path = path.with_suffix(path.suffix + ".lock")
@@ -238,8 +230,9 @@ def _file_lock(path: Path, exclusive: bool = True, timeout: Optional[float] = No
                 # Use alarm-based timeout for blocking lock
                 import signal
 
-                def _timeout_handler(signum, frame):
-                    raise TimeoutError(f"Lock acquisition timed out for {path}")
+                def _timeout_handler(signum, frame) -> Never:
+                    msg = f"Lock acquisition timed out for {path}"
+                    raise TimeoutError(msg)
 
                 old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
                 signal.setitimer(signal.ITIMER_REAL, timeout)
@@ -251,35 +244,31 @@ def _file_lock(path: Path, exclusive: bool = True, timeout: Optional[float] = No
             else:
                 fcntl.flock(lock_file.fileno(), operation)
 
-        except IOError as e:
+        except OSError as e:
             if e.errno == 11:  # EWOULDBLOCK / EAGAIN
-                raise TimeoutError(f"Lock acquisition would block for {path}")
+                msg = f"Lock acquisition would block for {path}"
+                raise TimeoutError(msg)
             raise
 
         yield lock_path
 
     finally:
         if lock_file is not None:
-            try:
+            with suppress(Exception):
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-            except Exception:
-                pass
-            try:
+            with suppress(Exception):
                 lock_file.close()
-            except Exception:
-                pass
 
 
 def atomic_save_json(
     target_path: Path,
-    data: Dict[str, Any],
+    data: dict[str, Any],
     create_backup: bool = True,
     validate_before_write: bool = True,
     use_lock: bool = True,
     indent: int = 2,
 ) -> bool:
-    """
-    Save JSON data atomically with optional backup and locking.
+    """Save JSON data atomically with optional backup and locking.
 
     This is the main entry point for profile persistence.
 
@@ -296,6 +285,7 @@ def atomic_save_json(
 
     [REH] Full atomic write with backup and validation
     [SFT] Locking prevents race conditions
+
     """
     target_path = Path(target_path)
 
@@ -309,9 +299,8 @@ def atomic_save_json(
         context = _file_lock(target_path) if use_lock else _null_context()
         with context:
             # Create backup of existing file
-            if create_backup and target_path.exists():
-                if not _create_backup(target_path, backup_path):
-                    logger.warning(f"Could not create backup for {target_path}")
+            if create_backup and target_path.exists() and not _create_backup(target_path, backup_path):
+                logger.warning(f"Could not create backup for {target_path}")
                     # Continue anyway - atomic write may still succeed
 
             # Atomic write
@@ -331,10 +320,10 @@ def atomic_save_json(
             return True
 
     except TimeoutError as e:
-        logger.error(f"Could not acquire lock for {target_path}: {e}")
+        logger.exception(f"Could not acquire lock for {target_path}: {e}")
         return False
     except Exception as e:
-        logger.error(f"Unexpected error saving {target_path}: {e}")
+        logger.exception(f"Unexpected error saving {target_path}: {e}")
         return False
 
 
@@ -346,11 +335,10 @@ def _null_context():
 
 def load_json_with_recovery(
     target_path: Path,
-    default_data: Optional[Dict] = None,
+    default_data: dict | None = None,
     attempt_recovery: bool = True,
-) -> Optional[Dict]:
-    """
-    Load JSON data with corruption recovery.
+) -> dict | None:
+    """Load JSON data with corruption recovery.
 
     Args:
         target_path: Path to JSON file
@@ -361,6 +349,7 @@ def load_json_with_recovery(
         Loaded data, or default_data if loading/recovery failed
 
     [REH] Automatic corruption detection and recovery
+
     """
     target_path = Path(target_path)
 
@@ -368,12 +357,11 @@ def load_json_with_recovery(
         return default_data
 
     try:
-        with open(target_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data
+        with open(target_path, encoding="utf-8") as f:
+            return json.load(f)
 
     except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error for {target_path}: {e}")
+        logger.exception(f"JSON decode error for {target_path}: {e}")
 
         if attempt_recovery:
             backup_path = target_path.with_suffix(target_path.suffix + ".bak")
@@ -381,11 +369,11 @@ def load_json_with_recovery(
             if backup_path.exists():
                 logger.info(f"Attempting recovery from backup {backup_path}")
                 try:
-                    with open(backup_path, "r", encoding="utf-8") as f:
+                    with open(backup_path, encoding="utf-8") as f:
                         data = json.load(f)
                     # Validate recovered data is a dict before restoring [BUGFIX]
                     if not isinstance(data, dict):
-                        logger.error(f"Backup data is not a dict, skipping recovery for {target_path}")
+                        logger.exception(f"Backup data is not a dict, skipping recovery for {target_path}")
                         return default_data
                     # Attempt to restore the corrupted file
                     if _atomic_write_file(target_path, data, fsync=True):
@@ -399,23 +387,23 @@ def load_json_with_recovery(
                             pass
                     return data
                 except Exception as recovery_error:
-                    logger.error(f"Recovery from backup failed: {recovery_error}")
+                    logger.exception(f"Recovery from backup failed: {recovery_error}")
 
         return default_data
 
     except Exception as e:
-        logger.error(f"Error loading {target_path}: {e}")
+        logger.exception(f"Error loading {target_path}: {e}")
         return default_data
 
 
-def validate_profile_integrity(data: Dict) -> tuple[bool, Optional[str]]:
-    """
-    Validate that a profile dictionary has basic structural integrity.
+def validate_profile_integrity(data: dict) -> tuple[bool, str | None]:
+    """Validate that a profile dictionary has basic structural integrity.
 
     Returns:
         Tuple of (is_valid, error_message)
 
     [SFT] Detects malformed profiles before they cause issues
+
     """
     if not isinstance(data, dict):
         return False, "Profile data is not a dictionary"

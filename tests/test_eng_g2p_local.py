@@ -4,18 +4,18 @@ import types
 import bot.tts.eng_g2p_local as g2p
 
 
-def _reset_official(monkeypatch):
+def _reset_official(monkeypatch) -> None:
     monkeypatch.setattr(g2p, "_OFFICIAL_TOKENIZER_STATE", "uninitialized", raising=False)
     monkeypatch.setattr(g2p, "_OFFICIAL_TOKENIZER", None, raising=False)
     monkeypatch.setattr(g2p, "_ESPEAK_TMPDIR_CONFIGURED", False, raising=False)
     monkeypatch.setattr(g2p, "_ESPEAK_TMPDIR_PATH", None, raising=False)
 
 
-def test_text_to_ipa_prefers_official_tokenizer(monkeypatch):
+def test_text_to_ipa_prefers_official_tokenizer(monkeypatch) -> None:
     _reset_official(monkeypatch)
 
     class FakeTokenizer:
-        def phonemize(self, text, lang="en-us", norm=True):
+        def phonemize(self, text, lang="en-us", norm=True) -> str:
             assert lang == "en-us"
             assert norm is True
             assert text == "testing"
@@ -31,7 +31,7 @@ def test_text_to_ipa_prefers_official_tokenizer(monkeypatch):
     assert ipa == "tˈɛstɪŋ"
 
 
-def test_text_to_ipa_falls_back_to_cmudict(monkeypatch):
+def test_text_to_ipa_falls_back_to_cmudict(monkeypatch) -> None:
     _reset_official(monkeypatch)
 
     fake_cmudict = types.SimpleNamespace(dict=lambda: {"testing": [["T", "EH1", "S", "T", "IH0", "NG"]]})
@@ -44,7 +44,7 @@ def test_text_to_ipa_falls_back_to_cmudict(monkeypatch):
     assert ipa == "t ɛ s t ɪ ŋ"
 
 
-def test_text_to_ipa_maps_er_to_r_colored(monkeypatch):
+def test_text_to_ipa_maps_er_to_r_colored(monkeypatch) -> None:
     _reset_official(monkeypatch)
 
     fake_cmudict = types.SimpleNamespace(dict=lambda: {"bird": [["B", "ER1", "D"]]})
@@ -57,17 +57,18 @@ def test_text_to_ipa_maps_er_to_r_colored(monkeypatch):
     assert ipa == "b ɚ d"
 
 
-def test_text_to_ipa_retries_tempdir_failure(monkeypatch, tmp_path):
+def test_text_to_ipa_retries_tempdir_failure(monkeypatch, tmp_path) -> None:
     _reset_official(monkeypatch)
 
     class RetryTokenizer:
-        def __init__(self):
+        def __init__(self) -> None:
             self.calls = 0
 
-        def phonemize(self, text, lang="en-us", norm=True):
+        def phonemize(self, text, lang="en-us", norm=True) -> str:
             self.calls += 1
             if self.calls == 1:
-                raise OSError("failed to map segment from shared object")
+                msg = "failed to map segment from shared object"
+                raise OSError(msg)
             return "tˈɛstɪŋ"
 
     retry_tokenizer = RetryTokenizer()

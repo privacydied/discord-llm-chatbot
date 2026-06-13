@@ -1,21 +1,22 @@
-"""
-Extraction utilities for syndication content processing.
+"""Extraction utilities for syndication content processing.
 Implements strict media selection policy for X/Twitter syndication payloads.
 """
 
-from typing import List, Dict, Any, Optional, Iterable, Tuple
-from .url_utils import upgrade_pbs_to_orig, pbs_base_key
 import logging
 import os
 import re
+from collections.abc import Iterable
 from html import unescape
+from typing import Any
+
+from .url_utils import pbs_base_key, upgrade_pbs_to_orig
 
 log = logging.getLogger(__name__)
 
 
 def _iter_syndication_media_entries(
-    node: Dict[str, Any],
-) -> Iterable[Tuple[str, Dict[str, Any]]]:
+    node: dict[str, Any],
+) -> Iterable[tuple[str, dict[str, Any]]]:
     """Yield media entries from common syndication containers with source labels."""
     if not isinstance(node, dict):
         return
@@ -38,9 +39,8 @@ def _iter_syndication_media_entries(
                 yield (f"{entities_key}.media", m)
 
 
-def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Returns a dict with: { "text": str, "image_urls": List[str], "source": str, "had_card": bool }
+def extract_text_and_images_from_syndication(tw: dict[str, Any]) -> dict[str, Any]:
+    """Returns a dict with: { "text": str, "image_urls": List[str], "source": str, "had_card": bool }
     Policy:
       1) Primary native media first (photos array). If empty, check entities/extended_entities for photos.
          For video/animated_gif, use poster/thumbnail image when available.
@@ -50,10 +50,10 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
       5) Dedup: compare by base asset (strip query and :size) while preserving order.
     """
 
-    def _extract_article_text(article_node: Dict[str, Any]) -> str:
+    def _extract_article_text(article_node: dict[str, Any]) -> str:
         if not isinstance(article_node, dict):
             return ""
-        parts: List[str] = []
+        parts: list[str] = []
         title = str(article_node.get("title") or "").strip()
         preview = str(article_node.get("preview_text") or "").strip()
         if title:
@@ -81,10 +81,7 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
     base_text = (base_text or "").strip()
     article_text = _extract_article_text(tw.get("article") or {})
     if article_text:
-        if base_text and not re.search(r"https?://t\.co/[A-Za-z0-9]+", base_text):
-            text = base_text if article_text in base_text else f"{base_text}\n\n[Linked X Article]\n{article_text}"
-        else:
-            text = article_text
+        text = (base_text if article_text in base_text else f"{base_text}\n\n[Linked X Article]\n{article_text}") if base_text and not re.search(r"https?://t\.co/[A-Za-z0-9]+", base_text) else article_text
     else:
         text = base_text
     include_quoted = os.getenv("SYND_INCLUDE_QUOTED_MEDIA", "true").lower() in (
@@ -94,20 +91,20 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
         "on",
     )
 
-    def _collect_from_photos(node: Dict[str, Any]) -> List[str]:
-        urls: List[str] = []
+    def _collect_from_photos(node: dict[str, Any]) -> list[str]:
+        urls: list[str] = []
         for ph in node.get("photos") or []:
             raw = ph.get("url") or ph.get("media_url_https")
             if raw:
                 urls.append(upgrade_pbs_to_orig(raw))
         return urls
 
-    def _collect_from_entities(node: Dict[str, Any]) -> List[str]:
-        urls: List[str] = []
+    def _collect_from_entities(node: dict[str, Any]) -> list[str]:
+        urls: list[str] = []
         for _source, m in _iter_syndication_media_entries(node):
             try:
                 mtype = (m.get("type") or "").lower()
-                raw: Optional[str] = None
+                raw: str | None = None
                 if mtype == "photo":
                     raw = m.get("media_url_https") or m.get("url")
                 elif mtype in ("video", "animated_gif"):
@@ -119,11 +116,11 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
                 continue
         return urls
 
-    def _extract_card_url(node: Dict[str, Any]) -> Optional[str]:
+    def _extract_card_url(node: dict[str, Any]) -> str | None:
         # Prefer card.binding_values.photo_image_full_size_large or similar; fallback to top-level image
         card = node.get("card") or {}
         bv = card.get("binding_values") or {}
-        candidates: List[Optional[str]] = []
+        candidates: list[str | None] = []
         # Known preferred keys in rough order
         pref_keys = [
             "photo_image_full_size_large",
@@ -145,7 +142,7 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
             candidates.append(img)
 
         # Filter out icon-ish assets
-        filtered: List[str] = []
+        filtered: list[str] = []
         for c in candidates:
             if not c:
                 continue
@@ -201,7 +198,7 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
 
     # 4) Dedup by base asset (strip params and :size), preserve order
     seen_keys = set()
-    deduped: List[str] = []
+    deduped: list[str] = []
     for u in primary_urls:
         key = pbs_base_key(u)
         if key in seen_keys:
@@ -234,8 +231,8 @@ def extract_text_and_images_from_syndication(tw: Dict[str, Any]) -> Dict[str, An
     }
 
 
-def syndication_has_video(tw: Dict[str, Any]) -> bool:
-    """Check if syndication data indicates video or animated_gif media. [IV][REH]
+def syndication_has_video(tw: dict[str, Any]) -> bool:
+    """Check if syndication data indicates video or animated_gif media. [IV][REH].
 
     Detection strategies in priority order:
     1. Top-level 'video' field
@@ -247,14 +244,14 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
     if not isinstance(tw, dict):
         return False
 
-    def _log_node_keys(node_name: str, node: Dict[str, Any]) -> None:
+    def _log_node_keys(node_name: str, node: dict[str, Any]) -> None:
         try:
-            keys = sorted(list(node.keys()))
+            keys = sorted(node.keys())
             log.info("syndication_has_video: %s.keys=%s", node_name, keys)
         except Exception:
             pass
 
-    def _node_has_video(node_name: str, node: Dict[str, Any]) -> bool:
+    def _node_has_video(node_name: str, node: dict[str, Any]) -> bool:
         if not isinstance(node, dict) or not node:
             return False
 
@@ -324,7 +321,7 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
 
         return False
 
-    def _node_has_media_hints(node: Dict[str, Any]) -> bool:
+    def _node_has_media_hints(node: dict[str, Any]) -> bool:
         if not isinstance(node, dict) or not node:
             return False
         if any(
@@ -350,7 +347,7 @@ def syndication_has_video(tw: Dict[str, Any]) -> bool:
         return False
 
     # Evaluate all known nesting shapes deterministically.
-    nodes_to_scan: List[Tuple[str, Dict[str, Any]]] = [("tweet", tw)]
+    nodes_to_scan: list[tuple[str, dict[str, Any]]] = [("tweet", tw)]
     for key in ("quoted_tweet", "quoted_status", "retweeted_status", "legacy"):
         node = tw.get(key) or {}
         if isinstance(node, dict) and node:

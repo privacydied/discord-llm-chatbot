@@ -1,34 +1,34 @@
-"""
-Logging helper utilities for Discord bot setup and operations.
+"""Logging helper utilities for Discord bot setup and operations.
 
 Provides Rich-based visual logging for bot initialization, command setup,
 and other operational events using Tree and Panel displays.
 """
 
-from typing import List, Any
+import logging
+from typing import Any
+
 from rich.console import Console
 from rich.panel import Panel
-from rich.tree import Tree
 from rich.text import Text
-import logging
+from rich.tree import Tree
 
 logger = logging.getLogger(__name__)
 
 
 def log_commands_setup(
     console: Console,
-    command_modules: List[str],
-    command_cogs: List[Any],
+    command_modules: list[str],
+    command_cogs: list[Any],
     total_commands: int,
 ) -> None:
-    """
-    Generate a Rich visual report for command setup completion.
+    """Generate a Rich visual report for command setup completion.
 
     Args:
         console: Rich console for output
         command_modules: List of loaded command module names
         command_cogs: List of loaded command cogs
         total_commands: Total number of commands registered
+
     """
     try:
         # Normalize module and cog tuples into (name, success) pairs
@@ -73,19 +73,19 @@ def log_commands_setup(
         logger.info(f"✅ Command setup visualization complete: {total_commands} commands from {len(normalized_cogs)} cogs")
 
     except Exception as e:
-        logger.error(f"❌ Failed to generate command setup report: {e}")
+        logger.exception(f"❌ Failed to generate command setup report: {e}")
         # Fallback to simple logging if Rich display fails
         logger.info(f"✅ Loaded {total_commands} commands from {len(command_cogs)} cogs")
 
 
 def log_startup_banner(console: Console, bot_name: str, version: str = "1.0.0") -> None:
-    """
-    Display a startup banner for the bot.
+    """Display a startup banner for the bot.
 
     Args:
         console: Rich console for output
         bot_name: Name of the bot
         version: Version string
+
     """
     try:
         banner_text = Text()
@@ -105,16 +105,16 @@ def log_startup_banner(console: Console, bot_name: str, version: str = "1.0.0") 
         console.print()
 
     except Exception as e:
-        logger.error(f"❌ Failed to display startup banner: {e}")
+        logger.exception(f"❌ Failed to display startup banner: {e}")
 
 
 def log_shutdown_banner(console: Console, exit_code: int = 0) -> None:
-    """
-    Display a shutdown banner for the bot.
+    """Display a shutdown banner for the bot.
 
     Args:
         console: Rich console for output
         exit_code: Exit code (0 = graceful, >0 = error)
+
     """
     try:
         if exit_code == 0:
@@ -133,4 +133,4 @@ def log_shutdown_banner(console: Console, exit_code: int = 0) -> None:
         console.print()
 
     except Exception as e:
-        logger.error(f"❌ Failed to display shutdown banner: {e}")
+        logger.exception(f"❌ Failed to display shutdown banner: {e}")

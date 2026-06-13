@@ -1,9 +1,9 @@
-"""
-Smoke tests for environment variables and multimodal functionality.
+"""Smoke tests for environment variables and multimodal functionality.
 CHANGE: Added comprehensive tests to verify .env→code mapping and multimodal branch coverage.
 """
 
 import sys
+
 import pytest
 
 pytestmark = pytest.mark.skip(reason="Requires live multimodal routing infrastructure")
@@ -14,22 +14,22 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Import bot modules
-from bot.config import (
-    load_config,
-    validate_required_env,
-    validate_prompt_files,
-    check_venv_activation,
-    ConfigurationError,
-)
 from bot.ai_backend import generate_response, generate_vl_response
-from bot.events import has_image_attachments, get_image_urls
+from bot.config import (
+    ConfigurationError,
+    check_venv_activation,
+    load_config,
+    validate_prompt_files,
+    validate_required_env,
+)
+from bot.events import get_image_urls, has_image_attachments
 from bot.openai_backend import generate_vl_response as openai_vl_response
 
 
 class TestEnvironmentVariables:
     """Test environment variable loading and validation."""
 
-    def test_env_vars_loaded(self):
+    def test_env_vars_loaded(self) -> None:
         """Verify that essential .env variables are accessible."""
         config = load_config()
 
@@ -43,9 +43,8 @@ class TestEnvironmentVariables:
         assert config.get("OPENAI_TEXT_MODEL") is not None, "OPENAI_TEXT_MODEL must be set"
         assert config.get("VL_MODEL") is not None, "VL_MODEL must be set"
 
-        print("✅ All essential environment variables are loaded")
 
-    def test_prompt_files_exist(self):
+    def test_prompt_files_exist(self) -> None:
         """Verify that prompt files exist and are readable."""
         config = load_config()
 
@@ -62,31 +61,26 @@ class TestEnvironmentVariables:
         assert vl_prompt_path.exists(), f"VL prompt file not found: {vl_prompt_path}"
 
         # Test that files are readable
-        with open(prompt_path, "r") as f:
+        with open(prompt_path) as f:
             prompt_content = f.read()
             assert len(prompt_content.strip()) > 0, "Text prompt file is empty"
 
-        with open(vl_prompt_path, "r") as f:
+        with open(vl_prompt_path) as f:
             vl_prompt_content = f.read()
             assert len(vl_prompt_content.strip()) > 0, "VL prompt file is empty"
 
-        print("✅ Prompt files exist and are readable:")
-        print(f"  • Text prompt: {prompt_path}")
-        print(f"  • VL prompt: {vl_prompt_path}")
 
-    def test_validate_required_env(self):
+    def test_validate_required_env(self) -> None:
         """Test the validate_required_env function."""
         try:
             validate_required_env()
-            print("✅ Required environment variables validation passed")
         except ConfigurationError as e:
             pytest.fail(f"Required environment variables missing: {e}")
 
-    def test_validate_prompt_files(self):
+    def test_validate_prompt_files(self) -> None:
         """Test the validate_prompt_files function."""
         try:
             validate_prompt_files()
-            print("✅ Prompt file validation passed")
         except ConfigurationError as e:
             pytest.fail(f"Prompt file validation failed: {e}")
 
@@ -94,7 +88,7 @@ class TestEnvironmentVariables:
 class TestImageDetection:
     """Test image detection utilities for multimodal processing."""
 
-    def test_has_image_attachments_with_images(self):
+    def test_has_image_attachments_with_images(self) -> None:
         """Test image detection with mock Discord message containing images."""
         # Mock Discord message with image attachment
         mock_message = MagicMock()
@@ -105,9 +99,8 @@ class TestImageDetection:
 
         result = has_image_attachments(mock_message)
         assert result is True, "Should detect image attachments"
-        print("✅ Image detection works for PNG files")
 
-    def test_has_image_attachments_no_images(self):
+    def test_has_image_attachments_no_images(self) -> None:
         """Test image detection with mock Discord message containing no images."""
         # Mock Discord message with no attachments
         mock_message = MagicMock()
@@ -115,9 +108,8 @@ class TestImageDetection:
 
         result = has_image_attachments(mock_message)
         assert result is False, "Should not detect images when none present"
-        print("✅ Image detection correctly identifies no images")
 
-    def test_get_image_urls(self):
+    def test_get_image_urls(self) -> None:
         """Test image URL extraction from Discord message."""
         # Mock Discord message with image attachment
         mock_message = MagicMock()
@@ -130,14 +122,13 @@ class TestImageDetection:
         urls = get_image_urls(mock_message)
         assert len(urls) == 1, "Should extract one image URL"
         assert urls[0] == mock_attachment.url, "Should return the correct URL"
-        print("✅ Image URL extraction works correctly")
 
 
 class TestMultimodalLogic:
     """Test multimodal AI processing logic."""
 
     @patch("bot.openai_backend.openai.AsyncOpenAI")
-    async def test_vl_response_generation(self, mock_openai_client):
+    async def test_vl_response_generation(self, mock_openai_client) -> None:
         """Test VL response generation with mocked OpenAI client."""
         # Setup mock OpenAI client
         mock_client_instance = AsyncMock()
@@ -165,11 +156,10 @@ class TestMultimodalLogic:
         assert result["backend"] == "openai_vl"
         assert result["usage"]["total_tokens"] == 75
 
-        print("✅ VL response generation works correctly")
 
     @patch("bot.ai_backend.generate_vl_response")
     @patch("bot.ai_backend.generate_response")
-    async def test_hybrid_multimodal_routing(self, mock_generate_response, mock_generate_vl_response):
+    async def test_hybrid_multimodal_routing(self, mock_generate_response, mock_generate_vl_response) -> None:
         """Test that the AI backend correctly routes to VL when needed."""
         # Setup mocks
         mock_generate_vl_response.return_value = {
@@ -197,48 +187,38 @@ class TestMultimodalLogic:
         assert vl_result["backend"] == "openai_vl"
         assert text_result["backend"] == "openai"
 
-        print("✅ Hybrid multimodal routing works correctly")
 
 
 class TestVenvEnforcement:
     """Test .venv enforcement functionality."""
 
-    def test_check_venv_activation(self):
+    def test_check_venv_activation(self) -> None:
         """Test .venv activation check."""
         # This test will check the current environment
         # In a real .venv, sys.prefix should contain '.venv'
         try:
             check_venv_activation()
-            print("✅ .venv enforcement check completed")
         except Exception as e:
             # This is expected if not running in .venv
-            print(f"⚠️  .venv enforcement warning (expected): {e}")
+            pass
 
 
-def test_env_and_model_integration():
-    """
-    Integration smoke test to verify .env→code mapping and multimodal branch coverage.
+def test_env_and_model_integration() -> None:
+    """Integration smoke test to verify .env→code mapping and multimodal branch coverage.
     CHANGE: Comprehensive integration test as specified in requirements.
     """
-    print("\n🧪 Running comprehensive environment and multimodal smoke tests...\n")
-
     # Test 1: Environment variables
-    print("1. Testing environment variable loading...")
     config = load_config()
     assert config is not None
-    print("   ✅ Configuration loaded successfully")
 
     # Test 2: Prompt files
-    print("2. Testing prompt file accessibility...")
     prompt_file = config.get("PROMPT_FILE")
     vl_prompt_file = config.get("VL_PROMPT_FILE")
 
     assert Path(prompt_file).exists(), f"Text prompt file missing: {prompt_file}"
     assert Path(vl_prompt_file).exists(), f"VL prompt file missing: {vl_prompt_file}"
-    print("   ✅ Both prompt files accessible")
 
     # Test 3: Image detection logic
-    print("3. Testing image detection logic...")
     mock_msg_with_image = MagicMock()
     mock_attachment = MagicMock()
     mock_attachment.filename = "test.png"
@@ -249,19 +229,14 @@ def test_env_and_model_integration():
 
     assert has_image_attachments(mock_msg_with_image) is True
     assert has_image_attachments(mock_msg_no_image) is False
-    print("   ✅ Image detection logic works correctly")
 
     # Test 4: Model configuration
-    print("4. Testing model configuration...")
     text_model = config.get("OPENAI_TEXT_MODEL")
     vl_model = config.get("VL_MODEL")
 
     assert text_model is not None, "Text model not configured"
     assert vl_model is not None, "VL model not configured"
-    print(f"   ✅ Text model: {text_model}")
-    print(f"   ✅ VL model: {vl_model}")
 
-    print("\n🎉 All smoke tests passed! The hybrid multimodal system is ready.\n")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
-"""
-Local English grapheme-to-phoneme conversion outputting IPA symbols.
+"""Local English grapheme-to-phoneme conversion outputting IPA symbols.
 Zero dependencies, no network downloads, offline-only operation.
 IPA-focused for Kokoro TTS model compatibility.
 """
@@ -11,7 +10,6 @@ import re
 import tempfile
 import unicodedata
 from pathlib import Path
-from typing import Dict, List, Optional
 
 try:
     import cmudict  # type: ignore
@@ -20,7 +18,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 logger = logging.getLogger(__name__)
 
-IPA_REWRITE_TABLE: Dict[str, str] = {}
+IPA_REWRITE_TABLE: dict[str, str] = {}
 
 # Load lexicon from external JSON file
 _LEXICON_CACHE = None
@@ -29,7 +27,7 @@ _LEXICON_CACHE = None
 _OFFICIAL_TOKENIZER_STATE = "uninitialized"
 _OFFICIAL_TOKENIZER = None
 _ESPEAK_TMPDIR_CONFIGURED = False
-_ESPEAK_TMPDIR_PATH: Optional[Path] = None
+_ESPEAK_TMPDIR_PATH: Path | None = None
 
 
 def get_kokoro_tempdir() -> Path:
@@ -44,7 +42,7 @@ class G2PUnavailableError(RuntimeError):
     """Raised when the deterministic G2P pipeline cannot be used."""
 
 
-def _load_lexicon() -> Dict[str, str]:
+def _load_lexicon() -> dict[str, str]:
     """Load lexicon from lexicon_en.json file."""
     global _LEXICON_CACHE
     if _LEXICON_CACHE is not None:
@@ -53,7 +51,7 @@ def _load_lexicon() -> Dict[str, str]:
     try:
         lexicon_path = Path(__file__).parent / "lexicon_en.json"
         if lexicon_path.exists():
-            with open(lexicon_path, "r", encoding="utf-8") as f:
+            with open(lexicon_path, encoding="utf-8") as f:
                 _LEXICON_CACHE = json.load(f)
                 logger.debug("Loaded English lexicon: %d entries", len(_LEXICON_CACHE))
                 return _LEXICON_CACHE
@@ -108,9 +106,8 @@ def normalize_text(text: str) -> str:
     # Don't strip apostrophes from contractions like "what's"
 
     # Expand numbers to words for proper pronunciation
-    t = number_to_words(t)
+    return number_to_words(t)
 
-    return t
 
 
 def number_to_words(text: str) -> str:
@@ -163,7 +160,7 @@ def number_to_words(text: str) -> str:
         """Convert 0-99 to words."""
         if n < 20:
             return ones[n]
-        elif n < 100:
+        if n < 100:
             t, o = divmod(n, 10)
             return tens[t] + (" " + ones[o] if o else "")
         return str(n)  # Fallback for unexpected values
@@ -172,9 +169,9 @@ def number_to_words(text: str) -> str:
         """Convert year (1900-2099) to spoken form."""
         if 1900 <= year <= 1999:
             return f"{ones[19]} {_small_num(year - 1900)}"
-        elif 2000 <= year <= 2009:
+        if 2000 <= year <= 2009:
             return "two thousand" + (f" {ones[year - 2000]}" if year > 2000 else "")
-        elif 2010 <= year <= 2099:
+        if 2010 <= year <= 2099:
             return f"twenty {_small_num(year - 2000)}"
         return str(year)
 
@@ -888,9 +885,8 @@ def _normalize_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text)
 
     # Strip leading/trailing whitespace
-    text = text.strip()
+    return text.strip()
 
-    return text
 
 
 def _expand_numbers(text: str) -> str:
@@ -938,7 +934,7 @@ def _expand_numbers(text: str) -> str:
         num = int(match.group())
         if num == 0:
             return "zero"
-        elif num <= 19:
+        if num <= 19:
             teens = [
                 "",
                 "one",
@@ -962,7 +958,7 @@ def _expand_numbers(text: str) -> str:
                 "nineteen",
             ]
             return teens[num]
-        elif num <= 99:
+        if num <= 99:
             tens = [
                 "",
                 "",
@@ -979,43 +975,40 @@ def _expand_numbers(text: str) -> str:
             one = num % 10
             if one == 0:
                 return tens[ten]
-            else:
-                ones = [
-                    "",
-                    "one",
-                    "two",
-                    "three",
-                    "four",
-                    "five",
-                    "six",
-                    "seven",
-                    "eight",
-                    "nine",
-                ]
-                return tens[ten] + " " + ones[one]
-        else:  # 100-999
-            hundreds = num // 100
-            remainder = num % 100
-            hundreds_word = [
+            ones = [
                 "",
-                "one hundred",
-                "two hundred",
-                "three hundred",
-                "four hundred",
-                "five hundred",
-                "six hundred",
-                "seven hundred",
-                "eight hundred",
-                "nine hundred",
-            ][hundreds]
-            if remainder == 0:
-                return hundreds_word
-            else:
-                return hundreds_word + " " + expand_number(str(remainder))
+                "one",
+                "two",
+                "three",
+                "four",
+                "five",
+                "six",
+                "seven",
+                "eight",
+                "nine",
+            ]
+            return tens[ten] + " " + ones[one]
+        # 100-999
+        hundreds = num // 100
+        remainder = num % 100
+        hundreds_word = [
+            "",
+            "one hundred",
+            "two hundred",
+            "three hundred",
+            "four hundred",
+            "five hundred",
+            "six hundred",
+            "seven hundred",
+            "eight hundred",
+            "nine hundred",
+        ][hundreds]
+        if remainder == 0:
+            return hundreds_word
+        return hundreds_word + " " + expand_number(str(remainder))
 
-    text = re.sub(r"\b\d{1,3}\b", lambda m: expand_number(m), text)
+    return re.sub(r"\b\d{1,3}\b", expand_number, text)
 
-    return text
 
 
 def _strip_stress(phone: str) -> str:
@@ -1122,7 +1115,7 @@ def _heuristic_arpabet(word: str) -> list[str]:
     return [p for p in result if p]
 
 
-def _word_to_ipa(word: str, cmudict_dict: Optional[Dict[str, List[str]]]) -> str:
+def _word_to_ipa(word: str, cmudict_dict: dict[str, list[str]] | None) -> str:
     """Convert a single word to IPA phonemes."""
     word_lower = word.lower().strip()
 
@@ -1146,7 +1139,6 @@ def _word_to_ipa(word: str, cmudict_dict: Optional[Dict[str, List[str]]]) -> str
 
 def _get_official_tokenizer():
     """Return a cached kokoro_onnx Tokenizer instance when available."""
-
     global _OFFICIAL_TOKENIZER_STATE, _OFFICIAL_TOKENIZER
 
     if _OFFICIAL_TOKENIZER_STATE == "failed":
@@ -1185,13 +1177,10 @@ def _should_retry_official_tokenizer(exc: Exception) -> bool:
         return True
 
     context = getattr(exc, "__context__", None)
-    if isinstance(context, Exception) and _should_retry_official_tokenizer(context):
-        return True
-
-    return False
+    return bool(isinstance(context, Exception) and _should_retry_official_tokenizer(context))
 
 
-def _configure_official_tokenizer_tmpdir() -> Optional[Path]:
+def _configure_official_tokenizer_tmpdir() -> Path | None:
     """Route espeak temp files to an executable-safe location."""
     global _ESPEAK_TMPDIR_CONFIGURED, _ESPEAK_TMPDIR_PATH
 
@@ -1228,7 +1217,7 @@ def _phonemize_with_official(tokenizer, text: str) -> str:
     return " ".join(str(ipa).split())
 
 
-def _attempt_official_tokenizer(tokenizer, text: str) -> Optional[str]:
+def _attempt_official_tokenizer(tokenizer, text: str) -> str | None:
     """Try the official tokenizer with a safe retry for tempdir failures."""
     for attempt in range(2):
         try:
@@ -1273,8 +1262,7 @@ def _attempt_official_tokenizer(tokenizer, text: str) -> Optional[str]:
 
 
 def text_to_ipa(text: str) -> str:
-    """
-    Convert English text to IPA phonemes with deterministic normalization.
+    """Convert English text to IPA phonemes with deterministic normalization.
 
     Pipeline:
     1. Normalize text (Unicode, whitespace, punctuation)
@@ -1289,6 +1277,7 @@ def text_to_ipa(text: str) -> str:
     Returns:
         Space-separated IPA string
     [REH][CA]
+
     """
     if not text or not text.strip():
         return text
@@ -1318,7 +1307,8 @@ def text_to_ipa(text: str) -> str:
 
         cmudict_dict = cmudict.dict()
     except Exception as exc:
-        raise G2PUnavailableError("CMU Pronouncing Dictionary is not available for English IPA synthesis") from exc
+        msg = "CMU Pronouncing Dictionary is not available for English IPA synthesis"
+        raise G2PUnavailableError(msg) from exc
 
     # 1. Normalize text and apply lexicon
     text = normalize_text(text)
@@ -1391,8 +1381,7 @@ _VOCAB_SIZE = None
 
 
 def _load_real_vocab():
-    """
-    Load the official hardcoded Kokoro IPA vocabulary.
+    """Load the official hardcoded Kokoro IPA vocabulary.
     No external files or fallbacks - uses the embedded mapping.
     """
     global _REAL_VOCAB, _VOCAB_SIZE
@@ -1411,12 +1400,12 @@ def _load_real_vocab():
         return _REAL_VOCAB, _VOCAB_SIZE
 
     except Exception as e:
-        raise RuntimeError(f"Failed to load hardcoded Kokoro IPA vocabulary: {e}. No fallbacks allowed for English.")
+        msg = f"Failed to load hardcoded Kokoro IPA vocabulary: {e}. No fallbacks allowed for English."
+        raise RuntimeError(msg)
 
 
-def _ipa_to_ids(phonemes: str) -> List[int]:
-    """
-    Convert IPA phoneme string to model token IDs using greedy longest-match.
+def _ipa_to_ids(phonemes: str) -> list[int]:
+    """Convert IPA phoneme string to model token IDs using greedy longest-match.
 
     Uses the real model vocabulary with no guessing or fallbacks.
     All returned IDs are guaranteed to be within [0, vocab_size-1].
@@ -1429,6 +1418,7 @@ def _ipa_to_ids(phonemes: str) -> List[int]:
 
     Raises:
         ValueError: If any IPA symbol cannot be encoded
+
     """
     if not phonemes or not phonemes.strip():
         return [0]  # Return neutral token for empty input
@@ -1499,7 +1489,8 @@ def _ipa_to_ids(phonemes: str) -> List[int]:
         max_id = max(ids)
         min_id = min(ids)
         if max_id >= vocab_size or min_id < 0:
-            raise ValueError(f"Token ID out of bounds: min={min_id}, max={max_id}, vocab_size={vocab_size}")
+            msg = f"Token ID out of bounds: min={min_id}, max={max_id}, vocab_size={vocab_size}"
+            raise ValueError(msg)
 
     # Log results
     oov_count = len(oov_symbols)
@@ -1509,6 +1500,7 @@ def _ipa_to_ids(phonemes: str) -> List[int]:
     logger.debug(f"ipa_len={len(phonemes)} tokens={len(ids)} vocab_size={vocab_size} max_id={max(ids) if ids else 0} oov={oov_count}")
 
     if oov_count > 0:
-        raise ValueError(f"Unsupported IPA symbol(s): {', '.join(oov_symbols[:5])}")
+        msg = f"Unsupported IPA symbol(s): {', '.join(oov_symbols[:5])}"
+        raise ValueError(msg)
 
     return ids

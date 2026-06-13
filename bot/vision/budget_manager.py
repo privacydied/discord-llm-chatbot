@@ -1,5 +1,4 @@
-"""
-Vision Budget Manager - Cost tracking and quota enforcement
+"""Vision Budget Manager - Cost tracking and quota enforcement.
 
 Manages vision generation budgets and spend tracking:
 - User and server spending quotas with time-based resets
@@ -12,24 +11,28 @@ Follows Clean Architecture (CA) and Resource Management (RM) principles.
 """
 
 from __future__ import annotations
-import json
-import asyncio
-import aiofiles
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-from typing import Dict, Optional, Any
-from dataclasses import dataclass, asdict
-from enum import Enum
 
-from bot.utils.logging import get_logger
+import asyncio
+import json
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
+from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import aiofiles
+
 from bot.config import load_config
-from .types import VisionRequest
+from bot.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from .types import VisionRequest
 
 logger = get_logger(__name__)
 
 
 class BudgetPeriod(Enum):
-    """Budget reset periods"""
+    """Budget reset periods."""
 
     DAILY = "daily"
     WEEKLY = "weekly"
@@ -39,19 +42,19 @@ class BudgetPeriod(Enum):
 
 @dataclass
 class BudgetResult:
-    """Result of budget validation check"""
+    """Result of budget validation check."""
 
     approved: bool
     reason: str
     user_message: str
     remaining_budget: float
     estimated_cost: float
-    reset_time: Optional[datetime] = None
+    reset_time: datetime | None = None
 
 
 @dataclass
 class UserBudget:
-    """User budget tracking data"""
+    """User budget tracking data."""
 
     user_id: str
     daily_limit: float
@@ -69,16 +72,16 @@ class UserBudget:
 
     def __post_init__(self):
         if self.last_daily_reset is None:
-            self.last_daily_reset = datetime.now(timezone.utc)
+            self.last_daily_reset = datetime.now(UTC)
         if self.last_weekly_reset is None:
-            self.last_weekly_reset = datetime.now(timezone.utc)
+            self.last_weekly_reset = datetime.now(UTC)
         if self.last_monthly_reset is None:
-            self.last_monthly_reset = datetime.now(timezone.utc)
+            self.last_monthly_reset = datetime.now(UTC)
 
 
 @dataclass
 class SpendRecord:
-    """Individual spending record for audit trail"""
+    """Individual spending record for audit trail."""
 
     timestamp: datetime
     user_id: str
@@ -91,8 +94,7 @@ class SpendRecord:
 
 
 class VisionBudgetManager:
-    """
-    Budget management with quota enforcement and spend tracking
+    """Budget management with quota enforcement and spend tracking.
 
     Features:
     - Per-user daily/weekly/monthly quotas
@@ -102,7 +104,7 @@ class VisionBudgetManager:
     - Detailed analytics and reporting
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         self.config = config or load_config()
         self.logger = get_logger("vision.budget_manager")
 
@@ -118,26 +120,26 @@ class VisionBudgetManager:
         self.policy = self._load_budget_policy()
 
         # In-memory cache for performance
-        self._budget_cache: Dict[str, UserBudget] = {}
+        self._budget_cache: dict[str, UserBudget] = {}
         self._cache_ttl = 300  # 5 minutes
-        self._cache_timestamps: Dict[str, datetime] = {}
+        self._cache_timestamps: dict[str, datetime] = {}
 
         # Concurrency control
-        self._locks: Dict[str, asyncio.Lock] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
 
         self.logger.info(
-            f"Vision Budget Manager initialized - budget_dir: {self.budget_dir}, spend_ledger: {self.spend_ledger}, daily_limit: {self.policy.get('default_daily_limit', 10.0)}, monthly_limit: {self.policy.get('default_monthly_limit', 100.0)}"
+            f"Vision Budget Manager initialized - budget_dir: {self.budget_dir}, spend_ledger: {self.spend_ledger}, daily_limit: {self.policy.get('default_daily_limit', 10.0)}, monthly_limit: {self.policy.get('default_monthly_limit', 100.0)}",
         )
 
     async def check_budget(self, request: VisionRequest) -> BudgetResult:
-        """
-        Check if user has sufficient budget for request
+        """Check if user has sufficient budget for request.
 
         Args:
             request: Vision generation request with cost estimate
 
         Returns:
             BudgetResult with approval decision and remaining budget
+
         """
         user_id = request.user_id
         estimated_cost = request.estimated_cost or 0.1  # Fallback estimate
@@ -190,14 +192,14 @@ class VisionBudgetManager:
                 # Log result
                 if not approved:
                     self.logger.warning(
-                        f"Budget limit exceeded - user_id: {user_id}, estimated_cost: {estimated_cost}, remaining: {min_remaining}, daily_spent: {budget.daily_spent}, monthly_spent: {budget.monthly_spent}"
+                        f"Budget limit exceeded - user_id: {user_id}, estimated_cost: {estimated_cost}, remaining: {min_remaining}, daily_spent: {budget.daily_spent}, monthly_spent: {budget.monthly_spent}",
                     )
 
                 return result
 
         except Exception as e:
             self.logger.error(
-                f"Budget check error - user_id: {user_id}, error: {str(e)}",
+                f"Budget check error - user_id: {user_id}, error: {e!s}",
                 exc_info=True,
             )
             # Fail safe - allow small requests, block large ones
@@ -209,17 +211,16 @@ class VisionBudgetManager:
                     remaining_budget=1.0,
                     estimated_cost=estimated_cost,
                 )
-            else:
-                return BudgetResult(
-                    approved=False,
-                    reason=f"Budget check failed: {str(e)}",
-                    user_message="Unable to verify budget. Please try again.",
-                    remaining_budget=0.0,
-                    estimated_cost=estimated_cost,
-                )
+            return BudgetResult(
+                approved=False,
+                reason=f"Budget check failed: {e!s}",
+                user_message="Unable to verify budget. Please try again.",
+                remaining_budget=0.0,
+                estimated_cost=estimated_cost,
+            )
 
     async def reserve_budget(self, user_id: str, amount: float) -> None:
-        """Reserve budget amount for pending job [CMV]"""
+        """Reserve budget amount for pending job [CMV]."""
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
             self._reset_expired_periods(budget)
@@ -230,7 +231,7 @@ class VisionBudgetManager:
             self.logger.debug(f"Budget reserved - user_id: {user_id}, amount: {amount}, total_reserved: {budget.reserved_amount}")
 
     async def release_reservation(self, user_id: str, amount: float) -> None:
-        """Release reserved budget amount (job cancelled/failed) [CMV]"""
+        """Release reserved budget amount (job cancelled/failed) [CMV]."""
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
 
@@ -240,7 +241,7 @@ class VisionBudgetManager:
             self.logger.debug(f"Budget reservation released - user_id: {user_id}, amount: {amount}, new_reserved: {budget.reserved_amount}")
 
     async def record_actual_cost(self, user_id: str, reserved_amount: float, actual_cost: float) -> None:
-        """Record actual job cost and adjust budget [CMV]"""
+        """Record actual job cost and adjust budget [CMV]."""
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
             self._reset_expired_periods(budget)
@@ -259,20 +260,20 @@ class VisionBudgetManager:
             # Record to spend ledger
             await self._append_spend_record(
                 {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "user_id": user_id,
                     "reserved_amount": reserved_amount,
                     "actual_cost": actual_cost,
                     "savings": reserved_amount - actual_cost,
                     "daily_total": budget.daily_spent,
                     "monthly_total": budget.monthly_spent,
-                }
+                },
             )
 
             self.logger.info(f"Actual cost recorded - user_id: {user_id}, actual_cost: {actual_cost}, reserved_amount: {reserved_amount}, daily_total: {budget.daily_spent}, monthly_total: {budget.monthly_spent}")
 
-    async def get_user_budget_status(self, user_id: str) -> Dict[str, Any]:
-        """Get detailed budget status for user [CMV]"""
+    async def get_user_budget_status(self, user_id: str) -> dict[str, Any]:
+        """Get detailed budget status for user [CMV]."""
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
             self._reset_expired_periods(budget)
@@ -308,10 +309,10 @@ class VisionBudgetManager:
     async def adjust_user_budget(
         self,
         user_id: str,
-        daily_limit: Optional[float] = None,
-        monthly_limit: Optional[float] = None,
+        daily_limit: float | None = None,
+        monthly_limit: float | None = None,
     ) -> None:
-        """Adjust user budget limits (admin function) [CMV]"""
+        """Adjust user budget limits (admin function) [CMV]."""
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
 
@@ -326,25 +327,25 @@ class VisionBudgetManager:
 
             self.logger.info(f"User budget adjusted - user_id: {user_id}, daily_limit: {budget.daily_limit}, monthly_limit: {budget.monthly_limit}")
 
-    async def get_spend_analytics(self, days: int = 30) -> Dict[str, Any]:
-        """Get spending analytics across all users [CMV]"""
+    async def get_spend_analytics(self, days: int = 30) -> dict[str, Any]:
+        """Get spending analytics across all users [CMV]."""
         try:
             if not self.spend_ledger.exists():
                 return {"total_spend": 0.0, "total_jobs": 0, "users": 0}
 
             # Read spend ledger
-            cutoff_time = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff_time = datetime.now(UTC) - timedelta(days=days)
             total_spend = 0.0
             total_jobs = 0
             users = set()
             provider_spend = {}
             task_spend = {}
 
-            async with aiofiles.open(self.spend_ledger, "r") as f:
+            async with aiofiles.open(self.spend_ledger) as f:
                 async for line in f:
                     try:
                         record = json.loads(line.strip())
-                        record_time = datetime.fromisoformat(record["timestamp"].replace("Z", "+00:00"))
+                        record_time = datetime.fromisoformat(record["timestamp"])
 
                         if record_time >= cutoff_time:
                             actual_cost = record.get("actual_cost", 0.0)
@@ -373,12 +374,12 @@ class VisionBudgetManager:
             }
 
         except Exception as e:
-            self.logger.error(f"Analytics error: {e}")
+            self.logger.exception(f"Analytics error: {e}")
             return {"error": str(e)}
 
     def _reset_expired_periods(self, budget: UserBudget) -> None:
-        """Reset budget periods that have expired [CMV]"""
-        now = datetime.now(timezone.utc)
+        """Reset budget periods that have expired [CMV]."""
+        now = datetime.now(UTC)
 
         # Reset daily if past midnight UTC
         if now.date() > budget.last_daily_reset.date():
@@ -396,7 +397,7 @@ class VisionBudgetManager:
             budget.last_monthly_reset = now
 
     def _get_next_reset_time(self, budget: UserBudget) -> datetime:
-        """Get next budget reset time [CMV]"""
+        """Get next budget reset time [CMV]."""
         daily_reset = budget.last_daily_reset + timedelta(days=1)
         weekly_reset = budget.last_weekly_reset + timedelta(weeks=1)
         monthly_reset = budget.last_monthly_reset + timedelta(days=30)
@@ -404,8 +405,8 @@ class VisionBudgetManager:
         return min(daily_reset, weekly_reset, monthly_reset)
 
     def _generate_budget_message(self, limit_type: str, remaining: float, requested: float, reset_time: datetime) -> str:
-        """Generate user-friendly budget limit message [CMV]"""
-        time_until_reset = reset_time - datetime.now(timezone.utc)
+        """Generate user-friendly budget limit message [CMV]."""
+        time_until_reset = reset_time - datetime.now(UTC)
 
         if time_until_reset.total_seconds() < 3600:  # Less than 1 hour
             reset_text = f"in {int(time_until_reset.total_seconds() / 60)} minutes"
@@ -429,16 +430,16 @@ class VisionBudgetManager:
         )
 
     async def _load_user_budget(self, user_id: str) -> UserBudget:
-        """Load user budget from file or create default [CMV]"""
+        """Load user budget from file or create default [CMV]."""
         # Check cache first
-        if user_id in self._budget_cache and user_id in self._cache_timestamps and datetime.now(timezone.utc) - self._cache_timestamps[user_id] < timedelta(seconds=self._cache_ttl):
+        if user_id in self._budget_cache and user_id in self._cache_timestamps and datetime.now(UTC) - self._cache_timestamps[user_id] < timedelta(seconds=self._cache_ttl):
             return self._budget_cache[user_id]
 
         budget_file = self.budget_dir / f"{user_id}.json"
 
         try:
             if budget_file.exists():
-                async with aiofiles.open(budget_file, "r") as f:
+                async with aiofiles.open(budget_file) as f:
                     data = json.loads(await f.read())
 
                 # Convert timestamp strings back to datetime
@@ -448,7 +449,7 @@ class VisionBudgetManager:
                     "last_monthly_reset",
                 ]:
                     if field in data and isinstance(data[field], str):
-                        data[field] = datetime.fromisoformat(data[field].replace("Z", "+00:00"))
+                        data[field] = datetime.fromisoformat(data[field])
 
                 budget = UserBudget(**data)
             else:
@@ -463,12 +464,12 @@ class VisionBudgetManager:
 
             # Update cache
             self._budget_cache[user_id] = budget
-            self._cache_timestamps[user_id] = datetime.now(timezone.utc)
+            self._cache_timestamps[user_id] = datetime.now(UTC)
 
             return budget
 
         except Exception as e:
-            self.logger.error(f"Failed to load budget for {user_id}: {e}")
+            self.logger.exception(f"Failed to load budget for {user_id}: {e}")
             # Return default budget on error
             return UserBudget(
                 user_id=user_id,
@@ -478,7 +479,7 @@ class VisionBudgetManager:
             )
 
     async def _save_user_budget(self, budget: UserBudget) -> None:
-        """Save user budget to file [CMV]"""
+        """Save user budget to file [CMV]."""
         budget_file = self.budget_dir / f"{budget.user_id}.json"
         temp_file = self.budget_dir / f"{budget.user_id}.json.tmp"
 
@@ -502,15 +503,15 @@ class VisionBudgetManager:
 
             # Update cache
             self._budget_cache[budget.user_id] = budget
-            self._cache_timestamps[budget.user_id] = datetime.now(timezone.utc)
+            self._cache_timestamps[budget.user_id] = datetime.now(UTC)
 
         except Exception as e:
-            self.logger.error(f"Failed to save budget for {budget.user_id}: {e}")
+            self.logger.exception(f"Failed to save budget for {budget.user_id}: {e}")
             if temp_file.exists():
                 temp_file.unlink()
 
-    async def _append_spend_record(self, record: Dict[str, Any]) -> None:
-        """Append spend record to JSONL ledger [CMV]"""
+    async def _append_spend_record(self, record: dict[str, Any]) -> None:
+        """Append spend record to JSONL ledger [CMV]."""
         try:
             async with aiofiles.open(self.spend_ledger, "a") as f:
                 line = json.dumps(record, ensure_ascii=False) + "\n"
@@ -520,24 +521,23 @@ class VisionBudgetManager:
             self.logger.debug(f"Failed to append spend record: {e}")
 
     def _get_user_lock(self, user_id: str) -> asyncio.Lock:
-        """Get or create lock for user [CMV]"""
+        """Get or create lock for user [CMV]."""
         if user_id not in self._locks:
             self._locks[user_id] = asyncio.Lock()
         return self._locks[user_id]
 
-    def _load_budget_policy(self) -> Dict[str, Any]:
-        """Load budget policy from vision policy file [CMV]"""
+    def _load_budget_policy(self) -> dict[str, Any]:
+        """Load budget policy from vision policy file [CMV]."""
         try:
             policy_path = Path(self.config["VISION_POLICY_PATH"])
             if policy_path.exists():
-                with open(policy_path, "r") as f:
+                with open(policy_path) as f:
                     policy_data = json.load(f)
                 return policy_data.get("budget_manager", {})
-            else:
-                self.logger.warning(f"Policy file not found: {policy_path}")
-                return {}
+            self.logger.warning(f"Policy file not found: {policy_path}")
+            return {}
         except Exception as e:
-            self.logger.error(f"Failed to load budget policy: {e}")
+            self.logger.exception(f"Failed to load budget policy: {e}")
             return {}
 
 
@@ -548,10 +548,16 @@ class VisionBudgetManager:
 # budget_manager_v2.py, which will re-export from this module. [CA][REH]
 try:
     from ._budget_v2_impl import (
-        VisionBudgetManager as _V2_VisionBudgetManager,
         BudgetResult as _V2_BudgetResult,
-        UserBudget as _V2_UserBudget,
+    )
+    from ._budget_v2_impl import (
         TransactionRecord as _V2_TransactionRecord,
+    )
+    from ._budget_v2_impl import (
+        UserBudget as _V2_UserBudget,
+    )
+    from ._budget_v2_impl import (
+        VisionBudgetManager as _V2_VisionBudgetManager,
     )
 
     VisionBudgetManager = _V2_VisionBudgetManager  # type: ignore

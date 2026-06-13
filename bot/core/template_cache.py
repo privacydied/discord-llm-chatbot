@@ -1,20 +1,20 @@
-"""
-Template Caching System - Pre-compile and cache prompt templates for performance.
+"""Template Caching System - Pre-compile and cache prompt templates for performance.
 Implements PA (Performance Awareness) and CMV (Constants over Magic Values) rules.
 """
 
 import asyncio
 import hashlib
+import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional, List
-import re
-from concurrent.futures import ThreadPoolExecutor
+from typing import Any
+
+from bot.utils.logging import get_logger
 
 from .phase_constants import PhaseConstants as PC
-from .phase_timing import get_timing_manager, PipelineTracker
-from ..utils.logging import get_logger
+from .phase_timing import PipelineTracker, get_timing_manager
 
 logger = get_logger(__name__)
 
@@ -24,12 +24,12 @@ class TemplateMetadata:
     """Metadata for cached template."""
 
     template_id: str
-    file_path: Optional[str] = None
+    file_path: str | None = None
     cached_at: float = field(default_factory=time.time)
     hit_count: int = 0
     last_used: float = field(default_factory=time.time)
     content_hash: str = ""
-    variables: List[str] = field(default_factory=list)  # Variables found in template
+    variables: list[str] = field(default_factory=list)  # Variables found in template
 
 
 @dataclass
@@ -38,7 +38,7 @@ class CachedTemplate:
 
     content: str
     metadata: TemplateMetadata
-    compiled_sections: Dict[str, str] = field(default_factory=dict)
+    compiled_sections: dict[str, str] = field(default_factory=dict)
     static_prefix: str = ""
     static_suffix: str = ""
     variable_count: int = 0
@@ -53,8 +53,8 @@ class CachedTemplate:
 class TemplateCache:
     """High-performance template cache with pre-compilation."""
 
-    def __init__(self, max_cache_size: int = 100):
-        self.cache: Dict[str, CachedTemplate] = {}
+    def __init__(self, max_cache_size: int = 100) -> None:
+        self.cache: dict[str, CachedTemplate] = {}
         self.max_cache_size = max_cache_size
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="template-proc")
 
@@ -74,7 +74,7 @@ class TemplateCache:
         content_hash = hashlib.md5(f"{content}{persona}".encode(), usedforsecurity=False).hexdigest()[:8]
         return f"tpl_{persona}_{content_hash}"
 
-    def _extract_variables(self, content: str) -> List[str]:
+    def _extract_variables(self, content: str) -> list[str]:
         """Extract template variables from content [PA]."""
         # Find variables like {variable_name}, {{variable}}, or ${variable}
         patterns = [
@@ -90,7 +90,7 @@ class TemplateCache:
 
         return list(variables)
 
-    def _analyze_template_structure(self, content: str) -> Dict[str, Any]:
+    def _analyze_template_structure(self, content: str) -> dict[str, Any]:
         """Analyze template for optimization opportunities [PA]."""
         lines = content.split("\n")
 
@@ -133,7 +133,7 @@ class TemplateCache:
             "optimization_ratio": len(static_lines) / len(lines) if lines else 0,
         }
 
-    async def _compile_template_async(self, content: str, template_id: str, file_path: Optional[str] = None) -> CachedTemplate:
+    async def _compile_template_async(self, content: str, template_id: str, file_path: str | None = None) -> CachedTemplate:
         """Compile template in thread pool for CPU-intensive work [PA]."""
         loop = asyncio.get_event_loop()
 
@@ -182,7 +182,7 @@ class TemplateCache:
 
         return await loop.run_in_executor(self.executor, compile_template)
 
-    def _evict_least_used(self):
+    def _evict_least_used(self) -> None:
         """Evict least recently used templates when cache is full [PA]."""
         if len(self.cache) <= self.max_cache_size:
             return
@@ -202,23 +202,23 @@ class TemplateCache:
 
     async def get_template(
         self,
-        content: Optional[str] = None,
-        file_path: Optional[str] = None,
+        content: str | None = None,
+        file_path: str | None = None,
         persona: str = "default",
-        tracker: Optional[PipelineTracker] = None,
+        tracker: PipelineTracker | None = None,
     ) -> CachedTemplate:
         """Get cached template, compiling if necessary [PA]."""
-
         # Load from file if content not provided
         if content is None and file_path:
             try:
                 content = Path(file_path).read_text(encoding="utf-8")
             except Exception as e:
-                logger.error(f"❌ Failed to load template from {file_path}: {e}")
+                logger.exception(f"❌ Failed to load template from {file_path}: {e}")
                 raise
 
         if not content:
-            raise ValueError("Either content or valid file_path must be provided")
+            msg = "Either content or valid file_path must be provided"
+            raise ValueError(msg)
 
         template_id = self._generate_template_id(content, persona)
 
@@ -257,7 +257,7 @@ class TemplateCache:
 
         return cached_template
 
-    async def preload_templates(self, template_files: List[str], personas: List[str] = None):
+    async def preload_templates(self, template_files: list[str], personas: list[str] | None = None) -> None:
         """Preload multiple templates for better startup performance [PA]."""
         if personas is None:
             personas = ["default"]
@@ -277,9 +277,9 @@ class TemplateCache:
             load_time = int((time.time() - start_time) * 1000)
             logger.info(f"✅ Templates preloaded in {load_time}ms")
         except Exception as e:
-            logger.error(f"❌ Error preloading templates: {e}")
+            logger.exception(f"❌ Error preloading templates: {e}")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get cache performance statistics."""
         total_requests = self.stats["cache_hits"] + self.stats["cache_misses"]
         hit_rate = self.stats["cache_hits"] / total_requests if total_requests > 0 else 0
@@ -292,7 +292,7 @@ class TemplateCache:
             **self.stats,
         }
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         """Clean up resources [RM]."""
         self.executor.shutdown(wait=True)
         self.cache.clear()
@@ -302,20 +302,19 @@ class TemplateCache:
 class OptimizedPromptBuilder:
     """High-performance prompt builder using cached templates [PA]."""
 
-    def __init__(self, template_cache: TemplateCache):
+    def __init__(self, template_cache: TemplateCache) -> None:
         self.template_cache = template_cache
-        self.static_sections_cache: Dict[str, str] = {}  # Cache for deterministic sections
+        self.static_sections_cache: dict[str, str] = {}  # Cache for deterministic sections
 
     def _build_context_section(
         self,
         user_id: str,
-        guild_id: Optional[str],
-        history: List[Dict[str, Any]] = None,
+        guild_id: str | None,
+        history: list[dict[str, Any]] | None = None,
         rag_context: str = "",
         server_context: str = "",
     ) -> str:
         """Build context section with caching for static parts [PA]."""
-
         # Create cache key for static context parts
         static_key = f"static_{guild_id or 'dm'}"
 
@@ -359,16 +358,15 @@ class OptimizedPromptBuilder:
         user_prompt: str,
         template_file: str,
         user_id: str,
-        guild_id: Optional[str] = None,
+        guild_id: str | None = None,
         persona: str = "default",
-        history: List[Dict[str, Any]] = None,
+        history: list[dict[str, Any]] | None = None,
         rag_context: str = "",
         server_context: str = "",
-        tracker: Optional[PipelineTracker] = None,
+        tracker: PipelineTracker | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build optimized prompt using cached templates [PA]."""
-
         # Get cached template
         template = await self.template_cache.get_template(file_path=template_file, persona=persona, tracker=tracker)
 
@@ -409,7 +407,7 @@ class OptimizedPromptBuilder:
 
 
 # Global template cache instance [PA]
-_template_cache_instance: Optional[TemplateCache] = None
+_template_cache_instance: TemplateCache | None = None
 
 
 def get_template_cache() -> TemplateCache:
@@ -429,7 +427,7 @@ def get_prompt_builder() -> OptimizedPromptBuilder:
     return OptimizedPromptBuilder(cache)
 
 
-async def cleanup_template_cache():
+async def cleanup_template_cache() -> None:
     """Clean up global template cache [RM]."""
     global _template_cache_instance
     if _template_cache_instance:

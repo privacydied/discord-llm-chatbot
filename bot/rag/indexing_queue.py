@@ -1,5 +1,4 @@
-"""
-Background indexing queue and workers for RAG system.
+"""Background indexing queue and workers for RAG system.
 
 This module implements asynchronous document indexing with bounded concurrency,
 backpressure handling, and graceful shutdown capabilities.
@@ -10,11 +9,11 @@ import hashlib
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Set
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
-from ..utils.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -35,14 +34,14 @@ class IndexingTask:
 
     source_id: str
     text: str
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
     file_type: str = "text"
     priority: int = 1  # Higher = more important
     created_at: datetime = field(default_factory=datetime.utcnow)
     attempts: int = 0
     max_attempts: int = 3
     status: IndexingTaskStatus = IndexingTaskStatus.PENDING
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     def __post_init__(self):
         """Ensure metadata is not None."""
@@ -51,8 +50,7 @@ class IndexingTask:
 
 
 class IndexingQueue:
-    """
-    Asynchronous indexing queue with bounded workers and backpressure handling.
+    """Asynchronous indexing queue with bounded workers and backpressure handling.
 
     Features:
     - Bounded queue size with overflow handling
@@ -70,7 +68,7 @@ class IndexingQueue:
         num_workers: int = 2,
         batch_size: int = 10,
         enabled: bool = True,
-    ):
+    ) -> None:
         self.rag_backend = rag_backend
         self.max_queue_size = max_queue_size
         self.num_workers = num_workers
@@ -78,12 +76,12 @@ class IndexingQueue:
         self.enabled = enabled
 
         # Chunk-level dedup set: track (source_id, text_hash) [Phase 6-9]
-        self._seen_chunks: Set[str] = set()
+        self._seen_chunks: set[str] = set()
         self._dedup_max = int(os.getenv("RAG_DEDUP_CHUNKS", "1000"))
 
         # Queue and worker management
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=max_queue_size)
-        self._workers: List[asyncio.Task] = []
+        self._workers: list[asyncio.Task] = []
         self._shutdown_event = asyncio.Event()
         self._worker_lock = asyncio.Lock()
 
@@ -123,14 +121,14 @@ class IndexingQueue:
             logger.info(f"[RAG Indexing] ✔ {len(self._workers)} workers started successfully")
 
     async def enqueue_task(self, task: IndexingTask) -> bool:
-        """
-        Enqueue a document for background indexing.
+        """Enqueue a document for background indexing.
 
         Args:
             task: The indexing task to enqueue
 
         Returns:
             True if enqueued successfully, False if dropped due to overflow
+
         """
         if not self.enabled:
             # Synchronous processing when background indexing is disabled
@@ -194,18 +192,17 @@ class IndexingQueue:
                 self._stats["tasks_processed"] += 1
                 logger.debug(f"[RAG Indexing] ✔ Synchronously processed: {task.source_id} ({processing_time:.2f}s)")
                 return True
-            else:
-                task.status = IndexingTaskStatus.FAILED
-                task.error_message = "Backend processing failed"
-                self._stats["tasks_failed"] += 1
-                logger.error(f"[RAG Indexing] ✖ Synchronous processing failed: {task.source_id}")
-                return False
+            task.status = IndexingTaskStatus.FAILED
+            task.error_message = "Backend processing failed"
+            self._stats["tasks_failed"] += 1
+            logger.error(f"[RAG Indexing] ✖ Synchronous processing failed: {task.source_id}")
+            return False
 
         except Exception as e:
             task.status = IndexingTaskStatus.FAILED
             task.error_message = str(e)
             self._stats["tasks_failed"] += 1
-            logger.error(f"[RAG Indexing] ✖ Synchronous processing error: {task.source_id} - {e}")
+            logger.exception(f"[RAG Indexing] ✖ Synchronous processing error: {task.source_id} - {e}")
             return False
 
     async def _worker_loop(self, worker_id: int) -> None:
@@ -222,13 +219,13 @@ class IndexingQueue:
                     await self._process_task(task, worker_id)
                     self._queue.task_done()
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # No task available, continue loop to check shutdown
                     continue
 
                 except Exception as e:
                     self._stats["worker_errors"] += 1
-                    logger.error(f"[RAG Indexing] Worker {worker_id} error: {e}")
+                    logger.exception(f"[RAG Indexing] Worker {worker_id} error: {e}")
 
         except asyncio.CancelledError:
             logger.info(f"[RAG Indexing] Worker {worker_id} cancelled")
@@ -294,7 +291,7 @@ class IndexingQueue:
                 # If queue is full during retry, mark as failed
                 task.status = IndexingTaskStatus.FAILED
                 self._stats["tasks_failed"] += 1
-                logger.error(f"[RAG Indexing] Failed to re-enqueue task due to queue overflow: {task.source_id}")
+                logger.exception(f"[RAG Indexing] Failed to re-enqueue task due to queue overflow: {task.source_id}")
         else:
             # Max attempts reached
             task.status = IndexingTaskStatus.FAILED
@@ -302,15 +299,15 @@ class IndexingQueue:
 
             logger.error(f"[RAG Indexing] ✖ Worker {worker_id} task failed permanently: {task.source_id} - {error_message}")
 
-    async def shutdown(self, timeout: float = 30.0) -> Dict[str, Any]:
-        """
-        Gracefully shutdown the indexing queue.
+    async def shutdown(self, timeout: float = 30.0) -> dict[str, Any]:
+        """Gracefully shutdown the indexing queue.
 
         Args:
             timeout: Maximum time to wait for shutdown
 
         Returns:
             Shutdown statistics
+
         """
         if not self.enabled:
             logger.info("[RAG Indexing] Background indexing was disabled, nothing to shutdown")
@@ -326,7 +323,7 @@ class IndexingQueue:
         try:
             await asyncio.wait_for(self._queue.join(), timeout=timeout / 2)
             logger.info("[RAG Indexing] ✔ Queue drained successfully")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"[RAG Indexing] ⚠ Queue drain timeout, {self._queue.qsize()} tasks remaining")
 
         # Cancel and wait for workers
@@ -344,7 +341,7 @@ class IndexingQueue:
                         timeout=timeout / 2,
                     )
                     logger.info("[RAG Indexing] ✔ All workers stopped")
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.warning("[RAG Indexing] ⚠ Worker shutdown timeout")
 
                 self._workers.clear()
@@ -361,7 +358,7 @@ class IndexingQueue:
         logger.info(f"[RAG Indexing] ✔ Shutdown completed in {shutdown_time:.2f}s")
         return shutdown_stats
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get current queue statistics."""
         uptime = (datetime.utcnow() - self._stats["started_at"]).total_seconds()
 

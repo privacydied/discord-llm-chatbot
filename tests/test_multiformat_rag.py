@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""
-Test script for multi-format RAG document support.
+"""Test script for multi-format RAG document support.
 Creates sample documents in various formats and tests parsing.
 """
 
 import sys
 from pathlib import Path
+
 import pytest
 
 # Add bot module to path
@@ -105,7 +105,6 @@ This content demonstrates markdown structure preservation during chunking.
 </html>
 """)
 
-    print(f"✅ Created test documents in {test_dir}/")
     return test_dir
 
 
@@ -117,12 +116,9 @@ def test_dir(tmp_path, monkeypatch):
     return create_test_documents()
 
 
-def test_document_parsing(test_dir):
+def test_document_parsing(test_dir) -> None:
     """Test parsing of different document formats."""
-    print("\n🧪 Testing document parsing...")
-
     supported_extensions = document_parser_factory.get_supported_extensions()
-    print(f"📋 Supported extensions: {sorted(supported_extensions)}")
 
     test_files = [
         test_dir / "sample.txt",
@@ -132,22 +128,16 @@ def test_document_parsing(test_dir):
 
     for test_file in test_files:
         if test_file.exists():
-            print(f"\n📄 Testing {test_file.name}...")
 
             try:
                 parser = document_parser_factory.get_parser(test_file)
                 if parser:
-                    print(f"   Parser: {parser.__class__.__name__}")
 
                     content, metadata = document_parser_factory.parse_document(test_file)
 
-                    print(f"   Content length: {len(content)} characters")
-                    print(f"   Content type: {metadata.get('content_type', 'unknown')}")
-                    print(f"   Parser type: {metadata.get('parser_type', 'unknown')}")
 
                     # Show first 100 characters of content
                     preview = content[:100].replace("\n", " ")
-                    print(f"   Preview: {preview}...")
 
                     # Show some metadata
                     interesting_keys = [
@@ -158,20 +148,17 @@ def test_document_parsing(test_dir):
                     ]
                     for key in interesting_keys:
                         if key in metadata:
-                            print(f"   {key}: {metadata[key]}")
+                            pass
 
-                    print("   ✅ Parsing successful")
                 else:
-                    print("   ❌ No parser found")
+                    pass
 
             except Exception as e:
-                print(f"   ❌ Parsing failed: {e}")
+                pass
 
 
-def test_chunking_strategies():
+def test_chunking_strategies() -> None:
     """Test different chunking strategies for document types."""
-    print("\n🔪 Testing chunking strategies...")
-
     from bot.rag.text_chunker import create_chunker
     from bot.rag.vector_schema import HybridSearchConfig
 
@@ -186,32 +173,23 @@ def test_chunking_strategies():
     ]
 
     for file_type, content in test_cases:
-        print(f"\n📝 Testing {file_type} chunking...")
 
         try:
             chunker = create_chunker(file_type, config)
             result = chunker.chunk_text(content)
 
-            print(f"   Chunker: {chunker.__class__.__name__}")
-            print(f"   Chunks created: {len(result.chunks)}")
-            print(f"   Strategy: {result.metadata.get('chunking_strategy', 'unknown')}")
 
             # Show first chunk preview
             if result.chunks:
                 preview = result.chunks[0][:80].replace("\n", " ")
-                print(f"   First chunk: {preview}...")
 
-            print("   ✅ Chunking successful")
 
         except Exception as e:
-            print(f"   ❌ Chunking failed: {e}")
+            pass
 
 
-def main():
+def main() -> None:
     """Main test function."""
-    print("🚀 Multi-Format RAG Document Support Test")
-    print("=" * 50)
-
     # Create test documents
     test_dir = create_test_documents()
 
@@ -221,22 +199,7 @@ def main():
     # Test chunking strategies
     test_chunking_strategies()
 
-    print("\n" + "=" * 50)
-    print("✅ Multi-format RAG testing complete!")
-    print("\n📚 Supported formats:")
-    print("   • TXT - Plain text files")
-    print("   • MD - Markdown files")
-    print("   • HTML - Web pages")
-    print("   • PDF - Portable documents (requires PyPDF2)")
-    print("   • DOCX - Word documents (requires python-docx)")
-    print("   • EPUB - E-books (requires ebooklib)")
-    print("   • MOBI - Kindle books (basic support)")
 
-    print("\n🔧 To use with your Discord bot:")
-    print("   1. Install dependencies: pip install -r requirements.txt")
-    print("   2. Add documents to kb/ directory")
-    print("   3. Run: !rag bootstrap")
-    print("   4. Search: !rag search 'your query'")
 
 
 if __name__ == "__main__":

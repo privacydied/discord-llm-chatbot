@@ -31,7 +31,7 @@ def mock_message() -> MagicMock:
 # Test Cases
 
 
-def test_dm_chat_message(mock_bot, mock_message):
+def test_dm_chat_message(mock_bot, mock_message) -> None:
     """Test that a regular DM message is parsed as a CHAT command."""
     mock_message.content = "Hello there"
     mock_message.channel.type = "private"
@@ -43,7 +43,7 @@ def test_dm_chat_message(mock_bot, mock_message):
     assert result.cleaned_content == "Hello there"
 
 
-def test_guild_chat_message_with_mention(mock_bot, mock_message):
+def test_guild_chat_message_with_mention(mock_bot, mock_message) -> None:
     """Test that a regular guild message with a mention is parsed as CHAT."""
     mock_message.content = f"<@!{mock_bot.user.id}> How are you?"
     mock_message.channel.type = "text"
@@ -55,7 +55,7 @@ def test_guild_chat_message_with_mention(mock_bot, mock_message):
     assert result.cleaned_content == "How are you?"
 
 
-def test_guild_message_without_mention_is_ignored(mock_bot, mock_message):
+def test_guild_message_without_mention_is_ignored(mock_bot, mock_message) -> None:
     """Test that a guild message without a mention returns None."""
     mock_message.content = "!ping"
     mock_message.channel.type = "text"
@@ -66,7 +66,7 @@ def test_guild_message_without_mention_is_ignored(mock_bot, mock_message):
     assert result is None
 
 
-def test_dm_ping_command(mock_bot, mock_message):
+def test_dm_ping_command(mock_bot, mock_message) -> None:
     """Test that a !ping command in a DM is parsed correctly."""
     mock_message.content = "!ping"
     mock_message.channel.type = "private"
@@ -77,7 +77,7 @@ def test_dm_ping_command(mock_bot, mock_message):
     assert result.cleaned_content == ""
 
 
-def test_guild_tts_command_with_args(mock_bot, mock_message):
+def test_guild_tts_command_with_args(mock_bot, mock_message) -> None:
     """Test a !tts command with arguments in a guild."""
     mock_message.content = f"<@!{mock_bot.user.id}> !tts some text to speak"
     mock_message.channel.type = "text"
@@ -88,7 +88,7 @@ def test_guild_tts_command_with_args(mock_bot, mock_message):
     assert result.cleaned_content == "some text to speak"
 
 
-def test_guild_mention_only_is_ignored(mock_bot, mock_message):
+def test_guild_mention_only_is_ignored(mock_bot, mock_message) -> None:
     """Test that a message with only a mention is ignored."""
     mock_message.content = f"<@!{mock_bot.user.id}>"
     mock_message.channel.type = "text"
@@ -98,7 +98,7 @@ def test_guild_mention_only_is_ignored(mock_bot, mock_message):
     assert result is None, "A message with only a mention should be ignored"
 
 
-def test_dm_unknown_command_is_ignored(mock_bot, mock_message):
+def test_dm_unknown_command_is_ignored(mock_bot, mock_message) -> None:
     """Test that an unknown command like !foo is ignored."""
     mock_message.content = "!foo bar baz"
     mock_message.channel.type = "private"

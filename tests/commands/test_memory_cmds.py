@@ -1,12 +1,10 @@
-"""
-Tests for the MemoryCommands cog.
-"""
+"""Tests for the MemoryCommands cog."""
 
-import pytest
 import asyncio
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import discord
+import pytest
 
 from bot.commands.memory_cmds import MemoryCommands
 
@@ -47,7 +45,7 @@ def memory_cog(mock_bot):
 
 
 @pytest.mark.asyncio
-async def test_add_memory_cmd_success(memory_cog, mock_ctx, monkeypatch):
+async def test_add_memory_cmd_success(memory_cog, mock_ctx, monkeypatch) -> None:
     """Verify that a user can successfully add a memory."""
     # Mock the memory backend functions
     mock_get_profile = MagicMock(return_value={"memories": []})
@@ -72,7 +70,7 @@ async def test_add_memory_cmd_success(memory_cog, mock_ctx, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_add_memory_cmd_save_fails(memory_cog, mock_ctx, monkeypatch):
+async def test_add_memory_cmd_save_fails(memory_cog, mock_ctx, monkeypatch) -> None:
     """Verify error handling when saving a memory fails."""
     mock_get_profile = MagicMock(return_value={"memories": []})
     mock_save_profile = MagicMock(return_value=False)
@@ -85,7 +83,7 @@ async def test_add_memory_cmd_save_fails(memory_cog, mock_ctx, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_list_memories_cmd_success(memory_cog, mock_ctx, monkeypatch):
+async def test_list_memories_cmd_success(memory_cog, mock_ctx, monkeypatch) -> None:
     """Verify that a user can successfully list their memories."""
     memories = [{"content": "memory 1"}, {"content": "memory 2"}]
     mock_get_profile = MagicMock(return_value={"memories": memories})
@@ -100,7 +98,7 @@ async def test_list_memories_cmd_success(memory_cog, mock_ctx, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_list_memories_cmd_no_memories(memory_cog, mock_ctx, monkeypatch):
+async def test_list_memories_cmd_no_memories(memory_cog, mock_ctx, monkeypatch) -> None:
     """Verify the response when a user has no memories."""
     mock_get_profile = MagicMock(return_value={"memories": []})
     monkeypatch.setattr("bot.commands.memory_cmds.get_profile", mock_get_profile)
@@ -111,7 +109,7 @@ async def test_list_memories_cmd_no_memories(memory_cog, mock_ctx, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_clear_memories_cmd_confirmed(memory_cog, mock_ctx, monkeypatch):
+async def test_clear_memories_cmd_confirmed(memory_cog, mock_ctx, monkeypatch) -> None:
     """Verify that memories are cleared after confirmation."""
     mock_get_profile = MagicMock(return_value={"memories": [{"content": "a memory"}]})
     mock_save_profile = MagicMock(return_value=True)
@@ -130,7 +128,7 @@ async def test_clear_memories_cmd_confirmed(memory_cog, mock_ctx, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_clear_memories_cmd_timeout(memory_cog, mock_ctx, monkeypatch):
+async def test_clear_memories_cmd_timeout(memory_cog, mock_ctx, monkeypatch) -> None:
     """Verify that clearing is cancelled on timeout."""
     # Simulate a timeout
     mock_ctx.bot.wait_for.side_effect = asyncio.TimeoutError
@@ -144,7 +142,7 @@ async def test_clear_memories_cmd_timeout(memory_cog, mock_ctx, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_memory_group_no_subcommand(memory_cog, mock_ctx):
+async def test_memory_group_no_subcommand(memory_cog, mock_ctx) -> None:
     """Verify that the help command is sent when no subcommand is given."""
     mock_ctx.invoked_subcommand = None
     await memory_cog.memory_group.callback(memory_cog, mock_ctx)
@@ -162,7 +160,7 @@ def mock_admin_ctx(mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_server_memory_add_success(memory_cog, mock_admin_ctx, monkeypatch):
+async def test_server_memory_add_success(memory_cog, mock_admin_ctx, monkeypatch) -> None:
     """Verify an admin can successfully add a server memory."""
     mock_get = MagicMock(return_value={"memories": []})
     mock_save = MagicMock(return_value=True)
@@ -181,7 +179,7 @@ async def test_server_memory_add_success(memory_cog, mock_admin_ctx, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_server_memory_list_success(memory_cog, mock_admin_ctx, monkeypatch):
+async def test_server_memory_list_success(memory_cog, mock_admin_ctx, monkeypatch) -> None:
     """Verify an admin can successfully list server memories."""
     memories = [{"content": "server memory 1"}]
     mock_get = MagicMock(return_value={"memories": memories})
@@ -195,7 +193,7 @@ async def test_server_memory_list_success(memory_cog, mock_admin_ctx, monkeypatc
 
 
 @pytest.mark.asyncio
-async def test_server_memory_list_no_memories(memory_cog, mock_admin_ctx, monkeypatch):
+async def test_server_memory_list_no_memories(memory_cog, mock_admin_ctx, monkeypatch) -> None:
     """Verify the response when a server has no memories."""
     mock_get = MagicMock(return_value={"memories": []})
     monkeypatch.setattr("bot.commands.memory_cmds.get_server_profile", mock_get)
@@ -206,7 +204,7 @@ async def test_server_memory_list_no_memories(memory_cog, mock_admin_ctx, monkey
 
 
 @pytest.mark.asyncio
-async def test_server_memory_clear_confirmed(memory_cog, mock_admin_ctx, monkeypatch):
+async def test_server_memory_clear_confirmed(memory_cog, mock_admin_ctx, monkeypatch) -> None:
     """Verify that server memories are cleared after admin confirmation."""
     mock_get = MagicMock(return_value={"memories": [{"content": "a memory"}]})
     mock_save = MagicMock(return_value=True)
@@ -223,7 +221,7 @@ async def test_server_memory_clear_confirmed(memory_cog, mock_admin_ctx, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_memory_distill_once_starts_background_task(memory_cog, mock_admin_ctx, monkeypatch):
+async def test_memory_distill_once_starts_background_task(memory_cog, mock_admin_ctx, monkeypatch) -> None:
     started = asyncio.Event()
     release = asyncio.Event()
 
@@ -258,9 +256,9 @@ async def test_memory_distill_once_starts_background_task(memory_cog, mock_admin
 
 
 @pytest.mark.asyncio
-async def test_memory_distill_status_command_sends_embed(memory_cog, mock_admin_ctx, monkeypatch):
+async def test_memory_distill_status_command_sends_embed(memory_cog, mock_admin_ctx, monkeypatch) -> None:
     class FakeDistiller:
-        def __init__(self):
+        def __init__(self) -> None:
             self.dry_run = True
 
         async def get_status(self, guild_id=None):
@@ -299,9 +297,9 @@ async def test_memory_distill_status_command_sends_embed(memory_cog, mock_admin_
 
 
 @pytest.mark.asyncio
-async def test_memory_distill_dryrun_toggle(memory_cog, mock_admin_ctx, monkeypatch):
+async def test_memory_distill_dryrun_toggle(memory_cog, mock_admin_ctx, monkeypatch) -> None:
     class FakeDistiller:
-        def __init__(self):
+        def __init__(self) -> None:
             self.dry_run = True
 
         def set_dry_run(self, enabled: bool) -> None:
@@ -317,7 +315,7 @@ async def test_memory_distill_dryrun_toggle(memory_cog, mock_admin_ctx, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_server_memory_group_no_subcommand(memory_cog, mock_admin_ctx):
+async def test_server_memory_group_no_subcommand(memory_cog, mock_admin_ctx) -> None:
     """Verify help is sent when no server-memory subcommand is given."""
     mock_admin_ctx.invoked_subcommand = None
     await memory_cog.server_memory_group.callback(memory_cog, mock_admin_ctx)

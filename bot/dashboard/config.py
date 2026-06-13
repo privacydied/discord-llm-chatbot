@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional
 
 from bot.utils.logging import get_logger
 
@@ -40,8 +39,8 @@ class DashboardConfig:
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
     public_bind: bool = False
-    auth_token: Optional[str] = None
-    session_secret: Optional[str] = None
+    auth_token: str | None = None
+    session_secret: str | None = None
     owner_ids: set[int] = field(default_factory=set)
     rate_limit_sends_per_minute: int = DEFAULT_RATE_LIMIT_SENDS_PER_MINUTE
     max_message_chars: int = DEFAULT_MAX_MESSAGE_CHARS
@@ -80,14 +79,14 @@ class DashboardConfig:
             )
 
 
-def _parse_bool_str(raw: Optional[str], default: bool) -> bool:
+def _parse_bool_str(raw: str | None, default: bool) -> bool:
     if raw is None:
         return default
     s = str(raw).strip().lower()
     return s in {"1", "true", "yes", "on", "enabled", "enable"}
 
 
-def _safe_int(raw: Optional[str], default: int, name: str) -> int:
+def _safe_int(raw: str | None, default: int, name: str) -> int:
     if raw is None:
         return default
     try:
@@ -97,7 +96,7 @@ def _safe_int(raw: Optional[str], default: int, name: str) -> int:
         return default
 
 
-def _parse_ids(raw: Optional[str]) -> set[int]:
+def _parse_ids(raw: str | None) -> set[int]:
     if not raw:
         return set()
     ids = set()

@@ -1,21 +1,21 @@
-"""
-Enhanced contextual conversation manager for Discord bot.
+"""Enhanced contextual conversation manager for Discord bot.
 Handles multi-user conversation tracking across threads and DMs with privacy controls.
 """
 
+import asyncio
+import contextlib
 import json
 import os
-import asyncio
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Set
-from dataclasses import dataclass, asdict
-from cryptography.fernet import Fernet
+from typing import Any
 
 import discord
+from cryptography.fernet import Fernet
 
-from bot.utils.logging import get_logger
 from bot.config import load_config as _load_config
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -27,8 +27,8 @@ def _load_int_config(key: str, default: int) -> int:
         val = cfg.get(key)
         if val is not None:
             return int(val)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to load int config {key}: {e}")
     return default
 
 
@@ -39,8 +39,8 @@ def _load_bool_config(key: str, default: bool) -> bool:
         val = cfg.get(key)
         if val is not None:
             return bool(val)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to load bool config {key}: {e}")
     return default
 
 
@@ -50,18 +50,18 @@ class MessageEntry:
 
     user_id: str
     channel_id: str
-    thread_id: Optional[str]
+    thread_id: str | None
     timestamp: str
     role: str  # 'user' or 'bot'
     content: str
-    guild_id: Optional[str] = None
+    guild_id: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MessageEntry":
+    def from_dict(cls, data: dict[str, Any]) -> "MessageEntry":
         """Create from dictionary."""
         return cls(**data)
 
@@ -71,13 +71,12 @@ class ContextResponse:
     """Response envelope for context retrieval."""
 
     response_text: str
-    used_history: List[Dict[str, Any]]
+    used_history: list[dict[str, Any]]
     fallback: bool
 
 
 class EnhancedContextManager:
-    """
-    Enhanced contextual conversation manager that tracks multi-user conversations
+    """Enhanced contextual conversation manager that tracks multi-user conversations
     across threads and DMs with privacy controls and encryption.
     """
 
@@ -85,12 +84,11 @@ class EnhancedContextManager:
         self,
         bot: discord.Client,
         filepath: str = "runtime/enhanced_context.json",
-        history_window: Optional[int] = None,
+        history_window: int | None = None,
         max_token_limit: int = 4000,
-        encryption_key: Optional[bytes] = None,
-    ):
-        """
-        Initialize the enhanced context manager.
+        encryption_key: bytes | None = None,
+    ) -> None:
+        """Initialize the enhanced context manager.
 
         Args:
             bot: Discord bot instance
@@ -98,6 +96,7 @@ class EnhancedContextManager:
             history_window: Max messages per user/channel (from HISTORY_WINDOW env var)
             max_token_limit: Max tokens for context to avoid prompt bloat
             encryption_key: Key for encrypting stored content
+
         """
         self.bot = bot
         self.filepath = filepath
@@ -129,10 +128,10 @@ class EnhancedContextManager:
                 self.cipher = Fernet(key)
 
         # Storage: {context_key: List[MessageEntry]}
-        self.memory: Dict[str, List[MessageEntry]] = {}
+        self.memory: dict[str, list[MessageEntry]] = {}
 
         # Privacy opt-out tracking: {user_id: bool}
-        self.privacy_opt_outs: Dict[str, bool] = {}
+        self.privacy_opt_outs: dict[str, bool] = {}
 
         # Concurrency protection for thread-safe operations
         self._memory_lock = asyncio.Lock()
@@ -144,26 +143,24 @@ class EnhancedContextManager:
         """Generate context key for message storage."""
         if isinstance(message.channel, discord.DMChannel):
             return f"dm_{message.author.id}"
-        elif hasattr(message.channel, "parent") and message.channel.parent:
+        if hasattr(message.channel, "parent") and message.channel.parent:
             # Thread in a channel
             return f"guild_{message.guild.id}_thread_{message.channel.id}"
-        else:
-            # Regular channel
-            return f"guild_{message.guild.id}_channel_{message.channel.id}"
+        # Regular channel
+        return f"guild_{message.guild.id}_channel_{message.channel.id}"
 
-    def _get_user_context_key(self, user_id: str, channel_id: str, guild_id: Optional[str] = None) -> str:
+    def _get_user_context_key(self, user_id: str, channel_id: str, guild_id: str | None = None) -> str:
         """Generate user-specific context key."""
         if guild_id:
             return f"guild_{guild_id}_channel_{channel_id}_user_{user_id}"
-        else:
-            return f"dm_{user_id}"
+        return f"dm_{user_id}"
 
     def _encrypt_content(self, content: str) -> str:
         """Encrypt message content."""
         try:
             return self.cipher.encrypt(content.encode()).decode()
         except Exception as e:
-            logger.error(f"❌ Encryption failed: {e}")
+            logger.exception(f"❌ Encryption failed: {e}")
             return content  # Fallback to unencrypted
 
     def _decrypt_content(self, encrypted_content: str) -> str:
@@ -182,7 +179,7 @@ class EnhancedContextManager:
 
         try:
             if os.path.exists(self.filepath):
-                with open(self.filepath, "r", encoding="utf-8") as f:
+                with open(self.filepath, encoding="utf-8") as f:
                     data = json.load(f)
 
                 # Load message entries
@@ -196,7 +193,7 @@ class EnhancedContextManager:
             else:
                 logger.info(f"Context file not found at {self.filepath}, starting fresh")
         except Exception as e:
-            logger.error(f"❌ Failed to load context: {e}")
+            logger.exception(f"❌ Failed to load context: {e}")
             self.memory = {}
             self.privacy_opt_outs = {}
 
@@ -216,20 +213,18 @@ class EnhancedContextManager:
                 "privacy_opt_outs": self.privacy_opt_outs,
                 "metadata": {
                     "version": "1.0",
-                    "last_updated": datetime.now(timezone.utc).isoformat(),
+                    "last_updated": datetime.now(UTC).isoformat(),
                 },
             }
 
             await write_json_atomic(Path(self.filepath), data)
 
             # Post-write permission hardening
-            try:
+            with contextlib.suppress(Exception):
                 os.chmod(self.filepath, 0o600)
-            except Exception:
-                pass
 
         except Exception as e:
-            logger.error("Failed to save context: %s", e)
+            logger.exception("Failed to save context: %s", e)
 
     def set_privacy_opt_out(self, user_id: str, opt_out: bool = True) -> None:
         """Set privacy opt-out for a user."""
@@ -248,7 +243,7 @@ class EnhancedContextManager:
                     )
                     if not t.cancelled() and t.exception()
                     else None
-                )
+                ),
             )
         except RuntimeError:
             # No event loop — skip save (should not happen in normal bot op)
@@ -259,13 +254,13 @@ class EnhancedContextManager:
         """Check if user has opted out of context tracking."""
         return self.privacy_opt_outs.get(str(user_id), False)
 
-    async def append_message(self, message: discord.Message, role: str = "user"):
-        """
-        Append a message to context storage.
+    async def append_message(self, message: discord.Message, role: str = "user") -> None:
+        """Append a message to context storage.
 
         Args:
             message: Discord message object
             role: 'user' or 'bot'
+
         """
         if self.is_privacy_opted_out(str(message.author.id)):
             logger.debug(f"Skipping context storage for opted-out user {message.author.id}")
@@ -310,7 +305,7 @@ class EnhancedContextManager:
         """Rough token count estimation (1 token ≈ 4 characters)."""
         return len(text) // 4
 
-    def _get_recent_participants(self, context_key: str, lookback_messages: int = 20) -> Set[str]:
+    def _get_recent_participants(self, context_key: str, lookback_messages: int = 20) -> set[str]:
         """Get users who recently participated in a conversation."""
         if context_key not in self.memory:
             return set()
@@ -318,9 +313,8 @@ class EnhancedContextManager:
         recent_messages = self.memory[context_key][-lookback_messages:]
         return {entry.user_id for entry in recent_messages}
 
-    def get_context_for_user(self, message: discord.Message, include_cross_user: bool = True) -> List[MessageEntry]:
-        """
-        Get conversation context for a specific user, optionally including cross-user context.
+    def get_context_for_user(self, message: discord.Message, include_cross_user: bool = True) -> list[MessageEntry]:
+        """Get conversation context for a specific user, optionally including cross-user context.
 
         Args:
             message: Discord message to get context for
@@ -328,6 +322,7 @@ class EnhancedContextManager:
 
         Returns:
             List of MessageEntry objects
+
         """
         context_key = self._get_context_key(message)
 
@@ -350,9 +345,8 @@ class EnhancedContextManager:
 
         return relevant_messages[-self.history_window :]
 
-    def format_context_string(self, entries: List[MessageEntry], max_tokens: Optional[int] = None) -> str:
-        """
-        Format context entries into a conversation string.
+    def format_context_string(self, entries: list[MessageEntry], max_tokens: int | None = None) -> str:
+        """Format context entries into a conversation string.
 
         Args:
             entries: List of MessageEntry objects
@@ -360,6 +354,7 @@ class EnhancedContextManager:
 
         Returns:
             Formatted context string
+
         """
         if not entries:
             return ""
@@ -415,7 +410,7 @@ class EnhancedContextManager:
                 total_chars += line_chars
 
             except Exception as e:
-                logger.error(f"❌ Error formatting context entry: {e}")
+                logger.exception(f"❌ Error formatting context entry: {e}")
                 continue
 
         # Reverse back to chronological order
@@ -427,8 +422,7 @@ class EnhancedContextManager:
         response_text: str,
         include_cross_user: bool = True,
     ) -> ContextResponse:
-        """
-        Generate a contextual response with conversation history.
+        """Generate a contextual response with conversation history.
 
         Args:
             message: Discord message being responded to
@@ -437,6 +431,7 @@ class EnhancedContextManager:
 
         Returns:
             ContextResponse with formatted response and metadata
+
         """
         fallback = False
         used_history = []
@@ -464,7 +459,7 @@ class EnhancedContextManager:
                 logger.debug(f"✔ Context retrieved [entries={len(context_entries)}, tokens≈{self._estimate_token_count(context_str)}]")
 
         except Exception as e:
-            logger.error(f"❌ Context retrieval failed: {e}")
+            logger.exception(f"❌ Context retrieval failed: {e}")
             fallback = True
             response_text = f"Got you — y'all wild. {response_text}"
 
@@ -478,7 +473,7 @@ class EnhancedContextManager:
             await self._save()
             logger.info(f"Context reset for {context_key}")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get context manager statistics."""
         total_messages = sum(len(entries) for entries in self.memory.values())
         return {

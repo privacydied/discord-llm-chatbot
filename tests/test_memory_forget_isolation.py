@@ -30,7 +30,7 @@ class FakeRecord:
         summary: str = "",
         context_type: str = "user_preference",
         confidence: float = 0.8,
-    ):
+    ) -> None:
         self.memory_id = memory_id
         self.user_id = user_id
         self.summary = summary
@@ -55,7 +55,7 @@ def _make_service(owned_records, deleted_ids=None):
     svc.list_user_memories = AsyncMock(side_effect=list_memories)
     svc.search_user_memories = AsyncMock(return_value=[])
 
-    async def delete_memory(mid, *, owner_id=None):
+    async def delete_memory(mid, *, owner_id=None) -> bool:
         matching = [r for r in owned_records if r.memory_id == mid]
         if not matching:
             return False
@@ -82,13 +82,13 @@ def _make_ctx(bot):
     return ctx
 
 
-async def _forget(cog, ctx, *, memory_id):
+async def _forget(cog, ctx, *, memory_id) -> None:
     """Invoke the memory_forget command handler correctly."""
     cmd = cog.__class__.__dict__["memory_forget"]
     await cmd.callback(cog, ctx, memory_id=memory_id)
 
 
-async def _memories_show(cog, ctx, *, limit=5):
+async def _memories_show(cog, ctx, *, limit=5) -> None:
     cmd = cog.__class__.__dict__["memories_show"]
     await cmd.callback(cog, ctx, limit=limit)
 
@@ -135,7 +135,7 @@ def _make_cog(bot):
 # deletes only 9aeae0d9
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_forget_exact_id_deletes_only_requested():
+async def test_forget_exact_id_deletes_only_requested() -> None:
     """Forgetting 9aeae0d9-aaaa deletes only that memory, not a06e027c."""
     bot = _make_bot()
     cog = _make_cog(bot)
@@ -158,7 +158,7 @@ async def test_forget_exact_id_deletes_only_requested():
 # Test: Forgetting one memory does not change or remove another memory
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_forget_one_does_not_touch_others():
+async def test_forget_one_does_not_touch_others() -> None:
     """After deleting 9aeae0d9, a06e027c is still present via list query."""
     bot = _make_bot()
     cog = _make_cog(bot)
@@ -181,7 +181,7 @@ async def test_forget_one_does_not_touch_others():
     remaining_ids = {r.memory_id for r in remaining}
     assert "a06e027c-dddd-eeee-ffff-222222222222" in remaining_ids
     # 9aeae0d9 should be filtered out because it was deleted
-    assert "9aeae0d9-aaaa-bbbb-cccc-111111111111" not in deleted_ids or True  # check via deleted_ids
+    assert True  # check via deleted_ids
     assert "9aeae0d9-aaaa-bbbb-cccc-111111111111" in deleted_ids
 
 
@@ -189,7 +189,7 @@ async def test_forget_one_does_not_touch_others():
 # Test: User A cannot delete User B's memory by ID
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_user_cannot_delete_other_users_memory():
+async def test_user_cannot_delete_other_users_memory() -> None:
     bot = _make_bot()
     cog = _make_cog(bot)
     deleted_ids = []
@@ -214,7 +214,7 @@ async def test_user_cannot_delete_other_users_memory():
 # Test: Prefix delete works only when unique
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_prefix_delete_unique():
+async def test_prefix_delete_unique() -> None:
     """User sends 9aeae0d9 -> exactly one match -> deletes it."""
     bot = _make_bot()
     cog = _make_cog(bot)
@@ -237,7 +237,7 @@ async def test_prefix_delete_unique():
 # Test: Ambiguous prefix delete deletes nothing
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_ambiguous_prefix_deletes_nothing():
+async def test_ambiguous_prefix_deletes_nothing() -> None:
     """User sends a06e0 -> two matches for user 111 with that prefix -> rejected."""
     bot = _make_bot()
     cog = _make_cog(bot)
@@ -259,7 +259,7 @@ async def test_ambiguous_prefix_deletes_nothing():
 # Test: Unknown ID deletes nothing
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_unknown_id_deletes_nothing():
+async def test_unknown_id_deletes_nothing() -> None:
     bot = _make_bot()
     cog = _make_cog(bot)
     deleted_ids = []
@@ -280,7 +280,7 @@ async def test_unknown_id_deletes_nothing():
 # Test: Response reports actual deleted canonical ID
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_response_reports_canonical_id():
+async def test_response_reports_canonical_id() -> None:
     bot = _make_bot()
     cog = _make_cog(bot)
     deleted_ids = []
@@ -302,9 +302,10 @@ async def test_response_reports_canonical_id():
 # Test: !memories-show after delete no longer lists the deleted memory
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_memories_show_after_delete():
+async def test_memories_show_after_delete() -> None:
     """After forgetting 9aeae0d9, !memories-show still lists a06e027c,
-    and 9aeae0d9 is gone."""
+    and 9aeae0d9 is gone.
+    """
     bot = _make_bot()
     cog = _make_cog(bot)
     deleted_ids = []

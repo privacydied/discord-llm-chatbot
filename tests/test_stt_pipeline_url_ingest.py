@@ -1,3 +1,5 @@
+from typing import Never
+
 import pytest
 
 from bot.exceptions import InferenceError
@@ -67,8 +69,9 @@ async def test_fetch_url_audio_with_span_success() -> None:
 async def test_fetch_url_audio_with_span_error_marks_span_and_reraises() -> None:
     spans = _Spans()
 
-    async def _fetcher(url: str, force_refresh: bool = False):
-        raise RuntimeError("fetch failed")
+    async def _fetcher(url: str, force_refresh: bool = False) -> Never:
+        msg = "fetch failed"
+        raise RuntimeError(msg)
 
     with pytest.raises(RuntimeError, match="fetch failed"):
         await fetch_url_audio_with_span(
@@ -126,8 +129,9 @@ async def test_fetch_url_audio_or_raise_converts_ingest_error() -> None:
     class _IngestErr(Exception):
         pass
 
-    async def _fetcher(url: str, force_refresh: bool = False):
-        raise _IngestErr("download failed")
+    async def _fetcher(url: str, force_refresh: bool = False) -> Never:
+        msg = "download failed"
+        raise _IngestErr(msg)
 
     with pytest.raises(InferenceError, match="download failed"):
         await fetch_url_audio_or_raise(
@@ -155,8 +159,9 @@ async def test_fetch_url_audio_or_raise_passthrough_non_ingest_error() -> None:
     class _IngestErr(Exception):
         pass
 
-    async def _fetcher(url: str, force_refresh: bool = False):
-        raise RuntimeError("other failure")
+    async def _fetcher(url: str, force_refresh: bool = False) -> Never:
+        msg = "other failure"
+        raise RuntimeError(msg)
 
     with pytest.raises(RuntimeError, match="other failure"):
         await fetch_url_audio_or_raise(
@@ -183,7 +188,7 @@ async def test_prepare_url_download_for_stt_success() -> None:
     manager = object()
     order = []
 
-    async def _ensure_ready_or_raise(**kwargs):
+    async def _ensure_ready_or_raise(**kwargs) -> None:
         assert kwargs["manager"] is manager
         assert kwargs["job"] is job
         order.append("ensure")
@@ -221,11 +226,13 @@ async def test_prepare_url_download_for_stt_stops_on_ready_error() -> None:
     guard = _Guard()
     spans = _Spans()
 
-    async def _ensure_ready_or_raise(**kwargs):
-        raise RuntimeError("not ready")
+    async def _ensure_ready_or_raise(**kwargs) -> Never:
+        msg = "not ready"
+        raise RuntimeError(msg)
 
-    async def _fetch_or_raise(**kwargs):
-        raise AssertionError("fetch should not run")
+    async def _fetch_or_raise(**kwargs) -> Never:
+        msg = "fetch should not run"
+        raise AssertionError(msg)
 
     with pytest.raises(RuntimeError, match="not ready"):
         await prepare_url_download_for_stt(
@@ -251,11 +258,12 @@ async def test_prepare_url_download_for_stt_stops_on_fetch_error() -> None:
     guard = _Guard()
     spans = _Spans()
 
-    async def _ensure_ready_or_raise(**kwargs):
+    async def _ensure_ready_or_raise(**kwargs) -> None:
         return None
 
-    async def _fetch_or_raise(**kwargs):
-        raise RuntimeError("fetch failed")
+    async def _fetch_or_raise(**kwargs) -> Never:
+        msg = "fetch failed"
+        raise RuntimeError(msg)
 
     with pytest.raises(RuntimeError, match="fetch failed"):
         await prepare_url_download_for_stt(

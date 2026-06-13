@@ -1,10 +1,9 @@
-"""
-Minimal test bot to verify basic Discord bot functionality.
-"""
+"""Minimal test bot to verify basic Discord bot functionality."""
 
+import logging
 import os
 import sys
-import logging
+
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -34,7 +33,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 
 @bot.event
-async def on_ready():
+async def on_ready() -> None:
     """Event triggered when the bot is ready."""
     logger.info(f"Logged in as {bot.user.name} (ID: {bot.user.id})")
     logger.info(f"Bot is in {len(bot.guilds)} guilds:")
@@ -46,22 +45,22 @@ async def on_ready():
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="!ping"))
         logger.info('Bot presence set to "Listening to !ping"')
     except Exception as e:
-        logger.error(f"Error setting presence: {e}")
+        logger.exception(f"Error setting presence: {e}")
 
 
 @bot.command()
-async def ping(ctx):
+async def ping(ctx) -> None:
     """Simple ping command to test if the bot is responding."""
     logger.info(f"Ping command received from {ctx.author} in {ctx.guild.name if ctx.guild else 'DM'}")
     try:
         await ctx.send("Pong! 🏓")
         logger.info("Successfully sent pong response")
     except Exception as e:
-        logger.error(f"Error sending pong: {e}")
+        logger.exception(f"Error sending pong: {e}")
 
 
 @bot.event
-async def on_message(message):
+async def on_message(message) -> None:
     """Event triggered when a message is received."""
     # Don't respond to ourselves
     if message.author == bot.user:
@@ -73,12 +72,11 @@ async def on_message(message):
     try:
         await bot.process_commands(message)
     except Exception as e:
-        logger.error(f"Error processing command: {e}")
+        logger.exception(f"Error processing command: {e}")
 
 
 if __name__ == "__main__":
     if not TOKEN:
-        print("Error: DISCORD_TOKEN not found in .env file")
+        pass
     else:
-        print("Starting test bot...")
         bot.run(TOKEN)

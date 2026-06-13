@@ -1,20 +1,19 @@
-"""
-Tokenizer registry for TTS tokenizer discovery and management.
+"""Tokenizer registry for TTS tokenizer discovery and management.
 
 This module provides a singleton registry for tokenizer availability
 to ensure consistent state across imports and prevent reset issues.
 """
 
+import importlib.util
+import json
 import logging
 import os
-from typing import Dict, Set, Any, Tuple, Literal
-from dataclasses import dataclass
-import importlib.util
+import re
 import shutil
 import subprocess
-import json
-import re
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Literal
 
 from .tts.errors import MissingTokeniserError
 
@@ -73,7 +72,7 @@ class TokenizerRegistry:
             cls._instance = TokenizerRegistry()
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the registry. Should only be called once."""
         if TokenizerRegistry._instance is not None:
             logger.warning(
@@ -82,21 +81,21 @@ class TokenizerRegistry:
             )
 
         # Initialize with empty set
-        self._available_tokenizers: Set[str] = set()
+        self._available_tokenizers: set[str] = set()
         self._initialized = False
         self._size_at_init = 0
         # Per-language lexicon cache (lower-cased keys)
-        self._lexicons: Dict[str, Dict[str, str]] = {}
+        self._lexicons: dict[str, dict[str, str]] = {}
 
-    def discover_tokenizers(self, force: bool = False) -> Dict[str, bool]:
-        """
-        Discover available tokenizers in the current environment.
+    def discover_tokenizers(self, force: bool = False) -> dict[str, bool]:
+        """Discover available tokenizers in the current environment.
 
         Args:
             force: Force rediscovery even if already initialized
 
         Returns:
             Dictionary mapping tokenizer names to availability status
+
         """
         # Skip if already initialized unless forced
         if self._initialized and not force:
@@ -121,8 +120,7 @@ class TokenizerRegistry:
                 # Verify espeak works by running a simple command
                 result = subprocess.run(
                     ["espeak", "--version"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                     timeout=2,
                 )
                 if result.returncode == 0:
@@ -143,8 +141,7 @@ class TokenizerRegistry:
                 # Verify espeak-ng works by running a simple command
                 result = subprocess.run(
                     ["espeak-ng", "--version"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
+                    capture_output=True,
                     timeout=2,
                 )
                 if result.returncode == 0:
@@ -217,7 +214,7 @@ class TokenizerRegistry:
         # Return dictionary of available tokenizers
         return {t: t in self._available_tokenizers for t in TOKENIZER_TYPES}
 
-    def _dump_environment_diagnostics(self) -> Dict[str, Any]:
+    def _dump_environment_diagnostics(self) -> dict[str, Any]:
         """Dump environment diagnostics for tokenizer discovery."""
         diagnostics = {}
 
@@ -233,8 +230,7 @@ class TokenizerRegistry:
         return diagnostics
 
     def select_tokenizer_for_language(self, language: str) -> str:
-        """
-        Select the best tokenizer for the given language.
+        """Select the best tokenizer for the given language.
 
         Args:
             language: Language code (e.g., 'en', 'ja')
@@ -244,6 +240,7 @@ class TokenizerRegistry:
 
         Raises:
             MissingTokeniserError: If no suitable tokenizer is found for the language
+
         """
         # Ensure discovery has been performed
         if not self._initialized:
@@ -263,13 +260,12 @@ class TokenizerRegistry:
 
         # Check for environment override
         env_tokenizer = os.environ.get("TTS_TOKENISER", "").strip().lower()
-        if env_tokenizer:
-            if env_tokenizer in self._available_tokenizers:
-                logger.info(
-                    f"Using environment-specified tokenizer: {env_tokenizer}",
-                    extra={"subsys": "tts", "event": "registry.env_override"},
-                )
-                return env_tokenizer
+        if env_tokenizer and env_tokenizer in self._available_tokenizers:
+            logger.info(
+                f"Using environment-specified tokenizer: {env_tokenizer}",
+                extra={"subsys": "tts", "event": "registry.env_override"},
+            )
+            return env_tokenizer
             # Removed warning here - only warn in autodiscovery branch when actually used
 
         # Get tokenizer preferences for the language
@@ -284,10 +280,12 @@ class TokenizerRegistry:
             if FORCE_IPA:
                 from .tts.errors import UnsupportedIPASymbolError
 
-                raise UnsupportedIPASymbolError("IPA required: no phoneme tokenizers available and grapheme fallback disabled")
+                msg = "IPA required: no phoneme tokenizers available and grapheme fallback disabled"
+                raise UnsupportedIPASymbolError(msg)
             if not ALLOW_GRAPHEME:
                 logger.warning("No phoneme tokenizers available for English, but grapheme fallback disabled")
-                raise MissingTokeniserError(f"No suitable phoneme tokenizer found for {language}")
+                msg = f"No suitable phoneme tokenizer found for {language}"
+                raise MissingTokeniserError(msg)
             return "grapheme"
 
         # Find the first available tokenizer in the preference list for non-English
@@ -308,9 +306,10 @@ class TokenizerRegistry:
             f"No tokenizer available for language '{language}'",
             extra={"subsys": "tts", "event": "registry.no_tokenizer"},
         )
-        raise MissingTokeniserError(f"No tokenizer available for language '{language}'")
+        msg = f"No tokenizer available for language '{language}'"
+        raise MissingTokeniserError(msg)
 
-    def _load_lexicon(self, language: str) -> Dict[str, str]:
+    def _load_lexicon(self, language: str) -> dict[str, str]:
         """Load lexicon for a language from env or default path. Cached per language.
         Looks for env TTS_LEXICON or TTS_LEXICON_PATH. Defaults to `bot/tts/lexicon_<lang>.json`.
         Returns a dict mapping lowercased words to phoneme strings.
@@ -318,7 +317,7 @@ class TokenizerRegistry:
         lang = self._canonicalize_language(language or os.environ.get("TTS_LANGUAGE", "en"))
         if lang in self._lexicons:
             return self._lexicons[lang]
-        lex: Dict[str, str] = {}
+        lex: dict[str, str] = {}
         try:
             env_path = os.environ.get("TTS_LEXICON") or os.environ.get("TTS_LEXICON_PATH")
             if env_path:
@@ -357,7 +356,7 @@ class TokenizerRegistry:
             )
         return lex
 
-    def apply_lexicon(self, text: str, language: str) -> Tuple[str, bool]:
+    def apply_lexicon(self, text: str, language: str) -> tuple[str, bool]:
         """Apply lexicon replacements to text for a given language.
         Returns (new_text, changed).
         """
@@ -384,14 +383,14 @@ class TokenizerRegistry:
         return new_text, changed
 
     def _canonicalize_language(self, language: str) -> str:
-        """
-        Canonicalize language code.
+        """Canonicalize language code.
 
         Args:
             language: Language code (e.g., 'en', 'ja', 'en-US')
 
         Returns:
             Canonicalized language code
+
         """
         if not language:
             return "en"  # Default to English
@@ -413,15 +412,15 @@ class TokenizerRegistry:
 
         return language
 
-    def is_tokenizer_warning_needed(self, language: str = None) -> bool:
-        """
-        Check if a tokenizer warning needs to be shown to the user.
+    def is_tokenizer_warning_needed(self, language: str | None = None) -> bool:
+        """Check if a tokenizer warning needs to be shown to the user.
 
         Args:
             language: Optional language code to check. If None, uses TTS_LANGUAGE env var.
 
         Returns:
             True if warning should be shown, False otherwise
+
         """
         # Ensure discovery has been performed
         if not self._initialized:
@@ -443,25 +442,24 @@ class TokenizerRegistry:
             return False  # No warning needed for English
 
         # For Japanese/Chinese, we need misaki
-        if language in ("ja", "zh"):
-            if "misaki" not in self._available_tokenizers:
-                logger.warning(
-                    f"No {language} tokenizer found. Speech quality will be poor.",
-                    extra={"subsys": "tts", "event": f"registry.warning.{language}"},
-                )
-                return True
+        if language in ("ja", "zh") and "misaki" not in self._available_tokenizers:
+            logger.warning(
+                f"No {language} tokenizer found. Speech quality will be poor.",
+                extra={"subsys": "tts", "event": f"registry.warning.{language}"},
+            )
+            return True
 
         return False
 
     def get_tokenizer_warning_message(self, language: str = "en") -> str:
-        """
-        Get a user-friendly warning message about missing tokenizers.
+        """Get a user-friendly warning message about missing tokenizers.
 
         Args:
             language: Language code for the warning message
 
         Returns:
             A message suitable for displaying to users
+
         """
         language = self._canonicalize_language(language)
 
@@ -474,18 +472,17 @@ class TokenizerRegistry:
                 "- `g2p_en`: `pip install g2p_en`\n\n"
                 "Without these, English speech will sound robotic and unnatural."
             )
-        elif language in ("ja", "zh"):
+        if language in ("ja", "zh"):
             return f"⚠️ **Asian language tokenizer missing**\n\nFor better {language} speech quality, please install:\n- `misaki`: `pip install misaki`\n\nWithout this, {language} speech will sound incorrect."
-        else:
-            return (
-                f"⚠️ **Phonetic tokeniser missing for {language}**\n\n"
-                f"For better speech quality, please install one of:\n"
-                f"- `phonemizer`: `pip install phonemizer`\n"
-                f"- `espeak`: `apt install espeak` or `brew install espeak`\n\n"
-                f"Without these, speech will sound robotic and unnatural."
-            )
+        return (
+            f"⚠️ **Phonetic tokeniser missing for {language}**\n\n"
+            f"For better speech quality, please install one of:\n"
+            f"- `phonemizer`: `pip install phonemizer`\n"
+            f"- `espeak`: `apt install espeak` or `brew install espeak`\n\n"
+            f"Without these, speech will sound robotic and unnatural."
+        )
 
-    def get_available_tokenizers(self) -> Set[str]:
+    def get_available_tokenizers(self) -> set[str]:
         """Get the set of available tokenizers."""
         # Ensure discovery has been performed
         if not self._initialized:
@@ -494,8 +491,7 @@ class TokenizerRegistry:
         return self._available_tokenizers.copy()
 
     def select_for_language(self, language: str, text: str) -> Decision:
-        """
-        Select the best tokenizer for the given language and return a typed Decision.
+        """Select the best tokenizer for the given language and return a typed Decision.
 
         Note:
         - Production English path is IPA-only via `bot.tts.ipa_vocab_loader` and
@@ -512,6 +508,7 @@ class TokenizerRegistry:
 
         Raises:
             MissingTokeniserError: If no suitable tokenizer is found for the language
+
         """
         # Ensure discovery has been performed
         if not self._initialized:
@@ -524,7 +521,7 @@ class TokenizerRegistry:
         # The engine's English path remains IPA-only and does not consult the registry.
 
         # Apply lexicon first
-        text, lex_changed = self.apply_lexicon(text, language)
+        text, _lex_changed = self.apply_lexicon(text, language)
 
         # Get tokenizer selection
         tokenizer = self._select_tokenizer_with_fallback(language)
@@ -570,52 +567,50 @@ class TokenizerRegistry:
         return Decision(mode="grapheme", payload=text, alphabet="GRAPHEME")
 
     def _select_tokenizer_with_fallback(self, language: str) -> str:
-        """
-        Select tokenizer for language with proper English misaki handling.
+        """Select tokenizer for language with proper English misaki handling.
 
         For English, if misaki is specified via env but not ideal,
         fall back to phonemizer with a debug log.
         """
         # Check for environment override
         env_tokenizer = os.environ.get("TTS_TOKENISER", "").strip().lower()
-        if env_tokenizer:
-            if env_tokenizer in self._available_tokenizers:
-                # Special handling for English + misaki
-                if language == "en" and env_tokenizer == "misaki":
-                    # Misaki is JP/CN only, fall back to phonemizer for English
-                    if "phonemizer" in self._available_tokenizers:
-                        logger.debug(
-                            "misaki is JP-only; falling back to phonemizer for en",
-                            extra={
-                                "subsys": "tts",
-                                "event": "registry.misaki_fallback",
-                            },
-                        )
-                        return "phonemizer"
-                    elif "g2p_en" in self._available_tokenizers:
-                        logger.debug(
-                            "misaki is JP-only; falling back to g2p_en for en",
-                            extra={
-                                "subsys": "tts",
-                                "event": "registry.misaki_fallback",
-                            },
-                        )
-                        return "g2p_en"
-                    elif "espeak" in self._available_tokenizers:
-                        logger.debug(
-                            "misaki is JP-only; falling back to espeak for en",
-                            extra={
-                                "subsys": "tts",
-                                "event": "registry.misaki_fallback",
-                            },
-                        )
-                        return "espeak"
+        if env_tokenizer and env_tokenizer in self._available_tokenizers:
+            # Special handling for English + misaki
+            if language == "en" and env_tokenizer == "misaki":
+                # Misaki is JP/CN only, fall back to phonemizer for English
+                if "phonemizer" in self._available_tokenizers:
+                    logger.debug(
+                        "misaki is JP-only; falling back to phonemizer for en",
+                        extra={
+                            "subsys": "tts",
+                            "event": "registry.misaki_fallback",
+                        },
+                    )
+                    return "phonemizer"
+                if "g2p_en" in self._available_tokenizers:
+                    logger.debug(
+                        "misaki is JP-only; falling back to g2p_en for en",
+                        extra={
+                            "subsys": "tts",
+                            "event": "registry.misaki_fallback",
+                        },
+                    )
+                    return "g2p_en"
+                if "espeak" in self._available_tokenizers:
+                    logger.debug(
+                        "misaki is JP-only; falling back to espeak for en",
+                        extra={
+                            "subsys": "tts",
+                            "event": "registry.misaki_fallback",
+                        },
+                    )
+                    return "espeak"
 
-                logger.debug(
-                    f"Using environment-specified tokenizer: {env_tokenizer}",
-                    extra={"subsys": "tts", "event": "registry.env_override"},
-                )
-                return env_tokenizer
+            logger.debug(
+                f"Using environment-specified tokenizer: {env_tokenizer}",
+                extra={"subsys": "tts", "event": "registry.env_override"},
+            )
+            return env_tokenizer
 
         # Get tokenizer preferences for the language
         preferences = TOKENISER_MAP.get(language, TOKENISER_MAP.get("*", []))
@@ -646,7 +641,8 @@ class TokenizerRegistry:
             f"No tokenizer available for language '{language}'",
             extra={"subsys": "tts", "event": "registry.no_tokenizer"},
         )
-        raise MissingTokeniserError(f"No tokenizer available for language '{language}'")
+        msg = f"No tokenizer available for language '{language}'"
+        raise MissingTokeniserError(msg)
 
     def _tokenize_to_phonemes(self, text: str, tokenizer: str, language: str) -> str:
         """Tokenize text to phonemes using the specified tokenizer."""
@@ -656,7 +652,8 @@ class TokenizerRegistry:
 
                 return phonemize(text, language="en-us", backend="espeak", strip=True)
             except ImportError:
-                raise Exception("phonemizer not available")
+                msg = "phonemizer not available"
+                raise Exception(msg)
 
         elif tokenizer in ("espeak", "espeak-ng"):
             try:
@@ -665,10 +662,11 @@ class TokenizerRegistry:
                 result = subprocess.run(cmd, input=text, text=True, capture_output=True, timeout=10)
                 if result.returncode == 0:
                     return result.stdout.strip()
-                else:
-                    raise Exception(f"espeak failed: {result.stderr}")
+                msg = f"espeak failed: {result.stderr}"
+                raise Exception(msg)
             except (subprocess.SubprocessError, FileNotFoundError):
-                raise Exception(f"{tokenizer} not available")
+                msg = f"{tokenizer} not available"
+                raise Exception(msg)
 
         elif tokenizer == "g2p_en":
             try:
@@ -678,7 +676,8 @@ class TokenizerRegistry:
                 phonemes = g2p(text)
                 return " ".join(phonemes)
             except ImportError:
-                raise Exception("g2p_en not available")
+                msg = "g2p_en not available"
+                raise Exception(msg)
 
         elif tokenizer == "misaki":
             try:
@@ -691,10 +690,12 @@ class TokenizerRegistry:
                     return result[0]
                 return result
             except ImportError:
-                raise Exception("misaki not available")
+                msg = "misaki not available"
+                raise Exception(msg)
 
         else:
-            raise Exception(f"Unsupported tokenizer: {tokenizer}")
+            msg = f"Unsupported tokenizer: {tokenizer}"
+            raise Exception(msg)
 
 
 # Minimal ARPAbet -> IPA (covers core English; extend as needed)
@@ -742,11 +743,10 @@ ARPABET_TO_IPA = {
 
 
 def arpabet_to_ipa(seq):
-    """
-    Convert a sequence of ARPAbet tokens (possibly with stress digits, e.g. 'IH1')
+    """Convert a sequence of ARPAbet tokens (possibly with stress digits, e.g. 'IH1')
     into an IPA string separated by spaces.
     Example input: ['K', 'AW1', 'N', 'T', 'IH1', 'NG']
-    Output: 'k aʊ n t ɪ ŋ'
+    Output: 'k aʊ n t ɪ ŋ'.
     """
     out = []
     for s in seq:
@@ -757,23 +757,22 @@ def arpabet_to_ipa(seq):
     return " ".join(out)
 
 
-def discover_tokenizers(force: bool = False) -> Dict[str, bool]:
-    """
-    Discover available tokenizers using the registry singleton.
+def discover_tokenizers(force: bool = False) -> dict[str, bool]:
+    """Discover available tokenizers using the registry singleton.
 
     Args:
         force: Force rediscovery even if already initialized
 
     Returns:
         Dictionary mapping tokenizer names to availability status
+
     """
     registry = TokenizerRegistry.get_instance()
     return registry.discover_tokenizers(force)
 
 
 def select_tokenizer_for_language(language: str) -> str:
-    """
-    Select the best tokenizer for the given language using the registry singleton.
+    """Select the best tokenizer for the given language using the registry singleton.
 
     Args:
         language: Language code (e.g., 'en', 'ja')
@@ -783,6 +782,7 @@ def select_tokenizer_for_language(language: str) -> str:
 
     Raises:
         MissingTokeniserError: If no suitable tokenizer is found for the language
+
     """
     registry = TokenizerRegistry.get_instance()
     # Call the real class method to exercise logic even if instance is mocked
@@ -790,40 +790,40 @@ def select_tokenizer_for_language(language: str) -> str:
 
 
 def is_tokenizer_warning_needed(language: str = "en") -> bool:
-    """
-    Check if a tokenizer warning needs to be shown to the user.
+    """Check if a tokenizer warning needs to be shown to the user.
 
     Args:
         language: Language code to check for tokenizer warnings
 
     Returns:
         True if warning should be shown, False otherwise
+
     """
     registry = TokenizerRegistry.get_instance()
     return registry.is_tokenizer_warning_needed(language)
 
 
 def get_tokenizer_warning_message(language: str = "en") -> str:
-    """
-    Get a user-friendly warning message about missing tokenizers.
+    """Get a user-friendly warning message about missing tokenizers.
 
     Args:
         language: Language code for the warning message
 
     Returns:
         A message suitable for displaying to users
+
     """
     registry = TokenizerRegistry.get_instance()
     return registry.get_tokenizer_warning_message(language)
 
 
-def get_available_tokenizers() -> Set[str]:
+def get_available_tokenizers() -> set[str]:
     """Get the set of available tokenizers using the registry singleton."""
     registry = TokenizerRegistry.get_instance()
     return registry.get_available_tokenizers()
 
 
-def apply_lexicon(text: str, language: str) -> Tuple[str, bool]:
+def apply_lexicon(text: str, language: str) -> tuple[str, bool]:
     """Apply lexicon replacements using the registry singleton."""
     registry = TokenizerRegistry.get_instance()
     return registry.apply_lexicon(text, language)

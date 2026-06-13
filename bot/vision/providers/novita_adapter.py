@@ -1,33 +1,26 @@
-"""
-Novita.ai Vision Provider Adapter
+"""Novita.ai Vision Provider Adapter.
 
 Implements Novita.ai API integration for comprehensive vision generation.
 Supports text-to-image, text-to-video, and image-to-video generation.
 """
 
 import asyncio
-import aiohttp
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any
+
+import aiohttp
 
 from bot.utils.logging import get_logger
-from ..types import (
-    VisionRequest,
-    VisionResponse,
-    VisionProvider,
-    VisionTask,
-    VisionError,
-    VisionErrorType,
-)
+from bot.vision.types import VisionError, VisionErrorType, VisionProvider, VisionRequest, VisionResponse, VisionTask
+
 from .base import BaseVisionProvider
 
 logger = get_logger(__name__)
 
 
 class NovitaAdapter(BaseVisionProvider):
-    """
-    Novita.ai API adapter for comprehensive vision generation
+    """Novita.ai API adapter for comprehensive vision generation.
 
     Supports:
     - Text-to-image with DreamShaper and other models
@@ -36,12 +29,12 @@ class NovitaAdapter(BaseVisionProvider):
     - Async job polling for long-running video tasks [PA]
     """
 
-    def __init__(self, config: Dict[str, Any], policy: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any], policy: dict[str, Any]) -> None:
         super().__init__(config, policy)
 
         self.api_key = config["VISION_API_KEY"]
         self.base_url = "https://api.novita.ai/v3"
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
 
         # Novita-specific settings
         self.polling_interval = 5  # seconds
@@ -53,8 +46,8 @@ class NovitaAdapter(BaseVisionProvider):
     def get_provider_name(self) -> VisionProvider:
         return VisionProvider.NOVITA
 
-    def _normalize_request_for_novita(self, request: VisionRequest, task_type: str) -> Dict[str, Any]:
-        """Normalize and validate request parameters for Novita.ai to prevent 400 errors [IV][CMV]"""
+    def _normalize_request_for_novita(self, request: VisionRequest, task_type: str) -> dict[str, Any]:
+        """Normalize and validate request parameters for Novita.ai to prevent 400 errors [IV][CMV]."""
         # Start with clean payload - remove None/empty values
         payload = {}
 
@@ -123,7 +116,7 @@ class NovitaAdapter(BaseVisionProvider):
         return payload
 
     def _validate_config(self) -> None:
-        """Validate Novita.ai specific configuration [IV]"""
+        """Validate Novita.ai specific configuration [IV]."""
         if not self.config.get("VISION_API_KEY"):
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
@@ -132,12 +125,12 @@ class NovitaAdapter(BaseVisionProvider):
             )
 
     def _initialize(self) -> None:
-        """Initialize HTTP session and validate API access"""
+        """Initialize HTTP session and validate API access."""
         self.logger.info("Initializing Novita.ai adapter")
         self.session = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create HTTP session with proper headers [RM]"""
+        """Get or create HTTP session with proper headers [RM]."""
         if self.session is None or self.session.closed:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -155,7 +148,7 @@ class NovitaAdapter(BaseVisionProvider):
         return self.session
 
     async def generate(self, request: VisionRequest, model: str) -> VisionResponse:
-        """Generate vision content using Novita.ai API"""
+        """Generate vision content using Novita.ai API."""
         start_time = time.time()
 
         self._log_request_start(request, model)
@@ -191,7 +184,7 @@ class NovitaAdapter(BaseVisionProvider):
             processing_time = time.time() - start_time
             error = VisionError(
                 error_type=VisionErrorType.PROVIDER_ERROR,
-                message=f"Unexpected Novita.ai error: {str(e)}",
+                message=f"Unexpected Novita.ai error: {e!s}",
                 user_message="An unexpected error occurred. Please try again.",
                 provider=VisionProvider.NOVITA,
             )
@@ -199,7 +192,7 @@ class NovitaAdapter(BaseVisionProvider):
             return self._create_error_response(request.idempotency_key, error, processing_time)
 
     async def _text_to_image(self, request: VisionRequest, model: str) -> VisionResponse:
-        """Generate image from text using Novita.ai Qwen Image API"""
+        """Generate image from text using Novita.ai Qwen Image API."""
         session = await self._get_session()
 
         # Use normalized request to prevent 400 errors
@@ -223,20 +216,19 @@ class NovitaAdapter(BaseVisionProvider):
                     result = await self._poll_for_completion(task_id)
                     return await self._process_image_result(result, request)
 
-                else:
-                    error_data = await resp.json() if resp.content_type == "application/json" else {}
-                    raise await self._map_api_error(resp.status, error_data)
+                error_data = await resp.json() if resp.content_type == "application/json" else {}
+                raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
             raise VisionError(
                 error_type=VisionErrorType.NETWORK_ERROR,
-                message=f"Network error: {str(e)}",
+                message=f"Network error: {e!s}",
                 user_message="Network connection failed. Please try again.",
                 provider=VisionProvider.NOVITA,
             )
 
     async def _text_to_video(self, request: VisionRequest, model: str) -> VisionResponse:
-        """Generate video from text using Novita.ai"""
+        """Generate video from text using Novita.ai."""
         session = await self._get_session()
 
         # Map model names to Novita.ai format
@@ -286,20 +278,19 @@ class NovitaAdapter(BaseVisionProvider):
                     result = await self._poll_for_completion(task_id, max_attempts=self.max_poll_attempts)
                     return await self._process_video_result(result, request)
 
-                else:
-                    error_data = await resp.json() if resp.content_type == "application/json" else {}
-                    raise await self._map_api_error(resp.status, error_data)
+                error_data = await resp.json() if resp.content_type == "application/json" else {}
+                raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
             raise VisionError(
                 error_type=VisionErrorType.NETWORK_ERROR,
-                message=f"Network error: {str(e)}",
+                message=f"Network error: {e!s}",
                 user_message="Network connection failed. Please try again.",
                 provider=VisionProvider.NOVITA,
             )
 
     async def _image_to_video(self, request: VisionRequest, model: str) -> VisionResponse:
-        """Generate video from image using Novita.ai"""
+        """Generate video from image using Novita.ai."""
         if not request.input_image or not request.input_image.exists():
             raise VisionError(
                 error_type=VisionErrorType.VALIDATION_ERROR,
@@ -355,20 +346,19 @@ class NovitaAdapter(BaseVisionProvider):
                     result = await self._poll_for_completion(task_id, max_attempts=self.max_poll_attempts)
                     return await self._process_video_result(result, request)
 
-                else:
-                    error_data = await resp.json() if resp.content_type == "application/json" else {}
-                    raise await self._map_api_error(resp.status, error_data)
+                error_data = await resp.json() if resp.content_type == "application/json" else {}
+                raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
             raise VisionError(
                 error_type=VisionErrorType.NETWORK_ERROR,
-                message=f"Network error: {str(e)}",
+                message=f"Network error: {e!s}",
                 user_message="Network connection failed. Please try again.",
                 provider=VisionProvider.NOVITA,
             )
 
     async def _upload_image(self, image_path: Path) -> str:
-        """Upload image to Novita.ai and return URL [RM]"""
+        """Upload image to Novita.ai and return URL [RM]."""
         session = await self._get_session()
 
         with open(image_path, "rb") as f:
@@ -392,19 +382,18 @@ class NovitaAdapter(BaseVisionProvider):
                         )
 
                     return image_url
-                else:
-                    error_data = await resp.json() if resp.content_type == "application/json" else {}
-                    raise await self._map_api_error(resp.status, error_data)
+                error_data = await resp.json() if resp.content_type == "application/json" else {}
+                raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
             raise VisionError(
                 error_type=VisionErrorType.NETWORK_ERROR,
-                message=f"Image upload failed: {str(e)}",
+                message=f"Image upload failed: {e!s}",
                 user_message="Failed to upload image. Please try again.",
             )
 
-    async def _poll_for_completion(self, task_id: str, max_attempts: int = 60) -> Dict[str, Any]:
-        """Poll Novita.ai task until completion [PA]"""
+    async def _poll_for_completion(self, task_id: str, max_attempts: int = 60) -> dict[str, Any]:
+        """Poll Novita.ai task until completion [PA]."""
         session = await self._get_session()
 
         for attempt in range(max_attempts):
@@ -418,7 +407,7 @@ class NovitaAdapter(BaseVisionProvider):
                         if status == "TASK_STATUS_SUCCEED":
                             self.logger.debug(f"Task {task_id} completed successfully")
                             return result
-                        elif status in ["TASK_STATUS_FAILED", "TASK_STATUS_CANCELED"]:
+                        if status in ["TASK_STATUS_FAILED", "TASK_STATUS_CANCELED"]:
                             error_msg = result.get("task", {}).get("reason", "Task failed")
                             raise VisionError(
                                 error_type=VisionErrorType.PROVIDER_ERROR,
@@ -426,7 +415,7 @@ class NovitaAdapter(BaseVisionProvider):
                                 user_message="Generation failed. Please try again with different parameters.",
                                 provider=VisionProvider.NOVITA,
                             )
-                        elif status in [
+                        if status in [
                             "TASK_STATUS_PROCESSING",
                             "TASK_STATUS_QUEUED",
                             "TASK_STATUS_RUNNING",
@@ -437,34 +426,31 @@ class NovitaAdapter(BaseVisionProvider):
                             self.logger.debug(f"Task {task_id} status: {status}, progress: {progress}%")
                             await asyncio.sleep(self.polling_interval)
                             continue
-                        else:
-                            # Unknown status - log for debugging and treat as processing
-                            self.logger.warning(f"Unknown Novita status '{status}' for task {task_id}, treating as processing")
-                            await asyncio.sleep(self.polling_interval)
-                            continue
+                        # Unknown status - log for debugging and treat as processing
+                        self.logger.warning(f"Unknown Novita status '{status}' for task {task_id}, treating as processing")
+                        await asyncio.sleep(self.polling_interval)
+                        continue
 
-                    elif resp.status == 404:
+                    if resp.status == 404:
                         raise VisionError(
                             error_type=VisionErrorType.PROVIDER_ERROR,
                             message=f"Task {task_id} not found",
                             user_message="Generation task not found. Please try again.",
                             provider=VisionProvider.NOVITA,
                         )
-                    else:
-                        error_data = await resp.json() if resp.content_type == "application/json" else {}
-                        raise await self._map_api_error(resp.status, error_data)
+                    error_data = await resp.json() if resp.content_type == "application/json" else {}
+                    raise await self._map_api_error(resp.status, error_data)
 
             except aiohttp.ClientError as e:
                 if attempt < max_attempts - 1:
                     await asyncio.sleep(self.polling_interval)
                     continue
-                else:
-                    raise VisionError(
-                        error_type=VisionErrorType.NETWORK_ERROR,
-                        message=f"Polling failed: {str(e)}",
-                        user_message="Network error while checking generation status.",
-                        provider=VisionProvider.NOVITA,
-                    )
+                raise VisionError(
+                    error_type=VisionErrorType.NETWORK_ERROR,
+                    message=f"Polling failed: {e!s}",
+                    user_message="Network error while checking generation status.",
+                    provider=VisionProvider.NOVITA,
+                )
 
         # Max attempts reached
         raise VisionError(
@@ -474,8 +460,8 @@ class NovitaAdapter(BaseVisionProvider):
             provider=VisionProvider.NOVITA,
         )
 
-    async def _process_image_result(self, result: Dict[str, Any], request: VisionRequest) -> VisionResponse:
-        """Process completed image generation result"""
+    async def _process_image_result(self, result: dict[str, Any], request: VisionRequest) -> VisionResponse:
+        """Process completed image generation result."""
         artifacts_dir = Path(self.config["VISION_ARTIFACTS_DIR"])
         artifacts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -544,8 +530,8 @@ class NovitaAdapter(BaseVisionProvider):
             provider_job_id=result.get("task", {}).get("task_id"),
         )
 
-    async def _process_video_result(self, result: Dict[str, Any], request: VisionRequest) -> VisionResponse:
-        """Process completed video generation result"""
+    async def _process_video_result(self, result: dict[str, Any], request: VisionRequest) -> VisionResponse:
+        """Process completed video generation result."""
         artifacts_dir = Path(self.config["VISION_ARTIFACTS_DIR"])
         artifacts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -611,8 +597,8 @@ class NovitaAdapter(BaseVisionProvider):
             provider_job_id=result.get("task", {}).get("task_id"),
         )
 
-    async def _map_api_error(self, status_code: int, error_data: Dict[str, Any]) -> VisionError:
-        """Map Novita.ai API errors to VisionError [REH]"""
+    async def _map_api_error(self, status_code: int, error_data: dict[str, Any]) -> VisionError:
+        """Map Novita.ai API errors to VisionError [REH]."""
         error_message = error_data.get("msg", error_data.get("message", "Unknown API error"))
 
         if status_code == 400:
@@ -623,15 +609,14 @@ class NovitaAdapter(BaseVisionProvider):
                     user_message="Your prompt was blocked by content safety filters. Please try a different prompt.",
                     provider=VisionProvider.NOVITA,
                 )
-            else:
-                return VisionError(
-                    error_type=VisionErrorType.VALIDATION_ERROR,
-                    message=f"Invalid request: {error_message}",
-                    user_message="There was a problem with your request. Please check your parameters.",
-                    provider=VisionProvider.NOVITA,
-                )
+            return VisionError(
+                error_type=VisionErrorType.VALIDATION_ERROR,
+                message=f"Invalid request: {error_message}",
+                user_message="There was a problem with your request. Please check your parameters.",
+                provider=VisionProvider.NOVITA,
+            )
 
-        elif status_code == 401:
+        if status_code == 401:
             return VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message="Authentication failed with Novita.ai",
@@ -639,7 +624,7 @@ class NovitaAdapter(BaseVisionProvider):
                 provider=VisionProvider.NOVITA,
             )
 
-        elif status_code == 403:
+        if status_code == 403:
             # Payment/balance errors - NOT retryable, should trigger immediate failover [REH]
             if "NOT_ENOUGH_BALANCE" in str(error_data) or "insufficient" in error_message.lower():
                 return VisionError(
@@ -655,7 +640,7 @@ class NovitaAdapter(BaseVisionProvider):
                 provider=VisionProvider.NOVITA,
             )
 
-        elif status_code == 429:
+        if status_code == 429:
             return VisionError(
                 error_type=VisionErrorType.QUOTA_EXCEEDED,
                 message="Rate limit exceeded",
@@ -664,7 +649,7 @@ class NovitaAdapter(BaseVisionProvider):
                 retry_after_seconds=60,
             )
 
-        elif status_code >= 500:
+        if status_code >= 500:
             return VisionError(
                 error_type=VisionErrorType.PROVIDER_ERROR,
                 message=f"Novita.ai server error: {error_message}",
@@ -673,16 +658,15 @@ class NovitaAdapter(BaseVisionProvider):
                 retry_after_seconds=30,
             )
 
-        else:
-            return VisionError(
-                error_type=VisionErrorType.PROVIDER_ERROR,
-                message=f"Novita.ai API error {status_code}: {error_message}",
-                user_message="An error occurred with the generation service. Please try again.",
-                provider=VisionProvider.NOVITA,
-            )
+        return VisionError(
+            error_type=VisionErrorType.PROVIDER_ERROR,
+            message=f"Novita.ai API error {status_code}: {error_message}",
+            user_message="An error occurred with the generation service. Please try again.",
+            provider=VisionProvider.NOVITA,
+        )
 
-    async def get_job_status(self, provider_job_id: str) -> Dict[str, Any]:
-        """Get current status of Novita.ai job"""
+    async def get_job_status(self, provider_job_id: str) -> dict[str, Any]:
+        """Get current status of Novita.ai job."""
         session = await self._get_session()
 
         try:
@@ -701,14 +685,13 @@ class NovitaAdapter(BaseVisionProvider):
                         "failed": status in ["TASK_STATUS_FAILED", "TASK_STATUS_CANCELED"],
                         "result": result if status == "TASK_STATUS_SUCCEED" else None,
                     }
-                else:
-                    return {
-                        "status": "ERROR",
-                        "progress": 0,
-                        "completed": False,
-                        "failed": True,
-                        "error": f"HTTP {resp.status}",
-                    }
+                return {
+                    "status": "ERROR",
+                    "progress": 0,
+                    "completed": False,
+                    "failed": True,
+                    "error": f"HTTP {resp.status}",
+                }
 
         except Exception as e:
             return {
@@ -720,8 +703,8 @@ class NovitaAdapter(BaseVisionProvider):
             }
 
     async def poll(self, provider_job_id: str):
-        """Poll job status and return UnifiedJobStatus (required by unified adapter)"""
-        from ..unified_adapter import UnifiedJobStatus, UnifiedStatus
+        """Poll job status and return UnifiedJobStatus (required by unified adapter)."""
+        from bot.vision.unified_adapter import UnifiedJobStatus, UnifiedStatus
 
         try:
             status_data = await self.get_job_status(provider_job_id)
@@ -757,13 +740,13 @@ class NovitaAdapter(BaseVisionProvider):
             )
 
     async def cancel_job(self, provider_job_id: str) -> bool:
-        """Cancel Novita.ai job if possible"""
+        """Cancel Novita.ai job if possible."""
         # Novita.ai doesn't currently support job cancellation
         # Return False to indicate cancellation not supported
         return False
 
     async def close(self) -> None:
-        """Clean up resources [RM]"""
+        """Clean up resources [RM]."""
         if self.session and not self.session.closed:
             await self.session.close()
             self.logger.debug("Closed Novita.ai HTTP session")

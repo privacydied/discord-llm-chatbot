@@ -1,5 +1,4 @@
-"""
-Tests for transactional hot-reload with candidate validation and safe rollback.
+"""Tests for transactional hot-reload with candidate validation and safe rollback.
 
 These tests verify that hot-reload is transactional:
 - Failed reloads never poison the live config
@@ -12,24 +11,25 @@ These tests verify that hot-reload is transactional:
 import os
 import tempfile
 from pathlib import Path
+from typing import Never
 from unittest.mock import patch
 
 import pytest
 
 from bot.config import (
+    invalidate_config_cache,
     load_config,
     load_config_candidate,
     validate_config_candidate,
-    invalidate_config_cache,
 )
 from bot.config_reload import (
-    reload_env,
-    manual_reload_command,
-    get_current_config,
-    add_reload_callback,
-    remove_reload_callback,
-    _preferred_env_path,
     _candidate_env_paths,
+    _preferred_env_path,
+    add_reload_callback,
+    get_current_config,
+    manual_reload_command,
+    reload_env,
+    remove_reload_callback,
 )
 
 
@@ -53,7 +53,7 @@ def _reset_config_state():
 
 
 @pytest.fixture
-def valid_env_content():
+def valid_env_content() -> str:
     """A valid .env content with all required variables."""
     return """DISCORD_TOKEN=test_token_123
 PROMPT_FILE=prompts/prompt-yoroi-super-chill.txt
@@ -78,14 +78,14 @@ def valid_env_file(valid_env_content):
 class TestLoadConfigCandidate:
     """Test the load_config_candidate function loads from file without mutating global state."""
 
-    def test_loads_from_specific_file(self, valid_env_file):
+    def test_loads_from_specific_file(self, valid_env_file) -> None:
         """load_config_candidate reads from the given file path."""
         config = load_config_candidate(valid_env_file)
         assert config["DISCORD_TOKEN"] == "test_token_123"
         assert config["OPENAI_API_KEY"] == "sk-test-key"
         assert config["TEXT_BACKEND"] == "openai"
 
-    def test_does_not_mutate_os_environ(self, valid_env_file):
+    def test_does_not_mutate_os_environ(self, valid_env_file) -> None:
         """load_config_candidate should not modify os.environ."""
         # Ensure clean state
         for key in ["DISCORD_TOKEN", "OPENAI_API_KEY", "TEST_CANDIDATE_KEY"]:
@@ -96,13 +96,13 @@ class TestLoadConfigCandidate:
         assert "DISCORD_TOKEN" not in os.environ
         assert "OPENAI_API_KEY" not in os.environ
 
-    def test_uses_defaults_for_missing_optional(self, valid_env_file):
+    def test_uses_defaults_for_missing_optional(self, valid_env_file) -> None:
         """Optional keys get defaults when not in candidate file."""
         config = load_config_candidate(valid_env_file)
         assert config["OLLAMA_BASE_URL"] == "http://localhost:11434"
         assert config["TEMPERATURE"] == 0.7
 
-    def test_handles_missing_file_gracefully(self):
+    def test_handles_missing_file_gracefully(self) -> None:
         """Missing file returns config with defaults/os.environ fallbacks."""
         missing_path = Path("/nonexistent/path/.env")
         config = load_config_candidate(missing_path)
@@ -114,14 +114,14 @@ class TestLoadConfigCandidate:
 class TestValidateConfigCandidate:
     """Test validate_config_candidate enforces required and provider-specific keys."""
 
-    def test_accepts_valid_openai_config(self, valid_env_file):
+    def test_accepts_valid_openai_config(self, valid_env_file) -> None:
         """Valid OpenAI config passes validation."""
         config = load_config_candidate(valid_env_file)
         is_valid, missing = validate_config_candidate(config)
         assert is_valid is True
         assert missing == []
 
-    def test_rejects_missing_discord_token(self, valid_env_file):
+    def test_rejects_missing_discord_token(self, valid_env_file) -> None:
         """Missing DISCORD_TOKEN causes rejection."""
         config = load_config_candidate(valid_env_file)
         config["DISCORD_TOKEN"] = None
@@ -129,7 +129,7 @@ class TestValidateConfigCandidate:
         assert is_valid is False
         assert "DISCORD_TOKEN" in missing
 
-    def test_rejects_missing_prompt_file(self, valid_env_file):
+    def test_rejects_missing_prompt_file(self, valid_env_file) -> None:
         """Missing PROMPT_FILE causes rejection."""
         config = load_config_candidate(valid_env_file)
         config["PROMPT_FILE"] = None
@@ -137,7 +137,7 @@ class TestValidateConfigCandidate:
         assert is_valid is False
         assert "PROMPT_FILE" in missing
 
-    def test_rejects_missing_vl_prompt_file(self, valid_env_file):
+    def test_rejects_missing_vl_prompt_file(self, valid_env_file) -> None:
         """Missing VL_PROMPT_FILE causes rejection."""
         config = load_config_candidate(valid_env_file)
         config["VL_PROMPT_FILE"] = None
@@ -145,7 +145,7 @@ class TestValidateConfigCandidate:
         assert is_valid is False
         assert "VL_PROMPT_FILE" in missing
 
-    def test_rejects_openai_backend_without_openai_key(self, valid_env_file):
+    def test_rejects_openai_backend_without_openai_key(self, valid_env_file) -> None:
         """OpenAI backend requires OPENAI_API_KEY."""
         config = load_config_candidate(valid_env_file)
         config["TEXT_BACKEND"] = "openai"
@@ -154,25 +154,25 @@ class TestValidateConfigCandidate:
         assert is_valid is False
         assert "OPENAI_API_KEY" in missing
 
-    def test_accepts_nvidia_backend_with_nvidia_key(self, valid_env_file):
+    def test_accepts_nvidia_backend_with_nvidia_key(self, valid_env_file) -> None:
         """NVIDIA backend accepts NVIDIA_NIM_API_KEY."""
         config = load_config_candidate(valid_env_file)
         config["TEXT_BACKEND"] = "nvidia"
         config["OPENAI_API_KEY"] = None
         config["NVIDIA_NIM_API_KEY"] = "nvidia-key-123"
-        is_valid, missing = validate_config_candidate(config)
+        is_valid, _missing = validate_config_candidate(config)
         assert is_valid is True
 
-    def test_accepts_nvidia_backend_with_openai_key_alias(self, valid_env_file):
+    def test_accepts_nvidia_backend_with_openai_key_alias(self, valid_env_file) -> None:
         """NVIDIA backend accepts OPENAI_API_KEY as alias."""
         config = load_config_candidate(valid_env_file)
         config["TEXT_BACKEND"] = "nvidia"
         config["NVIDIA_NIM_API_KEY"] = None
         config["OPENAI_API_KEY"] = "openai-key-123"
-        is_valid, missing = validate_config_candidate(config)
+        is_valid, _missing = validate_config_candidate(config)
         assert is_valid is True
 
-    def test_rejects_nvidia_backend_without_any_key(self, valid_env_file):
+    def test_rejects_nvidia_backend_without_any_key(self, valid_env_file) -> None:
         """NVIDIA backend rejects when neither key is present."""
         config = load_config_candidate(valid_env_file)
         config["TEXT_BACKEND"] = "nvidia"
@@ -182,29 +182,29 @@ class TestValidateConfigCandidate:
         assert is_valid is False
         assert "NVIDIA_NIM_API_KEY" in missing
 
-    def test_accepts_ollama_backend_without_openai_key(self, valid_env_file):
+    def test_accepts_ollama_backend_without_openai_key(self, valid_env_file) -> None:
         """Ollama backend does not require OPENAI_API_KEY."""
         config = load_config_candidate(valid_env_file)
         config["TEXT_BACKEND"] = "ollama"
         config["OPENAI_API_KEY"] = None
         config["OLLAMA_BASE_URL"] = "http://localhost:11434"
         config["OLLAMA_MODEL"] = "llama3"
-        is_valid, missing = validate_config_candidate(config)
+        is_valid, _missing = validate_config_candidate(config)
         assert is_valid is True
 
-    def test_accepts_other_backends_without_openai_key(self, valid_env_file):
+    def test_accepts_other_backends_without_openai_key(self, valid_env_file) -> None:
         """Unknown/other backends don't require OPENAI_API_KEY beyond baseline."""
         config = load_config_candidate(valid_env_file)
         config["TEXT_BACKEND"] = "custom_backend"
         config["OPENAI_API_KEY"] = None
-        is_valid, missing = validate_config_candidate(config)
+        is_valid, _missing = validate_config_candidate(config)
         assert is_valid is True
 
 
 class TestReloadEnvTransactional:
     """Test reload_env is transactional - failed reloads don't poison live config."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         invalidate_config_cache()
         import bot.config_reload as cr
 
@@ -217,7 +217,7 @@ class TestReloadEnvTransactional:
             cr._env_loaded_values_by_path.clear()
             cr._snapshot_known_env_files()
 
-    def test_missing_env_file_rejected_keeps_previous_config(self, valid_env_file):
+    def test_missing_env_file_rejected_keeps_previous_config(self, valid_env_file) -> None:
         """Test A: Missing .env during hot reload keeps previous config."""
         import bot.config_reload as cr
 
@@ -241,7 +241,7 @@ class TestReloadEnvTransactional:
         live = get_current_config()
         assert live["DISCORD_TOKEN"] == "original_token"
 
-    def test_partial_env_file_rejected_keeps_previous_config(self, valid_env_file):
+    def test_partial_env_file_rejected_keeps_previous_config(self, valid_env_file) -> None:
         """Test B: Partial .env (missing required vars) keeps previous config."""
         import bot.config_reload as cr
 
@@ -272,7 +272,7 @@ class TestReloadEnvTransactional:
         finally:
             os.unlink(partial_path)
 
-    def test_openai_backend_missing_key_rejected(self, valid_env_file):
+    def test_openai_backend_missing_key_rejected(self, valid_env_file) -> None:
         """Test C: OpenAI backend missing OPENAI_API_KEY is rejected."""
         import bot.config_reload as cr
 
@@ -290,7 +290,7 @@ class TestReloadEnvTransactional:
                 "PROMPT_FILE=prompts/prompt-yoroi-super-chill.txt\n"
                 "VL_PROMPT_FILE=prompts/vl-prompt.txt\n"
                 "TEXT_BACKEND=openai\n"
-                "# OPENAI_API_KEY is missing\n"
+                "# OPENAI_API_KEY is missing\n",
             )
             partial_path = Path(f.name)
 
@@ -309,7 +309,7 @@ class TestReloadEnvTransactional:
         finally:
             os.unlink(partial_path)
 
-    def test_ollama_backend_accepted_without_openai_key(self, valid_env_file):
+    def test_ollama_backend_accepted_without_openai_key(self, valid_env_file) -> None:
         """Test D: Ollama backend accepted without OPENAI_API_KEY."""
         import bot.config_reload as cr
 
@@ -329,7 +329,7 @@ class TestReloadEnvTransactional:
                 "TEXT_BACKEND=ollama\n"
                 "OLLAMA_BASE_URL=http://localhost:11434\n"
                 "OLLAMA_MODEL=llama3\n"
-                "# OPENAI_API_KEY intentionally omitted\n"
+                "# OPENAI_API_KEY intentionally omitted\n",
             )
             ollama_path = Path(f.name)
 
@@ -347,7 +347,7 @@ class TestReloadEnvTransactional:
         finally:
             os.unlink(ollama_path)
 
-    def test_successful_reload_updates_config_and_runs_callbacks(self, valid_env_file):
+    def test_successful_reload_updates_config_and_runs_callbacks(self, valid_env_file) -> None:
         """Test E: Successful reload updates config and runs callbacks."""
         import bot.config_reload as cr
 
@@ -361,7 +361,7 @@ class TestReloadEnvTransactional:
         # Track callback calls
         callback_calls = []
 
-        def tracking_callback(old_cfg, new_cfg):
+        def tracking_callback(old_cfg, new_cfg) -> None:
             callback_calls.append((old_cfg.copy(), new_cfg.copy()))
 
         add_reload_callback(tracking_callback)
@@ -376,7 +376,7 @@ class TestReloadEnvTransactional:
                     "OPENAI_API_KEY=new_openai_key\n"
                     "OPENAI_API_BASE=https://openrouter.ai/api/v1\n"
                     "OPENAI_TEXT_MODEL=deepseek/deepseek-chat-v3-0324:free\n"
-                    "TEXT_BACKEND=openai\n"
+                    "TEXT_BACKEND=openai\n",
                 )
                 new_path = Path(f.name)
 
@@ -401,7 +401,7 @@ class TestReloadEnvTransactional:
         finally:
             remove_reload_callback(tracking_callback)
 
-    def test_callback_exception_logged_but_reload_succeeds(self, valid_env_file):
+    def test_callback_exception_logged_but_reload_succeeds(self, valid_env_file) -> None:
         """Test F: Callback exception is logged but doesn't roll back committed config."""
         import bot.config_reload as cr
 
@@ -410,8 +410,9 @@ class TestReloadEnvTransactional:
         cr._current_config = good_config.copy()
         cr._config_version = "original_version"
 
-        def failing_callback(old_cfg, new_cfg):
-            raise RuntimeError("Callback failed intentionally")
+        def failing_callback(old_cfg, new_cfg) -> Never:
+            msg = "Callback failed intentionally"
+            raise RuntimeError(msg)
 
         add_reload_callback(failing_callback)
 
@@ -422,7 +423,7 @@ class TestReloadEnvTransactional:
                     "PROMPT_FILE=prompts/prompt-yoroi-super-chill.txt\n"
                     "VL_PROMPT_FILE=prompts/vl-prompt.txt\n"
                     "OPENAI_API_KEY=new_key\n"
-                    "TEXT_BACKEND=openai\n"
+                    "TEXT_BACKEND=openai\n",
                 )
                 new_path = Path(f.name)
 
@@ -440,7 +441,7 @@ class TestReloadEnvTransactional:
         finally:
             remove_reload_callback(failing_callback)
 
-    def test_callback_exception_during_validation_does_not_run(self, valid_env_file):
+    def test_callback_exception_during_validation_does_not_run(self, valid_env_file) -> None:
         """Callbacks should not run when validation fails."""
         import bot.config_reload as cr
 
@@ -451,7 +452,7 @@ class TestReloadEnvTransactional:
 
         callback_calls = []
 
-        def tracking_callback(old_cfg, new_cfg):
+        def tracking_callback(old_cfg, new_cfg) -> None:
             callback_calls.append((old_cfg, new_cfg))
 
         add_reload_callback(tracking_callback)
@@ -476,10 +477,11 @@ class TestReloadEnvTransactional:
 class TestManualReloadCommand:
     """Test G: !reload command reports accurate status."""
 
-    def test_reports_success_on_valid_reload(self, valid_env_file):
+    def test_reports_success_on_valid_reload(self, valid_env_file) -> None:
         """Valid reload reports success with version change."""
-        import bot.config_reload as cr
         import time
+
+        import bot.config_reload as cr
 
         good_config = load_config_candidate(valid_env_file)
         good_config["DISCORD_TOKEN"] = "original_token"
@@ -500,7 +502,7 @@ class TestManualReloadCommand:
             assert "✅ Configuration reloaded" in result
             assert "Version:" in result
 
-    def test_reports_rejected_with_missing_vars(self, valid_env_file):
+    def test_reports_rejected_with_missing_vars(self, valid_env_file) -> None:
         """Rejected reload reports missing variables and that previous config kept."""
         import bot.config_reload as cr
 
@@ -525,7 +527,7 @@ class TestManualReloadCommand:
         finally:
             os.unlink(bad_path)
 
-    def test_reports_missing_file(self, valid_env_file):
+    def test_reports_missing_file(self, valid_env_file) -> None:
         """Missing file reports rejection with previous config kept."""
         import bot.config_reload as cr
 
@@ -542,7 +544,7 @@ class TestManualReloadCommand:
         assert "not found" in result
         assert "Previous config kept active" in result
 
-    def test_reports_debounced(self, valid_env_file):
+    def test_reports_debounced(self, valid_env_file) -> None:
         """Rapid successive reloads report debounced."""
         import bot.config_reload as cr
 
@@ -562,7 +564,7 @@ class TestManualReloadCommand:
 class TestConfigCacheAndRollback:
     """Test config cache invalidation and rollback behavior."""
 
-    def test_cache_invalidated_only_on_success(self, valid_env_file):
+    def test_cache_invalidated_only_on_success(self, valid_env_file) -> None:
         """Cache should only be invalidated after successful validation."""
         import bot.config_reload as cr
         from bot.config import get_config_cache
@@ -589,7 +591,7 @@ class TestConfigCacheAndRollback:
         finally:
             os.unlink(bad_path)
 
-    def test_last_good_config_available_for_rollback(self, valid_env_file):
+    def test_last_good_config_available_for_rollback(self, valid_env_file) -> None:
         """get_last_good_config returns the last successfully loaded config."""
         from bot.config import get_last_good_config
 
@@ -610,14 +612,14 @@ class TestConfigCacheAndRollback:
 class TestPathHandling:
     """Test .env path discovery and handling."""
 
-    def test_preferred_env_path_returns_existing(self, valid_env_file):
+    def test_preferred_env_path_returns_existing(self, valid_env_file) -> None:
         """_preferred_env_path returns first existing candidate."""
         # The valid_env_file should be in the candidate list
         preferred = _preferred_env_path()
         # Just verify it returns a Path
         assert isinstance(preferred, Path)
 
-    def test_candidate_env_paths_includes_common_locations(self):
+    def test_candidate_env_paths_includes_common_locations(self) -> None:
         """_candidate_env_paths includes cwd, repo root, yoroi.env variants."""
         paths = _candidate_env_paths()
         assert len(paths) >= 2
@@ -628,7 +630,7 @@ class TestPathHandling:
         resolved = [p.resolve() for p in paths]
         assert cwd_env.resolve() in resolved or repo_env.resolve() in resolved
 
-    def test_reload_uses_watched_path(self, valid_env_file):
+    def test_reload_uses_watched_path(self, valid_env_file) -> None:
         """reload_env uses the same path resolution as watcher."""
         import bot.config_reload as cr
 

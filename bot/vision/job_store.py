@@ -1,5 +1,4 @@
-"""
-Vision Job Store - JSON-based job persistence
+"""Vision Job Store - JSON-based job persistence.
 
 Handles persistence of vision generation jobs using JSON files on disk:
 - Job creation, updates, and retrieval
@@ -12,26 +11,28 @@ Follows Clean Architecture (CA) and Resource Management (RM) principles.
 """
 
 from __future__ import annotations
-import json
-import asyncio
-import aiofiles
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Dict, List, Optional, Any
-from contextlib import asynccontextmanager
-import os
 
-from bot.utils.logging import get_logger
+import asyncio
+import json
+import os
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+import aiofiles
+
 from bot.config import load_config
-from .types import VisionJob, VisionJobState, VisionError, VisionErrorType
+from bot.utils.logging import get_logger
+
 from .money import Money
+from .types import VisionError, VisionErrorType, VisionJob, VisionJobState
 
 logger = get_logger(__name__)
 
 
 class VisionJobStore:
-    """
-    JSON-based job persistence with atomic operations and audit logging
+    """JSON-based job persistence with atomic operations and audit logging.
 
     Features:
     - Atomic file writes with backup/recovery
@@ -41,7 +42,7 @@ class VisionJobStore:
     - Automatic cleanup and archival
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         self.config = config or load_config()
         self.logger = get_logger("vision.job_store")
 
@@ -54,20 +55,20 @@ class VisionJobStore:
         self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
 
         # File locking for concurrent access
-        self._locks: Dict[str, asyncio.Lock] = {}
+        self._locks: dict[str, asyncio.Lock] = {}
         self._ledger_lock = asyncio.Lock()
 
         self.logger.info(f"Vision Job Store initialized - jobs_dir: {self.jobs_dir}, ledger_path: {self.ledger_path}")
 
     async def save_job(self, job: VisionJob) -> None:
-        """
-        Save job state to JSON file atomically
+        """Save job state to JSON file atomically.
 
         Args:
             job: VisionJob instance to persist
 
         Raises:
             VisionError: On file I/O errors
+
         """
         job_id = job.job_id
 
@@ -79,7 +80,7 @@ class VisionJobStore:
 
                 # Serialize job data
                 job_data = job.to_dict()
-                job_data["last_updated"] = datetime.now(timezone.utc).isoformat()
+                job_data["last_updated"] = datetime.now(UTC).isoformat()
 
                 # Write to temp file
                 async with aiofiles.open(temp_file, "w") as f:
@@ -95,16 +96,15 @@ class VisionJobStore:
                 self.logger.debug(f"Job state saved - job_id: {job_id[:8]}, state: {job.state.value}, progress: {getattr(job, 'progress_percentage', 0)}")
 
         except Exception as e:
-            self.logger.error(f"Failed to save job {job_id[:8]}: {str(e)}")
+            self.logger.exception(f"Failed to save job {job_id[:8]}: {e!s}")
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
-                message=f"Failed to save job: {str(e)}",
+                message=f"Failed to save job: {e!s}",
                 user_message="Failed to save job progress. Please try again.",
             )
 
-    async def load_job(self, job_id: str) -> Optional[VisionJob]:
-        """
-        Load job from JSON file
+    async def load_job(self, job_id: str) -> VisionJob | None:
+        """Load job from JSON file.
 
         Args:
             job_id: Job ID to load
@@ -114,6 +114,7 @@ class VisionJobStore:
 
         Raises:
             VisionError: On file corruption or I/O errors
+
         """
         try:
             async with self._get_job_lock(job_id):
@@ -123,7 +124,7 @@ class VisionJobStore:
                     return None
 
                 # Read and deserialize
-                async with aiofiles.open(job_file, "r") as f:
+                async with aiofiles.open(job_file) as f:
                     content = await f.read()
                     job_data = json.loads(content)
 
@@ -142,25 +143,24 @@ class VisionJobStore:
                 return job
 
         except json.JSONDecodeError as e:
-            self.logger.error(f"Job file corrupted - job_id: {job_id[:8]}, error: {str(e)}")
+            self.logger.exception(f"Job file corrupted - job_id: {job_id[:8]}, error: {e!s}")
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
-                message=f"Job file corrupted: {str(e)}",
+                message=f"Job file corrupted: {e!s}",
                 user_message="Job data is corrupted. Please contact support.",
             )
 
         except Exception as e:
-            self.logger.error(f"Failed to load job - job_id: {job_id[:8]}, error: {str(e)}")
+            self.logger.exception(f"Failed to load job - job_id: {job_id[:8]}, error: {e!s}")
             return None  # Treat as not found for robustness
 
     async def list_jobs(
         self,
-        user_id: Optional[str] = None,
-        state: Optional[VisionJobState] = None,
+        user_id: str | None = None,
+        state: VisionJobState | None = None,
         limit: int = 100,
-    ) -> List[VisionJob]:
-        """
-        List jobs with optional filtering
+    ) -> list[VisionJob]:
+        """List jobs with optional filtering.
 
         Args:
             user_id: Filter by user ID
@@ -169,6 +169,7 @@ class VisionJobStore:
 
         Returns:
             List of VisionJob instances
+
         """
         jobs = []
 
@@ -205,18 +206,18 @@ class VisionJobStore:
             return jobs
 
         except Exception as e:
-            self.logger.error(f"Failed to list jobs: {e}")
+            self.logger.exception(f"Failed to list jobs: {e}")
             return []
 
     async def delete_job(self, job_id: str) -> bool:
-        """
-        Delete job and its progress log
+        """Delete job and its progress log.
 
         Args:
             job_id: Job ID to delete
 
         Returns:
             True if deleted, False if not found
+
         """
         try:
             async with self._get_job_lock(job_id):
@@ -231,21 +232,21 @@ class VisionJobStore:
                 # Append deletion record to ledger
                 await self._append_ledger_entry(
                     {
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "event": "job_deleted",
                         "job_id": job_id,
-                    }
+                    },
                 )
 
                 self.logger.info(f"Job deleted: {job_id[:8]}")
                 return True
 
         except Exception as e:
-            self.logger.error(f"Failed to delete job {job_id[:8]}: {e}")
+            self.logger.exception(f"Failed to delete job {job_id[:8]}: {e}")
             return False
 
     async def get_user_active_count(self, user_id: str) -> int:
-        """Get count of active jobs for user [CMV]"""
+        """Get count of active jobs for user [CMV]."""
         try:
             active_states = {
                 VisionJobState.CREATED,
@@ -261,21 +262,21 @@ class VisionJobStore:
             return len(active_jobs)
 
         except Exception as e:
-            self.logger.error(f"Failed to count user active jobs: {e}")
+            self.logger.exception(f"Failed to count user active jobs: {e}")
             return 0
 
     async def cleanup_old_jobs(self, days: int = 30) -> int:
-        """
-        Archive/delete jobs older than specified days
+        """Archive/delete jobs older than specified days.
 
         Args:
             days: Age threshold for cleanup
 
         Returns:
             Number of jobs cleaned up
+
         """
         cleaned_count = 0
-        cutoff_time = datetime.now(timezone.utc).timestamp() - (days * 24 * 3600)
+        cutoff_time = datetime.now(UTC).timestamp() - (days * 24 * 3600)
 
         try:
             job_files = list(self.jobs_dir.glob("*.json"))
@@ -291,13 +292,13 @@ class VisionJobStore:
                         if job:
                             await self._append_ledger_entry(
                                 {
-                                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                     "event": "job_archived",
                                     "job_id": job_id,
                                     "final_state": job.state.value,
                                     "user_id": job.request.user_id,
                                     "created_at": job.created_at.isoformat(),
-                                }
+                                },
                             )
 
                         # Delete job file
@@ -314,14 +315,14 @@ class VisionJobStore:
             return cleaned_count
 
         except Exception as e:
-            self.logger.error(f"Job cleanup error: {e}")
+            self.logger.exception(f"Job cleanup error: {e}")
             return 0
 
     async def _append_progress_log(self, job: VisionJob) -> None:
-        """Append job progress to JSONL audit log [CMV]"""
+        """Append job progress to JSONL audit log [CMV]."""
         try:
             log_entry = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "job_id": job.job_id,
                 "state": job.state.value,
                 "progress_percentage": job.progress_percentage,
@@ -354,23 +355,22 @@ class VisionJobStore:
             # Log errors but don't fail the main operation
             self.logger.debug(f"Progress log append failed: {e}")
 
-    async def _append_ledger_entry(self, entry: Dict[str, Any]) -> None:
-        """Append entry to JSONL ledger file [CMV]"""
+    async def _append_ledger_entry(self, entry: dict[str, Any]) -> None:
+        """Append entry to JSONL ledger file [CMV]."""
         try:
             # Use async lock instead of blocking fcntl.flock to prevent deadlocks
-            async with self._ledger_lock:
-                async with aiofiles.open(self.ledger_path, "a") as f:
-                    line = json.dumps(entry, ensure_ascii=False) + "\n"
-                    await f.write(line)
-                    await f.flush()
+            async with self._ledger_lock, aiofiles.open(self.ledger_path, "a") as f:
+                line = json.dumps(entry, ensure_ascii=False) + "\n"
+                await f.write(line)
+                await f.flush()
 
-                    # Force sync to disk for data integrity
-                    if hasattr(f, "fileno"):
-                        try:
-                            fd = f.fileno()  # type: ignore[attr-defined]
-                            os.fsync(fd)
-                        except Exception:
-                            pass
+                # Force sync to disk for data integrity
+                if hasattr(f, "fileno"):
+                    try:
+                        fd = f.fileno()  # type: ignore[attr-defined]
+                        os.fsync(fd)
+                    except Exception:
+                        pass
         except Exception as e:
             self.logger.debug(f"Ledger append failed: {e}")
 
@@ -387,8 +387,8 @@ class VisionJobStore:
         finally:
             lock.release()
 
-    async def get_job_stats(self) -> Dict[str, Any]:
-        """Get statistics about jobs in store [CMV]"""
+    async def get_job_stats(self) -> dict[str, Any]:
+        """Get statistics about jobs in store [CMV]."""
         try:
             job_files = list(self.jobs_dir.glob("*.json"))
             total_jobs = len(job_files)
@@ -399,7 +399,7 @@ class VisionJobStore:
 
             for job_file in recent_files:
                 try:
-                    async with aiofiles.open(job_file, "r") as f:
+                    async with aiofiles.open(job_file) as f:
                         job_data = json.loads(await f.read())
                         state = job_data.get("state", "unknown")
                         state_counts[state] = state_counts.get(state, 0) + 1
@@ -414,5 +414,5 @@ class VisionJobStore:
             }
 
         except Exception as e:
-            self.logger.error(f"Failed to get job stats: {e}")
+            self.logger.exception(f"Failed to get job stats: {e}")
             return {"error": str(e)}

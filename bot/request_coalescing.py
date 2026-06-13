@@ -1,5 +1,4 @@
-"""
-Request coalescing for duplicate expensive operations. [PA][RM]
+"""Request coalescing for duplicate expensive operations. [PA][RM].
 
 This module provides deduplication for concurrent identical requests
 to prevent redundant work (e.g., same URL processed multiple times).
@@ -16,9 +15,12 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine, Dict, Generic, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from .utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
 
 logger = get_logger(__name__)
 
@@ -31,15 +33,14 @@ class _CoalescedEntry(Generic[T]):
 
     key: str
     future: asyncio.Future[T]
-    result: Optional[T] = None
-    error: Optional[Exception] = None
+    result: T | None = None
+    error: Exception | None = None
     completed: bool = False
     created_at: float = field(default_factory=time.time)
 
 
 class RequestCoalescer(Generic[T]):
-    """
-    Coalesces duplicate concurrent requests into single execution.
+    """Coalesces duplicate concurrent requests into single execution.
 
     When multiple coroutines request the same key simultaneously,
     only one executes while others wait for the result.
@@ -50,17 +51,17 @@ class RequestCoalescer(Generic[T]):
         name: str = "coalescer",
         result_ttl_s: float = 5.0,  # Cache completed results briefly
         cleanup_interval_s: float = 30.0,
-    ):
+    ) -> None:
         self.name = name
         self.result_ttl_s = result_ttl_s
         self.cleanup_interval_s = cleanup_interval_s
 
         # In-flight requests (key -> entry)
-        self._inflight: Dict[str, _CoalescedEntry[T]] = {}
+        self._inflight: dict[str, _CoalescedEntry[T]] = {}
 
         # Completed results (key -> (result, timestamp))
-        self._completed: Dict[str, tuple[T, float]] = {}
-        self._completed_errors: Dict[str, tuple[Exception, float]] = {}
+        self._completed: dict[str, tuple[T, float]] = {}
+        self._completed_errors: dict[str, tuple[Exception, float]] = {}
 
         # Cleanup tracking
         self._last_cleanup = time.time()
@@ -68,7 +69,7 @@ class RequestCoalescer(Generic[T]):
         self._lock = asyncio.Lock()
 
     def _maybe_cleanup(self) -> None:
-        """Remove stale entries to prevent memory growth. [RM]"""
+        """Remove stale entries to prevent memory growth. [RM]."""
         now = time.time()
         if now - self._last_cleanup < self.cleanup_interval_s:
             return
@@ -92,10 +93,9 @@ class RequestCoalescer(Generic[T]):
         self,
         key: str,
         coro_factory: Callable[[], Coroutine[Any, Any, T]],
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> T:
-        """
-        Execute coroutine with coalescing.
+        """Execute coroutine with coalescing.
 
         If another request with the same key is in-flight, wait for its result.
         If a recent result is cached, return it immediately.
@@ -112,6 +112,7 @@ class RequestCoalescer(Generic[T]):
         Raises:
             asyncio.TimeoutError: If operation times out
             Exception: Any exception from the underlying coroutine
+
         """
         async with self._lock:
             # Check for cached result first
@@ -120,8 +121,7 @@ class RequestCoalescer(Generic[T]):
                 if time.time() - ts <= self.result_ttl_s:
                     logger.debug(f"{self.name}.cache_hit | key={key[:50]}...")
                     return result
-                else:
-                    del self._completed[key]
+                del self._completed[key]
 
             # Check for cached error (re-raise to maintain semantics)
             if key in self._completed_errors:
@@ -129,8 +129,7 @@ class RequestCoalescer(Generic[T]):
                 if time.time() - ts <= self.result_ttl_s:
                     logger.debug(f"{self.name}.cache_hit_error | key={key[:50]}...")
                     raise error
-                else:
-                    del self._completed_errors[key]
+                del self._completed_errors[key]
 
             # Check if request is already in-flight
             entry = self._inflight.get(key)
@@ -148,7 +147,7 @@ class RequestCoalescer(Generic[T]):
                 else:
                     result = await asyncio.shield(waiter_future)
                 return result
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(f"{self.name}.timeout | key={key[:50]}...")
                 raise
 
@@ -177,7 +176,7 @@ class RequestCoalescer(Generic[T]):
 
             return result
 
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             entry.error = e
             entry.completed = True
             entry.future.set_exception(e)
@@ -200,12 +199,12 @@ class RequestCoalescer(Generic[T]):
 
 
 # Global coalescers for different operations
-_url_processing_coalescer: Optional[RequestCoalescer[str]] = None
-_vl_image_coalescer: Optional[RequestCoalescer[str]] = None
+_url_processing_coalescer: RequestCoalescer[str] | None = None
+_vl_image_coalescer: RequestCoalescer[str] | None = None
 
 
 def get_url_processing_coalescer() -> RequestCoalescer[str]:
-    """Get global URL processing coalescer. [CA]"""
+    """Get global URL processing coalescer. [CA]."""
     global _url_processing_coalescer
     if _url_processing_coalescer is None:
         _url_processing_coalescer = RequestCoalescer[str](
@@ -217,7 +216,7 @@ def get_url_processing_coalescer() -> RequestCoalescer[str]:
 
 
 def get_vl_image_coalescer() -> RequestCoalescer[str]:
-    """Get global vision-language image coalescer. [CA]"""
+    """Get global vision-language image coalescer. [CA]."""
     global _vl_image_coalescer
     if _vl_image_coalescer is None:
         _vl_image_coalescer = RequestCoalescer[str](

@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+import contextlib
+import html
 import json
 import os
 import re
-import html
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 from bs4 import BeautifulSoup
 
-from .utils.playwright_helpers import connect_browser as _pw_connect_browser
 from .utils.logging import get_logger
+from .utils.playwright_helpers import connect_browser as _pw_connect_browser
 
 logger = get_logger(__name__)
 
@@ -34,11 +35,11 @@ ACCEPT_LANGUAGE = os.getenv("WEBEX_ACCEPT_LANGUAGE", "en-US,en;q=0.9")
 class ExtractionResult:
     success: bool
     tier_used: str
-    canonical_url: Optional[str] = None
-    text: Optional[str] = None
-    author: Optional[str] = None
+    canonical_url: str | None = None
+    text: str | None = None
+    author: str | None = None
     raw_json_present: bool = False
-    error: Optional[str] = None
+    error: str | None = None
 
     def to_message(self) -> str:
         if not self.success:
@@ -59,10 +60,10 @@ class ExtractionResult:
 
 
 class WebExtractionService:
-    """Tiered web extractor with fast HTTPX path and optional Playwright. [PA][REH]"""
+    """Tiered web extractor with fast HTTPX path and optional Playwright. [PA][REH]."""
 
     def __init__(self) -> None:
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
         # Runtime gate for Tier B; auto-disables on fatal env errors [REH]
         self._tier_b_available: bool = ENABLE_TIER_B
 
@@ -124,7 +125,7 @@ class WebExtractionService:
             logger.warning("URL safety blocked extraction: %s", exc)
             return ExtractionResult(success=False, tier_used="none", error=f"URL blocked: {exc}")
 
-        last_error: Optional[str] = None
+        last_error: str | None = None
         last_tier = "none"
 
         try:
@@ -199,7 +200,7 @@ class WebExtractionService:
             )
         return ExtractionResult(success=False, tier_used="A", error="no text extracted")
 
-    async def _tier_b_playwright(self, url: str) -> Optional[ExtractionResult]:
+    async def _tier_b_playwright(self, url: str) -> ExtractionResult | None:
         try:
             from playwright.async_api import async_playwright
         except Exception:
@@ -218,7 +219,7 @@ class WebExtractionService:
                     page = await context.new_page()
                     page.set_default_timeout(timeout_ms)
 
-                    async def _route_handler(route, request):
+                    async def _route_handler(route, request) -> None:
                         try:
                             if request.resource_type in {
                                 "document",
@@ -230,10 +231,8 @@ class WebExtractionService:
                             else:
                                 await route.abort()
                         except Exception:
-                            try:
+                            with contextlib.suppress(Exception):
                                 await route.abort()
-                            except Exception:
-                                pass
 
                     await page.route("**/*", _route_handler)
                     await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
@@ -252,10 +251,8 @@ class WebExtractionService:
                     return ExtractionResult(success=False, tier_used="B", error="no text extracted")
                 finally:
                     if context is not None:
-                        try:
+                        with contextlib.suppress(Exception):
                             await context.close()
-                        except Exception:
-                            pass
         except Exception as exc:
             logger.warning(f"Tier B Playwright failed for {url}: {exc}")
             raise
@@ -271,11 +268,10 @@ class WebExtractionService:
         # Remove leading/trailing Unicode quotes often used in OG
         t = t.strip("\u201c\u201d\"'")
         # Collapse whitespace
-        t = re.sub(r"\s+", " ", t).strip()
-        return t
+        return re.sub(r"\s+", " ", t).strip()
 
     @staticmethod
-    def _parse_html_for_text(html: str, url: str) -> Dict[str, Any]:
+    def _parse_html_for_text(html: str, url: str) -> dict[str, Any]:
         soup = BeautifulSoup(html, "html.parser")
         text_candidates = []
         author = None
@@ -379,7 +375,7 @@ class WebExtractionService:
         }
 
     @staticmethod
-    def _deep_get(obj: Any, key: str) -> Optional[Any]:
+    def _deep_get(obj: Any, key: str) -> Any | None:
         if isinstance(obj, dict):
             if key in obj:
                 return obj[key]

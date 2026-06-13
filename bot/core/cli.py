@@ -1,11 +1,9 @@
-"""
-Handles command-line interface parsing and actions.
-"""
+"""Handles command-line interface parsing and actions."""
 
 import argparse
 import sys
 
-from bot.config import load_config, validate_required_env, ConfigurationError
+from bot.config import ConfigurationError, load_config, validate_required_env
 from bot.utils.logging import get_logger
 
 
@@ -18,14 +16,12 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def show_version_info():
+def show_version_info() -> None:
     """Display version and system information."""
     # This can be expanded with more detailed version info
-    print("Discord LLM Bot - Version 1.0.0")
-    print(f"Python Version: {sys.version}")
 
 
-def validate_configuration_only():
+def validate_configuration_only() -> None:
     """Validate configuration and exit."""
     logger = get_logger(__name__)
     try:

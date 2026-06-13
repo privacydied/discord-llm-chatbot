@@ -1,5 +1,4 @@
-"""
-Bounded concurrency pools with hierarchical cancellation for router optimization. [PA][RM]
+"""Bounded concurrency pools with hierarchical cancellation for router optimization. [PA][RM].
 
 This module provides separate execution pools for different types of work:
 - LIGHT: Planning, parsing, lightweight transforms (fast, CPU-light)
@@ -17,15 +16,18 @@ Key features:
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, TypeVar
-from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from .utils.logging import get_logger
+
+if TYPE_CHECKING:
+    import concurrent.futures
+    from collections.abc import Awaitable, Callable
 
 logger = get_logger(__name__)
 
@@ -33,7 +35,7 @@ T = TypeVar("T")
 
 
 class PoolType(Enum):
-    """Types of execution pools. [CMV]"""
+    """Types of execution pools. [CMV]."""
 
     LIGHT = "light"  # Planning, parsing, lightweight transforms
     NETWORK = "network"  # HTTP requests, API calls, downloads
@@ -42,7 +44,7 @@ class PoolType(Enum):
 
 @dataclass
 class PoolMetrics:
-    """Metrics for monitoring pool usage. [PA]"""
+    """Metrics for monitoring pool usage. [PA]."""
 
     tasks_submitted: int = 0
     tasks_completed: int = 0
@@ -58,29 +60,29 @@ class PoolMetrics:
 
 @dataclass
 class TaskContext:
-    """Context for tracking individual tasks. [CA]"""
+    """Context for tracking individual tasks. [CA]."""
 
     task_id: str
     pool_type: PoolType
     created_at: float
-    started_at: Optional[float] = None
-    completed_at: Optional[float] = None
-    parent_context: Optional["TaskContext"] = None
-    children: Set["TaskContext"] = field(default_factory=set)
+    started_at: float | None = None
+    completed_at: float | None = None
+    parent_context: TaskContext | None = None
+    children: set[TaskContext] = field(default_factory=set)
     cancelled: bool = False
     result: Any = None
-    error: Optional[Exception] = None
+    error: Exception | None = None
 
 
 class CancellationTree:
-    """Manages hierarchical task cancellation. [RM]"""
+    """Manages hierarchical task cancellation. [RM]."""
 
-    def __init__(self):
-        self.contexts: Dict[str, TaskContext] = {}
-        self.root_contexts: Set[TaskContext] = set()
+    def __init__(self) -> None:
+        self.contexts: dict[str, TaskContext] = {}
+        self.root_contexts: set[TaskContext] = set()
 
-    def create_context(self, task_id: str, pool_type: PoolType, parent_id: Optional[str] = None) -> TaskContext:
-        """Create a new task context with optional parent. [CA]"""
+    def create_context(self, task_id: str, pool_type: PoolType, parent_id: str | None = None) -> TaskContext:
+        """Create a new task context with optional parent. [CA]."""
         context = TaskContext(task_id=task_id, pool_type=pool_type, created_at=time.time())
 
         if parent_id and parent_id in self.contexts:
@@ -93,8 +95,8 @@ class CancellationTree:
         self.contexts[task_id] = context
         return context
 
-    def cancel_branch(self, task_id: str) -> List[str]:
-        """Cancel a task and all its children recursively. [RM]"""
+    def cancel_branch(self, task_id: str) -> list[str]:
+        """Cancel a task and all its children recursively. [RM]."""
         if task_id not in self.contexts:
             return []
 
@@ -112,7 +114,7 @@ class CancellationTree:
         return cancelled_ids
 
     def cleanup_context(self, task_id: str) -> None:
-        """Clean up completed task context. [RM]"""
+        """Clean up completed task context. [RM]."""
         if task_id not in self.contexts:
             return
 
@@ -129,14 +131,14 @@ class CancellationTree:
 
 
 class BoundedExecutionPool:
-    """Bounded execution pool with metrics and cancellation support. [PA][RM]"""
+    """Bounded execution pool with metrics and cancellation support. [PA][RM]."""
 
     def __init__(
         self,
         pool_type: PoolType,
         max_workers: int,
-        thread_name_prefix: Optional[str] = None,
-    ):
+        thread_name_prefix: str | None = None,
+    ) -> None:
         self.pool_type = pool_type
         self.max_workers = max_workers
         self.metrics = PoolMetrics()
@@ -149,8 +151,8 @@ class BoundedExecutionPool:
         )
 
         # Task tracking
-        self.active_tasks: Dict[str, asyncio.Task] = {}
-        self.task_futures: Dict[str, concurrent.futures.Future] = {}
+        self.active_tasks: dict[str, asyncio.Task] = {}
+        self.task_futures: dict[str, concurrent.futures.Future] = {}
 
         logger.info(f"🏊 {pool_type.value.upper()} pool initialized with {max_workers} workers")
 
@@ -158,10 +160,10 @@ class BoundedExecutionPool:
         self,
         task_id: str,
         coro: Awaitable[T],
-        parent_id: Optional[str] = None,
-        timeout: Optional[float] = None,
+        parent_id: str | None = None,
+        timeout: float | None = None,
     ) -> T:
-        """Submit async coroutine to the pool. [PA]"""
+        """Submit async coroutine to the pool. [PA]."""
         context = self.cancellation_tree.create_context(task_id, self.pool_type, parent_id)
 
         try:
@@ -172,10 +174,7 @@ class BoundedExecutionPool:
             context.started_at = time.time()
 
             # Create task with optional timeout
-            if timeout:
-                task = asyncio.create_task(asyncio.wait_for(coro, timeout=timeout))
-            else:
-                task = asyncio.create_task(coro)
+            task = asyncio.create_task(asyncio.wait_for(coro, timeout=timeout)) if timeout else asyncio.create_task(coro)
 
             self.active_tasks[task_id] = task
 
@@ -214,11 +213,11 @@ class BoundedExecutionPool:
         task_id: str,
         func: Callable[..., T],
         *args,
-        parent_id: Optional[str] = None,
-        timeout: Optional[float] = None,
+        parent_id: str | None = None,
+        timeout: float | None = None,
         **kwargs,
     ) -> T:
-        """Submit synchronous function to thread pool. [PA]"""
+        """Submit synchronous function to thread pool. [PA]."""
         context = self.cancellation_tree.create_context(task_id, self.pool_type, parent_id)
 
         try:
@@ -271,8 +270,8 @@ class BoundedExecutionPool:
                 del self.active_tasks[task_id]
             self.cancellation_tree.cleanup_context(task_id)
 
-    def cancel_task_branch(self, task_id: str) -> List[str]:
-        """Cancel a task and all its children. [RM]"""
+    def cancel_task_branch(self, task_id: str) -> list[str]:
+        """Cancel a task and all its children. [RM]."""
         cancelled_ids = self.cancellation_tree.cancel_branch(task_id)
 
         for cancelled_id in cancelled_ids:
@@ -292,12 +291,12 @@ class BoundedExecutionPool:
         return cancelled_ids
 
     def get_metrics(self) -> PoolMetrics:
-        """Get current pool metrics. [PA]"""
+        """Get current pool metrics. [PA]."""
         self.metrics.pool_utilization = self.metrics.current_active / self.max_workers
         return self.metrics
 
     async def shutdown(self) -> None:
-        """Shutdown the pool gracefully. [RM]"""
+        """Shutdown the pool gracefully. [RM]."""
         logger.info(f"🛑 Shutting down {self.pool_type.value} pool...")
 
         # Cancel all active tasks
@@ -314,9 +313,9 @@ class BoundedExecutionPool:
 
 
 class ConcurrencyManager:
-    """Manages all execution pools with hierarchical cancellation. [PA][RM]"""
+    """Manages all execution pools with hierarchical cancellation. [PA][RM]."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize concurrency manager with configuration."""
         self.config = config or {}
 
@@ -339,7 +338,7 @@ class ConcurrencyManager:
         logger.info("🎯 ConcurrencyManager initialized with all pools")
 
     async def _generate_task_id(self, prefix: str = "task") -> str:
-        """Generate unique task ID. [CA]"""
+        """Generate unique task ID. [CA]."""
         async with self._task_lock:
             self._task_counter += 1
             return f"{prefix}_{self._task_counter}_{int(time.time() * 1000)}"
@@ -349,10 +348,10 @@ class ConcurrencyManager:
         self,
         pool_type: PoolType,
         task_name: str = "task",
-        parent_id: Optional[str] = None,
-        timeout: Optional[float] = None,
+        parent_id: str | None = None,
+        timeout: float | None = None,
     ):
-        """Context manager for submitting work to a specific pool. [CA]"""
+        """Context manager for submitting work to a specific pool. [CA]."""
         task_id = await self._generate_task_id(f"{pool_type.value}_{task_name}")
         pool = self.pools[pool_type]
 
@@ -363,7 +362,7 @@ class ConcurrencyManager:
             async def sync_task(self, func: Callable[..., T], *args, **kwargs) -> T:
                 return await pool.submit_sync(task_id, func, *args, parent_id=parent_id, timeout=timeout, **kwargs)
 
-            def cancel(self) -> List[str]:
+            def cancel(self) -> list[str]:
                 return pool.cancel_task_branch(task_id)
 
         try:
@@ -377,9 +376,9 @@ class ConcurrencyManager:
         self,
         coro: Awaitable[T],
         task_name: str = "light_task",
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> T:
-        """Run a lightweight task (planning, parsing). [PA]"""
+        """Run a lightweight task (planning, parsing). [PA]."""
         async with self.submit_to_pool(PoolType.LIGHT, task_name, timeout=timeout) as submitter:
             return await submitter.async_task(coro)
 
@@ -387,9 +386,9 @@ class ConcurrencyManager:
         self,
         coro: Awaitable[T],
         task_name: str = "network_task",
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> T:
-        """Run a network-bound task (HTTP, API calls). [PA]"""
+        """Run a network-bound task (HTTP, API calls). [PA]."""
         async with self.submit_to_pool(PoolType.NETWORK, task_name, timeout=timeout) as submitter:
             return await submitter.async_task(coro)
 
@@ -397,9 +396,9 @@ class ConcurrencyManager:
         self,
         coro: Awaitable[T],
         task_name: str = "heavy_task",
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> T:
-        """Run a heavy task (OCR, STT, ffmpeg). [PA]"""
+        """Run a heavy task (OCR, STT, ffmpeg). [PA]."""
         async with self.submit_to_pool(PoolType.HEAVY, task_name, timeout=timeout) as submitter:
             return await submitter.async_task(coro)
 
@@ -408,19 +407,19 @@ class ConcurrencyManager:
         func: Callable[..., T],
         *args,
         task_name: str = "heavy_sync",
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         **kwargs,
     ) -> T:
-        """Run a heavy synchronous task in thread pool. [PA]"""
+        """Run a heavy synchronous task in thread pool. [PA]."""
         async with self.submit_to_pool(PoolType.HEAVY, task_name, timeout=timeout) as submitter:
             return await submitter.sync_task(func, *args, **kwargs)
 
-    def get_all_metrics(self) -> Dict[PoolType, PoolMetrics]:
-        """Get metrics for all pools. [PA]"""
+    def get_all_metrics(self) -> dict[PoolType, PoolMetrics]:
+        """Get metrics for all pools. [PA]."""
         return {pool_type: pool.get_metrics() for pool_type, pool in self.pools.items()}
 
     def cancel_all_tasks_in_pool(self, pool_type: PoolType) -> int:
-        """Cancel all tasks in a specific pool. [RM]"""
+        """Cancel all tasks in a specific pool. [RM]."""
         pool = self.pools[pool_type]
         total_cancelled = 0
 
@@ -431,7 +430,7 @@ class ConcurrencyManager:
         return total_cancelled
 
     async def shutdown_all(self) -> None:
-        """Shutdown all pools gracefully. [RM]"""
+        """Shutdown all pools gracefully. [RM]."""
         logger.info("🛑 Shutting down all execution pools...")
 
         # Shutdown in reverse order of dependency
@@ -442,13 +441,13 @@ class ConcurrencyManager:
 
 
 # Global singleton instance
-_concurrency_manager_instance: Optional[ConcurrencyManager] = None
+_concurrency_manager_instance: ConcurrencyManager | None = None
 
 
 def get_concurrency_manager(
-    config: Optional[Dict[str, Any]] = None,
+    config: dict[str, Any] | None = None,
 ) -> ConcurrencyManager:
-    """Get or create the global concurrency manager instance. [CA]"""
+    """Get or create the global concurrency manager instance. [CA]."""
     global _concurrency_manager_instance
 
     if _concurrency_manager_instance is None:

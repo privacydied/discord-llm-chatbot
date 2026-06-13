@@ -1,5 +1,4 @@
-"""
-URL classification and content-type detection for unified media/document handling.
+"""URL classification and content-type detection for unified media/document handling.
 
 This module provides URL classification that routes URLs to the appropriate
 processing pipeline (document, audio, video, image, or web scraper) based on
@@ -14,7 +13,6 @@ from __future__ import annotations
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Tuple
 from urllib.parse import urlparse
 
 import httpx
@@ -26,9 +24,6 @@ from .attachment_classifier import (
 )
 from .utils.external_api import _is_private_hostname
 from .utils.logging import get_logger
-
-if TYPE_CHECKING:
-    pass
 
 logger = get_logger(__name__)
 
@@ -69,9 +64,9 @@ class ClassifiedURL:
 
     url: str
     bucket: AttachmentBucket
-    content_type: Optional[str]  # From HTTP headers, if available
-    filename: Optional[str]  # Extracted from URL path
-    content_length: Optional[int]  # From HTTP headers, if available
+    content_type: str | None  # From HTTP headers, if available
+    filename: str | None  # Extracted from URL path
+    content_length: int | None  # From HTTP headers, if available
     detection_method: str  # "head_request", "extension_only", or "fallback"
 
 
@@ -80,9 +75,8 @@ class ClassifiedURL:
 # ---------------------------------------------------------------------------
 
 
-async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int]]:
-    """
-    Detect the content type of a URL using a HEAD request.
+async def detect_url_content_type(url: str) -> tuple[str | None, int | None]:
+    """Detect the content type of a URL using a HEAD request.
 
     Args:
         url: HTTP(S) URL to probe
@@ -94,6 +88,7 @@ async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int
         - Uses HEAD request to avoid downloading full content
         - Falls back gracefully on network errors or timeouts
         - Only handles http:// and https:// URLs
+
     """
     # Validate URL scheme
     try:
@@ -179,7 +174,7 @@ async def detect_url_content_type(url: str) -> Tuple[Optional[str], Optional[int
         return None, None
 
 
-def _extract_filename_from_url(url: str) -> Optional[str]:
+def _extract_filename_from_url(url: str) -> str | None:
     """Extract filename from URL path."""
     try:
         parsed = urlparse(url)
@@ -200,8 +195,7 @@ def _extract_filename_from_url(url: str) -> Optional[str]:
 
 
 async def classify_url(url: str) -> ClassifiedURL:
-    """
-    Classify a URL into a processing bucket.
+    """Classify a URL into a processing bucket.
 
     This determines whether a URL should be processed as:
     - DOC: Document (PDF, DOCX, etc.) → document parsing pipeline
@@ -215,6 +209,7 @@ async def classify_url(url: str) -> ClassifiedURL:
 
     Returns:
         ClassifiedURL with bucket assignment and metadata
+
     """
     filename = _extract_filename_from_url(url)
 
@@ -334,9 +329,8 @@ async def download_url_to_temp(
     max_bytes: int = URL_MAX_DOWNLOAD_BYTES,
     timeout: float = URL_DOWNLOAD_TIMEOUT_S,
     suffix: str = "",
-) -> Tuple[Optional[Path], Optional[str]]:
-    """
-    Download a URL to a temporary file.
+) -> tuple[Path | None, str | None]:
+    """Download a URL to a temporary file.
 
     Args:
         url: HTTP(S) URL to download
@@ -352,6 +346,7 @@ async def download_url_to_temp(
     Notes:
         - Caller is responsible for cleaning up the temp file
         - Respects Content-Length header to avoid downloading oversized files
+
     """
     try:
         parsed = urlparse(url)

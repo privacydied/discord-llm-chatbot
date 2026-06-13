@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""
-EnhancedRetryManager fallback/retry/circuit-breaker simulation harness (tests location).
+"""EnhancedRetryManager fallback/retry/circuit-breaker simulation harness (tests location).
 Run with:
-    uv run python tests/test_vl_fallback.py
+    uv run python tests/test_vl_fallback.py.
 """
 
 import asyncio
@@ -10,11 +9,11 @@ import json
 import logging
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, Dict, Tuple
 
-from rich.logging import RichHandler
 from rich.console import Console
+from rich.logging import RichHandler
 from rich.panel import Panel
 
 from bot.enhanced_retry import ProviderConfig
@@ -104,60 +103,64 @@ def configure_test_ladder():
 
 
 def make_handler_fn(logger: logging.Logger, behavior: str) -> Callable[[ProviderConfig], Callable[[], str]]:
-    state: Dict[Tuple[str, str], int] = {}
+    state: dict[tuple[str, str], int] = {}
 
     def factory(provider_cfg: ProviderConfig):
-        async def run():
+        async def run() -> str:
             prov = provider_cfg.name
             if behavior == "retryable_fail_primary":
                 if prov == "testprov1":
-                    raise Exception("502 Provider returned error: temporary upstream issue")
+                    msg = "502 Provider returned error: temporary upstream issue"
+                    raise Exception(msg)
                 return f"OK from {prov}"
-            elif behavior == "non_retryable":
-                raise Exception("authentication failed: invalid api key")
-            elif behavior == "slow_op":
+            if behavior == "non_retryable":
+                msg = "authentication failed: invalid api key"
+                raise Exception(msg)
+            if behavior == "slow_op":
                 await asyncio.sleep(provider_cfg.timeout + 0.5)
                 return f"finished after sleep on {prov}"
-            elif behavior == "always_fail":
-                raise Exception("502 Provider returned error")
-            elif behavior == "always_fail_primary_only":
+            if behavior == "always_fail":
+                msg = "502 Provider returned error"
+                raise Exception(msg)
+            if behavior == "always_fail_primary_only":
                 if prov == "testprov1":
-                    raise Exception("502 Provider returned error")
+                    msg = "502 Provider returned error"
+                    raise Exception(msg)
                 return f"OK from {prov}"
-            elif behavior == "succeed_on_second_attempt":
+            if behavior == "succeed_on_second_attempt":
                 key = (behavior, prov)
                 cnt = state.get(key, 0) + 1
                 state[key] = cnt
                 if cnt == 1:
-                    raise Exception("503 Service unavailable: try again")
+                    msg = "503 Service unavailable: try again"
+                    raise Exception(msg)
                 return f"OK after retry on {prov}"
-            else:
-                return f"OK default {prov}"
+            return f"OK default {prov}"
 
         return run
 
     return factory
 
 
-async def scenario_retryable_then_fallback(logger: logging.Logger):
+async def scenario_retryable_then_fallback(logger: logging.Logger) -> None:
     mgr = configure_test_ladder()
     res = await mgr.run_with_fallback("vision", make_handler_fn(logger, "retryable_fail_primary"), per_item_budget=3.0)
     logger.info(f"Scenario retryable_then_fallback -> success={res.success}, provider={res.provider_used}, attempts={res.attempts}, time={res.total_time:.2f}s")
 
 
-async def scenario_non_retryable(logger: logging.Logger):
+async def scenario_non_retryable(logger: logging.Logger) -> None:
     mgr = configure_test_ladder()
     res = await mgr.run_with_fallback("vision", make_handler_fn(logger, "non_retryable"), per_item_budget=3.0)
     logger.info(f"Scenario non_retryable -> success={res.success}, error={res.error}, attempts={res.attempts}, time={res.total_time:.2f}s")
 
 
-async def scenario_budget_exhaustion(logger: logging.Logger):
+async def scenario_budget_exhaustion(logger: logging.Logger) -> None:
     mgr = configure_test_ladder()
     res = await mgr.run_with_fallback("vision", make_handler_fn(logger, "slow_op"), per_item_budget=0.7)
     logger.info(f"Scenario budget_exhaustion -> success={res.success}, error={res.error}, attempts={res.attempts}, time={res.total_time:.2f}s")
 
 
-async def scenario_circuit_breaker_skip(logger: logging.Logger):
+async def scenario_circuit_breaker_skip(logger: logging.Logger) -> None:
     mgr = configure_test_ladder()
     _ = await mgr.run_with_fallback(
         "vision",
@@ -168,7 +171,7 @@ async def scenario_circuit_breaker_skip(logger: logging.Logger):
     logger.info(f"Scenario circuit_breaker_skip -> success={res.success}, provider={res.provider_used}, attempts={res.attempts}, time={res.total_time:.2f}s")
 
 
-async def scenario_retry_within_provider(logger: logging.Logger):
+async def scenario_retry_within_provider(logger: logging.Logger) -> None:
     mgr = configure_test_ladder()
     res = await mgr.run_with_fallback(
         "vision",
@@ -178,7 +181,7 @@ async def scenario_retry_within_provider(logger: logging.Logger):
     logger.info(f"Scenario retry_within_provider -> success={res.success}, provider={res.provider_used}, attempts={res.attempts}, time={res.total_time:.2f}s")
 
 
-async def main():
+async def main() -> None:
     logger = setup_logging()
 
     console = Console()
@@ -187,7 +190,7 @@ async def main():
             "EnhancedRetryManager Fallback/Retry Simulator",
             subtitle="VL pipeline validation",
             style="bold green",
-        )
+        ),
     )
 
     tasks = [
@@ -203,11 +206,10 @@ async def main():
         try:
             await t
         except Exception as e:
-            logger.error(f"Scenario raised exception: {type(e).__name__}: {e}")
+            logger.exception(f"Scenario raised exception: {type(e).__name__}: {e}")
         finally:
             elapsed = time.time() - start
             logger.info(f"Scenario completed in {elapsed:.2f}s")
-            print("-" * 80)
 
 
 if __name__ == "__main__":

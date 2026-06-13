@@ -1,3 +1,5 @@
+from typing import Never
+
 import pytest
 
 from bot.stt_pipeline.runtime import (
@@ -34,7 +36,7 @@ def test_load_stt_runtime_compat(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_ensure_stt_manager_ready_no_ensure_ready_fail_open() -> None:
     class Manager:
-        def is_available(self):
+        def is_available(self) -> bool:
             return True
 
     assert await ensure_stt_manager_ready(Manager()) is True
@@ -43,10 +45,10 @@ async def test_ensure_stt_manager_ready_no_ensure_ready_fail_open() -> None:
 @pytest.mark.asyncio
 async def test_ensure_stt_manager_ready_async_ensure_ready() -> None:
     class Manager:
-        def is_available(self):
+        def is_available(self) -> bool:
             return True
 
-        async def ensure_ready(self):
+        async def ensure_ready(self) -> bool:
             return True
 
     assert await ensure_stt_manager_ready(Manager()) is True
@@ -55,10 +57,10 @@ async def test_ensure_stt_manager_ready_async_ensure_ready() -> None:
 @pytest.mark.asyncio
 async def test_ensure_stt_manager_ready_sync_ensure_ready_false() -> None:
     class Manager:
-        def is_available(self):
+        def is_available(self) -> bool:
             return True
 
-        def ensure_ready(self):
+        def ensure_ready(self) -> bool:
             return False
 
     assert await ensure_stt_manager_ready(Manager()) is False
@@ -67,7 +69,7 @@ async def test_ensure_stt_manager_ready_sync_ensure_ready_false() -> None:
 @pytest.mark.asyncio
 async def test_ensure_stt_manager_ready_is_available_false() -> None:
     class Manager:
-        def is_available(self):
+        def is_available(self) -> bool:
             return False
 
     assert await ensure_stt_manager_ready(Manager()) is False
@@ -76,11 +78,12 @@ async def test_ensure_stt_manager_ready_is_available_false() -> None:
 @pytest.mark.asyncio
 async def test_ensure_stt_manager_ready_ensure_ready_raises() -> None:
     class Manager:
-        def is_available(self):
+        def is_available(self) -> bool:
             return True
 
-        async def ensure_ready(self):
-            raise RuntimeError("boom")
+        async def ensure_ready(self) -> Never:
+            msg = "boom"
+            raise RuntimeError(msg)
 
     assert await ensure_stt_manager_ready(Manager()) is False
 
@@ -88,7 +91,8 @@ async def test_ensure_stt_manager_ready_ensure_ready_raises() -> None:
 @pytest.mark.asyncio
 async def test_ensure_stt_manager_ready_is_available_raises() -> None:
     class Manager:
-        def is_available(self):
-            raise RuntimeError("boom")
+        def is_available(self) -> Never:
+            msg = "boom"
+            raise RuntimeError(msg)
 
     assert await ensure_stt_manager_ready(Manager()) is False

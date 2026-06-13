@@ -6,21 +6,21 @@ import pytest
 pytestmark = pytest.mark.skip(reason="Requires TTS engine phoneme pipeline")
 
 
-def test_en_uses_phoneme_only(monkeypatch):
+def test_en_uses_phoneme_only(monkeypatch) -> None:
     from bot.tts.engines.kokoro import KokoroEngine
 
     created = {}
 
     class KDStub:
-        def __init__(self, *a, **k):
+        def __init__(self, *a, **k) -> None:
             created["use_tokenizer"] = k.get("use_tokenizer", True)
 
-        def create(self, **k):
+        def create(self, **k) -> str:
             created.update(k)
             return "/tmp/f.wav"
 
     eng = KokoroEngine()
-    eng._get_kokoro_direct = lambda **k: KDStub(**k)
+    eng._get_kokoro_direct = KDStub
     eng._wav_to_bytes = lambda p: b"WAV"
 
     out = eng.synthesize("one two three", language="en")
@@ -30,7 +30,7 @@ def test_en_uses_phoneme_only(monkeypatch):
     assert created.get("disable_autodiscovery") is True
 
 
-def test_no_error_when_no_tokenizer_if_phonemes(monkeypatch, caplog):
+def test_no_error_when_no_tokenizer_if_phonemes(monkeypatch, caplog) -> None:
     from bot.tts.kokoro_direct import KokoroDirect
 
     kd = KokoroDirect("/model.onnx", "/voices.bin", use_tokenizer=False)

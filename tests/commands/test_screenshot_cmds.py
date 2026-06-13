@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from bot.commands.screenshot_commands import ScreenshotCommands
 
@@ -37,7 +38,7 @@ def mock_ctx(mock_bot):
 
 
 @pytest.mark.asyncio
-async def test_ss_missing_url_prompts_usage(mock_bot, mock_ctx):
+async def test_ss_missing_url_prompts_usage(mock_bot, mock_ctx) -> None:
     cog = ScreenshotCommands(mock_bot)
     mock_ctx.message.content = "no url here"
 
@@ -50,7 +51,7 @@ async def test_ss_missing_url_prompts_usage(mock_bot, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_ss_valid_url_delegates_to_router_and_edits_embed(mock_bot, mock_ctx):
+async def test_ss_valid_url_delegates_to_router_and_edits_embed(mock_bot, mock_ctx) -> None:
     cog = ScreenshotCommands(mock_bot)
     url = "https://example.com"
 
@@ -67,4 +68,5 @@ async def test_ss_valid_url_delegates_to_router_and_edits_embed(mock_bot, mock_c
     mock_msg = mock_ctx.reply.return_value
     mock_msg.edit.assert_awaited()
     kwargs = mock_msg.edit.await_args.kwargs
-    assert "embed" in kwargs and kwargs["embed"] is not None
+    assert "embed" in kwargs
+    assert kwargs["embed"] is not None

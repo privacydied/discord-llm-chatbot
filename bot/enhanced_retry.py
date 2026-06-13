@@ -1,17 +1,18 @@
-"""
-Enhanced retry system with provider/model fallback ladder and circuit breaker.
+"""Enhanced retry system with provider/model fallback ladder and circuit breaker.
 Implements per-item wall-clock budget and configurable timeouts.
 """
 
 import asyncio
-import time
-import random
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
-from enum import Enum
 import logging
 import os
-from .config import load_config, get_vl_model_ladder
+import random
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
+
+from .config import get_vl_model_ladder, load_config
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ _IMAGE_CAPABLE_MODELS: frozenset[str] = frozenset(
         # Other VL models
         "pixtral-12b-2409",
         "pixtral-large-2411",
-    }
+    },
 )
 
 
@@ -108,43 +109,43 @@ class RetryResult:
 
     success: bool
     result: Any = None
-    error: Optional[Exception] = None
+    error: Exception | None = None
     attempts: int = 0
     total_time: float = 0.0
-    provider_used: Optional[str] = None
+    provider_used: str | None = None
     fallback_occurred: bool = False
 
 
 class EnhancedRetryManager:
     """Enhanced retry manager with provider fallback and circuit breaker."""
 
-    def __init__(self):
-        self.circuit_breakers: Dict[str, CircuitBreakerState] = {}
-        self.provider_configs: Dict[str, List[ProviderConfig]] = {}
+    def __init__(self) -> None:
+        self.circuit_breakers: dict[str, CircuitBreakerState] = {}
+        self.provider_configs: dict[str, list[ProviderConfig]] = {}
         self._load_default_configs()
 
-    def _load_default_configs(self):
+    def _load_default_configs(self) -> None:
         """Load provider configurations from .env/config with sensible fallbacks."""
         config = load_config()
 
         def _parse_ladder(
             models_env: str | None,
             timeouts_env: str | None,
-            default: List[ProviderConfig],
+            default: list[ProviderConfig],
             max_attempts_env: str | None = None,
-        ) -> List[ProviderConfig]:
+        ) -> list[ProviderConfig]:
             # models entries may be either "provider|model" or just "model" (defaults to openrouter)
             if not models_env:
                 return default
             models = [m.strip() for m in models_env.split(",") if m.strip()]
-            timeouts: List[float] = []
+            timeouts: list[float] = []
             seen_pairs: set[tuple[str, str]] = set()
             if timeouts_env:
                 try:
                     timeouts = [float(t.strip()) for t in timeouts_env.split(",") if t.strip()]
                 except Exception:
                     timeouts = []
-            attempts: List[int] = []
+            attempts: list[int] = []
             if max_attempts_env:
                 try:
                     attempts = [max(1, int(t.strip())) for t in max_attempts_env.split(",") if t.strip()]
@@ -154,8 +155,8 @@ class EnhancedRetryManager:
             # when the provider+model pair matches an entry in the default ladder. This
             # keeps TEXT_FALLBACK_MODELS aligned with default_text/default_vision even
             # when TEXT_FALLBACK_TIMEOUTS is omitted or partially specified.
-            default_by_key: Dict[tuple[str, str], ProviderConfig] = {(pc.name, pc.model): pc for pc in default}
-            ladder: List[ProviderConfig] = []
+            default_by_key: dict[tuple[str, str], ProviderConfig] = {(pc.name, pc.model): pc for pc in default}
+            ladder: list[ProviderConfig] = []
             for idx, entry in enumerate(models):
                 if "|" in entry:
                     provider, model = entry.split("|", 1)
@@ -206,7 +207,7 @@ class EnhancedRetryManager:
                             max_delay=base_cfg.max_delay,
                             exponential_base=base_cfg.exponential_base,
                             jitter=base_cfg.jitter,
-                        )
+                        ),
                     )
                 else:
                     ladder.append(ProviderConfig(provider, model, timeout=timeout, max_attempts=max_attempts))
@@ -292,9 +293,8 @@ class EnhancedRetryManager:
 
         vl_head = (config.get("VL_MODEL") or "").strip()
 
-        def _ensure_head(ladder: List[ProviderConfig], head_model: str, default_timeout: float) -> List[ProviderConfig]:
-            """
-            Ensure head_model is at the front of the ladder without reordering the remainder.
+        def _ensure_head(ladder: list[ProviderConfig], head_model: str, default_timeout: float) -> list[ProviderConfig]:
+            """Ensure head_model is at the front of the ladder without reordering the remainder.
             If head_model is absent, prepend it with default_timeout.
             """
             if not head_model:
@@ -303,9 +303,9 @@ class EnhancedRetryManager:
             if existing_idx is not None:
                 head_cfg = ladder[existing_idx]
                 remainder = [pc for i, pc in enumerate(ladder) if i != existing_idx]
-                return [head_cfg] + remainder
+                return [head_cfg, *remainder]
             head_cfg = ProviderConfig("openrouter", head_model, timeout=default_timeout)
-            return [head_cfg] + ladder
+            return [head_cfg, *ladder]
 
         # Vision ladder: env is authoritative; only apply capability filtering to defaults
         raw_vision_ladder = _parse_ladder(vision_models, vision_timeouts, default_vision)
@@ -329,10 +329,7 @@ class EnhancedRetryManager:
         # Do not prepend OPENAI_TEXT_MODEL when env ladder is provided, because stale
         # model slugs can cause repeated 404/no-endpoints stalls before real fallbacks.
         raw_text_ladder = _parse_ladder(text_models, text_timeouts, default_text, text_max_attempts)
-        if text_from_env:
-            filtered_text = raw_text_ladder
-        else:
-            filtered_text = raw_text_ladder
+        filtered_text = raw_text_ladder if text_from_env else raw_text_ladder
 
         self.provider_configs["text"] = filtered_text
         # Media ladder can be overridden via env; if not provided, use defaults above
@@ -351,12 +348,11 @@ class EnhancedRetryManager:
             t = ", ".join([f"{pc.name}|{pc.model}(t={pc.timeout}s,a={pc.max_attempts})" for pc in self.provider_configs["text"]])
             m = ", ".join([f"{pc.name}|{pc.model}(t={pc.timeout}s,a={pc.max_attempts})" for pc in self.provider_configs["media"]])
             logger.info(f"🔧 Fallback ladders loaded → vision: [{v}] | text: [{t}] | media: [{m}]")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to log fallback ladders: {e}")
 
     def _apply_vl_override(self, vision_from_env: bool = False) -> None:
-        """
-        Ensure the configured VL ladder head (VL_MODEL) is reflected in the vision provider order.
+        """Ensure the configured VL ladder head (VL_MODEL) is reflected in the vision provider order.
         If vision ladder came from env, respect env order and do not reorder/filter.
         """
         if vision_from_env:
@@ -380,8 +376,8 @@ class EnhancedRetryManager:
                 return (provider.strip() or "openrouter", model.strip())
             return "openrouter", entry.strip()
 
-        base_by_model: Dict[str, ProviderConfig] = {provider.model: provider for provider in vision_providers}
-        ordered: List[ProviderConfig] = []
+        base_by_model: dict[str, ProviderConfig] = {provider.model: provider for provider in vision_providers}
+        ordered: list[ProviderConfig] = []
         seen_models: set[str] = set()
 
         for idx, raw_entry in enumerate(override_entries):
@@ -405,7 +401,7 @@ class EnhancedRetryManager:
                         provider_name,
                         model_name,
                         timeout=timeout,
-                    )
+                    ),
                 )
             seen_models.add(model_name)
 
@@ -417,12 +413,12 @@ class EnhancedRetryManager:
         if ordered:
             self.provider_configs["vision"] = ordered
 
-    def refresh_from_env(self) -> Dict[str, List[str]]:
+    def refresh_from_env(self) -> dict[str, list[str]]:
         """Rebuild provider ladders from the current environment while preserving breaker state."""
         old_breakers = dict(self.circuit_breakers)
         self._load_default_configs()
 
-        new_breakers: Dict[str, CircuitBreakerState] = {}
+        new_breakers: dict[str, CircuitBreakerState] = {}
         all_provider_keys: set[str] = set()
         for providers in self.provider_configs.values():
             for provider in providers:
@@ -435,7 +431,7 @@ class EnhancedRetryManager:
 
         self.circuit_breakers = new_breakers
 
-        summary: Dict[str, List[str]] = {}
+        summary: dict[str, list[str]] = {}
         for modality, providers in self.provider_configs.items():
             summary[modality] = [provider.model for provider in providers]
 
@@ -480,13 +476,13 @@ class EnhancedRetryManager:
 
         return True
 
-    def _record_success(self, provider_key: str):
+    def _record_success(self, provider_key: str) -> None:
         """Record successful operation for provider."""
         breaker = self._get_circuit_breaker(provider_key)
         breaker.status = ProviderStatus.HEALTHY
         breaker.failure_count = 0
 
-    def _record_failure(self, provider_key: str):
+    def _record_failure(self, provider_key: str) -> None:
         """Record failed operation for provider."""
         breaker = self._get_circuit_breaker(provider_key)
         breaker.failure_count += 1
@@ -536,19 +532,18 @@ class EnhancedRetryManager:
             return False
         # Hard non-retryable auth/authorization failures.
         # These are configuration/account issues, not transient provider blips.
-        if "401" in error_str or "403" in error_str:
-            if any(
-                pat in error_str
-                for pat in (
-                    "authentication",
-                    "unauthorized",
-                    "forbidden",
-                    "user not found",
-                    "invalid api key",
-                    "bad api key",
-                )
-            ):
-                return False
+        if ("401" in error_str or "403" in error_str) and any(
+            pat in error_str
+            for pat in (
+                "authentication",
+                "unauthorized",
+                "forbidden",
+                "user not found",
+                "invalid api key",
+                "bad api key",
+            )
+        ):
+            return False
         if "authenticationerror" in error_type or "permission" in error_type:
             return False
 
@@ -561,13 +556,13 @@ class EnhancedRetryManager:
         coro_factory: Callable[[ProviderConfig], Callable[[], Any]],
         per_item_budget: float = 45.0,
     ) -> RetryResult:
-        """
-        Run operation with provider fallback ladder and circuit breaker.
+        """Run operation with provider fallback ladder and circuit breaker.
 
         Args:
             modality: Type of operation (vision, text, etc.)
             coro_factory: Factory function that takes ProviderConfig and returns coroutine
             per_item_budget: Maximum wall-clock time for this item
+
         """
         start_time = time.time()
         providers = self.provider_configs.get(modality, [])
@@ -581,7 +576,7 @@ class EnhancedRetryManager:
 
         total_attempts = 0
         fallback_occurred = False
-        last_exception: Optional[Exception] = None
+        last_exception: Exception | None = None
         budget_exhausted = False
 
         for provider_idx, provider_config in enumerate(providers):
@@ -642,26 +637,26 @@ class EnhancedRetryManager:
                     # Preserve provider identity on all downstream error paths.
                     try:
                         if not getattr(e, "provider_key", None):
-                            setattr(e, "provider_key", provider_key)
-                    except Exception:
-                        pass
+                            e.provider_key = provider_key
+                    except Exception as e2:
+                        logger.debug(f"Failed to set provider_key on exception: {e2}")
                     # Normalize timeouts to a descriptive message [REH]
                     try:
                         if isinstance(e, (asyncio.TimeoutError, TimeoutError)):
                             desc = f"LLM attempt timed out after {attempt_timeout:.1f}s for {provider_key}"
                             te = TimeoutError(desc)
                             try:
-                                setattr(te, "provider_key", provider_key)
-                                setattr(te, "timeout_seconds", attempt_timeout)
-                            except Exception:
-                                pass
+                                te.provider_key = provider_key
+                                te.timeout_seconds = attempt_timeout
+                            except Exception as e2:
+                                logger.debug(f"Failed to set timeout attributes: {e2}")
                             e = te
-                    except Exception:
-                        pass
+                    except Exception as e2:
+                        logger.debug(f"Timeout normalization failed: {e2}")
                     # Treat OpenRouter 404 / no-endpoints as permanent provider unavailability [REH]
                     msg_lower = f"{type(e).__name__}: {e}".lower()
                     if "404" in msg_lower and "no endpoints found" in msg_lower:
-                        logger.error(f"❌ Provider unavailable (404 no endpoints) for {provider_key}: {type(e).__name__}: {e}")
+                        logger.exception(f"❌ Provider unavailable (404 no endpoints) for {provider_key}: {type(e).__name__}: {e}")
                         last_exception = e
                         self._record_failure(provider_key)
                         breaker = self._get_circuit_breaker(provider_key)
@@ -670,10 +665,7 @@ class EnhancedRetryManager:
                             dead_model_cooldown = float(os.getenv("OPENROUTER_DEAD_MODEL_COOLDOWN_S", "1800"))
                         except Exception:
                             dead_model_cooldown = 1800.0
-                        breaker.cooldown_duration = max(
-                            float(breaker.cooldown_duration or 0.0),
-                            max(60.0, dead_model_cooldown),
-                        )
+                        breaker.cooldown_duration = max(float(breaker.cooldown_duration or 0.0), 60.0, dead_model_cooldown)
                         break
                     # Auth failures should short-circuit the entire ladder: trying more models
                     # with the same bad credentials just burns budget and latency.
@@ -690,7 +682,7 @@ class EnhancedRetryManager:
                                 "bad api key",
                             )
                         ) and ("401" in msg_lower or "403" in msg_lower):
-                            logger.error(f"❌ Authentication failure for {provider_key}; aborting ladder: {type(e).__name__}: {e}")
+                            logger.exception(f"❌ Authentication failure for {provider_key}; aborting ladder: {type(e).__name__}: {e}")
                             total_time = time.time() - start_time
                             return RetryResult(
                                 success=False,
@@ -706,7 +698,7 @@ class EnhancedRetryManager:
                     last_exception = e
 
                     if not self._is_retryable_error(e):
-                        logger.error(f"❌ Non-retryable error, skipping remaining attempts for {provider_key}: {type(e).__name__}: {e}")
+                        logger.exception(f"❌ Non-retryable error, skipping remaining attempts for {provider_key}: {type(e).__name__}: {e}")
                         break
 
                     # Record failure for circuit breaker
@@ -735,7 +727,7 @@ class EnhancedRetryManager:
 
                         # Only apply jitter to backoff-based delays (not Retry-After)
                         if (not use_retry_after) and provider_config.jitter:
-                            delay *= 0.8 + random.random() * 0.4
+                            delay *= 0.8 + random.random() * 0.4  # nosec B311
 
                         # Check if we have budget for the delay
                         elapsed = time.time() - start_time

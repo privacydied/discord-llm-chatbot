@@ -1,25 +1,24 @@
-"""
-Discord bot main entry point - BOOTSTRAP ONLY
+"""Discord bot main entry point - BOOTSTRAP ONLY
 This module should contain NO business logic, only orchestration.
 """
 
 import asyncio
+import contextlib
 import os
-import sys
-from typing import Dict, NoReturn, Optional
+from typing import NoReturn
 
 import aiohttp
 import discord
 
-from bot.config import load_config, load_system_prompts, check_venv_activation
+from bot.config import check_venv_activation, load_config, load_system_prompts
 from bot.config_reload import setup_config_reload, start_file_watcher
 from bot.core.bot import LLMBot
 from bot.core.cli import parse_arguments, show_version_info, validate_configuration_only
-from bot.core.startup import run_pre_flight_checks, create_bot_intents, get_prefix
+from bot.core.startup import create_bot_intents, get_prefix, run_pre_flight_checks
 from bot.exceptions import ConfigurationError
-from bot.tasks import spawn_background_tasks
-from bot.utils.logging import init_logging, get_logger, shutdown_logging_and_exit
 from bot.shutdown import setup_signal_handlers
+from bot.tasks import spawn_background_tasks
+from bot.utils.logging import get_logger, init_logging, shutdown_logging_and_exit
 
 # ---------------------------------------------------------------------------
 # Phase 3: Thread caps — MUST run before heavy ML modules are initialized.
@@ -33,7 +32,7 @@ os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 
-async def main(bot_ref: Optional[Dict[str, LLMBot]] = None) -> NoReturn:
+async def main(bot_ref: dict[str, LLMBot] | None = None) -> NoReturn:
     """Main bot execution function with enhanced error handling and CLI support."""
     init_logging()
     logger = get_logger(__name__)
@@ -107,7 +106,7 @@ async def main(bot_ref: Optional[Dict[str, LLMBot]] = None) -> NoReturn:
 
         except (discord.HTTPException, aiohttp.ClientConnectorError):
             if attempt == max_retries - 1:
-                logger.error("Failed to log in. Please check your Discord token.")
+                logger.exception("Failed to log in. Please check your Discord token.")
                 shutdown_logging_and_exit(1)
             delay = base_delay * (2**attempt)
             logger.warning(f"Connection failed, retrying in {delay}s...")
@@ -127,10 +126,8 @@ def run_bot() -> None:
         # Store bot instance for proper cleanup
         asyncio.run(main_with_cleanup())
     except KeyboardInterrupt:
-        print("\nBot shutdown requested by user.")
         shutdown_logging_and_exit(0)
-    except Exception as e:
-        print(f"FATAL ERROR: {e}", file=sys.stderr)
+    except Exception:
         import traceback
 
         traceback.print_exc()
@@ -139,7 +136,7 @@ def run_bot() -> None:
 
 async def main_with_cleanup() -> NoReturn:
     """Main function with proper resource cleanup."""
-    bot_state: Dict[str, LLMBot] = {}
+    bot_state: dict[str, LLMBot] = {}
     try:
         # Run the main bot logic
         await main(bot_state)
@@ -151,10 +148,8 @@ async def main_with_cleanup() -> NoReturn:
         # Ensure proper cleanup even if main() fails
         bot_instance = bot_state.get("bot")
         if bot_instance:
-            try:
+            with contextlib.suppress(Exception):
                 await bot_instance.close()
-            except Exception as e:
-                print(f"Error during bot cleanup: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

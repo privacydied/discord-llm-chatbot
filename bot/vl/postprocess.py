@@ -1,23 +1,21 @@
-"""
-VL Output Sanitizer - Removes chain-of-thought leakage and model reasoning.
+"""VL Output Sanitizer - Removes chain-of-thought leakage and model reasoning.
 
 Enforces clean VL output before passing to Text Flow in the 1-hop pipeline.
 """
 
 import os
 import re
-from typing import Optional
 
 
 def sanitize_model_output(text: str) -> str:
-    """
-    Sanitize VL model output to remove reasoning, rules, and thinking blocks.
+    """Sanitize VL model output to remove reasoning, rules, and thinking blocks.
 
     Args:
         text: Raw VL model response
 
     Returns:
         Cleaned text suitable for Text Flow input
+
     """
     # Check if sanitization is enabled
     strip_reasoning = os.getenv("VL_STRIP_REASONING", "1").lower() in (
@@ -85,20 +83,19 @@ def sanitize_model_output(text: str) -> str:
         cleaned = cleaned[:truncate_at].strip()
 
     # 6. Final cleanup - remove any remaining empty lines at start/end
-    cleaned = cleaned.strip()
+    return cleaned.strip()
 
-    return cleaned
 
 
 def has_reasoning_content(text: str) -> bool:
-    """
-    Check if text contains reasoning content that should be sanitized.
+    """Check if text contains reasoning content that should be sanitized.
 
     Args:
         text: Text to check
 
     Returns:
         True if text contains <think> blocks or rule explanations
+
     """
     if not text:
         return False
@@ -122,12 +119,11 @@ def has_reasoning_content(text: str) -> bool:
     return any(indicator in text_lower for indicator in rule_indicators)
 
 
-def sanitize_vl_reply_text(text: str, max_chars: Optional[int] = None, strip_reasoning: Optional[bool] = None) -> str:
-    """
-    Sanitize VL text for reply-image flow to a concise, natural message.
+def sanitize_vl_reply_text(text: str, max_chars: int | None = None, strip_reasoning: bool | None = None) -> str:
+    """Sanitize VL text for reply-image flow to a concise, natural message.
     - Optionally strip chain-of-thought / planning text (default: on)
     - Keep first 3–5 descriptive lines (bullets or sentences)
-    - Hard truncate to max_chars at sentence/space boundary with ellipsis
+    - Hard truncate to max_chars at sentence/space boundary with ellipsis.
 
     Args:
         text: Raw VL model output
@@ -136,6 +132,7 @@ def sanitize_vl_reply_text(text: str, max_chars: Optional[int] = None, strip_rea
 
     Returns:
         Clean, concise text suitable for inline Discord replies.
+
     """
     if text is None:
         return ""
@@ -208,9 +205,9 @@ def sanitize_vl_reply_text(text: str, max_chars: Optional[int] = None, strip_rea
 
         filtered = [ln for ln in lines if _is_content_line(ln)]
         # If filtering removed everything, fall back to first few original lines
-        chosen = filtered if filtered else lines
+        chosen = filtered or lines
         # Keep between 3 and 5 lines when available
-        take_n = 5 if len(chosen) >= 5 else (3 if len(chosen) >= 3 else len(chosen))
+        take_n = 5 if len(chosen) >= 5 else (min(3, len(chosen)))
         cleaned = "\n".join(chosen[:take_n]).strip()
 
     # Final hard truncate by characters with sentence/space boundary preference

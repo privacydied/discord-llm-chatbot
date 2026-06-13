@@ -1,12 +1,11 @@
-"""
-Admin DM Alert System - Secure, DM-only broadcast alerting with emoji-driven composer.
+"""Admin DM Alert System - Secure, DM-only broadcast alerting with emoji-driven composer.
 
 This module contains ONLY the Discord command cog and event handlers.
 Business logic is in admin_alert_manager.py, models in admin_alert_models.py.
 """
 
-import asyncio
-from typing import Dict, List, Optional
+
+import contextlib
 
 import discord
 from discord.ext import commands
@@ -21,7 +20,7 @@ logger = get_logger(__name__)
 
 
 class AdminAlertCommands(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.config = load_config()
         self.logger = get_logger(f"{__name__}.AdminAlertCommands")
@@ -30,9 +29,8 @@ class AdminAlertCommands(commands.Cog):
 
     @commands.command(name="alert")
     @commands.cooldown(2, 300, type=commands.BucketType.user)
-    async def alert_command(self, ctx: commands.Context, *, message: str = None) -> None:
-        """
-        Admin broadcast command.
+    async def alert_command(self, ctx: commands.Context, *, message: str | None = None) -> None:
+        """Admin broadcast command.
 
         Usage:
           !alert <message>   - Direct broadcast to all servers
@@ -88,12 +86,11 @@ class AdminAlertCommands(commands.Cog):
             self.logger.info(f"Alert session started for user {ctx.author.id}")
 
         except Exception as e:
-            self.logger.error(f"Failed to create alert session: {e}")
+            self.logger.exception(f"Failed to create alert session: {e}")
             await ctx.send("Failed to start alert session. Please try again.")
 
     async def _handle_direct_broadcast(self, ctx, content: str) -> None:
-        """
-        Direct broadcast mode: send message to all eligible guilds immediately.
+        """Direct broadcast mode: send message to all eligible guilds immediately.
 
         [REH] Non-fatal per-guild errors; continues to other guilds.
         [CA] Reuses existing permission checking logic.
@@ -194,7 +191,7 @@ class AdminAlertCommands(commands.Cog):
             try:
                 await reaction.remove(user)
             except Exception:
-                pass
+                self.logger.debug("Failed to remove reaction", exc_info=True)
             return
 
         emoji = str(reaction.emoji)
@@ -217,7 +214,7 @@ class AdminAlertCommands(commands.Cog):
                 if not channels:
                     return
 
-                guild_map: Dict[int, List[discord.TextChannel]] = {}
+                guild_map: dict[int, list[discord.TextChannel]] = {}
                 for ch in channels:
                     gid = ch.guild.id
                     if gid not in guild_map:
@@ -240,15 +237,13 @@ class AdminAlertCommands(commands.Cog):
                     if session.guild_page < total_pages - 1:
                         session.guild_page += 1
                         await self._show_guild_selection(user, session, guild_map, sorted_guilds)
-                try:
+                with contextlib.suppress(discord.HTTPException):
                     await reaction.remove(user)
-                except discord.HTTPException:
-                    pass
 
             # Channel selection navigation (on channel_message_id)
             if reaction.message.id == getattr(session, "channel_message_id", None):
                 channels = await self.alert_manager.get_accessible_channels()
-                guild_map: Dict[int, List[discord.TextChannel]] = {}
+                guild_map: dict[int, list[discord.TextChannel]] = {}
                 for ch in channels:
                     gid = ch.guild.id
                     if gid not in guild_map:
@@ -274,21 +269,19 @@ class AdminAlertCommands(commands.Cog):
                     try:
                         await reaction.message.clear_reactions()
                     except Exception:
-                        pass
-                    sorted_guilds = session.guilds_list if session.guilds_list else []
+                        self.logger.debug("Failed to clear reactions", exc_info=True)
+                    sorted_guilds = session.guilds_list or []
                     await self._show_guild_selection(user, session, guild_map, sorted_guilds)
                 elif emoji == "❌":
                     await self._handle_cancel(reaction, user, session)
-                try:
+                with contextlib.suppress(discord.HTTPException):
                     await reaction.remove(user)
-                except discord.HTTPException:
-                    pass
 
         except discord.HTTPException as e:
-            self.logger.error(f"Discord API error handling reaction {emoji}: status={e.status}, code={e.code}")
+            self.logger.exception(f"Discord API error handling reaction {emoji}: status={e.status}, code={e.code}")
             await user.send("An error occurred. Please try again.")
         except Exception as e:
-            self.logger.error(f"Error handling reaction {emoji}: {e}")
+            self.logger.exception(f"Error handling reaction {emoji}: {e}")
             await user.send("An error occurred. Please try again.")
 
     @commands.Cog.listener()
@@ -331,7 +324,7 @@ class AdminAlertCommands(commands.Cog):
                     if not channels:
                         await message.channel.send("No channels found.")
                         return
-                    guild_map: Dict[int, List[discord.TextChannel]] = {}
+                    guild_map: dict[int, list[discord.TextChannel]] = {}
                     for ch in channels:
                         gid = ch.guild.id
                         if gid not in guild_map:
@@ -339,7 +332,7 @@ class AdminAlertCommands(commands.Cog):
                         guild_map[gid].append(ch)
                     for gid in guild_map:
                         guild_map[gid].sort(key=lambda c: (c.position, c.name.lower()))
-                    sorted_guilds = session.guilds_list if session.guilds_list else []
+                    sorted_guilds = session.guilds_list or []
                     await self._show_guild_selection(message.author, session, guild_map, sorted_guilds)
                     return
 
@@ -353,7 +346,7 @@ class AdminAlertCommands(commands.Cog):
                     await message.channel.send("No accessible channels found.")
                     return
 
-                guild_map: Dict[int, List[discord.TextChannel]] = {}
+                guild_map: dict[int, list[discord.TextChannel]] = {}
                 for ch in channels:
                     gid = ch.guild.id
                     if gid not in guild_map:
@@ -396,8 +389,8 @@ class AdminAlertCommands(commands.Cog):
                     await message.channel.send("Could not find channels for that guild.")
                     return
 
-                selected: List[AlertDestination] = []
-                invalid: List[int] = []
+                selected: list[AlertDestination] = []
+                invalid: list[int] = []
 
                 for idx in indices:
                     if 1 <= idx <= len(guild_channels):
@@ -408,7 +401,7 @@ class AdminAlertCommands(commands.Cog):
                                 channel_id=ch.id,
                                 channel_name=ch.name,
                                 guild_name=ch.guild.name,
-                            )
+                            ),
                         )
                     else:
                         invalid.append(idx)
@@ -454,15 +447,15 @@ class AdminAlertCommands(commands.Cog):
                 return
 
         except Exception as e:
-            self.logger.error(f"Error handling DM message: {e}")
+            self.logger.exception(f"Error handling DM message: {e}")
             try:
                 await message.channel.send("Error processing your input. Please try again.")
             except Exception:
-                pass
+                self.logger.debug("Failed to send error message to user", exc_info=True)
 
-    def _extract_indices(self, text: str) -> List[int]:
+    def _extract_indices(self, text: str) -> list[int]:
         """Parse comma/space separated integers from user input."""
-        indices: List[int] = []
+        indices: list[int] = []
         for token in text.replace("\n", ",").split(","):
             token = token.strip()
             if not token:
@@ -477,11 +470,11 @@ class AdminAlertCommands(commands.Cog):
                         continue
         return indices
 
-    def _parse_content_fields(self, text: str) -> tuple[Optional[str], Optional[str], str]:
+    def _parse_content_fields(self, text: str) -> tuple[str | None, str | None, str]:
         """Extract TITLE: and DESC: lines; return (title|None, desc|None, body_text)."""
-        title: Optional[str] = None
-        desc: Optional[str] = None
-        body_lines: List[str] = []
+        title: str | None = None
+        desc: str | None = None
+        body_lines: list[str] = []
         for line in text.splitlines():
             stripped = line.strip()
             if stripped.lower().startswith("title:"):
@@ -502,9 +495,9 @@ class AdminAlertCommands(commands.Cog):
             dm_msg = await source_message.channel.fetch_message(session.composer_message_id)
             await dm_msg.edit(embed=composer_embed)
         except discord.HTTPException as e:
-            self.logger.error(f"Embed edit failed: status={e.status}, code={e.code}")
+            self.logger.exception(f"Embed edit failed: status={e.status}, code={e.code}")
         except Exception as e:
-            self.logger.error(f"Failed to update composer embed: {e}")
+            self.logger.exception(f"Failed to update composer embed: {e}")
 
     async def _handle_channel_selection(self, reaction: discord.Reaction, user: discord.User, session) -> None:
         """Present guild-based channel selection with scrollable guild list."""
@@ -515,7 +508,7 @@ class AdminAlertCommands(commands.Cog):
             await user.send("I couldn't find any text channels I can send messages to. Check the bot permissions and try again.")
             return
 
-        guild_map: Dict[int, List[discord.TextChannel]] = {}
+        guild_map: dict[int, list[discord.TextChannel]] = {}
         for ch in channels:
             gid = ch.guild.id
             if gid not in guild_map:
@@ -533,17 +526,15 @@ class AdminAlertCommands(commands.Cog):
 
         await self._show_guild_selection(user, session, guild_map, sorted_guilds)
 
-        try:
+        with contextlib.suppress(discord.HTTPException):
             await reaction.remove(user)
-        except discord.HTTPException:
-            pass
 
     async def _show_guild_selection(
         self,
         user: discord.User,
         session,
-        guild_map: Dict[int, List[discord.TextChannel]],
-        sorted_guilds: List[int],
+        guild_map: dict[int, list[discord.TextChannel]],
+        sorted_guilds: list[int],
     ) -> None:
         """Display paginated guild list with scroll indicators."""
         GUILDS_PER_PAGE = 8
@@ -602,7 +593,7 @@ class AdminAlertCommands(commands.Cog):
         user: discord.User,
         session,
         guild_id: int,
-        guild_map: Dict[int, List[discord.TextChannel]],
+        guild_map: dict[int, list[discord.TextChannel]],
     ) -> None:
         """Show channels within a selected guild with pagination."""
         CHANNELS_PER_PAGE = 10
@@ -669,7 +660,7 @@ class AdminAlertCommands(commands.Cog):
             "TITLE: Server Maintenance\n"
             "DESC: Scheduled maintenance tonight\n"
             "Please save your work.\n"
-            "```"
+            "```",
         )
 
         try:
@@ -678,7 +669,7 @@ class AdminAlertCommands(commands.Cog):
             full_message = await reaction.message.channel.fetch_message(reaction.message.id)
             await full_message.edit(embed=composer_embed)
         except discord.HTTPException as e:
-            self.logger.error(f"Failed to update composer embed in content composition: status={e.status}, code={e.code}")
+            self.logger.exception(f"Failed to update composer embed in content composition: status={e.status}, code={e.code}")
             raise
 
     async def _handle_preview(self, reaction: discord.Reaction, user: discord.User, session) -> None:
@@ -727,7 +718,7 @@ class AdminAlertCommands(commands.Cog):
             full_message = await reaction.message.channel.fetch_message(reaction.message.id)
             await full_message.edit(embed=composer_embed)
         except discord.HTTPException as e:
-            self.logger.error(f"Failed to update composer embed in preview: status={e.status}, code={e.code}")
+            self.logger.exception(f"Failed to update composer embed in preview: status={e.status}, code={e.code}")
             raise
 
     async def _handle_send_confirmation(self, reaction: discord.Reaction, user: discord.User, session) -> None:
@@ -772,7 +763,7 @@ class AdminAlertCommands(commands.Cog):
             else:
                 await user.send("Alert send cancelled.")
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await user.send("Confirmation timeout. Alert cancelled.")
 
     async def _handle_cancel(self, reaction: discord.Reaction, user: discord.User, session) -> None:

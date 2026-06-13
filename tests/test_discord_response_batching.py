@@ -6,11 +6,11 @@ import discord
 import pytest
 
 from bot.action import BotAction
-from bot.core.bot import LLMBot, _DISCORD_MAX_CONTENT_LEN
+from bot.core.bot import _DISCORD_MAX_CONTENT_LEN, LLMBot
 
 
 class _FakeSentMessage:
-    def __init__(self, content: str, embeds=None, files=None):
+    def __init__(self, content: str, embeds=None, files=None) -> None:
         self.content = content
         self.embeds = embeds or []
         self.files = files or []
@@ -20,13 +20,14 @@ class _FakeSentMessage:
 
 class _MessageProcessorMock:
     """Simulates MessageProcessor.on_message filtering: returns False for
-    bot/self authors, True for legitimate user messages."""
+    bot/self authors, True for legitimate user messages.
+    """
 
-    def __init__(self, bot_stub):
+    def __init__(self, bot_stub) -> None:
         self._bot_stub = bot_stub
         self.enqueue = AsyncMock()
 
-    async def on_message(self, message):
+    async def on_message(self, message) -> bool:
         author = getattr(message, "author", None)
         if author is None:
             return True
@@ -61,7 +62,7 @@ def bot_stub():
 
 
 @pytest.mark.asyncio
-async def test_chunk_short_text_returns_single_chunk_unchanged(bot_stub):
+async def test_chunk_short_text_returns_single_chunk_unchanged(bot_stub) -> None:
     text = "short response"
 
     chunks = LLMBot._chunk_message_content(bot_stub, text)
@@ -70,7 +71,7 @@ async def test_chunk_short_text_returns_single_chunk_unchanged(bot_stub):
 
 
 @pytest.mark.asyncio
-async def test_chunk_text_just_over_limit_returns_two_chunks(bot_stub):
+async def test_chunk_text_just_over_limit_returns_two_chunks(bot_stub) -> None:
     text = "x" * (_DISCORD_MAX_CONTENT_LEN + 1)
 
     chunks = LLMBot._chunk_message_content(bot_stub, text)
@@ -81,7 +82,7 @@ async def test_chunk_text_just_over_limit_returns_two_chunks(bot_stub):
 
 
 @pytest.mark.asyncio
-async def test_chunk_prefers_paragraph_boundaries(bot_stub):
+async def test_chunk_prefers_paragraph_boundaries(bot_stub) -> None:
     text = ("a" * 1880) + "\n\n" + ("b" * 80)
 
     chunks = LLMBot._chunk_message_content(bot_stub, text)
@@ -93,7 +94,7 @@ async def test_chunk_prefers_paragraph_boundaries(bot_stub):
 
 
 @pytest.mark.asyncio
-async def test_chunk_prefers_newline_boundaries(bot_stub):
+async def test_chunk_prefers_newline_boundaries(bot_stub) -> None:
     # Use length > 1950 so it actually requires splitting.
     text = ("a" * 1940) + "\n" + ("b" * 50)
 
@@ -106,7 +107,7 @@ async def test_chunk_prefers_newline_boundaries(bot_stub):
 
 
 @pytest.mark.asyncio
-async def test_chunk_prefers_simple_sentence_boundaries(bot_stub):
+async def test_chunk_prefers_simple_sentence_boundaries(bot_stub) -> None:
     # Use length > 1950 so it actually requires splitting.
     text = ("a" * 1945) + ". " + ("b" * 50)
 
@@ -119,7 +120,7 @@ async def test_chunk_prefers_simple_sentence_boundaries(bot_stub):
 
 
 @pytest.mark.asyncio
-async def test_chunk_hard_splits_long_unbroken_text(bot_stub):
+async def test_chunk_hard_splits_long_unbroken_text(bot_stub) -> None:
     text = "z" * ((_DISCORD_MAX_CONTENT_LEN * 2) + 17)
 
     chunks = LLMBot._chunk_message_content(bot_stub, text)
@@ -130,7 +131,7 @@ async def test_chunk_hard_splits_long_unbroken_text(bot_stub):
 
 
 @pytest.mark.asyncio
-async def test_chunk_does_not_mangle_code_block_worse_than_current(bot_stub):
+async def test_chunk_does_not_mangle_code_block_worse_than_current(bot_stub) -> None:
     # We allow splits inside code fences if necessary, but we must:
     # - preserve content (no loss)
     # - not introduce random extra backticks or markers.
@@ -150,7 +151,7 @@ async def test_chunk_does_not_mangle_code_block_worse_than_current(bot_stub):
 
 
 @pytest.mark.asyncio
-async def test_send_chunked_short_message_sends_once(bot_stub):
+async def test_send_chunked_short_message_sends_once(bot_stub) -> None:
     # Single-chunk case via _send_chunked_reply.
     content = "short reply"
     action = BotAction(content=content, embeds=None)
@@ -205,7 +206,7 @@ async def test_send_chunked_short_message_sends_once(bot_stub):
 
 
 @pytest.mark.asyncio
-async def test_send_chunked_long_message_is_sequential_and_ordered(bot_stub):
+async def test_send_chunked_long_message_is_sequential_and_ordered(bot_stub) -> None:
     content = "x" * 3500
     action = BotAction(content=content, embeds=[discord.Embed(title="alpha")])
     files = [MagicMock(name="file")]
@@ -305,13 +306,13 @@ async def test_send_chunked_long_message_is_sequential_and_ordered(bot_stub):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "author_id,self_id",
+    ("author_id", "self_id"),
     [
         (99999, 99999),  # self-authored bot message
         (22222, 99999),  # other bot-authored message
     ],
 )
-async def test_on_message_ignores_bot_authors(bot_stub, author_id, self_id):
+async def test_on_message_ignores_bot_authors(bot_stub, author_id, self_id) -> None:
     bot_stub.user.id = self_id
     bot_stub.router = MagicMock()
 
@@ -327,7 +328,7 @@ async def test_on_message_ignores_bot_authors(bot_stub, author_id, self_id):
 
 
 @pytest.mark.asyncio
-async def test_on_message_ignores_own_continuation_message_no_loop(bot_stub):
+async def test_on_message_ignores_own_continuation_message_no_loop(bot_stub) -> None:
     bot_stub.user.id = 99999
     bot_stub.router = MagicMock()
 
@@ -345,7 +346,7 @@ async def test_on_message_ignores_own_continuation_message_no_loop(bot_stub):
 
 
 @pytest.mark.asyncio
-async def test_no_infinite_self_reply_loop_via_continuation(bot_stub):
+async def test_no_infinite_self_reply_loop_via_continuation(bot_stub) -> None:
     # Concept: if on_message ignored bot messages, we cannot get into a loop
     # where bot replies to its own continuations. This test encodes that guarantee.
 

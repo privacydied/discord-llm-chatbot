@@ -1,22 +1,20 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from typing import List, Optional
-
-import pytest
+from typing import Never
 
 import discord
+import pytest
 
 from bot.memory.mention_context import (
     maybe_build_mention_context,
 )
 
-
 # Helpers -------------------------------------------------------------
 
 
 class FakeAuthor:
-    def __init__(self, id: int, name: str, bot: bool = False):
+    def __init__(self, id: int, name: str, bot: bool = False) -> None:
         self.id = id
         self.name = name
         self.display_name = name
@@ -32,8 +30,8 @@ class FakeMessage:
         created_at: datetime,
         channel,
         guild=None,
-        reference: Optional[SimpleNamespace] = None,
-    ):
+        reference: SimpleNamespace | None = None,
+    ) -> None:
         self.id = id
         self.author = author
         self.content = content
@@ -47,7 +45,7 @@ class FakeMessage:
 
 
 class FakeHistory:
-    def __init__(self, items: List[FakeMessage]):
+    def __init__(self, items: list[FakeMessage]) -> None:
         self._items = list(items)
 
     def __aiter__(self):
@@ -62,7 +60,7 @@ class FakeHistory:
 
 
 class FakeChannel:
-    def __init__(self, channel_id: int, items: List[FakeMessage], channel_type=None):
+    def __init__(self, channel_id: int, items: list[FakeMessage], channel_type=None) -> None:
         self.id = channel_id
         # Store reference (not copy) so messages appended after construction are visible [BUGFIX]
         self._items = items
@@ -72,10 +70,7 @@ class FakeChannel:
         items = list(self._items)
         if after is not None:
             items = [m for m in items if m.created_at > after]
-        if oldest_first:
-            items = sorted(items, key=lambda m: m.created_at)
-        else:
-            items = sorted(items, key=lambda m: m.created_at, reverse=True)
+        items = sorted(items, key=lambda m: m.created_at) if oldest_first else sorted(items, key=lambda m: m.created_at, reverse=True)
         if limit:
             items = items[:limit]
         return FakeHistory(items)
@@ -88,7 +83,7 @@ class FakeChannel:
 
 
 class FakeGuild:
-    def __init__(self, gid: int, members: List[FakeAuthor]):
+    def __init__(self, gid: int, members: list[FakeAuthor]) -> None:
         self.id = gid
         self._mem_by_id = {m.id: m for m in members}
         self.members = list(members)
@@ -98,19 +93,19 @@ class FakeGuild:
 
 
 class FakeBot:
-    def __init__(self, uid: int):
+    def __init__(self, uid: int) -> None:
         self.user = SimpleNamespace(id=uid)
 
 
 def _now():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # Tests ---------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_thread_case_short():
+async def test_thread_case_short() -> None:
     now = _now()
     bot = FakeBot(999)
     author = FakeAuthor(1, "alice")
@@ -150,7 +145,7 @@ async def test_thread_case_short():
 
 
 @pytest.mark.asyncio
-async def test_thread_case_cap_truncate():
+async def test_thread_case_cap_truncate() -> None:
     now = _now()
     bot = FakeBot(999)
     author = FakeAuthor(1, "alice")
@@ -179,13 +174,13 @@ async def test_thread_case_cap_truncate():
         "MEM_FETCH_TIMEOUT_S": 2,
     }
 
-    joined, block = await maybe_build_mention_context(bot, trigger, cfg)
+    _joined, block = await maybe_build_mention_context(bot, trigger, cfg)
     assert block.count <= 40
     assert block.truncated is True
 
 
 @pytest.mark.asyncio
-async def test_reply_case_linear():
+async def test_reply_case_linear() -> None:
     now = _now()
     bot = FakeBot(999)
     a = FakeAuthor(1, "alice")
@@ -233,13 +228,13 @@ async def test_reply_case_linear():
         "MEM_FETCH_TIMEOUT_S": 2,
     }
 
-    joined, block = await maybe_build_mention_context(bot, trigger, cfg)
+    _joined, block = await maybe_build_mention_context(bot, trigger, cfg)
     assert block.source == "discord-reply-chain"
     assert [it.text_plain for it in block.items] == ["root", "r1", "r2", "r3"]
 
 
 @pytest.mark.asyncio
-async def test_reply_case_forked_only_chain_included():
+async def test_reply_case_forked_only_chain_included() -> None:
     now = _now()
     bot = FakeBot(999)
     a = FakeAuthor(1, "alice")
@@ -292,12 +287,12 @@ async def test_reply_case_forked_only_chain_included():
     trigger.mentions = [SimpleNamespace(id=bot.user.id)]
 
     cfg = {"MEM_MENTION_CONTEXT_ENABLED": True}
-    joined, block = await maybe_build_mention_context(bot, trigger, cfg)
+    _joined, block = await maybe_build_mention_context(bot, trigger, cfg)
     assert [it.text_plain for it in block.items] == ["root", "r1", "r2", "r3"]
 
 
 @pytest.mark.asyncio
-async def test_lone_case_noop():
+async def test_lone_case_noop() -> None:
     now = _now()
     bot = FakeBot(999)
     a = FakeAuthor(1, "alice")
@@ -312,7 +307,7 @@ async def test_lone_case_noop():
 
 
 @pytest.mark.asyncio
-async def test_age_cap_excludes_old_except_root():
+async def test_age_cap_excludes_old_except_root() -> None:
     now = _now()
     bot = FakeBot(999)
     a = FakeAuthor(1, "alice")
@@ -344,13 +339,13 @@ async def test_age_cap_excludes_old_except_root():
     trigger.mentions = [SimpleNamespace(id=bot.user.id)]
 
     cfg = {"MEM_MENTION_CONTEXT_ENABLED": True, "MEM_MAX_AGE_MIN": 60}
-    joined, block = await maybe_build_mention_context(bot, trigger, cfg)
+    _joined, block = await maybe_build_mention_context(bot, trigger, cfg)
     # root + r1 + r2; root allowed even if over age
     assert [it.text_plain for it in block.items] == ["root", "r1", "r2"]
 
 
 @pytest.mark.asyncio
-async def test_bot_filter_excludes_others_keeps_ours():
+async def test_bot_filter_excludes_others_keeps_ours() -> None:
     now = _now()
     bot = FakeBot(999)
     a = FakeAuthor(1, "alice")
@@ -386,24 +381,24 @@ async def test_bot_filter_excludes_others_keeps_ours():
     trigger.mentions = [our_bot_user]
 
     cfg = {"MEM_MENTION_CONTEXT_ENABLED": True}
-    joined, block = await maybe_build_mention_context(bot, trigger, cfg)
+    _joined, block = await maybe_build_mention_context(bot, trigger, cfg)
     texts = [it.text_plain for it in block.items]
     assert "bot noise" not in texts
     assert "bot reply" in texts
 
 
 @pytest.mark.asyncio
-async def test_timeout_fallback_clean():
+async def test_timeout_fallback_clean() -> None:
     now = _now()
     bot = FakeBot(999)
     a = FakeAuthor(1, "alice")
     guild = FakeGuild(10, [a])
 
     class SlowChannel(FakeChannel):
-        async def fetch_message(self, mid: int):
+        async def fetch_message(self, mid: int) -> Never:
             # Simulate long stall
             await asyncio.sleep(0.2)
-            raise asyncio.TimeoutError()
+            raise TimeoutError
 
     items = []
     ch = SlowChannel(1007, items)
@@ -418,7 +413,7 @@ async def test_timeout_fallback_clean():
 
 
 @pytest.mark.asyncio
-async def test_merge_dedup_within_block():
+async def test_merge_dedup_within_block() -> None:
     # Ensure duplicates inside collected set are removed by message id
     now = _now()
     bot = FakeBot(999)
@@ -436,7 +431,7 @@ async def test_merge_dedup_within_block():
     trigger.mentions = [SimpleNamespace(id=bot.user.id)]
 
     cfg = {"MEM_MENTION_CONTEXT_ENABLED": True}
-    joined, block = await maybe_build_mention_context(bot, trigger, cfg)
+    _joined, block = await maybe_build_mention_context(bot, trigger, cfg)
     ids = [it.id for it in block.items]
     # only two unique ids (901, 902)
     assert ids == [str(901), str(902)]

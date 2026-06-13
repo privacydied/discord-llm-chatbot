@@ -1,11 +1,12 @@
-"""
-Retry utilities specifically for multimodal processing.
+"""Retry utilities specifically for multimodal processing.
 Implements per-item retry logic with exponential backoff for sequential processing.
 """
 
 import asyncio
 import random
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
+
 from .exceptions import APIError, InferenceError
 from .utils.logging import get_logger
 
@@ -23,8 +24,7 @@ async def run_with_retries(
     jitter: bool = True,
     timeout: float = 30.0,
 ) -> str:
-    """
-    Execute an async function with retry logic for multimodal processing.
+    """Execute an async function with retry logic for multimodal processing.
 
     Args:
         coro_func: Async function to execute
@@ -40,6 +40,7 @@ async def run_with_retries(
 
     Raises:
         The last exception encountered if all retries fail
+
     """
     last_exception = None
 
@@ -64,7 +65,7 @@ async def run_with_retries(
                 break
 
             if attempt == retries - 1:
-                logger.error(f"❌ All {retries} retry attempts failed for {coro_func.__name__}")
+                logger.exception(f"❌ All {retries} retry attempts failed for {coro_func.__name__}")
                 break
 
             delay = _calculate_delay(attempt, base_delay, max_delay, jitter)
@@ -73,7 +74,7 @@ async def run_with_retries(
             await asyncio.sleep(delay)
 
     # All retries exhausted - return error message instead of raising
-    error_msg = f"Failed after {retries} attempts: {str(last_exception)}"
+    error_msg = f"Failed after {retries} attempts: {last_exception!s}"
     logger.error(f"❌ {coro_func.__name__} failed completely: {error_msg}")
 
     # Return a canonical failure string for aggregation
@@ -116,7 +117,7 @@ def _calculate_delay(attempt: int, base_delay: float, max_delay: float, jitter: 
     if jitter:
         # Add jitter to prevent thundering herd
         jitter_range = delay * 0.1
-        delay += random.uniform(-jitter_range, jitter_range)
+        delay += random.uniform(-jitter_range, jitter_range)  # nosec B311
 
     return max(0, delay)
 
@@ -127,7 +128,7 @@ def _get_item_name(item: Any) -> str:
         payload = item.payload
         if hasattr(payload, "filename"):
             return payload.filename
-        elif isinstance(payload, str):
+        if isinstance(payload, str):
             # URL - extract domain or filename
             if "/" in payload:
                 return payload.split("/")[-1] or payload.split("/")[-2]

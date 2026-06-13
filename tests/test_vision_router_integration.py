@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""
-Test Vision system integration with the main router.
+"""Test Vision system integration with the main router.
 Verifies natural language intent detection and job orchestration flow.
 """
 
 import asyncio
 import os
 import shutil
-from unittest.mock import AsyncMock, MagicMock, patch
+import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 # Mock Discord imports before importing bot modules
 class MockMessage:
-    def __init__(self):
+    def __init__(self) -> None:
         self.id = 123456789
         self.author = MockUser()
         self.guild = MockGuild()
@@ -21,22 +21,22 @@ class MockMessage:
 
 
 class MockUser:
-    def __init__(self):
+    def __init__(self) -> None:
         self.id = 987654321
 
 
 class MockGuild:
-    def __init__(self):
+    def __init__(self) -> None:
         self.id = 555666777
 
 
 class MockChannel:
-    def __init__(self):
+    def __init__(self) -> None:
         self.send = AsyncMock()
 
 
 class MockBot:
-    def __init__(self):
+    def __init__(self) -> None:
         self.config = {
             "VISION_ENABLED": "true",
             "VISION_API_KEY": "test-key",
@@ -54,15 +54,12 @@ os.environ.update(
         "VISION_DATA_DIR": "/tmp/test-vision",
         "VISION_POLICY_PATH": "/tmp/test-policy.json",
         "VISION_DRY_RUN_MODE": "true",
-    }
+    },
 )
 
 
-async def test_vision_router_integration():
-    """Test Vision system integration with router [CDiP]"""
-
-    print("🧪 Testing Vision Router Integration...")
-
+async def test_vision_router_integration() -> bool:
+    """Test Vision system integration with router [CDiP]."""
     # Create test data directory
     test_dir = Path("/tmp/test-vision")
     test_dir.mkdir(exist_ok=True)
@@ -80,10 +77,8 @@ async def test_vision_router_integration():
 
     try:
         # Test imports work
-        print("📦 Testing imports...")
         from bot.router import Router
 
-        print("✅ Router and Vision imports successful")
 
         # Create mock bot and router
         mock_bot = MockBot()
@@ -92,7 +87,6 @@ async def test_vision_router_integration():
         # Verify Vision components initialized
         assert router._vision_intent_router is not None, "VisionIntentRouter should be initialized"
         assert router._vision_orchestrator is not None, "VisionOrchestrator should be initialized"
-        print("✅ Vision components initialized in router")
 
         # Test intent detection for various prompts
         test_prompts = [
@@ -104,7 +98,6 @@ async def test_vision_router_integration():
             "draw a dragon breathing fire",
         ]
 
-        print("🎯 Testing intent detection...")
         vision_detected = 0
 
         for prompt in test_prompts:
@@ -118,19 +111,14 @@ async def test_vision_router_integration():
 
                 if intent_result.decision.use_vision:
                     vision_detected += 1
-                    print(f"  ✅ Vision detected for: '{prompt}' (confidence: {intent_result.confidence:.2f})")
-                    print(f"     Task: {intent_result.extracted_params.task}")
-                    print(f"     Prompt: {intent_result.extracted_params.prompt}")
                 else:
-                    print(f"  ➡️  Regular text for: '{prompt}'")
+                    pass
 
             except Exception as e:
-                print(f"  ❌ Error processing '{prompt}': {e}")
+                pass
 
-        print(f"📊 Vision intent detected in {vision_detected}/{len(test_prompts)} prompts")
 
         # Test _invoke_text_flow with vision intent
-        print("🔀 Testing text flow routing...")
 
         mock_message = MockMessage()
 
@@ -147,9 +135,9 @@ async def test_vision_router_integration():
 
             # Check if vision handler was called
             if mock_vision_handler.called:
-                print("✅ Vision generation handler was invoked for vision prompt")
+                pass
             else:
-                print("❌ Vision generation handler was not called")
+                pass
 
         # Test router method existence
         required_methods = [
@@ -160,25 +148,19 @@ async def test_vision_router_integration():
             "_create_progress_bar",
         ]
 
-        print("🔍 Checking required router methods...")
         for method_name in required_methods:
             if hasattr(router, method_name):
-                print(f"  ✅ {method_name} exists")
+                pass
             else:
-                print(f"  ❌ {method_name} missing")
+                pass
 
         # Test progress bar utility
         if hasattr(router, "_create_progress_bar"):
             progress_bar = router._create_progress_bar(75)
-            print(f"📊 Progress bar test: {progress_bar}")
             assert len(progress_bar) > 0, "Progress bar should not be empty"
-            print("✅ Progress bar generation works")
 
-        print("\n🎉 Vision Router Integration Test Complete!")
-        print("✅ All core integration components are functional")
 
     except Exception as e:
-        print(f"❌ Integration test failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -194,11 +176,8 @@ async def test_vision_router_integration():
     return True
 
 
-async def test_vision_orchestrator_startup():
-    """Test Vision orchestrator startup and shutdown [REH]"""
-
-    print("\n🔄 Testing Vision Orchestrator Lifecycle...")
-
+async def test_vision_orchestrator_startup() -> bool:
+    """Test Vision orchestrator startup and shutdown [REH]."""
     test_dir = Path("/tmp/test-vision-lifecycle")
     test_dir.mkdir(exist_ok=True)
 
@@ -220,26 +199,21 @@ async def test_vision_orchestrator_startup():
         orchestrator = VisionOrchestrator(mock_config)
 
         # Test startup
-        print("🚀 Starting orchestrator...")
         await orchestrator.startup()
-        print("✅ Orchestrator startup completed")
 
         # Verify directories created
         expected_dirs = ["jobs", "artifacts"]
         for dir_name in expected_dirs:
             dir_path = test_dir / dir_name
             if dir_path.exists():
-                print(f"  ✅ {dir_name}/ directory created")
+                pass
             else:
-                print(f"  ❌ {dir_name}/ directory missing")
+                pass
 
         # Test shutdown
-        print("🛑 Shutting down orchestrator...")
         await orchestrator.shutdown()
-        print("✅ Orchestrator shutdown completed")
 
     except Exception as e:
-        print(f"❌ Orchestrator lifecycle test failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -255,8 +229,6 @@ async def test_vision_orchestrator_startup():
 if __name__ == "__main__":
 
     async def main():
-        print("🧪 Vision Router Integration Tests")
-        print("=" * 50)
 
         # Test integration
         test1_passed = await test_vision_router_integration()
@@ -264,14 +236,13 @@ if __name__ == "__main__":
         # Test orchestrator lifecycle
         test2_passed = await test_vision_orchestrator_startup()
 
-        print("\n" + "=" * 50)
         if test1_passed and test2_passed:
-            print("🎉 ALL TESTS PASSED! Vision integration is ready.")
+            pass
         else:
-            print("❌ Some tests failed. Check integration.")
+            pass
 
         return test1_passed and test2_passed
 
     # Run the tests
     result = asyncio.run(main())
-    exit(0 if result else 1)
+    sys.exit(0 if result else 1)

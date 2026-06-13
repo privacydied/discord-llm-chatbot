@@ -1,14 +1,10 @@
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
 
 # Re-export InputModality from the dedicated modality module to maintain
 # backward compatibility for legacy imports (e.g., tests importing from bot.types)
 from .modality import InputModality
-
-if TYPE_CHECKING:
-    pass
 
 
 class Command(Enum):
@@ -50,8 +46,8 @@ class ParsedCommand:
 class ResponseMessage:
     """Data class to hold response content."""
 
-    text: Optional[str] = None
-    audio_path: Optional[Path] = None
+    text: str | None = None
+    audio_path: Path | None = None
 
 
 class OutputModality(Enum):
@@ -70,8 +66,8 @@ class OutputModality(Enum):
 # Explicit export list for clarity and legacy compatibility
 __all__ = [
     "Command",
-    "ParsedCommand",
-    "ResponseMessage",
     "InputModality",
     "OutputModality",
+    "ParsedCommand",
+    "ResponseMessage",
 ]

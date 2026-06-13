@@ -1,5 +1,4 @@
-"""
-Public output sanitizer - last-mile safety layer before Discord send.
+"""Public output sanitizer - last-mile safety layer before Discord send.
 
 Ensures only public-facing assistant text is sent to Discord.
 Blocks internal reasoning, chain-of-thought, mode-gate commentary, etc.
@@ -11,11 +10,12 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Optional, Tuple
-
-import discord
+from typing import TYPE_CHECKING
 
 from .utils.logging import get_logger
+
+if TYPE_CHECKING:
+    import discord
 
 logger = get_logger(__name__)
 
@@ -178,9 +178,8 @@ def _compute_text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
-def _matches_reasoning_pattern(text: str) -> Tuple[bool, str]:
-    """
-    Check if text matches any reasoning leak pattern.
+def _matches_reasoning_pattern(text: str) -> tuple[bool, str]:
+    """Check if text matches any reasoning leak pattern.
     Returns (matched, matched_pattern_or_empty).
     """
     if not text:
@@ -192,7 +191,7 @@ def _matches_reasoning_pattern(text: str) -> Tuple[bool, str]:
     return False, ""
 
 
-def _matches_unsafe_fallback_pattern(text: str) -> Tuple[bool, str]:
+def _matches_unsafe_fallback_pattern(text: str) -> tuple[bool, str]:
     """Detect unsafe fallback text that quotes internal context."""
     if not text:
         return False, ""
@@ -204,17 +203,16 @@ def _matches_unsafe_fallback_pattern(text: str) -> Tuple[bool, str]:
 
 
 def extract_public_reply_text(
-    content: Optional[str],
+    content: str | None,
     *,
-    request_id: Optional[str] = None,
-    message_id: Optional[str] = None,
-    channel_id: Optional[str] = None,
-    guild_id: Optional[str] = None,
-    provider: Optional[str] = None,
-    model: Optional[str] = None,
+    request_id: str | None = None,
+    message_id: str | None = None,
+    channel_id: str | None = None,
+    guild_id: str | None = None,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> str:
-    """
-    Extract public-facing reply text from model output.
+    """Extract public-facing reply text from model output.
 
     This is the final safety layer before sending to Discord.
     It:
@@ -234,6 +232,7 @@ def extract_public_reply_text(
 
     Returns:
         Safe public text ready for Discord
+
     """
     # Handle None/empty
     if content is None:
@@ -320,9 +319,8 @@ def extract_public_reply_text(
     return cleaned
 
 
-def has_reasoning_leakage(content: Optional[str]) -> bool:
-    """
-    Check if content contains reasoning leakage patterns.
+def has_reasoning_leakage(content: str | None) -> bool:
+    """Check if content contains reasoning leakage patterns.
 
     This is a lightweight check for callers that want to handle
     sanitization themselves.
@@ -332,6 +330,7 @@ def has_reasoning_leakage(content: Optional[str]) -> bool:
 
     Returns:
         True if content contains reasoning leakage
+
     """
     if not content:
         return False
@@ -340,8 +339,7 @@ def has_reasoning_leakage(content: Optional[str]) -> bool:
 
 
 def sanitize_public_text(text: str) -> str:
-    """
-    Strip internal labels, aggregation markers, prompt fragments, and
+    """Strip internal labels, aggregation markers, prompt fragments, and
     debug/routing identifiers from text before it reaches Discord.
 
     This is the single public-output sanitizer called at the send boundary.
@@ -419,8 +417,7 @@ def sanitize_public_text(text: str) -> str:
 
 
 def sanitize_embed_for_public(embed: discord.Embed) -> discord.Embed:
-    """
-    Sanitize all text fields of a Discord Embed for public output.
+    """Sanitize all text fields of a Discord Embed for public output.
 
     Mutates the embed in place and returns it.
     Handles None values gracefully. If embed is None, returns None.
@@ -446,7 +443,7 @@ def sanitize_embed_for_public(embed: discord.Embed) -> discord.Embed:
                     "name": sanitize_public_text(f.name) or "\u200b",
                     "value": sanitize_public_text(f.value) or "\u200b",
                     "inline": f.inline,
-                }
+                },
             )
         # Clear existing fields by setting internal _fields to empty
         embed._fields = []
@@ -462,14 +459,14 @@ def sanitize_embed_for_public(embed: discord.Embed) -> discord.Embed:
         new_footer = sanitize_public_text(embed.footer.text) or ""
         embed.set_footer(
             text=new_footer,
-            icon_url=embed.footer.icon_url if embed.footer.icon_url else None,
+            icon_url=embed.footer.icon_url or None,
         )
 
     return embed
 
 
 def sanitize_embed_collection_for_public(
-    embeds: Optional[list[discord.Embed]],
+    embeds: list[discord.Embed] | None,
 ) -> list[discord.Embed]:
     """Sanitize a list of embeds for public Discord output."""
     if not embeds:
@@ -478,11 +475,11 @@ def sanitize_embed_collection_for_public(
 
 
 def sanitize_public_message_payload(
-    content: Optional[str] = None,
+    content: str | None = None,
     *,
-    embed: Optional[discord.Embed] = None,
-    embeds: Optional[list[discord.Embed]] = None,
-) -> tuple[Optional[str], Optional[discord.Embed], list[discord.Embed]]:
+    embed: discord.Embed | None = None,
+    embeds: list[discord.Embed] | None = None,
+) -> tuple[str | None, discord.Embed | None, list[discord.Embed]]:
     """Sanitize outbound Discord message payload text immediately before send."""
     sanitized_content = sanitize_public_text(content) if content is not None else None
     sanitized_embed = sanitize_embed_for_public(embed) if embed is not None else None

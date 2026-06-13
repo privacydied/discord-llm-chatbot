@@ -1,12 +1,12 @@
-"""
-Unit tests for text→image generation routing and file handling fixes.
+"""Unit tests for text→image generation routing and file handling fixes.
 Tests the key behaviors fixed in the "Fix This Code" implementation.
 """
 
-import pytest
-from unittest.mock import Mock, patch
 import os
 import re
+from unittest.mock import Mock, patch
+
+import pytest
 
 
 class TestDirectVisionTriggers:
@@ -14,7 +14,6 @@ class TestDirectVisionTriggers:
 
     def _detect_direct_vision_triggers(self, content: str):
         """Standalone implementation of trigger detection logic for testing."""
-
         content_clean = content.lower().strip()
         content_clean = re.sub(r"[!.?]+", ".", content_clean)
 
@@ -50,7 +49,7 @@ class TestDirectVisionTriggers:
 
         return None
 
-    def test_generate_image_triggers(self):
+    def test_generate_image_triggers(self) -> None:
         """Test various 'generate image' trigger patterns."""
         test_cases = [
             "generate an image of a puppy",
@@ -67,7 +66,7 @@ class TestDirectVisionTriggers:
             assert result["task"] == "text_to_image"
             assert "puppy" in result["prompt"] or "cat" in result["prompt"] or "mountains" in result["prompt"] or "sunset" in result["prompt"]
 
-    def test_create_variations(self):
+    def test_create_variations(self) -> None:
         """Test 'create' trigger variations."""
         test_cases = [
             "create an image of a dragon",
@@ -80,7 +79,7 @@ class TestDirectVisionTriggers:
             assert result is not None, f"Failed to detect trigger in: {content}"
             assert result["task"] == "text_to_image"
 
-    def test_make_variations(self):
+    def test_make_variations(self) -> None:
         """Test 'make' trigger variations."""
         test_cases = [
             "make a picture of a robot",
@@ -93,7 +92,7 @@ class TestDirectVisionTriggers:
             assert result is not None, f"Failed to detect trigger in: {content}"
             assert result["task"] == "text_to_image"
 
-    def test_draw_variations(self):
+    def test_draw_variations(self) -> None:
         """Test 'draw' trigger variations."""
         test_cases = [
             "draw me a house",
@@ -106,7 +105,7 @@ class TestDirectVisionTriggers:
             assert result is not None, f"Failed to detect trigger in: {content}"
             assert result["task"] == "text_to_image"
 
-    def test_other_triggers(self):
+    def test_other_triggers(self) -> None:
         """Test other trigger words."""
         test_cases = [
             "imagine a beautiful sunset",
@@ -119,7 +118,7 @@ class TestDirectVisionTriggers:
             assert result is not None, f"Failed to detect trigger in: {content}"
             assert result["task"] == "text_to_image"
 
-    def test_no_trigger_cases(self):
+    def test_no_trigger_cases(self) -> None:
         """Test cases that should NOT trigger vision generation."""
         test_cases = [
             "Hello, how are you?",
@@ -135,7 +134,7 @@ class TestDirectVisionTriggers:
             result = self._detect_direct_vision_triggers(content)
             assert result is None, f"Incorrectly detected trigger in: {content}"
 
-    def test_prompt_extraction(self):
+    def test_prompt_extraction(self) -> None:
         """Test that prompts are correctly extracted after triggers."""
         test_cases = [
             ("generate an image of a red car", "red car"),
@@ -161,9 +160,8 @@ class TestRoutingPrecedence:
         ]
         return any(re.match(pattern, url) for pattern in twitter_patterns)
 
-    def test_twitter_url_blocks_generation(self):
+    def test_twitter_url_blocks_generation(self) -> None:
         """X/Twitter URLs should route to VL, not image generation."""
-
         # Check that Twitter URL is detected
         has_twitter = self._is_twitter_url("https://twitter.com/user/status/123")
         assert has_twitter is True
@@ -171,9 +169,8 @@ class TestRoutingPrecedence:
         # In actual routing, this should NOT trigger vision generation
         # because Twitter URLs have higher precedence
 
-    def test_image_attachment_blocks_generation(self):
+    def test_image_attachment_blocks_generation(self) -> None:
         """Image attachments should route to VL, not image generation."""
-
         # Mock attachment
         attachment = Mock()
         attachment.content_type = "image/png"
@@ -186,7 +183,7 @@ class TestRoutingPrecedence:
         # In actual routing, this should NOT trigger vision generation
         # because image attachments have higher precedence
 
-    def test_pure_generate_text_triggers_vision(self):
+    def test_pure_generate_text_triggers_vision(self) -> None:
         """Pure generate text (no URLs/attachments) should trigger vision."""
         content = "generate an image of a puppy"
 
@@ -199,7 +196,7 @@ class TestRoutingPrecedence:
 class TestMimeTypeDetection:
     """Test MIME type detection and proper file extensions."""
 
-    def test_png_detection(self):
+    def test_png_detection(self) -> None:
         """Test PNG file signature detection."""
         # Mock PNG header
         png_header = b"\x89PNG\r\n\x1a\n" + b"fake_png_data"
@@ -212,7 +209,7 @@ class TestMimeTypeDetection:
 
         assert detected_mime == "image/png"
 
-    def test_jpeg_detection(self):
+    def test_jpeg_detection(self) -> None:
         """Test JPEG file signature detection."""
         jpeg_header = b"\xff\xd8\xff" + b"fake_jpeg_data"
 
@@ -223,7 +220,7 @@ class TestMimeTypeDetection:
 
         assert detected_mime == "image/jpeg"
 
-    def test_webp_detection(self):
+    def test_webp_detection(self) -> None:
         """Test WebP file signature detection."""
         webp_header = b"RIFF" + b"1234" + b"WEBP" + b"fake_webp_data"
 
@@ -234,7 +231,7 @@ class TestMimeTypeDetection:
 
         assert detected_mime == "image/webp"
 
-    def test_gif_detection(self):
+    def test_gif_detection(self) -> None:
         """Test GIF file signature detection."""
         gif_header = b"GIF89a" + b"fake_gif_data"
 
@@ -245,7 +242,7 @@ class TestMimeTypeDetection:
 
         assert detected_mime == "image/gif"
 
-    def test_extension_mapping(self):
+    def test_extension_mapping(self) -> None:
         """Test MIME type to extension mapping."""
         mime_map = {
             "image/png": ".png",
@@ -259,7 +256,7 @@ class TestMimeTypeDetection:
         assert mime_map["image/webp"] == ".webp"
         assert mime_map["image/gif"] == ".gif"
 
-    def test_fallback_extension(self):
+    def test_fallback_extension(self) -> None:
         """Test fallback to .png for unknown types."""
         mime_map = {
             "image/png": ".png",
@@ -287,10 +284,9 @@ class TestDiscordPermissions:
     @pytest.fixture
     def mock_guild_member(self):
         """Create a mock guild member (bot)."""
-        member = Mock()
-        return member
+        return Mock()
 
-    def test_guild_permission_check_success(self, mock_channel, mock_guild_member):
+    def test_guild_permission_check_success(self, mock_channel, mock_guild_member) -> None:
         """Test successful permission check in guild."""
         # Mock permissions with attach_files and send_messages
         perms = Mock()
@@ -303,7 +299,7 @@ class TestDiscordPermissions:
         can_attach_files = perms.attach_files and perms.send_messages
         assert can_attach_files is True
 
-    def test_guild_permission_check_missing_attach_files(self, mock_channel, mock_guild_member):
+    def test_guild_permission_check_missing_attach_files(self, mock_channel, mock_guild_member) -> None:
         """Test permission check when missing attach_files."""
         # Mock permissions missing attach_files
         perms = Mock()
@@ -326,7 +322,7 @@ class TestDiscordPermissions:
         permission_error = f"Missing permissions: {', '.join(missing_perms)}"
         assert "Attach Files" in permission_error
 
-    def test_dm_channel_assumed_permissions(self):
+    def test_dm_channel_assumed_permissions(self) -> None:
         """Test that DM channels assume we can attach files."""
         # For DM channels (no guild), we assume we can attach files
         channel = Mock()
@@ -337,7 +333,7 @@ class TestDiscordPermissions:
         can_attach_files = True
         assert can_attach_files is True
 
-    def test_fallback_message_format(self):
+    def test_fallback_message_format(self) -> None:
         """Test fallback message format when upload fails."""
         job_id = "test_job_12345"
         num_files = 2
@@ -360,7 +356,7 @@ class TestDebugObservability:
     """Test VISION_TRIGGER_DEBUG=1 observability."""
 
     @patch.dict(os.environ, {"VISION_TRIGGER_DEBUG": "1"})
-    def test_debug_logging_enabled(self):
+    def test_debug_logging_enabled(self) -> None:
         """Test that debug logging is enabled with env var."""
         debug_triggers = os.getenv("VISION_TRIGGER_DEBUG", "0").lower() in (
             "1",
@@ -371,7 +367,7 @@ class TestDebugObservability:
         assert debug_triggers is True
 
     @patch.dict(os.environ, {"VISION_TRIGGER_DEBUG": "0"})
-    def test_debug_logging_disabled(self):
+    def test_debug_logging_disabled(self) -> None:
         """Test that debug logging is disabled by default."""
         debug_triggers = os.getenv("VISION_TRIGGER_DEBUG", "0").lower() in (
             "1",
@@ -381,7 +377,7 @@ class TestDebugObservability:
         )
         assert debug_triggers is False
 
-    def test_debug_message_format(self):
+    def test_debug_message_format(self) -> None:
         """Test debug message format structure."""
         pattern = r"generate\s+(an?\s+)?(image|picture)"
         extracted_prompt = "a beautiful sunset"
@@ -398,7 +394,7 @@ class TestDebugObservability:
 class TestIntegrationScenarios:
     """Test end-to-end integration scenarios."""
 
-    def test_dm_generate_basic(self):
+    def test_dm_generate_basic(self) -> None:
         """Test: 'generate a picture of a puppy' in DM → calls Vision, not text."""
         content = "generate a picture of a puppy"
 
@@ -409,7 +405,7 @@ class TestIntegrationScenarios:
         assert result["task"] == "text_to_image"
         assert "puppy" in result["prompt"]
 
-    def test_guild_generate_with_mention(self):
+    def test_guild_generate_with_mention(self) -> None:
         """Test: @bot generate an image → Vision (not text)."""
         content = "<@!11111> generate an image of a cat"
 
@@ -426,9 +422,8 @@ class TestIntegrationScenarios:
         assert result is not None
         assert result["task"] == "text_to_image"
 
-    def test_x_link_present_routes_to_syndication(self):
+    def test_x_link_present_routes_to_syndication(self) -> None:
         """Test: X link present → routes to Syndication VL (NOT image gen)."""
-
         # Check Twitter URL detection
         url_detector = TestRoutingPrecedence()
         has_twitter_url = url_detector._is_twitter_url("https://twitter.com/user/status/123")
@@ -437,9 +432,8 @@ class TestIntegrationScenarios:
         # In actual routing, this should bypass vision generation
         # due to routing precedence rules
 
-    def test_image_attachment_no_text_routes_to_vl(self):
+    def test_image_attachment_no_text_routes_to_vl(self) -> None:
         """Test: image attachment + no text → routes to VL (NOT image gen)."""
-
         # Mock image attachment
         attachment = Mock()
         attachment.content_type = "image/png"

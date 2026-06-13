@@ -7,10 +7,13 @@ side-effect free so rare routing bugs can be isolated and tested easily.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional
 import re
 import time
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 try:  # pragma: no cover - fallback when optional deps missing
     from bot.utils.logging import get_logger
@@ -29,7 +32,7 @@ class ScopeResult:
     """Resolved scope information."""
 
     case: str
-    scope_id: Optional[str]
+    scope_id: str | None
 
 
 def resolve_scope(trigger: object) -> ScopeResult:
@@ -40,9 +43,8 @@ def resolve_scope(trigger: object) -> ScopeResult:
 
     Returns a :class:`ScopeResult` with ``case`` in ``{"thread", "reply", "plain"}``.
     """
-
     case = "plain"
-    scope_id: Optional[str] = None
+    scope_id: str | None = None
     try:
         if getattr(trigger, "channel", None) and getattr(getattr(trigger, "channel", None), "id", None) and getattr(trigger, "channel", None).__class__.__name__ == "Thread":
             case = "thread"
@@ -67,10 +69,9 @@ def resolve_scope(trigger: object) -> ScopeResult:
     return ScopeResult(case=case, scope_id=scope_id)
 
 
-def extract_chat_text(messages: Iterable[str]) -> Dict[str, object]:
+def extract_chat_text(messages: Iterable[str]) -> dict[str, object]:
     """Join messages, strip mentions and report text presence."""
-
-    cleaned: List[str] = []
+    cleaned: list[str] = []
     for m in messages:
         without_mentions = re.sub(r"<@!?\d+>", "", m)
         cleaned.append(without_mentions.strip())
@@ -87,12 +88,11 @@ def extract_chat_text(messages: Iterable[str]) -> Dict[str, object]:
     return {"text": joined, "has_text_flag": has_text}
 
 
-MEDIA_RE = re.compile(r"\b(photo|image|picture|screenshot|video|media)\b", re.I)
+MEDIA_RE = re.compile(r"\b(photo|image|picture|screenshot|video|media)\b", re.IGNORECASE)
 
 
 def detect_media_intent(text: str) -> bool:
     """Return True if the text explicitly requests media handling."""
-
     intent = bool(MEDIA_RE.search(text))
     logger.info(
         "media_intent",
@@ -102,12 +102,11 @@ def detect_media_intent(text: str) -> bool:
 
 
 def harvest_in_scope_io(
-    scope_messages: Iterable[Dict[str, Iterable[str]]],
-) -> Dict[str, List[str]]:
+    scope_messages: Iterable[dict[str, Iterable[str]]],
+) -> dict[str, list[str]]:
     """Collect URLs and attachments from in-scope messages."""
-
-    urls: List[str] = []
-    attachments: List[str] = []
+    urls: list[str] = []
+    attachments: list[str] = []
     for msg in scope_messages:
         urls.extend(msg.get("urls", []))
         attachments.extend(msg.get("attachments", []))
@@ -122,9 +121,8 @@ def harvest_in_scope_io(
     return {"urls": urls, "attachments": attachments}
 
 
-def choose_route(has_text: bool, media_intent: bool, harvested: Dict[str, List[str]]) -> str:
+def choose_route(has_text: bool, media_intent: bool, harvested: dict[str, list[str]]) -> str:
     """Select a route: ``text``, ``media`` or ``nag``."""
-
     route = "text"
     has_media = bool(harvested.get("urls") or harvested.get("attachments"))
     if media_intent and not has_media:
@@ -140,9 +138,8 @@ def choose_route(has_text: bool, media_intent: bool, harvested: Dict[str, List[s
     return route
 
 
-def select_reply_target(case: str, scope_id: Optional[str], now: float | None = None) -> Optional[str]:
+def select_reply_target(case: str, scope_id: str | None, now: float | None = None) -> str | None:
     """Decide final reply target based on case and scope id."""
-
     if now is None:
         now = time.time()
     target = scope_id if case in {"thread", "reply"} else None
@@ -158,12 +155,11 @@ def select_reply_target(case: str, scope_id: Optional[str], now: float | None = 
     return target
 
 
-def compose_context(messages: List[str], limits: Dict[str, int]) -> Dict[str, object]:
+def compose_context(messages: list[str], limits: dict[str, int]) -> dict[str, object]:
     """Deduplicate and truncate context messages."""
-
     max_items = limits.get("max_items", len(messages))
     max_chars = limits.get("max_chars", 1000)
-    deduped: List[str] = []
+    deduped: list[str] = []
     seen = set()
     for m in messages:
         if m not in seen:

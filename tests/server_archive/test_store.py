@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 from types import SimpleNamespace
+from typing import Never
 
 import pytest
 
@@ -11,16 +12,16 @@ from bot.server_archive.models import (
     ArchiveAttachment,
     ArchiveChannel,
     ArchiveGuild,
+    ArchiveMention,
     ArchiveMessage,
     ArchiveMessageBundle,
-    ArchiveMention,
     ArchiveUser,
 )
 from bot.server_archive.service import ServerArchiveService
 from bot.server_archive.store import ServerArchiveStore
 
 
-@pytest.fixture()
+@pytest.fixture
 def bundle_factory():
     def _make(
         message_id: str,
@@ -63,7 +64,7 @@ def bundle_factory():
 
 
 @pytest.mark.asyncio
-async def test_schema_bootstrap_idempotent_and_wal(tmp_path):
+async def test_schema_bootstrap_idempotent_and_wal(tmp_path) -> None:
     store = ServerArchiveStore(tmp_path / "archive.sqlite3")
     await store.initialize()
     await store.initialize()
@@ -78,7 +79,7 @@ async def test_schema_bootstrap_idempotent_and_wal(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_distiller_tables_are_lazy_created_for_existing_db(tmp_path):
+async def test_distiller_tables_are_lazy_created_for_existing_db(tmp_path) -> None:
     db_path = tmp_path / "archive.sqlite3"
     conn = sqlite3.connect(db_path)
     try:
@@ -96,7 +97,7 @@ async def test_distiller_tables_are_lazy_created_for_existing_db(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_message_attachment_and_fts_search(tmp_path, bundle_factory):
+async def test_message_attachment_and_fts_search(tmp_path, bundle_factory) -> None:
     store = ServerArchiveStore(tmp_path / "archive.sqlite3")
     await store.initialize()
     await store.upsert_bundle(bundle_factory("100", "hello archive search world"))
@@ -114,7 +115,7 @@ async def test_message_attachment_and_fts_search(tmp_path, bundle_factory):
 
 
 @pytest.mark.asyncio
-async def test_delete_tombstone_excludes_from_search(tmp_path, bundle_factory):
+async def test_delete_tombstone_excludes_from_search(tmp_path, bundle_factory) -> None:
     store = ServerArchiveStore(tmp_path / "archive.sqlite3")
     await store.initialize()
     await store.upsert_bundle(bundle_factory("200", "searchable tombstone message"))
@@ -124,7 +125,7 @@ async def test_delete_tombstone_excludes_from_search(tmp_path, bundle_factory):
 
 
 @pytest.mark.asyncio
-async def test_search_is_guild_scoped_and_limit_is_enforced(tmp_path, bundle_factory):
+async def test_search_is_guild_scoped_and_limit_is_enforced(tmp_path, bundle_factory) -> None:
     store = ServerArchiveStore(tmp_path / "archive.sqlite3")
     await store.initialize()
     for idx in range(20):
@@ -136,10 +137,10 @@ async def test_search_is_guild_scoped_and_limit_is_enforced(tmp_path, bundle_fac
 
 
 @pytest.mark.asyncio
-async def test_queue_full_drops_writes_without_blocking(bundle_factory):
+async def test_queue_full_drops_writes_without_blocking(bundle_factory) -> None:
     seen = []
 
-    async def persist(batch):
+    async def persist(batch) -> None:
         seen.append([item.message.message_id for item in batch])
         await asyncio.sleep(0.05)
 
@@ -150,7 +151,7 @@ async def test_queue_full_drops_writes_without_blocking(bundle_factory):
 
 
 @pytest.mark.asyncio
-async def test_live_tail_ignores_dm_and_bot_messages(monkeypatch, tmp_path):
+async def test_live_tail_ignores_dm_and_bot_messages(monkeypatch, tmp_path) -> None:
     cfg = {
         "SERVER_ARCHIVE_ENABLE": True,
         "SERVER_ARCHIVE_DB_PATH": str(tmp_path / "archive.sqlite3"),
@@ -190,7 +191,7 @@ async def test_live_tail_ignores_dm_and_bot_messages(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_full_sync_does_not_start_twice(monkeypatch, tmp_path):
+async def test_full_sync_does_not_start_twice(monkeypatch, tmp_path) -> None:
     cfg = {
         "SERVER_ARCHIVE_ENABLE": True,
         "SERVER_ARCHIVE_DB_PATH": str(tmp_path / "archive.sqlite3"),
@@ -209,7 +210,7 @@ async def test_full_sync_does_not_start_twice(monkeypatch, tmp_path):
     service = ServerArchiveService(bot=None)
     await service.start()
 
-    async def slow_sync(store, guild, *, force=False):
+    async def slow_sync(store, guild, *, force=False) -> int:
         await asyncio.sleep(0.2)
         return 1
 
@@ -224,13 +225,14 @@ async def test_full_sync_does_not_start_twice(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_permission_errors_are_logged_and_skipped(tmp_path):
+async def test_permission_errors_are_logged_and_skipped(tmp_path) -> None:
     store = ServerArchiveStore(tmp_path / "archive.sqlite3")
     await store.initialize()
 
     class PermissionErrorHistory:
-        async def history(self, **kwargs):
-            raise PermissionError("forbidden")
+        async def history(self, **kwargs) -> Never:
+            msg = "forbidden"
+            raise PermissionError(msg)
 
     guild = SimpleNamespace(id=1, text_channels=[PermissionErrorHistory()], threads=[])
     result = await __import__("bot.server_archive.sync", fromlist=["sync_guild_archive"]).sync_guild_archive(store, guild)

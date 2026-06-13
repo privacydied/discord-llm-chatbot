@@ -1,68 +1,69 @@
 """Core bot implementation for Discord LLM Chatbot."""
 
 from __future__ import annotations
+
 import asyncio
+import io
 import os
 import sys
 import time
-from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Optional, Dict, List, Tuple, Any
+import uuid
+from contextlib import asynccontextmanager, suppress
+from typing import TYPE_CHECKING, Any
 
 import discord
-import io
-import uuid
 from discord.ext import commands
 from rich.console import Console
-from rich.tree import Tree
 from rich.panel import Panel
+from rich.tree import Tree
 
-from bot.public_output import (
-    sanitize_public_text,
-    sanitize_embed_for_public,
-    sanitize_public_message_payload,
-)
 from bot.config import load_system_prompts
 from bot.config_reload import add_reload_callback
 from bot.enhanced_retry import get_retry_manager
+from bot.events import setup_command_error_handler
 from bot.http_client import cleanup_http_client
-from bot.utils.logging import get_logger
-from bot.metrics import NullMetrics
 from bot.memory import (
     enqueue_inferred_memory,
+    load_all_profiles,
     start_memory_distiller,
     start_memory_service,
     stop_memory_distiller,
     stop_memory_service,
-    load_all_profiles,
 )
-from bot.server_archive import start_server_archive_service, stop_server_archive_service
 from bot.memory.context_manager import ContextManager
 from bot.memory.enhanced_context_manager import EnhancedContextManager
-from bot.events import setup_command_error_handler
-from bot.voice import VoiceMessagePublisher
-from bot.tts.errors import SynthesisError
 from bot.memory.thread_tail import (
-    resolve_thread_reply_target,
     _is_thread_channel,
+    resolve_thread_reply_target,
 )
+from bot.metrics import NullMetrics
+from bot.public_output import (
+    sanitize_embed_for_public,
+    sanitize_public_message_payload,
+    sanitize_public_text,
+)
+from bot.server_archive import start_server_archive_service, stop_server_archive_service
+from bot.tts.errors import SynthesisError
+from bot.utils.logging import get_logger
+from bot.voice import VoiceMessagePublisher
+
 from .message_processor import MessageProcessor
 
 # Discord hard limit is 2000; use 1950 to leave headroom for mentions/overhead [REH][PA]
 _DISCORD_MAX_CONTENT_LEN = 1950
 
 if TYPE_CHECKING:
-    from bot.router import Router, BotAction
+    from bot.router import BotAction, Router
     from bot.tts import TTSManager
 
 
 def log_commands_setup(
     console: Console,
-    command_modules: List[Tuple[str, bool]],
-    command_cogs: List[Tuple[str, bool]],
+    command_modules: list[tuple[str, bool]],
+    command_cogs: list[tuple[str, bool]],
     total_commands: int,
 ) -> None:
-    """
-    Log command setup progress using Rich's Tree and Panel for visual reporting.
+    """Log command setup progress using Rich's Tree and Panel for visual reporting.
 
     This function creates a structured visual report of the command setup process,
     showing the status of module imports and cog registrations in a tree format.
@@ -78,6 +79,7 @@ def log_commands_setup(
     - A branch "📦 Import modules" with ✅/❌ status for each module
     - A branch "⚙️ Load cogs" with ✅/❌ status for each cog
     - A summary with success/failure counts and total command count
+
     """
     # Create the main tree structure
     tree = Tree("🎬 Commands Setup")
@@ -125,7 +127,7 @@ def log_commands_setup(
 class LLMBot(commands.Bot):
     """Main bot class that extends the base Bot class with LLM capabilities."""
 
-    def __init__(self, *args, config: dict | None = None, **kwargs):
+    def __init__(self, *args, config: dict | None = None, **kwargs) -> None:
         # Provide sensible defaults for tests if not supplied
         if "command_prefix" not in kwargs:
             kwargs["command_prefix"] = os.getenv("COMMAND_PREFIX", "!")
@@ -148,19 +150,19 @@ class LLMBot(commands.Bot):
         self.user_profiles = {}
         self.server_profiles = {}
         self.memory_save_task = None
-        self.tts_manager: Optional[TTSManager] = None
+        self.tts_manager: TTSManager | None = None
         self.archive_service = None
-        self.router: Optional[Router] = None
+        self.router: Router | None = None
         self._background_tasks: set[asyncio.Task] = set()
-        self._event_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._event_loop: asyncio.AbstractEventLoop | None = None
         self._is_ready = asyncio.Event()
         self.system_prompts = {}
         self.message_processor = None  # set in setup_hook
-        self._typing_suppressed_until: Dict[int, float] = {}
+        self._typing_suppressed_until: dict[int, float] = {}
 
         # Track active long-running tasks for cancellation
-        self._active_long_running_tasks: Dict[str, asyncio.Task] = {}  # task_id -> task
-        self._task_metadata: Dict[str, Dict[str, Any]] = {}  # task_id -> metadata
+        self._active_long_running_tasks: dict[str, asyncio.Task] = {}  # task_id -> task
+        self._task_metadata: dict[str, dict[str, Any]] = {}  # task_id -> metadata
         self._task_lock = asyncio.Lock()  # [BUGFIX] prevent callback race on task tracking dicts
 
         # Idempotency guard to prevent duplicate initialization [DRY][REH]
@@ -186,7 +188,7 @@ class LLMBot(commands.Bot):
     def _track_background_task(self, task: asyncio.Task) -> None:
         """Register a background task so it is tracked and cancelled on shutdown."""
         self._background_tasks.add(task)
-        task.add_done_callback(lambda t: self._background_tasks.discard(t))
+        task.add_done_callback(self._background_tasks.discard)
 
         def _log_exception(t: asyncio.Task) -> None:
             try:
@@ -241,7 +243,7 @@ class LLMBot(commands.Bot):
                     kwargs["embeds"] = sanitized_embeds
                 return tuple(args_list), kwargs
 
-            def _wrap_method(owner, attr_name: str):
+            def _wrap_method(owner, attr_name: str) -> None:
                 original = getattr(owner, attr_name)
                 sentinel = f"_public_output_{attr_name}_wrapped"
                 if getattr(owner, sentinel, False):
@@ -314,7 +316,7 @@ class LLMBot(commands.Bot):
         operation: str,
         func,
         *,
-        base_extra: Optional[Dict[str, Any]] = None,
+        base_extra: dict[str, Any] | None = None,
         attempts: int = 3,
     ):
         """Retry transient Discord HTTP failures with short bounded backoff."""
@@ -328,21 +330,20 @@ class LLMBot(commands.Bot):
                     raise
 
                 delay = self._discord_retry_delay(exc, attempt)
-                try:
+                with suppress(Exception):
                     self.logger.warning(
-                        f"discord.retry | op={operation} attempt={attempt}/{attempts} status={getattr(exc, 'status', 'n/a')} delay={delay:.2f}s details={str(exc)}",
+                        f"discord.retry | op={operation} attempt={attempt}/{attempts} status={getattr(exc, 'status', 'n/a')} delay={delay:.2f}s details={exc!s}",
                         extra={**extra, "event": "discord.retry", "op": operation},
                     )
-                except Exception:
-                    pass
                 await asyncio.sleep(delay)
+        return None
 
     @asynccontextmanager
     async def _optional_typing(
         self,
         channel,
         *,
-        base_extra: Optional[Dict[str, Any]] = None,
+        base_extra: dict[str, Any] | None = None,
         enabled: bool = True,
     ):
         """Enter typing() when available, but don't fail the send path if it errors."""
@@ -375,7 +376,7 @@ class LLMBot(commands.Bot):
                 self._typing_suppressed_until[channel_key] = now + 300.0
             else:
                 self._typing_suppressed_until[channel_key] = now + 60.0
-            try:
+            with suppress(Exception):
                 self.logger.warning(
                     "discord.typing.skip | enter_failed",
                     extra={
@@ -386,13 +387,11 @@ class LLMBot(commands.Bot):
                         "status": getattr(exc, "status", None),
                     },
                 )
-            except Exception:
-                pass
             yield
             return
         except Exception as exc:
             self._typing_suppressed_until[channel_key] = now + 60.0
-            try:
+            with suppress(Exception):
                 self.logger.warning(
                     "discord.typing.skip | enter_failed",
                     extra={
@@ -402,8 +401,6 @@ class LLMBot(commands.Bot):
                         "error": str(exc),
                     },
                 )
-            except Exception:
-                pass
             yield
             return
 
@@ -411,14 +408,11 @@ class LLMBot(commands.Bot):
             yield
         finally:
             if entered and ctx is not None:
-                try:
+                with suppress(Exception):
                     await ctx.__aexit__(None, None, None)
-                except Exception:
-                    pass
 
-    async def process_commands(self, message: discord.Message) -> Optional[Any]:
-        """
-        Short-circuit non-command messages before invoking Discord's command pipeline.
+    async def process_commands(self, message: discord.Message) -> Any | None:
+        """Short-circuit non-command messages before invoking Discord's command pipeline.
         Prevents CommandNotFound surfacing for plain text that should be routed elsewhere.
         """
         content = (getattr(message, "content", "") or "").strip()
@@ -454,8 +448,8 @@ class LLMBot(commands.Bot):
 
             ensure_reduce_op_alias()
             self.logger.debug("torch compat shim applied")
-        except Exception:
-            pass  # fail-open
+        except Exception as e:
+            self.logger.debug(f"torch compat shim not available (fail-open): {e}")
 
         # Prevent duplicate initialization [DRY][REH]
         if self._boot_completed:
@@ -618,7 +612,7 @@ class LLMBot(commands.Bot):
             # Register config hot-reload callback to atomically swap live config and prompts [REH]
             try:
 
-                def _on_config_reload(old_cfg: Dict[str, Any], new_cfg: Dict[str, Any]) -> None:
+                def _on_config_reload(old_cfg: dict[str, Any], new_cfg: dict[str, Any]) -> None:
                     """Thread-safe config reload shim: schedules mutation onto the event loop."""
                     loop = self._event_loop
                     if loop is None or loop.is_closed():
@@ -626,7 +620,7 @@ class LLMBot(commands.Bot):
                         return
                     asyncio.run_coroutine_threadsafe(_apply_config_reload(old_cfg, new_cfg), loop)
 
-                async def _apply_config_reload(old_cfg: Dict[str, Any], new_cfg: Dict[str, Any]) -> None:
+                async def _apply_config_reload(old_cfg: dict[str, Any], new_cfg: dict[str, Any]) -> None:
                     try:
                         # Swap live config snapshot
                         self.config = dict(new_cfg)
@@ -634,10 +628,8 @@ class LLMBot(commands.Bot):
                         self.system_prompts = load_system_prompts()
                         # Ensure router sees the new snapshot
                         if getattr(self, "router", None) is not None:
-                            try:
+                            with suppress(Exception):
                                 self.router.config = self.config
-                            except Exception:
-                                pass
                         # Scoped re-init based on changed keys
                         try:
                             changed_keys = set()
@@ -652,23 +644,21 @@ class LLMBot(commands.Bot):
                                 try:
                                     if getattr(self, "tts_manager", None) and getattr(self.tts_manager, "_executor", None):
                                         self.tts_manager._executor.shutdown(wait=False)
-                                except Exception:
-                                    pass
+                                except Exception as e:
+                                    self.logger.debug(f"TTS executor shutdown failed: {e}")
                                 try:
                                     from bot.tts.interface import TTSManager
 
                                     self.tts_manager = TTSManager(self)
                                     self.logger.info("TTS manager hot-reloaded")
                                 except Exception as e:
-                                    self.logger.error(f"TTS hot-reload failed: {e}")
+                                    self.logger.exception(f"TTS hot-reload failed: {e}")
                             # Rebind Vision configs
-                            if any(k.startswith("VISION_") or k.startswith("VL_") for k in upper):
+                            if any(k.startswith(("VISION_", "VL_")) for k in upper):
                                 vo = getattr(self, "vision_orchestrator", None)
                                 if vo is not None:
-                                    try:
+                                    with suppress(Exception):
                                         vo.config = self.config
-                                    except Exception:
-                                        pass
                                     try:
                                         if hasattr(vo, "gateway") and vo.gateway is not None:
                                             if hasattr(vo.gateway, "update_config"):
@@ -698,7 +688,7 @@ class LLMBot(commands.Bot):
                                 except Exception as rebound_exc:
                                     self.logger.debug(f"Vision ladder rebound failed: {rebound_exc}")
                             # Restart shared HTTP client on HTTP/PROXY/TIMEOUT/RETRY changes
-                            if any(k.startswith("HTTP_") or k.startswith("PROXY_") or k.endswith("_TIMEOUT") or k.startswith("RETRY_") for k in upper):
+                            if any(k.startswith(("HTTP_", "PROXY_", "RETRY_")) or k.endswith("_TIMEOUT") for k in upper):
                                 try:
                                     # Best-effort; next get_http_client() will start a new one with fresh config
                                     self.logger.info(
@@ -710,11 +700,11 @@ class LLMBot(commands.Bot):
                                     )
 
                                     # Schedule cleanup with retained ref and bounded timeout [PHASE2]
-                                    async def _cleanup_with_timeout():
-                                        try:  # noqa: SIM105
+                                    async def _cleanup_with_timeout() -> None:
+                                        try:
                                             async with asyncio.timeout(10.0):
                                                 await cleanup_http_client()
-                                        except asyncio.TimeoutError:
+                                        except TimeoutError:
                                             self.logger.warning(
                                                 "config.reload.http_client_cleanup_timeout",
                                                 extra={
@@ -722,8 +712,8 @@ class LLMBot(commands.Bot):
                                                     "detail": {"timeout": 10.0},
                                                 },
                                             )
-                                        except Exception:
-                                            pass  # best-effort cleanup
+                                        except Exception as e:
+                                            self.logger.debug(f"HTTP client cleanup timeout: {e}")
 
                                     task = asyncio.create_task(_cleanup_with_timeout())
                                     self._track_background_task(task)
@@ -749,23 +739,23 @@ class LLMBot(commands.Bot):
                                         self.logger.debug("Dashboard hot-reload skipped: server not running")
                                 except Exception as e:
                                     self.logger.debug(f"Dashboard hot-reload failed: {e}")
-                        except Exception:
-                            pass
-                        # Breadcrumb
-                        self.logger.info(
-                            "config.reload.applied.bot",
-                            extra={
-                                "event": "config.reload.applied.bot",
-                                "detail": {"keys": len(new_cfg or {})},
-                            },
-                        )
+                            # Breadcrumb
+                            self.logger.info(
+                                "config.reload.applied.bot",
+                                extra={
+                                    "event": "config.reload.applied.bot",
+                                    "detail": {"keys": len(new_cfg or {})},
+                                },
+                            )
+                        except Exception as e:
+                            self.logger.exception(f"Reload callback failed: {e}")
                     except Exception as e:
-                        self.logger.error(f"Reload callback failed: {e}")
+                        self.logger.exception(f"Config reload apply failed: {e}")
 
                 add_reload_callback(_on_config_reload)
-            except Exception:
+            except Exception as e:
                 # Non-fatal — manual reload command still works
-                pass
+                self.logger.debug(f"Config reload callback registration failed: {e}")
 
             # Load user and server profiles
             await self.load_profiles()
@@ -802,7 +792,7 @@ class LLMBot(commands.Bot):
             self._boot_completed = False  # Reset flag on failure to allow retry
             raise
 
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         """Called when the bot is ready and connected to Discord."""
         # Simple ready state logging - all setup is handled in setup_hook() [DRY]
         if not self._is_ready.is_set():
@@ -822,7 +812,7 @@ class LLMBot(commands.Bot):
         """Compatibility shim — delegated to MessageProcessor."""
         await self.message_processor._process_user_messages(user_id)
 
-    async def _process_single_message(self, message: discord.Message):
+    async def _process_single_message(self, message: discord.Message) -> None:
         """Process a single message through the full pipeline."""
         try:
             # Append message to context (both managers for backward compatibility)
@@ -839,7 +829,7 @@ class LLMBot(commands.Bot):
             except Exception:
                 is_command = False
             if not is_command and getattr(message, "content", "").strip():
-                try:
+                with suppress(Exception):
                     self._track_background_task(
                         asyncio.create_task(
                             enqueue_inferred_memory(
@@ -850,17 +840,15 @@ class LLMBot(commands.Bot):
                                 thread_id=str(message.channel.id) if isinstance(message.channel, discord.Thread) else None,
                                 source_message_id=str(message.id),
                                 metadata={"source": "bot_message_pipeline"},
-                            )
-                        )
+                            ),
+                        ),
                     )
-                except Exception:
-                    pass
 
             guild_info = "DM" if isinstance(message.channel, discord.DMChannel) else f"guild:{message.guild.id}"
             self.logger.info(
                 " === DM MESSAGE PROCESSING STARTED ===="
                 if guild_info == "DM"
-                else f"Message queued: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)} queue_size:{self._get_user_queue(str(message.author.id)).qsize()}"
+                else f"Message queued: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)} queue_size:{self._get_user_queue(str(message.author.id)).qsize()}",
             )
 
             # The router decides if this is a command, a direct message, or something to ignore.
@@ -891,7 +879,7 @@ class LLMBot(commands.Bot):
                                     await stream_ctx["message"].delete()
                                 except Exception:
                                     # Fallback to editing the status message
-                                    try:
+                                    with suppress(Exception):
                                         await stream_ctx["message"].edit(
                                             content="",
                                             embeds=[
@@ -901,11 +889,9 @@ class LLMBot(commands.Bot):
                                                         "STREAMING_EMBED_STYLE",
                                                         "compact",
                                                     ),
-                                                )
+                                                ),
                                             ],
                                         )
-                                    except Exception:
-                                        pass
                             await self.process_commands(message)
                         elif action.has_payload:
                             # Stop streaming and mark as ready before sending the final response
@@ -926,7 +912,7 @@ class LLMBot(commands.Bot):
                         gate_reason = self.router.pop_gate_denied_reason(message.id) if self.router else None
                         is_cmd = await self._message_is_command(message)
                         if gate_reason and not is_cmd:
-                            try:
+                            with suppress(Exception):
                                 self.logger.info(
                                     f"gate.drop | reason={gate_reason} msg_id:{message.id}",
                                     extra={
@@ -936,14 +922,12 @@ class LLMBot(commands.Bot):
                                         "user_id": getattr(message.author, "id", None),
                                     },
                                 )
-                            except Exception:
-                                pass
                             return
                         if await self._message_is_command(message):
                             self.logger.info(f"Router returned no action for msg {message.id}; falling back to command processing.")
                             await self.process_commands(message)
                         else:
-                            try:
+                            with suppress(Exception):
                                 self.logger.info(
                                     f"router.noop | reason=no_route msg_id:{message.id}",
                                     extra={
@@ -952,8 +936,6 @@ class LLMBot(commands.Bot):
                                         "msg_id": message.id,
                                     },
                                 )
-                            except Exception:
-                                pass
                 finally:
                     if self.router:
                         self.router.clear_dispatch_metadata(message.id)
@@ -1069,7 +1051,7 @@ class LLMBot(commands.Bot):
             ]
 
             # Command-based plans
-            if content.startswith("!search") or content.startswith("[search]"):
+            if content.startswith(("!search", "[search]")):
                 return ONLINE_SEARCH
 
             if content.startswith("!rag "):
@@ -1155,10 +1137,8 @@ class LLMBot(commands.Bot):
             task = stream_ctx.get("task")
             if task and not task.done():
                 task.cancel()
-                try:
+                with suppress(Exception):
                     await task
-                except Exception:
-                    pass
             msg: discord.Message = stream_ctx.get("message")
             if msg:
                 style = self.config.get("STREAMING_EMBED_STYLE", "compact")
@@ -1231,8 +1211,8 @@ class LLMBot(commands.Bot):
         message: discord.Message,
         action: BotAction,
         target_message: discord.Message | None = None,
-        dispatch_meta: Optional[Dict[str, Any]] = None,
-    ):
+        dispatch_meta: dict[str, Any] | None = None,
+    ) -> None:
         """Executes a BotAction by sending or editing a message.
         If target_message is provided and there are no files/audio, we edit it to keep 1 IN → 1 OUT.
         Otherwise, we delete the placeholder and send a new reply.
@@ -1254,10 +1234,7 @@ class LLMBot(commands.Bot):
 
         target_channel_id = dispatch_meta.get("channel_id")
         if target_channel_id is None:
-            if reply_in_thread:
-                target_channel_id = getattr(trigger_channel, "parent_id", None) or getattr(trigger_channel, "id", None)
-            else:
-                target_channel_id = getattr(trigger_channel, "id", None) or ingress_channel_id
+            target_channel_id = getattr(trigger_channel, "parent_id", None) or getattr(trigger_channel, "id", None) if reply_in_thread else getattr(trigger_channel, "id", None) or ingress_channel_id
         target_thread_id = dispatch_meta.get("thread_id")
         if target_thread_id is None and reply_in_thread:
             target_thread_id = getattr(trigger_channel, "id", None)
@@ -1380,10 +1357,8 @@ class LLMBot(commands.Bot):
                 if res and getattr(res, "ok", False):
                     # Remove placeholder if present and stop; publisher already posted the message.
                     if target_message:
-                        try:
+                        with suppress(Exception):
                             await target_message.delete()
-                        except Exception:
-                            pass
                     if self.enhanced_context_manager and res.message:
                         await self.enhanced_context_manager.append_message(res.message, role="bot")
                     self.logger.info(
@@ -1391,14 +1366,13 @@ class LLMBot(commands.Bot):
                         extra={**base_extra, "event": "voice.native.ok"},
                     )
                     return
-                else:
-                    self.logger.warning(
-                        "voice:native.fallback",
-                        extra={**base_extra, "event": "voice.native.fallback"},
-                    )
-                    # Restore original content/embeds for normal send path
-                    action.content = _orig_content
-                    action.embeds = _orig_embeds
+                self.logger.warning(
+                    "voice:native.fallback",
+                    extra={**base_extra, "event": "voice.native.fallback"},
+                )
+                # Restore original content/embeds for normal send path
+                action.content = _orig_content
+                action.embeds = _orig_embeds
         except Exception as e:
             self.logger.error(
                 f"voice:native.exception | {e}",
@@ -1415,10 +1389,7 @@ class LLMBot(commands.Bot):
 
         # Pre-split content into Discord-safe chunks; most replies will be a single chunk.
         max_len = _DISCORD_MAX_CONTENT_LEN
-        if content and len(content) > max_len:
-            chunks = self._chunk_message_content(content)
-        else:
-            chunks = [content]
+        chunks = self._chunk_message_content(content) if content and len(content) > max_len else [content]
         needs_chunking = len(chunks) > 1
         if needs_chunking:
             try:
@@ -1555,7 +1526,7 @@ class LLMBot(commands.Bot):
                     except Exception:
                         pass
 
-                    try:
+                    with suppress(Exception):
                         self.logger.info(
                             "reply.target",
                             extra={
@@ -1568,8 +1539,6 @@ class LLMBot(commands.Bot):
                                 },
                             },
                         )
-                    except Exception:
-                        pass
 
                     # Decide whether it's safe to edit the placeholder
                     must_retarget = bool(target_message) and (reply_target is None or getattr(reply_target, "id", None) != getattr(message, "id", None))
@@ -1682,17 +1651,15 @@ class LLMBot(commands.Bot):
                     else:
                         # Remove placeholder if present, then send a proper reply with desired target
                         if target_message:
-                            try:
+                            with suppress(Exception):
                                 await self._call_with_discord_retry(
                                     "delete_message",
                                     target_message.delete,
                                     base_extra=base_extra,
                                 )
-                            except Exception:
-                                pass
 
                         # Log send mode
-                        try:
+                        with suppress(Exception):
                             self.logger.info(
                                 "send",
                                 extra={
@@ -1702,8 +1669,6 @@ class LLMBot(commands.Bot):
                                     "detail": {"mode": "delete_and_resend" if target_message else "direct"},
                                 },
                             )
-                        except Exception:
-                            pass
 
                         if reply_target is None and _is_thread_channel(ch):
                             # Send to thread without a reply reference (no reply-to-self loops available)
@@ -1773,7 +1738,7 @@ class LLMBot(commands.Bot):
                         await self.enhanced_context_manager.append_message(sent_message, role="bot")
                 else:
                     self.logger.error(
-                        f"dispatch:error | code={e.code} status={getattr(e, 'status', 'n/a')} details={str(e)}",
+                        f"dispatch:error | code={e.code} status={getattr(e, 'status', 'n/a')} details={e!s}",
                         extra={**base_extra, "event": "dispatch.send.error"},
                         exc_info=True,
                     )
@@ -1787,16 +1752,16 @@ class LLMBot(commands.Bot):
     async def _send_chunked_reply(
         self,
         message: discord.Message,
-        action: "BotAction",
+        action: BotAction,
         *,
-        base_extra: Dict[str, Any],
+        base_extra: dict[str, Any],
         force_reply_target: discord.Message | None,
         target_message: discord.Message | None,
-        dispatch_meta: Dict[str, Any],
+        dispatch_meta: dict[str, Any],
         content: str,
         files,
-        chunks: List[str],
-    ) -> Optional[discord.Message]:
+        chunks: list[str],
+    ) -> discord.Message | None:
         """Send a long text reply as multiple Discord messages while preserving reply targeting."""
         guild_id = getattr(message.guild, "id", None)
         is_dm = isinstance(message.channel, discord.DMChannel)
@@ -1852,7 +1817,7 @@ class LLMBot(commands.Bot):
         except Exception:
             pass
 
-        try:
+        with suppress(Exception):
             self.logger.info(
                 "reply.target",
                 extra={
@@ -1865,15 +1830,11 @@ class LLMBot(commands.Bot):
                     },
                 },
             )
-        except Exception:
-            pass
 
         # Any existing placeholder should be removed; multi-part replies always target the user message directly.
         if target_message is not None:
-            try:
+            with suppress(Exception):
                 await self._call_with_discord_retry("delete_message", target_message.delete, base_extra=base_extra)
-            except Exception:
-                pass
 
         # Resolve recipient and ping strategy once, then fan out to chunks.
         recipient = None
@@ -1956,7 +1917,7 @@ class LLMBot(commands.Bot):
             mention_prefix = None
 
         total_parts = len(chunks)
-        last_sent: Optional[discord.Message] = None
+        last_sent: discord.Message | None = None
 
         for part_idx, base_chunk in enumerate(chunks, start=1):
             is_first_part = part_idx == 1
@@ -2029,7 +1990,7 @@ class LLMBot(commands.Bot):
 
                 # Ensure strict ordering: each chunk is fully sent before the next.
                 last_sent = sent
-                try:
+                with suppress(Exception):
                     self.logger.info(
                         f"dispatch:ok | part={part_idx}/{total_parts} discord_msg_id={getattr(sent, 'id', None)} embeds={len(part_embeds)} files={len(part_files) if part_files else 0}",
                         extra={
@@ -2039,15 +2000,13 @@ class LLMBot(commands.Bot):
                             "parts": total_parts,
                         },
                     )
-                except Exception:
-                    pass
 
                 if self.enhanced_context_manager and sent:
                     await self.enhanced_context_manager.append_message(sent, role="bot")
             except discord.errors.HTTPException as e:
-                try:
+                with suppress(Exception):
                     self.logger.error(
-                        f"dispatch:error | part={part_idx}/{total_parts} code={e.code} status={getattr(e, 'status', 'n/a')} details={str(e)}",
+                        f"dispatch:error | part={part_idx}/{total_parts} code={e.code} status={getattr(e, 'status', 'n/a')} details={e!s}",
                         extra={
                             **base_extra,
                             "event": "dispatch.send.error",
@@ -2056,13 +2015,11 @@ class LLMBot(commands.Bot):
                         },
                         exc_info=True,
                     )
-                except Exception:
-                    pass
                 break
 
         return last_sent
 
-    def _chunk_message_content(self, content: str) -> List[str]:
+    def _chunk_message_content(self, content: str) -> list[str]:
         """Split a text payload into Discord-safe chunks.
 
         Requirements:
@@ -2086,7 +2043,7 @@ class LLMBot(commands.Bot):
         if len(text) <= max_len:
             return [text]
 
-        chunks: List[str] = []
+        chunks: list[str] = []
         n = len(text)
         start = 0
 
@@ -2100,7 +2057,7 @@ class LLMBot(commands.Bot):
             window = text[start : start + max_len]
 
             # Candidate split positions (relative to start), in priority order.
-            candidates: List[int] = []
+            candidates: list[int] = []
 
             para_idx = window.rfind("\n\n")
             if para_idx != -1:
@@ -2124,7 +2081,7 @@ class LLMBot(commands.Bot):
 
             # Deduplicate while preserving order.
             seen: set[int] = set()
-            uniq_candidates: List[int] = []
+            uniq_candidates: list[int] = []
             for c in candidates:
                 if c not in seen and c > 0:
                     seen.add(c)
@@ -2145,10 +2102,7 @@ class LLMBot(commands.Bot):
 
             # If none chosen by code-fence logic, take the last viable candidate.
             if best_break is None:
-                if uniq_candidates:
-                    best_break = max(uniq_candidates)
-                else:
-                    best_break = max_len
+                best_break = max(uniq_candidates) if uniq_candidates else max_len
 
             # Safety clamp: never exceed max_len.
             if best_break <= 0 or (start + best_break > n):
@@ -2187,11 +2141,7 @@ class LLMBot(commands.Bot):
             # Add other potentially long-running commands here
         ]
 
-        for cmd in long_running_commands:
-            if content.startswith(cmd):
-                return True
-
-        return False
+        return any(content.startswith(cmd) for cmd in long_running_commands)
 
     async def _message_is_command(self, message: discord.Message) -> bool:
         """Determine if a message should be treated as a command fallback candidate."""
@@ -2225,7 +2175,7 @@ class LLMBot(commands.Bot):
         }
 
         # Add callback to clean up when task completes
-        def cleanup_task(future):
+        def cleanup_task(future) -> None:
             # [BUGFIX] Use threadsafe deletion from done callback to avoid race with cancel_task
             self._active_long_running_tasks.pop(task_id, None)
             self._task_metadata.pop(task_id, None)
@@ -2234,7 +2184,7 @@ class LLMBot(commands.Bot):
 
         self.logger.info(f"Registered long-running task: {task_id} for command: {command}")
 
-    def get_active_tasks_for_user(self, user_id: int) -> List[Tuple[str, Dict[str, Any]]]:
+    def get_active_tasks_for_user(self, user_id: int) -> list[tuple[str, dict[str, Any]]]:
         """Get all active long-running tasks for a specific user."""
         user_tasks = []
         for task_id, metadata in self._task_metadata.items():
@@ -2258,7 +2208,7 @@ class LLMBot(commands.Bot):
         try:
             # Wait a bit for graceful cancellation
             await asyncio.wait_for(task, timeout=5.0)
-        except (asyncio.CancelledError, asyncio.TimeoutError):
+        except (TimeoutError, asyncio.CancelledError):
             # Expected - task was cancelled or timed out
             pass
         except Exception as e:
@@ -2272,7 +2222,7 @@ class LLMBot(commands.Bot):
 
         return True
 
-    async def _execute_out_of_band_command(self, message: discord.Message):
+    async def _execute_out_of_band_command(self, message: discord.Message) -> None:
         """Execute a long-running command outside the user's message queue."""
         try:
             guild_info = "DM" if isinstance(message.channel, discord.DMChannel) else f"guild:{message.guild.id}"
@@ -2295,7 +2245,7 @@ class LLMBot(commands.Bot):
             except Exception:
                 pass  # Don't let error handling errors crash the bot
 
-    async def on_message(self, message: discord.Message):
+    async def on_message(self, message: discord.Message) -> None:
         """Delegate early filtering to MessageProcessor, then handle
         SSOT gate / readiness / long-running commands before enqueue.
         """
@@ -2303,10 +2253,8 @@ class LLMBot(commands.Bot):
         # the early-return gate so DMs are captured even if filtered out
         # by the message processor (empty content, alert-suppressed, etc.)
         if isinstance(message.channel, discord.DMChannel):
-            try:
+            with suppress(Exception):
                 self._track_background_task(asyncio.create_task(self._record_dm_message(message)))
-            except Exception:
-                pass
 
         # Early filtering returns False for messages that should be dropped
         if not await self.message_processor.on_message(message):
@@ -2331,7 +2279,7 @@ class LLMBot(commands.Bot):
                         self.router.record_gate_hint(message.id, True)
                     else:
                         reason = self.router.pop_gate_denied_reason(message.id) or "blocked"
-                        try:
+                        with suppress(Exception):
                             self.logger.info(
                                 f"gate.drop | reason={reason} msg_id:{message.id}",
                                 extra={
@@ -2341,8 +2289,6 @@ class LLMBot(commands.Bot):
                                     "user_id": getattr(message.author, "id", None),
                                 },
                             )
-                        except Exception:
-                            pass
                         return
         except Exception as e:
             self.logger.warning(f"Gate check failed for msg_id:{message.id}: {e}")
@@ -2406,12 +2352,12 @@ class LLMBot(commands.Bot):
                 self.config.get(
                     "SERVER_ARCHIVE_ENABLED",
                     self.config.get("SERVER_ARCHIVE_ENABLE", False),
-                )
+                ),
             )
             if archive_enabled:
                 archive_start_task = asyncio.create_task(start_server_archive_service(self), name="server_archive_start")
 
-                def _log_archive_start_failure(task):
+                def _log_archive_start_failure(task) -> None:
                     try:
                         self.archive_service = task.result()
                     except Exception as exc:
@@ -2431,9 +2377,9 @@ class LLMBot(commands.Bot):
     async def _start_dashboard(self) -> None:
         """Start the dashboard server if enabled. Called as a background task."""
         try:
-            from bot.dashboard import load_dashboard_config, DashboardServer, AuditStore, DMStore, MessageStore
-            from bot.dashboard.services import DashboardServices
+            from bot.dashboard import AuditStore, DashboardServer, DMStore, MessageStore, load_dashboard_config
             from bot.dashboard.backfill import BackfillJobStore, BackfillService
+            from bot.dashboard.services import DashboardServices
 
             cfg = load_dashboard_config()
             if not cfg.enabled:
@@ -2541,7 +2487,7 @@ class LLMBot(commands.Bot):
                                 asyncio.create_task(
                                     self.vision_orchestrator.start(),
                                     name="vision_startup",
-                                )
+                                ),
                             )
                             self.logger.info("VisionOrchestrator: start queued")
                     except RuntimeError:
@@ -2549,12 +2495,12 @@ class LLMBot(commands.Bot):
                         try:
                             await self.vision_orchestrator.start()
                         except Exception as e:
-                            self.logger.error(f"Failed to start VisionOrchestrator: {e}")
+                            self.logger.exception(f"Failed to start VisionOrchestrator: {e}")
                 except ImportError:
                     self.logger.warning("Vision module not available")
                     self.vision_orchestrator = None
                 except Exception as e:
-                    self.logger.error(f"Failed to initialize VisionOrchestrator: {e}")
+                    self.logger.exception(f"Failed to initialize VisionOrchestrator: {e}")
                     self.vision_orchestrator = None
             else:
                 self.vision_orchestrator = None
@@ -2677,7 +2623,7 @@ class LLMBot(commands.Bot):
         # Count total registered commands across all cogs
         total_commands = 0
         for cog in self.cogs.values():
-            total_commands += len([cmd for cmd in cog.get_commands()])
+            total_commands += len(list(cog.get_commands()))
 
         # Generate Rich visual report
         from bot.utils.logging_helper import log_commands_setup
@@ -2700,7 +2646,7 @@ class LLMBot(commands.Bot):
         try:
             await super().connect(reconnect=reconnect)
         except discord.ConnectionClosed as e:
-            self.logger.error(f"Connection closed: {e}")
+            self.logger.exception(f"Connection closed: {e}")
             # Attempt to reconnect after a delay
             await asyncio.sleep(5)
             await self.connect(reconnect=reconnect)
@@ -2718,7 +2664,7 @@ class LLMBot(commands.Bot):
                     # Use a timeout to prevent hanging on Discord close
                     await asyncio.wait_for(super().close(), timeout=8.0)
                     self.logger.info("Discord connection closed successfully")
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self.logger.warning("Discord close timed out, forcing closure")
                     # Force close by setting internal state
                     if hasattr(self, "_closed"):
@@ -2738,10 +2684,8 @@ class LLMBot(commands.Bot):
                         # It's an asyncio.Task
                         if not self.memory_save_task.done():
                             self.memory_save_task.cancel()
-                            try:
+                            with suppress(TimeoutError, asyncio.CancelledError):
                                 await asyncio.wait_for(self.memory_save_task, timeout=2.0)
-                            except (asyncio.CancelledError, asyncio.TimeoutError):
-                                pass
                     elif hasattr(self.memory_save_task, "is_being_cancelled"):
                         # It's a tasks.Loop
                         if not self.memory_save_task.is_being_cancelled():
@@ -2765,7 +2709,7 @@ class LLMBot(commands.Bot):
                         asyncio.gather(*self._background_tasks, return_exceptions=True),
                         timeout=3.0,
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self.logger.warning("Background tasks did not complete within timeout")
 
             # Stop memory distiller service
@@ -2803,7 +2747,7 @@ class LLMBot(commands.Bot):
                     try:
                         await asyncio.wait_for(vo.close(), timeout=5.0)
                         self.logger.info("VisionOrchestrator: closed")
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         self.logger.warning("VisionOrchestrator close timed out")
                     except Exception as e:
                         self.logger.warning(f"VisionOrchestrator close error: {e}")
@@ -2815,7 +2759,7 @@ class LLMBot(commands.Bot):
             if self.tts_manager:
                 try:
                     await asyncio.wait_for(self.tts_manager.close(), timeout=2.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self.logger.warning("TTS manager close timed out")
 
             # Close global ollama client first
@@ -2857,7 +2801,7 @@ class LLMBot(commands.Bot):
             if hasattr(self, "rag_system"):
                 try:
                     await asyncio.wait_for(self.rag_system.close(), timeout=2.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self.logger.warning("RAG system close timed out")
 
             # Cancel remaining tasks with aggressive timeout
@@ -2872,7 +2816,7 @@ class LLMBot(commands.Bot):
                 # Very short timeout for remaining tasks
                 try:
                     await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=2.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     self.logger.warning("Some tasks did not cancel within final timeout")
 
         except Exception as e:
@@ -2892,11 +2836,10 @@ class LLMBot(commands.Bot):
                 await asyncio.sleep(0.05)  # Small delay for cleanup
 
             # Close ollama backend session
-            if hasattr(self, "router") and self.router:
-                if hasattr(self.router, "ollama_backend") and self.router.ollama_backend:
-                    self.logger.debug("Closing ollama backend session")
-                    await self.router.ollama_backend.close()
-                    await asyncio.sleep(0.05)
+            if hasattr(self, "router") and self.router and hasattr(self.router, "ollama_backend") and self.router.ollama_backend:
+                self.logger.debug("Closing ollama backend session")
+                await self.router.ollama_backend.close()
+                await asyncio.sleep(0.05)
 
             # Close any HTTP client sessions in various modules
             modules_to_check = [
@@ -2918,6 +2861,7 @@ class LLMBot(commands.Bot):
 
             # Find and close any remaining aiohttp sessions using garbage collection
             import gc
+
             import aiohttp
 
             # Force garbage collection to expose any remaining sessions

@@ -1,24 +1,26 @@
-"""
-Dynamic configuration reloading system with hot-reload support.
+"""Dynamic configuration reloading system with hot-reload support.
 Supports SIGHUP signal handling, file watching, and manual reload commands.
 """
 
-import signal
-import hashlib
 import asyncio
+import contextlib
+import hashlib
 import os
+import signal
 import threading
 import time
-from pathlib import Path
-from typing import Dict, Any, Optional, Set, Callable, List
+from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
+from typing import Any
+
 from dotenv import dotenv_values, load_dotenv
 
 from .config import (
+    invalidate_config_cache,
     load_config,
     load_config_candidate,
     validate_config_candidate,
-    invalidate_config_cache,
 )
 from .utils.logging import get_logger
 
@@ -34,22 +36,22 @@ except ImportError:
     restart_janitor = None
 
 # Global state for configuration management
-_current_config: Dict[str, Any] = {}
+_current_config: dict[str, Any] = {}
 _config_version: str = ""
 _config_lock = threading.RLock()
-_reload_callbacks: Set[Callable[[Dict[str, Any], Dict[str, Any]], None]] = set()
-_file_watcher_task: Optional[asyncio.Task] = None
+_reload_callbacks: set[Callable[[dict[str, Any], dict[str, Any]], None]] = set()
+_file_watcher_task: asyncio.Task | None = None
 _last_reload_time: float = 0
-_watcher_lock: Optional[asyncio.Lock] = None
+_watcher_lock: asyncio.Lock | None = None
 _reload_debounce_lock = threading.Lock()
 _last_reload_call_time: float = 0
 RELOAD_DEBOUNCE_S = 0.5  # Minimum time between reload calls
 
 
-def _candidate_env_paths() -> List[Path]:
+def _candidate_env_paths() -> list[Path]:
     """Return list of candidate env files to watch (resolved absolute paths).
     Order matters; the first existing is used as the preferred .env for default reloads.
-    Includes repo-root variants and yoroi.env for developer workflows. [CMV]
+    Includes repo-root variants and yoroi.env for developer workflows. [CMV].
     """
     root = Path(__file__).parent.parent.resolve()
     cwd = Path.cwd().resolve()
@@ -61,7 +63,7 @@ def _candidate_env_paths() -> List[Path]:
     ]
     # Deduplicate while preserving order
     seen = set()
-    out: List[Path] = []
+    out: list[Path] = []
     for p in candidates:
         rp = p.resolve()
         if rp not in seen:
@@ -79,11 +81,11 @@ def _preferred_env_path() -> Path:
 
 
 _env_file_path = _preferred_env_path()
-_last_env_digest: Optional[str] = None
-_env_loaded_values_by_path: Dict[Path, Dict[str, str]] = {}
+_last_env_digest: str | None = None
+_env_loaded_values_by_path: dict[Path, dict[str, str]] = {}
 
 
-def _read_dotenv_values(path: Path) -> Dict[str, str]:
+def _read_dotenv_values(path: Path) -> dict[str, str]:
     """Read dotenv key/value pairs without mutating process env."""
     try:
         return {str(key): str(value) for key, value in dotenv_values(path).items() if key and value is not None}
@@ -123,7 +125,7 @@ def _sync_dotenv_file(path: Path) -> None:
 _snapshot_known_env_files()
 
 
-def _file_digest(p: Path) -> Optional[str]:
+def _file_digest(p: Path) -> str | None:
     try:
         data = p.read_bytes()
         return hashlib.sha256(data).hexdigest()
@@ -131,7 +133,7 @@ def _file_digest(p: Path) -> Optional[str]:
         return None
 
 
-async def _file_digest_async(p: Path) -> Optional[str]:
+async def _file_digest_async(p: Path) -> str | None:
     """Offload blocking I/O+hash to a thread so the event loop stays responsive."""
     try:
         data = await asyncio.to_thread(p.read_bytes)
@@ -153,7 +155,7 @@ SENSITIVE_KEYS = {
 }
 
 
-def _generate_config_version(config: Dict[str, Any]) -> str:
+def _generate_config_version(config: dict[str, Any]) -> str:
     """Generate a hash-based version identifier for the configuration."""
     # Create a deterministic string representation of non-sensitive config
     config_str = ""
@@ -164,7 +166,7 @@ def _generate_config_version(config: Dict[str, Any]) -> str:
     return hashlib.sha256(config_str.encode()).hexdigest()[:12]
 
 
-def _redact_sensitive_values(config: Dict[str, Any]) -> Dict[str, Any]:
+def _redact_sensitive_values(config: dict[str, Any]) -> dict[str, Any]:
     """Create a copy of config with sensitive values redacted for logging."""
     redacted = {}
     for key, value in config.items():
@@ -178,7 +180,7 @@ def _redact_sensitive_values(config: Dict[str, Any]) -> Dict[str, Any]:
     return redacted
 
 
-def _compare_configs(old_config: Dict[str, Any], new_config: Dict[str, Any]) -> Dict[str, Any]:
+def _compare_configs(old_config: dict[str, Any], new_config: dict[str, Any]) -> dict[str, Any]:
     """Compare two configurations and return the differences."""
     changes = {"added": {}, "removed": {}, "modified": {}, "unchanged_count": 0}
 
@@ -203,21 +205,21 @@ def _compare_configs(old_config: Dict[str, Any], new_config: Dict[str, Any]) -> 
     return changes
 
 
-def _infer_subsystems(changes: Dict[str, Any]) -> Set[str]:
-    """Infer which subsystems are impacted based on changed keys. [CMV]"""
-    impacted: Set[str] = set()
-    keys: Set[str] = set()
+def _infer_subsystems(changes: dict[str, Any]) -> set[str]:
+    """Infer which subsystems are impacted based on changed keys. [CMV]."""
+    impacted: set[str] = set()
+    keys: set[str] = set()
     keys.update((changes.get("added") or {}).keys())
     keys.update((changes.get("removed") or {}).keys())
     keys.update((changes.get("modified") or {}).keys())
 
     for k in keys:
         ku = k.upper()
-        if ku.startswith("OPENAI_") or ku.startswith("OLLAMA_") or ku.startswith("TEXT_"):
+        if ku.startswith(("OPENAI_", "OLLAMA_", "TEXT_")):
             impacted.add("text")
-        if ku.startswith("VL_") or ku.startswith("VISION_"):
+        if ku.startswith(("VL_", "VISION_")):
             impacted.add("vision")
-        if ku.startswith("STT_") or ku.startswith("WHISPER_"):
+        if ku.startswith(("STT_", "WHISPER_")):
             impacted.add("stt")
         if ku.startswith("TTS_"):
             impacted.add("tts")
@@ -241,9 +243,8 @@ def _debounce_reload() -> bool:
         return True
 
 
-def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
-    """
-    Reload environment variables from .env file and update configuration.
+def reload_env(env_path: Path | None = None) -> dict[str, Any]:
+    """Reload environment variables from .env file and update configuration.
 
     Transactional reload flow:
     1. Load candidate config from .env file (no global state mutation)
@@ -253,6 +254,7 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
 
     Returns:
         Dictionary with reload results including success status, changes, and version
+
     """
     global _current_config, _config_version, _last_reload_time
 
@@ -349,10 +351,8 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
             logger.debug(f"📁 Reloaded .env from {target_path}")
 
             # Invalidate cached snapshot so load_config reflects new env immediately
-            try:
+            with contextlib.suppress(Exception):
                 invalidate_config_cache()
-            except Exception:
-                pass
 
             # Load new configuration from updated os.environ
             new_config = load_config()
@@ -389,8 +389,8 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                         },
                     },
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to log config reload diff breadcrumb: {e}")
 
             # Log changes with sensitive values redacted
             if changes["added"] or changes["removed"] or changes["modified"]:
@@ -417,13 +417,13 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
 
             # Applied breadcrumb with subsystem inference
             try:
-                subsystems: Set[str] = _infer_subsystems(changes)
+                subsystems: set[str] = _infer_subsystems(changes)
                 logger.info(
                     "config.reload.committed",
                     extra={
                         "event": "config.reload.committed",
                         "detail": {
-                            "subsystems": sorted(list(subsystems)),
+                            "subsystems": sorted(subsystems),
                             "old_version": old_version,
                             "new_version": new_version,
                             "prev_digest": env_before or "",
@@ -431,15 +431,15 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                         },
                     },
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to log config reload committed breadcrumb: {e}")
 
             # Notify callbacks
             for callback in _reload_callbacks:
                 try:
                     callback(old_config, new_config)
                 except Exception as e:
-                    logger.error(f"❌ Config reload callback failed: {e}")
+                    logger.exception(f"❌ Config reload callback failed: {e}")
 
             # Refresh retry manager ladders (text/vision/media) from updated env [REH]
             try:
@@ -470,7 +470,7 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                     if loop.is_running():
                         _task = asyncio.create_task(restart_janitor())
                         _task.add_done_callback(
-                            lambda t: logger.error(f"Janitor restart task failed: {t.exception()}") if t.exception() else None
+                            lambda t: logger.error(f"Janitor restart task failed: {t.exception()}") if t.exception() else None,
                         )
                     else:
                         loop.run_until_complete(restart_janitor())
@@ -487,7 +487,7 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
 
         except Exception as e:
             # Rollback breadcrumb — we keep prior config active
-            try:
+            with contextlib.suppress(Exception):
                 logger.info(
                     "config.reload.rollback",
                     extra={
@@ -495,13 +495,11 @@ def reload_env(env_path: Optional[Path] = None) -> Dict[str, Any]:
                         "detail": {"reason": str(e)[:200], "previous_config_kept": True},
                     },
                 )
-            except Exception:
-                pass
             logger.error(f"❌ Configuration reload failed: {e}", exc_info=True)
             return {"success": False, "error": str(e), "version": _config_version, "previous_config_kept": True}
 
 
-def get_current_config() -> Dict[str, Any]:
+def get_current_config() -> dict[str, Any]:
     """Get the current configuration (thread-safe)."""
     with _config_lock:
         return _current_config.copy()
@@ -512,14 +510,14 @@ def get_config_version() -> str:
     return _config_version
 
 
-def get_config_for_debug() -> Dict[str, Any]:
+def get_config_for_debug() -> dict[str, Any]:
     """Get configuration with sensitive values redacted for debugging."""
     with _config_lock:
         return _redact_sensitive_values(_current_config)
 
 
 def add_reload_callback(
-    callback: Callable[[Dict[str, Any], Dict[str, Any]], None],
+    callback: Callable[[dict[str, Any], dict[str, Any]], None],
 ) -> None:
     """Add a callback to be called when configuration is reloaded."""
     with _config_lock:
@@ -527,7 +525,7 @@ def add_reload_callback(
 
 
 def remove_reload_callback(
-    callback: Callable[[Dict[str, Any], Dict[str, Any]], None],
+    callback: Callable[[dict[str, Any], dict[str, Any]], None],
 ) -> None:
     """Remove a reload callback."""
     with _config_lock:
@@ -550,11 +548,11 @@ def _sighup_handler(signum: int, frame) -> None:
 async def _file_watcher_loop() -> None:
     """Main file watcher loop with proper debouncing."""
     env_paths = _candidate_env_paths()
-    last_digests: Dict[Path, Optional[str]] = {}
+    last_digests: dict[Path, str | None] = {}
     for p in env_paths:
         last_digests[p] = await _file_digest_async(p)
     # Track per-file mtime for quick-noop skip [Phase 17-23]
-    last_mtime: Dict[Path, float] = {}
+    last_mtime: dict[Path, float] = {}
     for p in env_paths:
         try:
             last_mtime[p] = p.stat().st_mtime if p.exists() else 0.0
@@ -568,8 +566,8 @@ async def _file_watcher_loop() -> None:
 
         _fw_cfg = _fw_load_config()
         debounce_delay = _fw_cfg.get("CONFIG_WATCH_DEBOUNCE_S", 1.0)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to load CONFIG_WATCH_DEBOUNCE_S, using fallback: {e}")
 
     status = "completed"
     try:
@@ -597,10 +595,10 @@ async def _file_watcher_loop() -> None:
                         last_digests[p] = dig
                     except Exception as _e:
                         # Continue checking other paths
-                        last_digests[p] = last_digests.get(p, None)
+                        last_digests[p] = last_digests.get(p)
 
             except Exception as e:
-                logger.error(f"Error in file watcher: {e}")
+                logger.exception(f"Error in file watcher: {e}")
                 await asyncio.sleep(5)  # Wait longer on error
 
     except asyncio.CancelledError:
@@ -611,7 +609,7 @@ async def _file_watcher_loop() -> None:
         status = "errored"
         logger.error(f"File watcher crashed: {e}", exc_info=True)
     finally:
-        try:
+        with contextlib.suppress(Exception):
             logger.info(
                 "config.watcher.exit",
                 extra={
@@ -619,8 +617,6 @@ async def _file_watcher_loop() -> None:
                     "detail": {"status": status},
                 },
             )
-        except Exception:
-            pass
 
 
 def setup_config_reload() -> None:
@@ -680,8 +676,8 @@ async def start_file_watcher() -> None:
                     "detail": {"candidates": candidates, "preferred": preferred},
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to log config watcher paths: {e}")
 
         _file_watcher_task = asyncio.create_task(_file_watcher_loop(), name="config_file_watcher")
         _file_watcher_task.add_done_callback(
@@ -692,7 +688,7 @@ async def start_file_watcher() -> None:
                 )
                 if t.done() and not t.cancelled() and t.exception()
                 else None
-            )
+            ),
         )
         logger.info(
             "config.watcher.started",
@@ -733,11 +729,11 @@ async def stop_file_watcher() -> None:
 
 
 def manual_reload_command() -> str:
-    """
-    Manually trigger a configuration reload (for Discord commands).
+    """Manually trigger a configuration reload (for Discord commands).
 
     Returns:
         Human-readable status message
+
     """
     try:
         result = reload_env()
@@ -756,21 +752,17 @@ def manual_reload_command() -> str:
             if change_summary:
                 summary = ", ".join(change_summary)
                 return f"✅ Configuration reloaded successfully!\n📊 Changes: {summary}\n🔖 Version: {result['old_version']} → {result['new_version']}"
-            else:
-                return f"✅ Configuration reloaded (no changes detected)\n🔖 Version: {result['new_version']}"
-        else:
-            if result.get("debounced"):
-                return "⏱️ Configuration reload debounced (too soon since last reload)"
-            elif result.get("rejected"):
-                missing_vars = result.get("missing_vars", [])
-                if missing_vars:
-                    missing_str = ", ".join(missing_vars)
-                    return f"❌ Configuration reload rejected: missing required variables ({missing_str}). Previous config kept active."
-                else:
-                    return f"❌ Configuration reload rejected: {result.get('error', 'Unknown error')}. Previous config kept active."
-            else:
-                return f"❌ Configuration reload failed: {result.get('error', 'Unknown error')}"
+            return f"✅ Configuration reloaded (no changes detected)\n🔖 Version: {result['new_version']}"
+        if result.get("debounced"):
+            return "⏱️ Configuration reload debounced (too soon since last reload)"
+        if result.get("rejected"):
+            missing_vars = result.get("missing_vars", [])
+            if missing_vars:
+                missing_str = ", ".join(missing_vars)
+                return f"❌ Configuration reload rejected: missing required variables ({missing_str}). Previous config kept active."
+            return f"❌ Configuration reload rejected: {result.get('error', 'Unknown error')}. Previous config kept active."
+        return f"❌ Configuration reload failed: {result.get('error', 'Unknown error')}"
 
     except Exception as e:
         logger.error(f"❌ Manual reload command failed: {e}", exc_info=True)
-        return f"❌ Configuration reload failed: {str(e)}"
+        return f"❌ Configuration reload failed: {e!s}"

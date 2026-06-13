@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import html
 import re
-from typing import Optional
 
 from bot.utils.logging import get_logger, redact_sensitive_values
 
@@ -93,9 +92,8 @@ def redact_secrets(text: str) -> str:
     def _replace_password(m: re.Match) -> str:
         return f"{m.group('prefix')}={_REDACTED}"
 
-    result = _PASSWORD_RE.sub(_replace_password, result)
+    return _PASSWORD_RE.sub(_replace_password, result)
 
-    return result
 
 
 def make_preview(text: str, max_chars: int = 200) -> str:
@@ -107,6 +105,7 @@ def make_preview(text: str, max_chars: int = 200) -> str:
 
     Returns:
         Redacted and possibly truncated string.
+
     """
     redacted = redact_secrets(text or "")
     if len(redacted) > max_chars:
@@ -124,7 +123,7 @@ def sanitize_for_html(text: str) -> str:
     return html.escape(safe, quote=True)
 
 
-def contains_mention_warning(text: str) -> Optional[str]:
+def contains_mention_warning(text: str) -> str | None:
     """Check if text contains @everyone, @here, or mass role mentions.
 
     Returns a warning string if detected, or None if safe.
@@ -156,7 +155,7 @@ def contains_mention_warning(text: str) -> Optional[str]:
 
 
 class ContentSecurityPolicy:
-    """Builder for Content-Security-Policy HTTP headers.
+    r"""Builder for Content-Security-Policy HTTP headers.
 
     Provides a fluent interface for constructing CSP directives:
 
@@ -183,57 +182,57 @@ class ContentSecurityPolicy:
             "object-src": {"'none'"},
         }
 
-    def default_src(self, *sources: str) -> "ContentSecurityPolicy":
+    def default_src(self, *sources: str) -> ContentSecurityPolicy:
         """Set default-src directive (replaces current)."""
         self._directives["default-src"] = set(sources)
         return self
 
-    def script_src(self, *sources: str) -> "ContentSecurityPolicy":
+    def script_src(self, *sources: str) -> ContentSecurityPolicy:
         """Set script-src directive (replaces current)."""
         self._directives["script-src"] = set(sources)
         return self
 
-    def style_src(self, *sources: str) -> "ContentSecurityPolicy":
+    def style_src(self, *sources: str) -> ContentSecurityPolicy:
         """Set style-src directive (replaces current)."""
         self._directives["style-src"] = set(sources)
         return self
 
-    def img_src(self, *sources: str) -> "ContentSecurityPolicy":
+    def img_src(self, *sources: str) -> ContentSecurityPolicy:
         """Set img-src directive (replaces current)."""
         self._directives["img-src"] = set(sources)
         return self
 
-    def font_src(self, *sources: str) -> "ContentSecurityPolicy":
+    def font_src(self, *sources: str) -> ContentSecurityPolicy:
         """Set font-src directive (replaces current)."""
         self._directives["font-src"] = set(sources)
         return self
 
-    def connect_src(self, *sources: str) -> "ContentSecurityPolicy":
+    def connect_src(self, *sources: str) -> ContentSecurityPolicy:
         """Set connect-src directive (replaces current)."""
         self._directives["connect-src"] = set(sources)
         return self
 
-    def frame_ancestors(self, *sources: str) -> "ContentSecurityPolicy":
+    def frame_ancestors(self, *sources: str) -> ContentSecurityPolicy:
         """Set frame-ancestors directive (replaces current)."""
         self._directives["frame-ancestors"] = set(sources)
         return self
 
-    def form_action(self, *sources: str) -> "ContentSecurityPolicy":
+    def form_action(self, *sources: str) -> ContentSecurityPolicy:
         """Set form-action directive (replaces current)."""
         self._directives["form-action"] = set(sources)
         return self
 
-    def add_directive(self, name: str, *sources: str) -> "ContentSecurityPolicy":
+    def add_directive(self, name: str, *sources: str) -> ContentSecurityPolicy:
         """Add or replace a custom directive."""
         self._directives[name] = set(sources)
         return self
 
-    def allow_inline_scripts(self) -> "ContentSecurityPolicy":
+    def allow_inline_scripts(self) -> ContentSecurityPolicy:
         """Convenience: add 'unsafe-inline' to script-src."""
         self._directives.setdefault("script-src", set()).add("'unsafe-inline'")
         return self
 
-    def allow_inline_styles(self) -> "ContentSecurityPolicy":
+    def allow_inline_styles(self) -> ContentSecurityPolicy:
         """Convenience: add 'unsafe-inline' to style-src."""
         self._directives.setdefault("style-src", set()).add("'unsafe-inline'")
         return self
@@ -251,7 +250,7 @@ class ContentSecurityPolicy:
         return {"Content-Security-Policy": self.build()}
 
     @classmethod
-    def permissive(cls) -> "ContentSecurityPolicy":
+    def permissive(cls) -> ContentSecurityPolicy:
         """Create a permissive CSP suitable for development or dashboards
         that use inline scripts and connect to Discord CDN.
 

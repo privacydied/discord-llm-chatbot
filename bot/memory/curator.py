@@ -6,11 +6,9 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import uuid4
-
-from .persistent_store import MemoryRecord
 
 # Pattern constants extracted to a dedicated module to keep this file smaller.
 # Importing from curator_patterns also re-exports is_public_safe for callers.
@@ -25,6 +23,7 @@ from .curator_patterns import (  # noqa: F401 – re-export for external importe
     _WORLD_CLAIM_TERMS,
     is_public_safe,
 )
+from .persistent_store import MemoryRecord
 
 logger = logging.getLogger(__name__)
 
@@ -33,23 +32,23 @@ logger = logging.getLogger(__name__)
 class MemoryCandidate:
     memory_id: str
     user_id: str
-    guild_id: Optional[str]
-    channel_id: Optional[str]
-    thread_id: Optional[str]
-    source_message_id: Optional[str]
+    guild_id: str | None
+    channel_id: str | None
+    thread_id: str | None
+    source_message_id: str | None
     context_type: str
     text: str
     summary: str
     importance: float
     confidence: float
     source: str
-    expires_at: Optional[str]
+    expires_at: str | None
     metadata_json: str = "{}"
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    last_accessed_at: Optional[str] = None
-    deleted_at: Optional[str] = None
-    chroma_id: Optional[str] = None
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    last_accessed_at: str | None = None
+    deleted_at: str | None = None
+    chroma_id: str | None = None
 
     def to_record(self) -> MemoryRecord:
         return MemoryRecord(
@@ -88,7 +87,7 @@ class CuratedMemoryCurator:
         default_ttl_days: int = 180,
         temp_ttl_days: int = 14,
         min_importance: float = 0.55,
-    ):
+    ) -> None:
         self.default_ttl_days = int(default_ttl_days)
         self.temp_ttl_days = int(temp_ttl_days)
         self.min_importance = float(min_importance)
@@ -100,14 +99,14 @@ class CuratedMemoryCurator:
         *,
         user_id: str,
         text: str,
-        guild_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        thread_id: Optional[str] = None,
-        source_message_id: Optional[str] = None,
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
+        source_message_id: str | None = None,
         context_type: str = "user_preference",
         source: str = "explicit_memory_command",
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Optional[MemoryCandidate]:
+        metadata: dict[str, Any] | None = None,
+    ) -> MemoryCandidate | None:
         text = self._normalize(text)
         if not text:
             return None
@@ -148,12 +147,12 @@ class CuratedMemoryCurator:
         *,
         user_id: str,
         text: str,
-        guild_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        thread_id: Optional[str] = None,
-        source_message_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Optional[MemoryCandidate]:
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
+        source_message_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> MemoryCandidate | None:
         text = self._normalize(text)
         if not text:
             return self._log_inferred_decision(
@@ -241,18 +240,17 @@ class CuratedMemoryCurator:
                     context_type=context_type,
                     reason="weak_temporary_context",
                 )
-        else:
-            # Non-temp memories must meet min_importance
-            if importance < self.min_importance:
-                return self._log_inferred_decision(
-                    user_id,
-                    guild_id,
-                    channel_id,
-                    thread_id,
-                    source_message_id,
-                    context_type=context_type,
-                    reason="below_importance_threshold",
-                )
+        # Non-temp memories must meet min_importance
+        elif importance < self.min_importance:
+            return self._log_inferred_decision(
+                user_id,
+                guild_id,
+                channel_id,
+                thread_id,
+                source_message_id,
+                context_type=context_type,
+                reason="below_importance_threshold",
+            )
 
         confidence = self._confidence(text, context_type)
         summary = self._summarize(text, context_type)
@@ -293,7 +291,7 @@ class CuratedMemoryCurator:
     # ---------------- internal helpers: normalization & filters ----------------
 
     def _normalize(self, text: str) -> str:
-        from ..config import load_config as _curator_load_config
+        from bot.config import load_config as _curator_load_config
 
         _cc = _curator_load_config()
         max_chars = int(_cc.get("MEMORY_MAX_TEXT_CHARS", 500))
@@ -304,18 +302,18 @@ class CuratedMemoryCurator:
 
     def _looks_sensitive(self, text: str) -> bool:
         lower = text.lower()
-        return any(re.search(pattern, lower, flags=re.I) for pattern in _SECRET_PATTERNS)
+        return any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _SECRET_PATTERNS)
 
     def _looks_internal(self, text: str) -> bool:
         lower = text.lower()
-        return any(re.search(pattern, lower, flags=re.I) for pattern in _INTERNAL_PATTERNS)
+        return any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _INTERNAL_PATTERNS)
 
     @staticmethod
     def _looks_denied_inferred(lower: str) -> bool:
         """Return True when inferred content matches the denylist."""
-        return any(re.search(pattern, lower, flags=re.I) for pattern in _INFERRED_DENYLIST)
+        return any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _INFERRED_DENYLIST)
 
-    def _rejection_reason_for_inferred(self, text: str) -> Optional[str]:
+    def _rejection_reason_for_inferred(self, text: str) -> str | None:
         lower = text.lower()
         if self._looks_quoted_or_external_content(lower):
             return "reject_quoted_or_external_content"
@@ -327,11 +325,11 @@ class CuratedMemoryCurator:
 
     @staticmethod
     def _has_project_anchor(lower: str) -> bool:
-        return any(re.search(pattern, lower, flags=re.I) for pattern in _PROJECT_FACT_SIGNALS)
+        return any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _PROJECT_FACT_SIGNALS)
 
     @staticmethod
     def _has_project_fact_cue(lower: str) -> bool:
-        return any(re.search(pattern, lower, flags=re.I) for pattern in _PROJECT_FACT_CUES)
+        return any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _PROJECT_FACT_CUES)
 
     def _looks_project_scoped_fact(self, lower: str) -> bool:
         if not self._has_project_anchor(lower):
@@ -359,34 +357,18 @@ class CuratedMemoryCurator:
     def _looks_sensitive_generalization(self, lower: str) -> bool:
         if self._has_project_anchor(lower):
             return False
-        if not any(re.search(pattern, lower, flags=re.I) for pattern in _SENSITIVE_ATTRIBUTE_PATTERNS):
+        if not any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _SENSITIVE_ATTRIBUTE_PATTERNS):
             return False
-        if any(re.search(pattern, lower, flags=re.I) for pattern in _GENERAL_CLAIM_TERMS):
+        if any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _GENERAL_CLAIM_TERMS):
             return True
-        if any(
-            trigger in lower
-            for trigger in [
-                " prefer ",
-                " likes ",
-                " like ",
-                " love ",
-                " loves ",
-                " am ",
-                "'m ",
-                " have ",
-                " is ",
-                " are ",
-            ]
-        ):
-            return True
-        return False
+        return bool(any(trigger in lower for trigger in [" prefer ", " likes ", " like ", " love ", " loves ", " am ", "'m ", " have ", " is ", " are "]))
 
     def _looks_world_claim(self, lower: str) -> bool:
         if self._has_project_anchor(lower):
             return False
-        if not any(re.search(pattern, lower, flags=re.I) for pattern in _WORLD_CLAIM_TERMS):
+        if not any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _WORLD_CLAIM_TERMS):
             return False
-        return any(re.search(pattern, lower, flags=re.I) for pattern in _GENERAL_CLAIM_TERMS)
+        return any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _GENERAL_CLAIM_TERMS)
 
     # ---------------- internal helpers: inferred classification ----------------
 
@@ -451,9 +433,7 @@ class CuratedMemoryCurator:
         if re.search(r"\b(i prefer|my preference|i'd prefer|i would prefer)\b", lower):
             return True
         # Strong preference without filler: "prefer short replies"
-        if bool(re.search(r"(?:^|\s)prefer\b(?:\s+\w+){1,6}", lower)):
-            return True
-        return False
+        return bool(bool(re.search(r"(?:^|\s)prefer\b(?:\s+\w+){1,6}", lower)))
 
     @staticmethod
     def _is_recurring_instruction(lower: str) -> bool:
@@ -488,14 +468,11 @@ class CuratedMemoryCurator:
         if bool(re.search(r"\bdon't\s+(?:do|say|use|assume)\b.*\bagain\b", lower)):
             return True
         # "never do X again"
-        if bool(re.search(r"\bnever\s+(?:do|say|use|assume)\b.*\bagain\b", lower)):
-            return True
-        return False
+        return bool(bool(re.search(r"\bnever\s+(?:do|say|use|assume)\b.*\bagain\b", lower)))
 
     @staticmethod
     def _is_strong_remember(lower: str) -> bool:
-        """
-        Only treat 'remember' as durable when there is a clear object.
+        """Only treat 'remember' as durable when there is a clear object.
 
         Store:
           - "remember that I prefer X"
@@ -516,9 +493,7 @@ class CuratedMemoryCurator:
         # Positive: "remember that", "remember this", "remember, ..."
         if bool(re.search(r"\bremember\s+(?:that|this|it)\b", lower)):
             return True
-        if bool(re.search(r"\bremember,\s+\w", lower)):
-            return True
-        return False
+        return bool(bool(re.search(r"\bremember,\s+\w", lower)))
 
     @staticmethod
     def _is_conversation_decision(lower: str) -> bool:
@@ -526,14 +501,11 @@ class CuratedMemoryCurator:
         # "we decided", "the decision is"
         if bool(re.search(r"\bwe decided\b", lower)):
             return True
-        if bool(re.search(r"\bthe decision (?:is|for)\b", lower)):
-            return True
-        return False
+        return bool(bool(re.search(r"\bthe decision (?:is|for)\b", lower)))
 
     @staticmethod
     def _is_bot_correction(lower: str) -> bool:
-        """
-        Only treat as correction when it corrects bot behavior or a rule,
+        """Only treat as correction when it corrects bot behavior or a rule,
         not just any mention of 'correct'/'wrong' in code talk.
 
         Store:
@@ -565,14 +537,10 @@ class CuratedMemoryCurator:
             return True
 
         # "remember, X is Y not Z" style:
-        if bool(re.search(r"\bremember,?\s+.*(?:is|should be).*not\b", lower)):
-            return True
-
-        return False
+        return bool(bool(re.search(r"\bremember,?\s+.*(?:is|should be).*not\b", lower)))
 
     def _is_project_fact(self, lower: str) -> bool:
-        """
-        Only treat as project_fact when the content is clearly about this bot,
+        """Only treat as project_fact when the content is clearly about this bot,
         repo, codebase, runtime behavior, or a concrete subsystem.
 
         Accept only project-scoped statements such as:
@@ -596,8 +564,7 @@ class CuratedMemoryCurator:
 
     @staticmethod
     def _is_server_fact(lower: str) -> bool:
-        """
-        Only treat as server_fact when it's a clear rule/fact about the server,
+        """Only treat as server_fact when it's a clear rule/fact about the server,
         not just any mention of 'server' or 'guild'.
         """
         # Exclude generic mentions:
@@ -610,28 +577,20 @@ class CuratedMemoryCurator:
         if bool(re.search(r"\b(for this server|for the server),\s+", lower)):
             return True
         # guild-specific rule:
-        if bool(re.search(r"\b(this guild|the guild)\s+(should|must|uses|is)\b", lower)):
-            return True
-
-        return False
+        return bool(bool(re.search(r"\b(this guild|the guild)\s+(should|must|uses|is)\b", lower)))
 
     @staticmethod
     def _is_relationship_note(lower: str) -> bool:
         # "our relationship", "we're close"
-        if bool(re.search(r"\b(?:our\s+)?relationship\b", lower)):
-            return True
-        return False
+        return bool(bool(re.search(r"\b(?:our\s+)?relationship\b", lower)))
 
     @staticmethod
     def _is_inside_joke(lower: str) -> bool:
-        if bool(re.search(r"\b(?:inside joke|running joke)\b", lower)):
-            return True
-        return False
+        return bool(bool(re.search(r"\b(?:inside joke|running joke)\b", lower)))
 
     @staticmethod
     def _is_temporary_context(lower: str) -> bool:
-        """
-        Only treat as temporary when it's clearly short-lived guidance.
+        """Only treat as temporary when it's clearly short-lived guidance.
         Do not treat 'today' as durable on its own; it must be combined with
         a weak/temporary phrase.
         """
@@ -639,9 +598,7 @@ class CuratedMemoryCurator:
         if any(p in lower for p in ["for now", "temporarily", "this week"]):
             return True
         # 'today' only when paired with temporary-scope language:
-        if "today" in lower and any(p in lower for p in ["for now", "until", "just for today", "temporarily"]):
-            return True
-        return False
+        return bool("today" in lower and any(p in lower for p in ["for now", "until", "just for today", "temporarily"]))
 
     # ---------------- importance & confidence (inferred) ----------------
 
@@ -706,11 +663,11 @@ class CuratedMemoryCurator:
             summary = summary[:217].rstrip() + "..."
         return f"{prefix} {summary}"
 
-    def _expiration_for(self, context_type: str) -> Optional[str]:
+    def _expiration_for(self, context_type: str) -> str | None:
         days = self._ttl_for(context_type)
         if days <= 0:
             return None
-        return (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+        return (datetime.now(UTC) + timedelta(days=days)).isoformat()
 
     def _ttl_for(self, context_type: str) -> int:
         if context_type == "temporary_context":
@@ -718,7 +675,7 @@ class CuratedMemoryCurator:
         return self.default_ttl_days
 
     @staticmethod
-    def _metadata_json(metadata: Dict[str, Any]) -> str:
+    def _metadata_json(metadata: dict[str, Any]) -> str:
         try:
             return json.dumps(metadata, ensure_ascii=False, separators=(",", ":"))
         except Exception:
@@ -729,15 +686,15 @@ class CuratedMemoryCurator:
     @staticmethod
     def _log_inferred_decision(
         user_id: str,
-        guild_id: Optional[str],
-        channel_id: Optional[str],
-        thread_id: Optional[str],
-        source_message_id: Optional[str],
-        context_type: Optional[str] = None,
+        guild_id: str | None,
+        channel_id: str | None,
+        thread_id: str | None,
+        source_message_id: str | None,
+        context_type: str | None = None,
         reason: str = "rejected",
-        importance: Optional[float] = None,
-        confidence: Optional[float] = None,
-        ttl_days: Optional[int] = None,
+        importance: float | None = None,
+        confidence: float | None = None,
+        ttl_days: int | None = None,
     ) -> None:
         """Log an inferred memory decision in a structured way.
 
@@ -770,7 +727,7 @@ class CuratedMemoryCurator:
 
 # Legacy compatibility wrapper for existing callers that relied on _DURABLE_HINTS.
 # This is intentionally kept small and not used by new inferred logic.
-_DURABLE_HINTS: Dict[str, str] = {
+_DURABLE_HINTS: dict[str, str] = {
     "prefer": "user_preference",
     "prefers": "user_preference",
     "call me": "user_preference",

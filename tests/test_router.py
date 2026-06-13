@@ -1,20 +1,20 @@
-"""
-Unit tests for the refactored Router class.
+"""Unit tests for the refactored Router class.
 
 Ensures all modality flows (text, audio, URL, image, doc) are correctly routed,
 and that the '1 IN > 1 OUT' principle is strictly enforced. Verifies command
 handling for static, cog-based, and standard chat commands.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-import discord
-import logging
-
-from bot.router import InputModality, Router, BotAction
-from bot.command_parser import ParsedCommand
-from bot.types import Command
 import asyncio
+import logging
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import discord
+import pytest
+
+from bot.command_parser import ParsedCommand
+from bot.router import BotAction, InputModality, Router
+from bot.types import Command
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ def mock_message():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "command_type, expected_text, should_be_none, should_delegate_to_cog",
+    ("command_type", "expected_text", "should_be_none", "should_delegate_to_cog"),
     [
         (Command.PING, "Pong!", False, False),
         (Command.HELP, None, False, True),
@@ -78,7 +78,7 @@ async def test_command_handling(
     expected_text,
     should_be_none,
     should_delegate_to_cog,
-):
+) -> None:
     """Test router's handling of static, cog, and ignored commands."""
     mock_parse_command.return_value = ParsedCommand(command=command_type, cleaned_content="Hello")
 
@@ -108,7 +108,7 @@ async def test_command_handling(
 
 @pytest.mark.asyncio
 @patch("bot.router.parse_command")
-async def test_alert_delegates_without_custom_parse(mock_parse_command, router, mock_message):
+async def test_alert_delegates_without_custom_parse(mock_parse_command, router, mock_message) -> None:
     mock_parse_command.return_value = None
 
     mock_message.guild = MagicMock(spec=discord.Guild)
@@ -123,12 +123,13 @@ async def test_alert_delegates_without_custom_parse(mock_parse_command, router, 
 
 
 @pytest.mark.asyncio
-async def test_router_typing_rate_limit_is_non_fatal(router, mock_message):
+async def test_router_typing_rate_limit_is_non_fatal(router, mock_message) -> None:
     """Typing failures should not abort routing, and repeated attempts should be suppressed."""
 
     class _BrokenTyping:
         async def __aenter__(self):
-            raise RuntimeError("429 Too Many Requests")
+            msg = "429 Too Many Requests"
+            raise RuntimeError(msg)
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -179,7 +180,7 @@ async def test_router_typing_rate_limit_is_non_fatal(router, mock_message):
 
 @pytest.mark.asyncio
 @patch("bot.router.parse_command")
-async def test_alert_delegates_without_custom_parse(mock_parse_command, router, mock_message):
+async def test_alert_delegates_without_custom_parse(mock_parse_command, router, mock_message) -> None:
     mock_parse_command.return_value = None
 
     mock_message.guild = MagicMock(spec=discord.Guild)
@@ -194,7 +195,7 @@ async def test_alert_delegates_without_custom_parse(mock_parse_command, router, 
 
 
 @pytest.mark.parametrize(
-    "modality, flow_key, expected_output",
+    ("modality", "flow_key", "expected_output"),
     [
         (InputModality.TEXT_ONLY, "process_text", "Processed text"),
         (InputModality.GENERAL_URL, "process_url", "Processed URL"),
@@ -211,7 +212,7 @@ async def test_modality_flows(
     modality,
     flow_key,
     expected_output,
-):
+) -> None:
     """Verify that each input modality is routed to the correct processing flow."""
     mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test content")
 
@@ -233,7 +234,7 @@ async def test_modality_flows(
 
 @pytest.mark.asyncio
 @patch("bot.router.parse_command")
-async def test_no_processed_text_returns_error(mock_parse_command, router, mock_message):
+async def test_no_processed_text_returns_error(mock_parse_command, router, mock_message) -> None:
     """Test that if a flow returns no text, a user-friendly error is returned."""
     mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
 
@@ -248,7 +249,7 @@ async def test_no_processed_text_returns_error(mock_parse_command, router, mock_
 
 @pytest.mark.asyncio
 @patch("bot.router.parse_command")
-async def test_exception_in_flow_returns_error(mock_parse_command, router, mock_message):
+async def test_exception_in_flow_returns_error(mock_parse_command, router, mock_message) -> None:
     """Test that an exception during processing returns a generic error message."""
     mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
 
@@ -263,7 +264,7 @@ async def test_exception_in_flow_returns_error(mock_parse_command, router, mock_
 
 @pytest.mark.asyncio
 @patch("bot.router.parse_command")
-async def test_empty_string_prevention(mock_parse_command, router, mock_message):
+async def test_empty_string_prevention(mock_parse_command, router, mock_message) -> None:
     """Verify empty string responses are converted to error messages."""
     mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
 
@@ -278,7 +279,7 @@ async def test_empty_string_prevention(mock_parse_command, router, mock_message)
 
 @pytest.mark.asyncio
 @patch("bot.router.parse_command")
-async def test_error_embed_generation(mock_parse_command, router, mock_message):
+async def test_error_embed_generation(mock_parse_command, router, mock_message) -> None:
     """Verify error conditions generate proper error content."""
     mock_parse_command.return_value = ParsedCommand(command=Command.CHAT, cleaned_content="Test")
 
@@ -294,7 +295,7 @@ async def test_error_embed_generation(mock_parse_command, router, mock_message):
 
 
 @pytest.mark.asyncio
-async def test_dm_plain_text_reply():
+async def test_dm_plain_text_reply() -> None:
     """Test that a plain text DM returns a ResponseMessage with content."""
     # Setup
     mock_bot = MagicMock()
@@ -319,14 +320,14 @@ async def test_dm_plain_text_reply():
 
 
 @pytest.mark.asyncio
-async def test_flow_process_attachments_multimodal_accepts_raw_content_arg(router, mock_message):
+async def test_flow_process_attachments_multimodal_accepts_raw_content_arg(router, mock_message) -> None:
     mock_message.attachments = []
     res = await router._flow_process_attachments_multimodal(mock_message, "")
     assert isinstance(res, BotAction)
 
 
 @pytest.mark.asyncio
-async def test_guild_unmentioned_ignored():
+async def test_guild_unmentioned_ignored() -> None:
     """Test that _should_process_message rejects unmentioned guild messages."""
     mock_bot = MagicMock()
     mock_bot.config = {
@@ -367,16 +368,17 @@ async def test_guild_unmentioned_ignored():
 
 
 class TestExtractionOnlyTimeout:
-    """Verify extraction-only items are guarded by asyncio.wait_for timeout. [REH][PA]"""
+    """Verify extraction-only items are guarded by asyncio.wait_for timeout. [REH][PA]."""
 
     @pytest.mark.asyncio
-    async def test_extraction_only_timeout_cancels_hung_handler(self, mock_bot):
+    async def test_extraction_only_timeout_cancels_hung_handler(self, mock_bot) -> None:
         """If an extraction handler hangs, asyncio.wait_for cancels it and
-        the item is recorded as failed (partial-success preserved)."""
+        the item is recorded as failed (partial-success preserved).
+        """
         router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
 
         # Mock _handle_item_with_provider to hang forever
-        async def _hang_forever(*args, **kwargs):
+        async def _hang_forever(*args, **kwargs) -> None:
             await asyncio.sleep(9999)
 
         router._handle_item_with_provider = AsyncMock(side_effect=_hang_forever)
@@ -393,12 +395,12 @@ class TestExtractionOnlyTimeout:
             source = inspect.getsource(router._process_multimodal_message_internal)
             # Verify asyncio.wait_for wraps extraction-only handler calls
             assert "asyncio.wait_for" in source, "extraction-only items must use asyncio.wait_for"
-            assert "asyncio.TimeoutError" in source, "must catch asyncio.TimeoutError for extraction items"
+            assert "TimeoutError" in source, "must catch TimeoutError for extraction items"
         finally:
             os.environ.pop("MULTIMODAL_PER_ITEM_BUDGET", None)
 
     @pytest.mark.asyncio
-    async def test_extraction_only_success_within_budget(self, mock_bot):
+    async def test_extraction_only_success_within_budget(self, mock_bot) -> None:
         """Extraction-only items that complete within budget succeed normally."""
         router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
         router._handle_item_with_provider = AsyncMock(return_value="extracted text")

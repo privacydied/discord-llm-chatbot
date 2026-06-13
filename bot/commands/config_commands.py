@@ -1,16 +1,10 @@
-"""
-Discord commands for configuration management and dynamic reloading.
-"""
+"""Discord commands for configuration management and dynamic reloading."""
 
 import discord
 from discord.ext import commands
 
-from ..config_reload import (
-    manual_reload_command,
-    get_config_for_debug,
-    get_config_version,
-)
-from ..utils.logging import get_logger
+from bot.config_reload import get_config_for_debug, get_config_version, manual_reload_command
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -41,7 +35,7 @@ class ConfigCommands(commands.Cog):
                 mention_author=False,
             )
         except Exception as e:
-            logger.error(f"❌ Manual config reload failed: {e}")
+            logger.exception(f"❌ Manual config reload failed: {e}")
             await ctx.reply(
                 "❌ Failed to reload configuration. Check logs for details.",
                 mention_author=False,
@@ -108,7 +102,7 @@ class ConfigCommands(commands.Cog):
                 mention_author=False,
             )
         except Exception as e:
-            logger.error(f"❌ Config status command failed: {e}")
+            logger.exception(f"❌ Config status command failed: {e}")
             await ctx.reply("❌ Failed to retrieve configuration status.", mention_author=False)
 
     @commands.command(name="config-help", aliases=["config_help"])

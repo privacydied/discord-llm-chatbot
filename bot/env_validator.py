@@ -1,20 +1,21 @@
-"""
-Environment consistency validator for Discord bot.
+"""Environment consistency validator for Discord bot.
 Checks that all required environment variables and files are present and valid.
 """
 
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Any
+from typing import Any
 
 # Import TTS utilities for validation
 try:
-    from .tts.validation import validate_tts_environment, get_env_paths
+    from .tts.validation import get_env_paths, validate_tts_environment
 
     use_enhanced_utils = True
 except ImportError:
     use_enhanced_utils = False
+
+import sys
 
 from bot.utils.logging import get_logger
 
@@ -49,9 +50,8 @@ REQUIRED_DIRS = [
 ]
 
 
-def validate_environment() -> Tuple[bool, Optional[str]]:
-    """
-    Validate the environment by checking required environment variables and directories.
+def validate_environment() -> tuple[bool, str | None]:
+    """Validate the environment by checking required environment variables and directories.
     Returns (is_valid, error_message) tuple.
     """
     # Check core environment variables
@@ -113,9 +113,8 @@ def validate_environment() -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-def get_environment_info() -> Dict[str, Any]:
-    """
-    Get information about the current environment.
+def get_environment_info() -> dict[str, Any]:
+    """Get information about the current environment.
     Returns a dictionary with environment details.
     """
     info = {
@@ -150,8 +149,7 @@ def get_environment_info() -> Dict[str, Any]:
 
 
 def validate_on_startup() -> bool:
-    """
-    Validate environment on startup and log results.
+    """Validate environment on startup and log results.
     Returns True if validation passed, False otherwise.
     """
     logger.info("Validating environment...")
@@ -162,9 +160,8 @@ def validate_on_startup() -> bool:
         env_info = get_environment_info()
         logger.info(f"Environment info: backend={env_info['backend']}, model={env_info['model']}, tts_voice={env_info['tts_voice']}")
         return True
-    else:
-        logger.error(f"❌ Environment validation failed: {error}")
-        return False
+    logger.error(f"❌ Environment validation failed: {error}")
+    return False
 
 
 if __name__ == "__main__":
@@ -177,7 +174,7 @@ if __name__ == "__main__":
     # Run validation
     if validate_on_startup():
         get_logger(__name__).info("Environment validation passed")
-        exit(0)
+        sys.exit(0)
     else:
         get_logger(__name__).error("Environment validation failed")
-        exit(1)
+        sys.exit(1)

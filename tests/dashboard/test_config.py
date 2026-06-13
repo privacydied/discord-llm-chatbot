@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import os
-
-import pytest
+from typing import TYPE_CHECKING
 
 from bot.dashboard.config import load_dashboard_config
+
+if TYPE_CHECKING:
+    import pytest
 
 
 class TestDashboardConfig:

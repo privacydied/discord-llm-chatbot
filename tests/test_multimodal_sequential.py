@@ -1,5 +1,4 @@
-"""
-Comprehensive tests for sequential multimodal processing.
+"""Comprehensive tests for sequential multimodal processing.
 Verifies the 1 IN → 1 OUT rule, retry logic, and result aggregation.
 """
 
@@ -7,12 +6,15 @@ import pytest
 
 pytestmark = pytest.mark.skip(reason="Requires live multimodal sequential processing")
 import asyncio
+from typing import Never
 from unittest.mock import AsyncMock, MagicMock
-from discord import Message, Attachment, Embed
-from bot.router import Router
-from bot.modality import InputModality, InputItem, collect_input_items
-from bot.result_aggregator import ResultAggregator, IMPLICIT_ACK_THOUGHTS_PROMPT
+
+from discord import Attachment, Embed, Message
+
+from bot.modality import InputItem, InputModality, collect_input_items
 from bot.multimodal_retry import run_with_retries
+from bot.result_aggregator import IMPLICIT_ACK_THOUGHTS_PROMPT, ResultAggregator
+from bot.router import Router
 
 
 @pytest.fixture
@@ -34,7 +36,7 @@ def router(mock_bot):
 
 
 @pytest.mark.asyncio
-async def test_two_images_sequential(router):
+async def test_two_images_sequential(router) -> None:
     """Test that two image attachments are processed sequentially, not in parallel."""
     # Create mock message with two image attachments
     message = MagicMock(spec=Message)
@@ -50,7 +52,7 @@ async def test_two_images_sequential(router):
     # Track processing order
     processing_order = []
 
-    async def mock_handle_image(item):
+    async def mock_handle_image(item) -> str:
         processing_order.append(item.payload.filename)
         await asyncio.sleep(0.1)  # Simulate processing time
         return f"Analysis of {item.payload.filename}: This is a test image."
@@ -61,7 +63,7 @@ async def test_two_images_sequential(router):
     # Mock text flow to capture final aggregated result
     final_prompt = None
 
-    async def capture_text_flow(prompt, message, context):
+    async def capture_text_flow(prompt, message, context) -> None:
         nonlocal final_prompt
         final_prompt = prompt
 
@@ -79,11 +81,12 @@ async def test_two_images_sequential(router):
     assert "image2.png" in final_prompt
     assert "Analysis of image1.jpg" in final_prompt
     assert "Analysis of image2.png" in final_prompt
-    assert "[1/2]" in final_prompt and "[2/2]" in final_prompt
+    assert "[1/2]" in final_prompt
+    assert "[2/2]" in final_prompt
 
 
 @pytest.mark.asyncio
-async def test_mixed_modalities_order(router):
+async def test_mixed_modalities_order(router) -> None:
     """Test that mixed modalities (image + PDF + URL + image) are processed in appearance order."""
     # Create mock message with mixed content
     message = MagicMock(spec=Message)
@@ -99,15 +102,15 @@ async def test_mixed_modalities_order(router):
     # Track processing order and types
     processing_log = []
 
-    async def mock_handle_general_url(item):
+    async def mock_handle_general_url(item) -> str:
         processing_log.append(("URL", item.payload))
         return f"URL content from {item.payload}"
 
-    async def mock_handle_pdf(item):
+    async def mock_handle_pdf(item) -> str:
         processing_log.append(("PDF", item.payload.filename))
         return f"PDF content from {item.payload.filename}"
 
-    async def mock_handle_image(item):
+    async def mock_handle_image(item) -> str:
         processing_log.append(("IMAGE", item.payload.filename))
         return f"Image analysis of {item.payload.filename}"
 
@@ -119,7 +122,7 @@ async def test_mixed_modalities_order(router):
     # Mock text flow
     final_prompt = None
 
-    async def capture_text_flow(prompt, message, context):
+    async def capture_text_flow(prompt, message, context) -> None:
         nonlocal final_prompt
         final_prompt = prompt
 
@@ -147,15 +150,16 @@ async def test_mixed_modalities_order(router):
 
 
 @pytest.mark.asyncio
-async def test_retries_then_success():
+async def test_retries_then_success() -> None:
     """Test that retry logic works: first two attempts fail, third succeeds."""
     call_count = 0
 
-    async def failing_handler(item):
+    async def failing_handler(item) -> str:
         nonlocal call_count
         call_count += 1
         if call_count <= 2:
-            raise ConnectionError(f"Attempt {call_count} failed")
+            msg = f"Attempt {call_count} failed"
+            raise ConnectionError(msg)
         return "Success on attempt 3"
 
     # Test the retry utility directly
@@ -173,11 +177,12 @@ async def test_retries_then_success():
 
 
 @pytest.mark.asyncio
-async def test_retries_then_fail():
+async def test_retries_then_fail() -> None:
     """Test that after all retries fail, a clear failure message is returned."""
 
-    async def always_failing_handler(item):
-        raise TimeoutError("Handler always times out")
+    async def always_failing_handler(item) -> Never:
+        msg = "Handler always times out"
+        raise TimeoutError(msg)
 
     # Test the retry utility
     result = await run_with_retries(
@@ -195,12 +200,12 @@ async def test_retries_then_fail():
 
 
 @pytest.mark.asyncio
-async def test_no_parallelism():
+async def test_no_parallelism() -> None:
     """Test that only one handler is active at any time."""
     active_handlers = set()
     max_concurrent = 0
 
-    async def tracking_handler(item):
+    async def tracking_handler(item) -> str:
         handler_id = id(asyncio.current_task())
         active_handlers.add(handler_id)
         nonlocal max_concurrent
@@ -236,7 +241,7 @@ async def test_no_parallelism():
 
 
 @pytest.mark.asyncio
-async def test_text_only_passthrough(router):
+async def test_text_only_passthrough(router) -> None:
     """Test that plain text messages are routed to text flow unchanged."""
     message = MagicMock(spec=Message)
     message.id = 999
@@ -248,7 +253,7 @@ async def test_text_only_passthrough(router):
     # Mock text flow to capture input
     captured_text = None
 
-    async def capture_text_flow(text, message, context):
+    async def capture_text_flow(text, message, context) -> None:
         nonlocal captured_text
         captured_text = text
 
@@ -261,7 +266,7 @@ async def test_text_only_passthrough(router):
     assert captured_text == "Just plain text, no attachments"
 
 
-def test_result_aggregator_formatting():
+def test_result_aggregator_formatting() -> None:
     """Test that ResultAggregator formats results correctly."""
     aggregator = ResultAggregator()
 
@@ -301,7 +306,7 @@ def test_result_aggregator_formatting():
     assert "Original message text" in prompt
 
 
-def test_result_aggregator_injects_ack_for_media_only_image():
+def test_result_aggregator_injects_ack_for_media_only_image() -> None:
     """Media-only SINGLE_IMAGE with no other text sources should inject implicit ack+thoughts prompt."""
     aggregator = ResultAggregator()
 
@@ -328,7 +333,7 @@ def test_result_aggregator_injects_ack_for_media_only_image():
     assert "Doomguy" in prompt
 
 
-def test_result_aggregator_uses_scraped_general_url_text_as_text_source():
+def test_result_aggregator_uses_scraped_general_url_text_as_text_source() -> None:
     """Scraped GENERAL_URL text (e.g., tweet caption + VL analysis) should prevent media-only ack injection."""
     aggregator = ResultAggregator()
 
@@ -365,7 +370,7 @@ Doomguy stands in front of a horde of demons in a fiery arena."""
     assert "This is a Doom tweet with an image of Doomguy." in prompt
 
 
-def test_collect_input_items_skips_instagram_preview_embed_when_url_present():
+def test_collect_input_items_skips_instagram_preview_embed_when_url_present() -> None:
     """Discord link preview embeds for Instagram mirrors should not become duplicate VIDEO_URL items."""
     message = MagicMock(spec=Message)
     message.id = 1502026808160157737
@@ -383,7 +388,7 @@ def test_collect_input_items_skips_instagram_preview_embed_when_url_present():
     assert items[0].payload == "https://d.vxinstagram.com/reel/DVMPNJtE50x/?igsh="
 
 
-def test_collect_input_items_order():
+def test_collect_input_items_order() -> None:
     """Test that collect_input_items preserves order correctly."""
     message = MagicMock(spec=Message)
     message.content = "Check https://example.com and https://test.org"
@@ -397,10 +402,14 @@ def test_collect_input_items_order():
 
     # Should be: URL1, URL2, attachment1, attachment2, embed1
     assert len(items) == 5
-    assert items[0].source_type == "url" and items[0].payload == "https://example.com"
-    assert items[1].source_type == "url" and items[1].payload == "https://test.org"
-    assert items[2].source_type == "attachment" and items[2].payload.filename == "file1.pdf"
-    assert items[3].source_type == "attachment" and items[3].payload.filename == "file2.jpg"
+    assert items[0].source_type == "url"
+    assert items[0].payload == "https://example.com"
+    assert items[1].source_type == "url"
+    assert items[1].payload == "https://test.org"
+    assert items[2].source_type == "attachment"
+    assert items[2].payload.filename == "file1.pdf"
+    assert items[3].source_type == "attachment"
+    assert items[3].payload.filename == "file2.jpg"
     assert items[4].source_type == "embed"
 
     # Verify order indices

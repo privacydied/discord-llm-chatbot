@@ -1,17 +1,19 @@
 import asyncio
-import logging
 import inspect
 import io
+import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
-from bot.tts.kokoro_adapter import Kokoro, import_kokoro_submodule, get_direct_wrapper
-from .base import BaseEngine
+from typing import Any
+
+from bot.tokenizer_registry import apply_lexicon, select_tokenizer_for_language
 from bot.tts.errors import TTSError
-from bot.tokenizer_registry import select_tokenizer_for_language, apply_lexicon
 from bot.tts.helpers import maybe_onnx_session
 from bot.tts.ipa_vocab_loader import UnsupportedIPASymbolError
+from bot.tts.kokoro_adapter import Kokoro, get_direct_wrapper, import_kokoro_submodule
+
+from .base import BaseEngine
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +28,11 @@ def _looks_like_ipa(s: str) -> bool:
 class KokoroONNXEngine(BaseEngine):
     def __init__(
         self,
-        model_path: Optional[str] = None,
-        voices_path: Optional[str] = None,
-        tokenizer: Optional[str] = None,
-        voice: Optional[str] = None,
-    ):
+        model_path: str | None = None,
+        voices_path: str | None = None,
+        tokenizer: str | None = None,
+        voice: str | None = None,
+    ) -> None:
         # Resolve defaults lazily so tests can instantiate without arguments
         project_root = Path(__file__).resolve().parents[3]
         env_model = os.getenv("KOKORO_MODEL_PATH", "").strip()
@@ -47,7 +49,7 @@ class KokoroONNXEngine(BaseEngine):
             str(project_root / "tts/voices/voices-v1.0.bin"),
         ]
 
-        def _first_existing(paths: list[str]) -> Optional[str]:
+        def _first_existing(paths: list[str]) -> str | None:
             for p in paths:
                 if p and Path(p).exists():
                     return p
@@ -60,21 +62,20 @@ class KokoroONNXEngine(BaseEngine):
         env_tokenizer = (os.environ.get("TTS_TOKENISER") or os.environ.get("TTS_TOKENIZER") or "").strip().lower()
         if tokenizer is not None:
             self.tokenizer = tokenizer
+        elif self.language.lower().startswith("en"):
+            # English uses built-in IPA path only; do not trigger registry discovery/logs
+            self.tokenizer = "builtin_ipa"
         else:
-            if self.language.lower().startswith("en"):
-                # English uses built-in IPA path only; do not trigger registry discovery/logs
-                self.tokenizer = "builtin_ipa"
-            else:
-                if env_tokenizer:
-                    logger.info("Using environment-specified tokenizer: %s", env_tokenizer)
-                self.tokenizer = select_tokenizer_for_language(self.language)
+            if env_tokenizer:
+                logger.info("Using environment-specified tokenizer: %s", env_tokenizer)
+            self.tokenizer = select_tokenizer_for_language(self.language)
         self.voice = voice or os.getenv("TTS_VOICE", "af_heart")
         self.engine = None
         # Misaki G2P (only used when registry selects 'misaki')
         self._g2p_initialized = False
         self._g2p = None
 
-    def load(self):
+    def load(self) -> None:
         try:
             # Patch EspeakWrapper to avoid Python 3.12 incompatibility
             try:
@@ -85,9 +86,9 @@ class KokoroONNXEngine(BaseEngine):
                 _ew = getattr(_tok, "EspeakWrapper", None)
                 if _ew is not None:
                     if not hasattr(_ew, "set_data_path"):
-                        setattr(_ew, "set_data_path", staticmethod(lambda *_, **__: None))
+                        _ew.set_data_path = staticmethod(lambda *_, **__: None)
                     if not hasattr(_ew, "set_library"):
-                        setattr(_ew, "set_library", staticmethod(lambda *_, **__: None))
+                        _ew.set_library = staticmethod(lambda *_, **__: None)
                     logger.debug("Patched EspeakWrapper with no-op methods")
             except Exception:
                 # Non-fatal; continue and let Kokoro attempt init
@@ -105,7 +106,7 @@ class KokoroONNXEngine(BaseEngine):
                 except Exception:
                     is_mock = False
                 if is_mock or current_tok is None:
-                    setattr(self.engine, "tokenizer", self.tokenizer)
+                    self.engine.tokenizer = self.tokenizer
             except Exception:
                 # Non-fatal if underlying object disallows setting attributes
                 logger.debug(
@@ -115,11 +116,11 @@ class KokoroONNXEngine(BaseEngine):
             logger.info("KokoroEngine loaded successfully")
         except Exception as e:
             logger.error(f"Failed to load KokoroEngine: {e}", exc_info=True)
-            raise TTSError(f"Failed to load KokoroEngine: {e}") from e
+            msg = f"Failed to load KokoroEngine: {e}"
+            raise TTSError(msg) from e
 
     def synthesize(self, text: str, language: str = "en", **kwargs):
-        """
-        For English, always use IPA-only path with no fallbacks.
+        """For English, always use IPA-only path with no fallbacks.
         Non-English languages use the registry-based approach.
         """
         lang = (language or "en").strip().lower()
@@ -162,7 +163,8 @@ class KokoroONNXEngine(BaseEngine):
             ipa = text_to_ipa(text)
         except UnsupportedIPASymbolError as exc:
             message = str(exc).strip()
-            raise TTSError(f"engine_input_error: unsupported_ipa {message}") from exc
+            msg = f"engine_input_error: unsupported_ipa {message}"
+            raise TTSError(msg) from exc
         except Exception as exc:
             logger.error(
                 "English IPA synthesis failed during G2P: %s",
@@ -171,12 +173,14 @@ class KokoroONNXEngine(BaseEngine):
                 extra={"subsys": "tts", "event": "english_ipa.error"},
             )
             if isinstance(exc, G2PUnavailableError):
-                raise TTSError(f"English IPA unavailable: {exc}") from exc
-            raise TTSError(f"English IPA synthesis failed: {exc}") from exc
+                msg = f"English IPA unavailable: {exc}"
+                raise TTSError(msg) from exc
+            msg = f"English IPA synthesis failed: {exc}"
+            raise TTSError(msg) from exc
 
         ipa, replacements = self._normalize_ipa_symbols(ipa)
         if replacements:
-            replaced_repr = "[" + ",".join(f"'{k}'" for k in replacements.keys()) + "]"
+            replaced_repr = "[" + ",".join(f"'{k}'" for k in replacements) + "]"
             total = sum(replacements.values())
             logger.info(
                 "kokoro.ipa.normalize replaced=%s count=%d",
@@ -201,7 +205,8 @@ class KokoroONNXEngine(BaseEngine):
 
         have_assets = bool(self.model_path and self.voices_path and Path(self.model_path).exists() and Path(self.voices_path).exists())
         if not have_assets:
-            raise TTSError("Kokoro ONNX assets missing; English requires IPA-only path with official vocabulary.")
+            msg = "Kokoro ONNX assets missing; English requires IPA-only path with official vocabulary."
+            raise TTSError(msg)
 
         # Use KokoroDirect with official IPA vocabulary (no autodiscovery, no tokenizer)
         kd = self._get_kokoro_direct(use_tokenizer=False, force_ipa=True)
@@ -225,13 +230,13 @@ class KokoroONNXEngine(BaseEngine):
         first_token = ipa.split()[0] if ipa.split() else ""
         attempt = 0
         max_attempts = 2
-        wav_path: Optional[str] = None
+        wav_path: str | None = None
         while attempt < max_attempts:
             attempt += 1
             result_container = [None]
             exception_container = [None]
 
-            def synthesis_target():
+            def synthesis_target() -> None:
                 try:
                     path = kd.create(
                         phonemes=ipa,
@@ -263,17 +268,18 @@ class KokoroONNXEngine(BaseEngine):
                 logger.error(
                     "English IPA synthesis failed: %s",
                     exception_container[0],
-                    exc_info=True,
                     extra={"subsys": "tts", "event": "english_ipa.error"},
                 )
-                raise TTSError(f"English IPA synthesis failed: {exception_container[0]}") from exception_container[0]
+                msg_0 = f"English IPA synthesis failed: {exception_container[0]}"
+                raise TTSError(msg_0) from exception_container[0]
 
             if result_container[0] is None:
                 logger.error(
                     "English IPA synthesis failed: no result returned",
                     extra={"subsys": "tts", "event": "english_ipa.error"},
                 )
-                raise TTSError("English IPA synthesis failed: no result returned")
+                msg_0 = "English IPA synthesis failed: no result returned"
+                raise TTSError(msg_0)
 
             wav_path = result_container[0]
             matched_symbols = getattr(kd, "_last_matched_symbols", [])
@@ -299,7 +305,8 @@ class KokoroONNXEngine(BaseEngine):
                 first_token = tokens[0]
 
         if wav_path is None:
-            raise TTSError("English IPA synthesis failed: no result returned")
+            msg_0 = "English IPA synthesis failed: no result returned"
+            raise TTSError(msg_0)
 
         audio_bytes = self._wav_to_bytes(wav_path)
 
@@ -326,8 +333,8 @@ class KokoroONNXEngine(BaseEngine):
         )
 
     @staticmethod
-    def _normalize_ipa_symbols(ipa: str) -> Tuple[str, Dict[str, int]]:
-        replacements: Dict[str, int] = {}
+    def _normalize_ipa_symbols(ipa: str) -> tuple[str, dict[str, int]]:
+        replacements: dict[str, int] = {}
         if "g" in ipa:
             count = ipa.count("g")
             ipa = ipa.replace("g", "ɡ")
@@ -422,10 +429,7 @@ class KokoroONNXEngine(BaseEngine):
                 logger.debug("Invoking Misaki G2P on input text")
                 phon = self._g2p(text)
                 # Misaki may return (phonemes, meta) or just phonemes
-                if isinstance(phon, tuple) and len(phon) >= 1:
-                    phonemes = phon[0]
-                else:
-                    phonemes = phon
+                phonemes = phon[0] if isinstance(phon, tuple) and len(phon) >= 1 else phon
                 # Avoid verbose logging; registry owns tokenizer decision logs
                 # Guard against empty phoneme outputs (suspected root of dropped words)
                 invalid_marker = False
@@ -450,8 +454,7 @@ class KokoroONNXEngine(BaseEngine):
                             if wav_bytes is not None:
                                 logger.info("kokoro.registry.found name=create mode=engine async=false")
                                 return wav_bytes
-                            else:
-                                logger.debug("create(is_phonemes=True) returned unrecognized audio format; continuing to probing methods")
+                            logger.debug("create(is_phonemes=True) returned unrecognized audio format; continuing to probing methods")
             except Exception:
                 # Fall through to generic probing quietly
                 logger.debug(
@@ -519,7 +522,7 @@ class KokoroONNXEngine(BaseEngine):
                             lambda: meth(speaker=self.voice, text=text),
                             # text-only (engine may use default voice)
                             lambda: meth(text),
-                        ]
+                        ],
                     )
                 else:
                     patterns.extend(
@@ -530,7 +533,7 @@ class KokoroONNXEngine(BaseEngine):
                             lambda: meth(text=text, speaker=self.voice),
                             # voice-first positional (some APIs expect voice before text)
                             lambda: meth(self.voice, text),
-                        ]
+                        ],
                     )
 
                 # Signature-aware kwargs attempts (covers alternate arg names)
@@ -598,11 +601,10 @@ class KokoroONNXEngine(BaseEngine):
                         name,
                     )
                     return wav_bytes
-                else:
-                    logger.debug(
-                        "Method '%s' returned unrecognized audio format; trying next pattern",
-                        name,
-                    )
+                logger.debug(
+                    "Method '%s' returned unrecognized audio format; trying next pattern",
+                    name,
+                )
 
         # Log available callable attributes to aid debugging
         try:
@@ -630,7 +632,8 @@ class KokoroONNXEngine(BaseEngine):
                 len(text or ""),
             )
             if lang_lower.startswith("en") and decision.mode != "phonemes":
-                raise TTSError("engine_input_error: english_requires_phonemes")
+                msg = "engine_input_error: english_requires_phonemes"
+                raise TTSError(msg)
 
             generate_waveform = getattr(kd, "generate_waveform", None)
             if not callable(generate_waveform):
@@ -639,29 +642,29 @@ class KokoroONNXEngine(BaseEngine):
                     kd_cls.__name__,
                     direct_candidates,
                 )
-                raise TTSError(f"engine_missing_callable: {kd_cls.__name__} missing generate_waveform")
+                msg = f"engine_missing_callable: {kd_cls.__name__} missing generate_waveform"
+                raise TTSError(msg)
 
             gw_kwargs = {
                 "voice": self.voice,
                 "lang": self.language,
                 "logger": logger,
             }
-            if decision.mode == "phonemes":
-                payload = {"phonemes": decision.payload}
-            else:
-                payload = {"text": decision.payload}
+            payload = {"phonemes": decision.payload} if decision.mode == "phonemes" else {"text": decision.payload}
 
             try:
                 audio_candidate = generate_waveform(**payload, **gw_kwargs)
             except UnsupportedIPASymbolError as exc:
-                raise TTSError(f"engine_input_error: unsupported_ipa {exc}") from exc
+                msg = f"engine_input_error: unsupported_ipa {exc}"
+                raise TTSError(msg) from exc
             except Exception as exc:
-                logger.error(
+                logger.exception(
                     "kokoro.registry.none engine=%s mode=direct candidates=%s",
                     kd_cls.__name__,
                     direct_candidates,
                 )
-                raise TTSError(f"engine_missing_callable: direct pipeline failed: {exc}") from exc
+                msg = f"engine_missing_callable: direct pipeline failed: {exc}"
+                raise TTSError(msg) from exc
 
             audio_bytes = self._normalize_audio_to_wav_bytes(audio_candidate)
             if audio_bytes is None:
@@ -670,7 +673,8 @@ class KokoroONNXEngine(BaseEngine):
                     kd_cls.__name__,
                     direct_candidates,
                 )
-                raise TTSError("engine_missing_callable: direct pipeline returned unsupported format")
+                msg = "engine_missing_callable: direct pipeline returned unsupported format"
+                raise TTSError(msg)
 
             logger.info("kokoro.registry.found name=generate_waveform mode=direct async=false")
             return audio_bytes
@@ -684,7 +688,8 @@ class KokoroONNXEngine(BaseEngine):
             type(self.engine).__name__,
             list(candidates),
         )
-        raise TTSError(f"engine_missing_callable: no compatible synthesis method found on {type(self.engine).__name__} (language={self.language}, candidates={list(candidates)})")
+        msg = f"engine_missing_callable: no compatible synthesis method found on {type(self.engine).__name__} (language={self.language}, candidates={list(candidates)})"
+        raise TTSError(msg)
 
     def _normalize_audio_to_wav_bytes(self, data: Any) -> bytes | None:
         """Ensure 16-bit PCM WAV regardless of input format.
@@ -692,8 +697,8 @@ class KokoroONNXEngine(BaseEngine):
         Converts various audio formats to standardized 16-bit PCM WAV
         with proper peak normalization for clean, consistent output.
         """
-        import soundfile as sf
         import numpy as np
+        import soundfile as sf
 
         # Handle different input types
         if isinstance(data, (bytes, bytearray)):
@@ -793,8 +798,8 @@ class KokoroONNXEngine(BaseEngine):
         Discord voice channels expect 48kHz sample rate. This method
         resamples any WAV audio to 48kHz with proper peak normalization.
         """
-        import soundfile as sf
         import numpy as np
+        import soundfile as sf
         from scipy.signal import resample_poly
 
         try:

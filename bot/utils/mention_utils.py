@@ -1,14 +1,10 @@
-"""
-Utilities for handling Discord user mentions with deduplication support.
-"""
+"""Utilities for handling Discord user mentions with deduplication support."""
 
 import re
-from typing import List, Set
 
 
-def format_mentions(users: List[str]) -> str:
-    """
-    Format a list of user IDs into a deduplicated mention string.
+def format_mentions(users: list[str]) -> str:
+    """Format a list of user IDs into a deduplicated mention string.
 
     Args:
         users: List of user ID strings (can contain duplicates)
@@ -20,12 +16,13 @@ def format_mentions(users: List[str]) -> str:
         format_mentions(["123", "456"]) -> "<@123> <@456>"
         format_mentions(["123", "123", "456"]) -> "<@123> <@456>"
         format_mentions([]) -> ""
+
     """
     if not users:
         return ""
 
     # Remove duplicates while preserving order
-    seen: Set[str] = set()
+    seen: set[str] = set()
     unique_users = []
     for user_id in users:
         if user_id not in seen:
@@ -37,15 +34,15 @@ def format_mentions(users: List[str]) -> str:
     return " ".join(mentions)
 
 
-def extract_user_ids_from_mentions(text: str) -> List[str]:
-    """
-    Extract user IDs from Discord mention strings in text.
+def extract_user_ids_from_mentions(text: str) -> list[str]:
+    """Extract user IDs from Discord mention strings in text.
 
     Args:
         text: Text containing Discord mentions like <@123> or <@!123>
 
     Returns:
         List of user ID strings found in the text
+
     """
     # Match both <@123> and <@!123> formats
     pattern = r"<@!?(\d+)>"
@@ -53,8 +50,7 @@ def extract_user_ids_from_mentions(text: str) -> List[str]:
 
 
 def deduplicate_mentions_in_text(text: str) -> str:
-    """
-    Remove duplicate user mentions from text while preserving the first occurrence.
+    """Remove duplicate user mentions from text while preserving the first occurrence.
 
     Args:
         text: Text that may contain duplicate mentions
@@ -65,6 +61,7 @@ def deduplicate_mentions_in_text(text: str) -> str:
     Examples:
         deduplicate_mentions_in_text("<@123> hello <@123>") -> "<@123> hello"
         deduplicate_mentions_in_text("<@123> <@456> <@123>") -> "<@123> <@456>"
+
     """
     if not text:
         return text
@@ -77,7 +74,7 @@ def deduplicate_mentions_in_text(text: str) -> str:
         return text  # No duplicates possible
 
     # Track seen user IDs and positions to remove
-    seen_users: Set[str] = set()
+    seen_users: set[str] = set()
     positions_to_remove = []
 
     for match in matches:
@@ -109,8 +106,7 @@ def deduplicate_mentions_in_text(text: str) -> str:
 
 
 def ensure_single_mention(content: str, target_user_id: str) -> str:
-    """
-    Ensure a target user is mentioned exactly once at the beginning of content.
+    """Ensure a target user is mentioned exactly once at the beginning of content.
 
     Args:
         content: The message content that may or may not contain mentions
@@ -124,6 +120,7 @@ def ensure_single_mention(content: str, target_user_id: str) -> str:
         ensure_single_mention("<@123> hello", "123") -> "<@123> hello"
         ensure_single_mention("hello <@123>", "123") -> "<@123> hello"
         ensure_single_mention("<@123> hello <@123>", "123") -> "<@123> hello"
+
     """
     if not content or not target_user_id:
         return content
@@ -136,5 +133,4 @@ def ensure_single_mention(content: str, target_user_id: str) -> str:
     # Add single mention at the beginning
     if content_clean:
         return f"{target_mention} {content_clean}"
-    else:
-        return target_mention
+    return target_mention

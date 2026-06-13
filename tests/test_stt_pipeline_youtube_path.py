@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Never
 
 import pytest
 
@@ -56,10 +57,10 @@ class _Logger:
         self.info_calls = []
         self.debug_calls = []
 
-    def info(self, msg, *args):
+    def info(self, msg, *args) -> None:
         self.info_calls.append((msg, args))
 
-    def debug(self, msg, *args):
+    def debug(self, msg, *args) -> None:
         self.debug_calls.append((msg, args))
 
 
@@ -101,8 +102,9 @@ async def test_try_youtube_transcript_first_success() -> None:
 async def test_try_youtube_transcript_first_fail_open_on_error() -> None:
     logger = _Logger()
 
-    async def _resolver(_url: str, force_refresh: bool = False):
-        raise RuntimeError("boom")
+    async def _resolver(_url: str, force_refresh: bool = False) -> Never:
+        msg = "boom"
+        raise RuntimeError(msg)
 
     result = await try_youtube_transcript_first(
         url="https://www.youtube.com/watch?v=abc123",

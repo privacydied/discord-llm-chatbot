@@ -1,7 +1,6 @@
 import pytest
 
-from bot import url_classifier
-from bot import web
+from bot import url_classifier, web
 
 
 @pytest.mark.asyncio
@@ -15,7 +14,7 @@ async def test_detect_url_content_type_returns_none_on_403_and_does_not_raise(
         headers = {"content-type": "text/html", "content-length": "123"}
 
     class _Client:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args, **kwargs) -> None:
             captured["headers"] = kwargs.get("headers")
 
         async def __aenter__(self):
@@ -60,7 +59,7 @@ async def test_download_url_to_temp_applies_url_http_headers(monkeypatch) -> Non
             return False
 
     class _Client:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args, **kwargs) -> None:
             captured["headers"] = kwargs.get("headers")
 
         async def __aenter__(self):
@@ -72,7 +71,7 @@ async def test_download_url_to_temp_applies_url_http_headers(monkeypatch) -> Non
         def stream(self, method: str, url: str):
             return _StreamCtx()
 
-    monkeypatch.setattr(url_classifier.httpx, "AsyncClient", lambda *a, **kw: _Client(*a, **kw))
+    monkeypatch.setattr(url_classifier.httpx, "AsyncClient", _Client)
 
     path, err = await url_classifier.download_url_to_temp("https://example.com/file.pdf")
 
@@ -96,7 +95,7 @@ async def test_web_fetch_url_content_applies_browser_like_headers(monkeypatch) -
             return b"hello"
 
     class _Client:
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args, **kwargs) -> None:
             captured["headers"] = kwargs.get("headers")
 
         async def __aenter__(self):
@@ -109,13 +108,13 @@ async def test_web_fetch_url_content_applies_browser_like_headers(monkeypatch) -
             return _Resp()
 
     # Mock httpx.AsyncClient
-    monkeypatch.setattr(web.httpx, "AsyncClient", lambda *a, **kw: _Client(*a, **kw))
+    monkeypatch.setattr(web.httpx, "AsyncClient", _Client)
 
     # Mock URL safety validation to allow example.com
-    async def _mock_validate_url_with_dns(url: str):
+    async def _mock_validate_url_with_dns(url: str) -> None:
         return None
 
-    async def _mock_validate_redirect_response(response):
+    async def _mock_validate_redirect_response(response) -> None:
         return None
 
     def _mock_is_private_hostname(hostname: str) -> bool:

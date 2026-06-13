@@ -16,9 +16,9 @@ import asyncio
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from bot.utils.logging import get_logger
 
@@ -61,7 +61,7 @@ DEFAULT_SLEEP_BETWEEN_CHANNELS = 1.0  # seconds
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 # ---------------------------------------------------------------------------
@@ -170,12 +170,12 @@ class BackfillJobStore:
             finally:
                 conn.close()
 
-    async def get_job(self, job_id: str) -> Optional[dict[str, Any]]:
+    async def get_job(self, job_id: str) -> dict[str, Any] | None:
         """Get a single job by ID."""
         await self.initialize()
         return await asyncio.to_thread(self._get_job_sync, job_id=job_id)
 
-    def _get_job_sync(self, job_id: str) -> Optional[dict[str, Any]]:
+    def _get_job_sync(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:
             conn = self._connect()
             try:
@@ -184,12 +184,12 @@ class BackfillJobStore:
             finally:
                 conn.close()
 
-    async def get_active_job(self, target_type: str, target_id: str) -> Optional[dict[str, Any]]:
+    async def get_active_job(self, target_type: str, target_id: str) -> dict[str, Any] | None:
         """Get the most recent non-terminal job for a target, if any."""
         await self.initialize()
         return await asyncio.to_thread(self._get_active_job_sync, target_type=target_type, target_id=target_id)
 
-    def _get_active_job_sync(self, target_type: str, target_id: str) -> Optional[dict[str, Any]]:
+    def _get_active_job_sync(self, target_type: str, target_id: str) -> dict[str, Any] | None:
         with self._lock:
             conn = self._connect()
             try:
@@ -208,8 +208,8 @@ class BackfillJobStore:
         page: int = 1,
         page_size: int = 50,
         max_page_size: int = 200,
-        status_filter: Optional[str] = None,
-        target_type_filter: Optional[str] = None,
+        status_filter: str | None = None,
+        target_type_filter: str | None = None,
     ) -> dict[str, Any]:
         """List backfill jobs with pagination and optional filters."""
         await self.initialize()
@@ -239,8 +239,8 @@ class BackfillJobStore:
         self,
         page_size: int,
         offset: int,
-        status_filter: Optional[str] = None,
-        target_type_filter: Optional[str] = None,
+        status_filter: str | None = None,
+        target_type_filter: str | None = None,
     ) -> tuple[list, int]:
         with self._lock:
             conn = self._connect()
@@ -264,7 +264,7 @@ class BackfillJobStore:
 
                 rows = conn.execute(
                     f"SELECT * FROM backfill_jobs WHERE {where_sql} ORDER BY created_at DESC LIMIT ? OFFSET ?",  # nosec B608
-                    params + [page_size, offset],
+                    [*params, page_size, offset],
                 ).fetchall()
                 return rows, total
             finally:
@@ -274,11 +274,11 @@ class BackfillJobStore:
         self,
         job_id: str,
         status: str,
-        error: Optional[str] = None,
-        messages_seen: Optional[int] = None,
-        messages_inserted: Optional[int] = None,
-        channels_seen: Optional[int] = None,
-        channels_skipped: Optional[int] = None,
+        error: str | None = None,
+        messages_seen: int | None = None,
+        messages_inserted: int | None = None,
+        channels_seen: int | None = None,
+        channels_skipped: int | None = None,
     ) -> bool:
         """Update job status and optional counters. Returns False if transition is invalid."""
         await self.initialize()
@@ -297,11 +297,11 @@ class BackfillJobStore:
         self,
         job_id: str,
         status: str,
-        error: Optional[str] = None,
-        messages_seen: Optional[int] = None,
-        messages_inserted: Optional[int] = None,
-        channels_seen: Optional[int] = None,
-        channels_skipped: Optional[int] = None,
+        error: str | None = None,
+        messages_seen: int | None = None,
+        messages_inserted: int | None = None,
+        channels_seen: int | None = None,
+        channels_skipped: int | None = None,
     ) -> bool:
         with self._lock:
             conn = self._connect()
@@ -396,10 +396,10 @@ class BackfillService:
 
     def __init__(
         self,
-        bot: "DiscordBot",
-        message_store: "MessageStore",
+        bot: DiscordBot,
+        message_store: MessageStore,
         job_store: BackfillJobStore,
-        audit_store: Optional["AuditStore"] = None,
+        audit_store: AuditStore | None = None,
         sleep_between_channels: float = DEFAULT_SLEEP_BETWEEN_CHANNELS,
     ) -> None:
         self._bot = bot
@@ -410,7 +410,7 @@ class BackfillService:
         self._active_lock = asyncio.Lock()
 
     @property
-    def bot(self) -> "DiscordBot":
+    def bot(self) -> DiscordBot:
         return self._bot
 
     @property
@@ -425,7 +425,7 @@ class BackfillService:
         self,
         channel_id: int,
         limit: int = DEFAULT_CHANNEL_LIMIT,
-        job_id: Optional[str] = None,
+        job_id: str | None = None,
     ) -> dict[str, Any]:
         """Backfill messages from a single text channel.
 
@@ -501,7 +501,7 @@ class BackfillService:
         guild_id: int,
         per_channel_limit: int = DEFAULT_PER_CHANNEL_LIMIT,
         max_channels: int = DEFAULT_MAX_CHANNELS,
-        job_id: Optional[str] = None,
+        job_id: str | None = None,
     ) -> dict[str, Any]:
         """Backfill visible text channels in a guild, up to max_channels."""
         job = await self._ensure_job(BACKFILL_TARGET_GUILD, str(guild_id), job_id)
@@ -521,8 +521,8 @@ class BackfillService:
                     text_channels.append(ch)
                 else:
                     logger.debug("Skipping channel %s (no read permission)", ch.id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to check permissions for channel {ch.id}: {e}")
             if len(text_channels) >= max_channels:
                 break
 
@@ -581,7 +581,7 @@ class BackfillService:
         self,
         user_id_or_channel_id: int,
         limit: int = DEFAULT_DM_LIMIT,
-        job_id: Optional[str] = None,
+        job_id: str | None = None,
     ) -> dict[str, Any]:
         """Backfill DM conversation history with a user.
 
@@ -668,7 +668,7 @@ class BackfillService:
         self,
         target_type: str,
         target_id: str,
-        existing_job_id: Optional[str] = None,
+        existing_job_id: str | None = None,
     ) -> dict[str, Any]:
         """Ensure a job exists. If an active job is found, return it.
         Otherwise create a new one. Uses asyncio.Lock to coalesce.
@@ -699,8 +699,8 @@ class BackfillService:
 
     async def _store_message(
         self,
-        msg: "discord.Message",
-        guild_id: Optional[int],
+        msg: discord.Message,
+        guild_id: int | None,
     ) -> bool:
         """Store a single Discord message into the message store.
 
@@ -738,7 +738,7 @@ class BackfillService:
                             "title": e.title,
                             "description": e.description[:200] if e.description else None,
                             "url": e.url,
-                        }
+                        },
                     )
 
             # Channel info
@@ -780,10 +780,10 @@ class BackfillService:
         self,
         event_type: str,
         result: str = "success",
-        target_guild_id: Optional[int] = None,
-        target_channel_id: Optional[int] = None,
-        target_user_id: Optional[int] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        target_guild_id: int | None = None,
+        target_channel_id: int | None = None,
+        target_user_id: int | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Record an audit event if audit_store is configured."""
         if self._audit_store is None:

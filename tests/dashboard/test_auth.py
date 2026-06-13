@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-
 from bot.dashboard.auth import SessionStore, _check_bearer_auth, _check_session_auth
 
 

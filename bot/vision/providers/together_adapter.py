@@ -1,33 +1,26 @@
-"""
-Together.ai Vision Provider Adapter
+"""Together.ai Vision Provider Adapter.
 
 Implements Together.ai API integration for vision generation tasks.
 Supports text-to-image and image-to-image generation with Stable Diffusion models.
 """
 
-import aiohttp
+import base64
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional
-import base64
+from typing import Any
+
+import aiohttp
 
 from bot.utils.logging import get_logger
-from ..types import (
-    VisionRequest,
-    VisionResponse,
-    VisionProvider,
-    VisionTask,
-    VisionError,
-    VisionErrorType,
-)
+from bot.vision.types import VisionError, VisionErrorType, VisionProvider, VisionRequest, VisionResponse, VisionTask
+
 from .base import BaseVisionProvider
 
 logger = get_logger(__name__)
 
 
 class TogetherAdapter(BaseVisionProvider):
-    """
-    Together.ai API adapter for vision generation
+    """Together.ai API adapter for vision generation.
 
     Supports:
     - Text-to-image generation with SDXL and SD 1.5
@@ -36,12 +29,12 @@ class TogetherAdapter(BaseVisionProvider):
     - Proper error mapping and retry handling [REH]
     """
 
-    def __init__(self, config: Dict[str, Any], policy: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any], policy: dict[str, Any]) -> None:
         super().__init__(config, policy)
 
         self.api_key = config["VISION_API_KEY"]
         self.base_url = "https://api.together.xyz/v1"
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
 
         # Together-specific timeouts
         self.request_timeout = 60  # seconds
@@ -51,7 +44,7 @@ class TogetherAdapter(BaseVisionProvider):
         return VisionProvider.TOGETHER
 
     def _validate_config(self) -> None:
-        """Validate Together.ai specific configuration [IV]"""
+        """Validate Together.ai specific configuration [IV]."""
         if not self.config.get("VISION_API_KEY"):
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
@@ -60,14 +53,14 @@ class TogetherAdapter(BaseVisionProvider):
             )
 
     def _initialize(self) -> None:
-        """Initialize HTTP session and validate API access"""
+        """Initialize HTTP session and validate API access."""
         self.logger.info("Initializing Together.ai adapter")
 
         # HTTP session will be created lazily in _get_session()
         self.session = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Get or create HTTP session with proper headers [RM]"""
+        """Get or create HTTP session with proper headers [RM]."""
         if self.session is None or self.session.closed:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -85,7 +78,7 @@ class TogetherAdapter(BaseVisionProvider):
         return self.session
 
     async def generate(self, request: VisionRequest, model: str) -> VisionResponse:
-        """Generate vision content using Together.ai API"""
+        """Generate vision content using Together.ai API."""
         start_time = time.time()
 
         self._log_request_start(request, model)
@@ -119,7 +112,7 @@ class TogetherAdapter(BaseVisionProvider):
             processing_time = time.time() - start_time
             error = VisionError(
                 error_type=VisionErrorType.PROVIDER_ERROR,
-                message=f"Unexpected Together.ai error: {str(e)}",
+                message=f"Unexpected Together.ai error: {e!s}",
                 user_message="An unexpected error occurred. Please try again.",
                 provider=VisionProvider.TOGETHER,
             )
@@ -127,7 +120,7 @@ class TogetherAdapter(BaseVisionProvider):
             return self._create_error_response(request.idempotency_key, error, processing_time)
 
     async def _text_to_image(self, request: VisionRequest, model: str) -> VisionResponse:
-        """Generate image from text prompt"""
+        """Generate image from text prompt."""
         session = await self._get_session()
 
         # Prepare request payload
@@ -157,20 +150,19 @@ class TogetherAdapter(BaseVisionProvider):
                 if resp.status == 200:
                     data = await resp.json()
                     return await self._process_image_response(data, request)
-                else:
-                    error_data = await resp.json() if resp.content_type == "application/json" else {}
-                    raise await self._map_api_error(resp.status, error_data)
+                error_data = await resp.json() if resp.content_type == "application/json" else {}
+                raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
             raise VisionError(
                 error_type=VisionErrorType.NETWORK_ERROR,
-                message=f"Network error: {str(e)}",
+                message=f"Network error: {e!s}",
                 user_message="Network connection failed. Please check your connection and try again.",
                 provider=VisionProvider.TOGETHER,
             )
 
     async def _image_to_image(self, request: VisionRequest, model: str) -> VisionResponse:
-        """Edit image using image-to-image pipeline"""
+        """Edit image using image-to-image pipeline."""
         if not request.input_image or not request.input_image.exists():
             raise VisionError(
                 error_type=VisionErrorType.VALIDATION_ERROR,
@@ -218,20 +210,19 @@ class TogetherAdapter(BaseVisionProvider):
                 if resp.status == 200:
                     data = await resp.json()
                     return await self._process_image_response(data, request)
-                else:
-                    error_data = await resp.json() if resp.content_type == "application/json" else {}
-                    raise await self._map_api_error(resp.status, error_data)
+                error_data = await resp.json() if resp.content_type == "application/json" else {}
+                raise await self._map_api_error(resp.status, error_data)
 
         except aiohttp.ClientError as e:
             raise VisionError(
                 error_type=VisionErrorType.NETWORK_ERROR,
-                message=f"Network error: {str(e)}",
+                message=f"Network error: {e!s}",
                 user_message="Network connection failed. Please try again.",
                 provider=VisionProvider.TOGETHER,
             )
 
-    async def _process_image_response(self, data: Dict[str, Any], request: VisionRequest) -> VisionResponse:
-        """Process API response and save generated images"""
+    async def _process_image_response(self, data: dict[str, Any], request: VisionRequest) -> VisionResponse:
+        """Process API response and save generated images."""
         artifacts_dir = Path(self.config["VISION_ARTIFACTS_DIR"])
         artifacts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -290,7 +281,7 @@ class TogetherAdapter(BaseVisionProvider):
         )
 
     async def _image_to_base64(self, image_path: Path) -> str:
-        """Convert image file to base64 string [RM]"""
+        """Convert image file to base64 string [RM]."""
         try:
             with open(image_path, "rb") as f:
                 image_bytes = f.read()
@@ -298,12 +289,12 @@ class TogetherAdapter(BaseVisionProvider):
         except Exception as e:
             raise VisionError(
                 error_type=VisionErrorType.VALIDATION_ERROR,
-                message=f"Failed to read image file: {str(e)}",
+                message=f"Failed to read image file: {e!s}",
                 user_message="Could not read the input image. Please try uploading again.",
             )
 
-    async def _map_api_error(self, status_code: int, error_data: Dict[str, Any]) -> VisionError:
-        """Map Together.ai API errors to VisionError [REH]"""
+    async def _map_api_error(self, status_code: int, error_data: dict[str, Any]) -> VisionError:
+        """Map Together.ai API errors to VisionError [REH]."""
         error_message = error_data.get("error", {}).get("message", "Unknown API error")
         error_data.get("error", {}).get("type", "")
 
@@ -316,15 +307,14 @@ class TogetherAdapter(BaseVisionProvider):
                     user_message="Your prompt was blocked by content safety filters. Please try a different prompt.",
                     provider=VisionProvider.TOGETHER,
                 )
-            else:
-                return VisionError(
-                    error_type=VisionErrorType.VALIDATION_ERROR,
-                    message=f"Invalid request: {error_message}",
-                    user_message="There was a problem with your request. Please check your parameters.",
-                    provider=VisionProvider.TOGETHER,
-                )
+            return VisionError(
+                error_type=VisionErrorType.VALIDATION_ERROR,
+                message=f"Invalid request: {error_message}",
+                user_message="There was a problem with your request. Please check your parameters.",
+                provider=VisionProvider.TOGETHER,
+            )
 
-        elif status_code == 401:
+        if status_code == 401:
             return VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message="Authentication failed with Together.ai",
@@ -332,7 +322,7 @@ class TogetherAdapter(BaseVisionProvider):
                 provider=VisionProvider.TOGETHER,
             )
 
-        elif status_code == 429:
+        if status_code == 429:
             return VisionError(
                 error_type=VisionErrorType.QUOTA_EXCEEDED,
                 message="Rate limit or quota exceeded",
@@ -341,7 +331,7 @@ class TogetherAdapter(BaseVisionProvider):
                 retry_after_seconds=60,
             )
 
-        elif status_code >= 500:
+        if status_code >= 500:
             return VisionError(
                 error_type=VisionErrorType.PROVIDER_ERROR,
                 message=f"Together.ai server error: {error_message}",
@@ -350,24 +340,23 @@ class TogetherAdapter(BaseVisionProvider):
                 retry_after_seconds=30,
             )
 
-        else:
-            return VisionError(
-                error_type=VisionErrorType.PROVIDER_ERROR,
-                message=f"Together.ai API error {status_code}: {error_message}",
-                user_message="An error occurred with the generation service. Please try again.",
-                provider=VisionProvider.TOGETHER,
-            )
+        return VisionError(
+            error_type=VisionErrorType.PROVIDER_ERROR,
+            message=f"Together.ai API error {status_code}: {error_message}",
+            user_message="An error occurred with the generation service. Please try again.",
+            provider=VisionProvider.TOGETHER,
+        )
 
-    async def get_job_status(self, provider_job_id: str) -> Dict[str, Any]:
-        """Together.ai uses synchronous API, so jobs complete immediately"""
+    async def get_job_status(self, provider_job_id: str) -> dict[str, Any]:
+        """Together.ai uses synchronous API, so jobs complete immediately."""
         return {"status": "completed", "progress": 100, "completed": True}
 
     async def cancel_job(self, provider_job_id: str) -> bool:
-        """Together.ai uses synchronous API, so no cancellation needed"""
+        """Together.ai uses synchronous API, so no cancellation needed."""
         return True  # Always "successful" since jobs complete immediately
 
     async def close(self) -> None:
-        """Clean up resources [RM]"""
+        """Clean up resources [RM]."""
         if self.session and not self.session.closed:
             await self.session.close()
             self.logger.debug("Closed Together.ai HTTP session")

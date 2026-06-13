@@ -1,5 +1,4 @@
-"""
-Comprehensive tests for UnifiedVisionAdapter integration
+"""Comprehensive tests for UnifiedVisionAdapter integration.
 
 Tests the refactored unified adapter system with provider plugins,
 error handling, fallback logic, and integration with gateway.
@@ -11,31 +10,32 @@ import pytest
 pytestmark = pytest.mark.skip(reason="Requires live vision provider APIs (together, novita, openrouter)")
 
 import asyncio
-import pytest
 from unittest.mock import patch
 
-from bot.vision.unified_adapter import (
-    UnifiedVisionAdapter,
-    TogetherPlugin,
-    NovitaPlugin,
-    UnifiedStatus,
-    NormalizedRequest,
-    UnifiedJobStatus,
-    UnifiedResult,
-)
+import pytest
+
 from bot.vision.gateway import VisionGateway
 from bot.vision.types import (
-    VisionRequest,
-    VisionTask,
     VisionError,
     VisionErrorType,
     VisionProvider,
+    VisionRequest,
+    VisionTask,
+)
+from bot.vision.unified_adapter import (
+    NormalizedRequest,
+    NovitaPlugin,
+    TogetherPlugin,
+    UnifiedJobStatus,
+    UnifiedResult,
+    UnifiedStatus,
+    UnifiedVisionAdapter,
 )
 
 
 @pytest.fixture
 def mock_config():
-    """Mock bot configuration for testing"""
+    """Mock bot configuration for testing."""
     return {
         "VISION_ENABLED": True,
         "VISION_API_KEY": "test_key_12345",
@@ -51,7 +51,7 @@ def mock_config():
 
 @pytest.fixture
 def vision_request():
-    """Sample vision request for testing"""
+    """Sample vision request for testing."""
     return VisionRequest(
         user_id="user_456",
         guild_id="guild_789",
@@ -66,27 +66,27 @@ def vision_request():
 
 @pytest.fixture
 def unified_adapter(mock_config):
-    """Create UnifiedVisionAdapter instance for testing"""
+    """Create UnifiedVisionAdapter instance for testing."""
     return UnifiedVisionAdapter(mock_config)
 
 
 @pytest.fixture
 def vision_gateway(mock_config):
-    """Create VisionGateway instance using unified adapter"""
+    """Create VisionGateway instance using unified adapter."""
     return VisionGateway(mock_config)
 
 
 class TestUnifiedVisionAdapter:
-    """Test UnifiedVisionAdapter core functionality"""
+    """Test UnifiedVisionAdapter core functionality."""
 
-    def test_adapter_initialization(self, unified_adapter):
-        """Test adapter initializes with provider plugins [CA]"""
+    def test_adapter_initialization(self, unified_adapter) -> None:
+        """Test adapter initializes with provider plugins [CA]."""
         assert len(unified_adapter.providers) > 0
         assert "together" in unified_adapter.providers or "novita" in unified_adapter.providers
         assert unified_adapter.provider_config is not None
 
-    def test_request_normalization(self, unified_adapter, vision_request):
-        """Test request normalization across providers [IV]"""
+    def test_request_normalization(self, unified_adapter, vision_request) -> None:
+        """Test request normalization across providers [IV]."""
         normalized = unified_adapter.normalize_request(vision_request)
 
         assert isinstance(normalized, NormalizedRequest)
@@ -97,8 +97,8 @@ class TestUnifiedVisionAdapter:
         assert normalized.steps == 20
         assert normalized.guidance_scale == 7.5
 
-    def test_provider_selection(self, unified_adapter, vision_request):
-        """Test automatic provider selection logic [CA]"""
+    def test_provider_selection(self, unified_adapter, vision_request) -> None:
+        """Test automatic provider selection logic [CA]."""
         # Override budget to allow providers to be selected
         unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
         normalized = unified_adapter.normalize_request(vision_request)
@@ -109,18 +109,18 @@ class TestUnifiedVisionAdapter:
         capabilities = provider.capabilities()
         assert normalized.task in capabilities.get("modes", [])
 
-    def test_cost_estimation(self, unified_adapter, vision_request):
-        """Test cost estimation across providers [CMV]"""
+    def test_cost_estimation(self, unified_adapter, vision_request) -> None:
+        """Test cost estimation across providers [CMV]."""
         estimates = unified_adapter.estimate_cost_for_request(vision_request)
 
         assert isinstance(estimates, dict)
         assert len(estimates) > 0
-        for provider_name, cost in estimates.items():
+        for cost in estimates.values():
             assert isinstance(cost, (int, float))
             assert cost >= 0
 
-    def test_supported_tasks(self, unified_adapter):
-        """Test getting supported tasks from all providers [PA]"""
+    def test_supported_tasks(self, unified_adapter) -> None:
+        """Test getting supported tasks from all providers [PA]."""
         tasks = unified_adapter.get_supported_tasks()
 
         assert isinstance(tasks, list)
@@ -129,10 +129,10 @@ class TestUnifiedVisionAdapter:
 
 
 class TestProviderPlugins:
-    """Test individual provider plugin implementations"""
+    """Test individual provider plugin implementations."""
 
-    def test_together_plugin_capabilities(self, mock_config):
-        """Test Together.ai plugin capabilities [CA]"""
+    def test_together_plugin_capabilities(self, mock_config) -> None:
+        """Test Together.ai plugin capabilities [CA]."""
         plugin = TogetherPlugin("together", {}, mock_config["VISION_API_KEY"])
         capabilities = plugin.capabilities()
 
@@ -141,8 +141,8 @@ class TestProviderPlugins:
         assert "max_size" in capabilities
         assert capabilities["nsfw_policy"] == "blocked"
 
-    def test_novita_plugin_capabilities(self, mock_config):
-        """Test Novita.ai plugin capabilities [CA]"""
+    def test_novita_plugin_capabilities(self, mock_config) -> None:
+        """Test Novita.ai plugin capabilities [CA]."""
         plugin = NovitaPlugin("novita", {}, mock_config["VISION_API_KEY"])
         capabilities = plugin.capabilities()
 
@@ -153,14 +153,14 @@ class TestProviderPlugins:
 
 
 class TestProviderAllowlistAndSelection:
-    """Test allow-listing and explicit provider selection behavior"""
+    """Test allow-listing and explicit provider selection behavior."""
 
-    def test_openrouter_initializes_when_allowed(self, mock_config):
+    def test_openrouter_initializes_when_allowed(self, mock_config) -> None:
         adapter = UnifiedVisionAdapter(mock_config)
         assert "openrouter" in adapter.providers
 
     @pytest.mark.asyncio
-    async def test_explicit_provider_rejected_when_not_allowed(self, mock_config):
+    async def test_explicit_provider_rejected_when_not_allowed(self, mock_config) -> None:
         config = dict(mock_config)
         config["VISION_ALLOWED_PROVIDERS"] = ["together", "novita"]
         adapter = UnifiedVisionAdapter(config)
@@ -179,8 +179,8 @@ class TestProviderAllowlistAndSelection:
         assert exc_info.value.error_type == VisionErrorType.VALIDATION_ERROR
 
     @pytest.mark.asyncio
-    async def test_plugin_session_management(self, mock_config):
-        """Test provider plugin session lifecycle [RM]"""
+    async def test_plugin_session_management(self, mock_config) -> None:
+        """Test provider plugin session lifecycle [RM]."""
         plugin = TogetherPlugin("together", {}, mock_config["VISION_API_KEY"])
 
         # Start session
@@ -193,11 +193,11 @@ class TestProviderAllowlistAndSelection:
 
 
 class TestErrorHandling:
-    """Test unified error handling and status mapping [REH]"""
+    """Test unified error handling and status mapping [REH]."""
 
     @pytest.mark.asyncio
-    async def test_authentication_error_handling(self, unified_adapter, vision_request):
-        """Test authentication error is properly handled"""
+    async def test_authentication_error_handling(self, unified_adapter, vision_request) -> None:
+        """Test authentication error is properly handled."""
         # Override budget so providers are selectable
         unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
         # Select together as the primary provider to patch
@@ -219,8 +219,8 @@ class TestErrorHandling:
             assert exc_info.value.error_type == VisionErrorType.AUTHENTICATION_ERROR
 
     @pytest.mark.asyncio
-    async def test_fallback_on_provider_failure(self, unified_adapter, vision_request):
-        """Test automatic fallback when primary provider fails"""
+    async def test_fallback_on_provider_failure(self, unified_adapter, vision_request) -> None:
+        """Test automatic fallback when primary provider fails."""
         # Override budget so providers are selectable
         unified_adapter.provider_config["vision"]["default_policy"]["budget_per_job_usd"] = 100.0
         # Ensure we have multiple providers for fallback testing
@@ -232,27 +232,26 @@ class TestErrorHandling:
         fallback_provider = unified_adapter.providers[provider_names[1]]
 
         # Mock primary provider to fail, fallback to succeed
-        with patch.object(primary_provider, "submit") as mock_primary:
-            with patch.object(fallback_provider, "submit") as mock_fallback:
-                mock_primary.side_effect = VisionError(
-                    message="Server error",
-                    error_type=VisionErrorType.SERVER_ERROR,
-                    user_message="Service unavailable",
-                )
-                mock_fallback.return_value = "fallback_job_123"
+        with patch.object(primary_provider, "submit") as mock_primary, patch.object(fallback_provider, "submit") as mock_fallback:
+            mock_primary.side_effect = VisionError(
+                message="Server error",
+                error_type=VisionErrorType.SERVER_ERROR,
+                user_message="Service unavailable",
+            )
+            mock_fallback.return_value = "fallback_job_123"
 
-                job_id, provider_name = await unified_adapter.submit(vision_request)
+            job_id, provider_name = await unified_adapter.submit(vision_request)
 
-                assert job_id.startswith(provider_names[1])  # Should use fallback provider
-                assert provider_name == provider_names[1]
+            assert job_id.startswith(provider_names[1])  # Should use fallback provider
+            assert provider_name == provider_names[1]
 
 
 class TestGatewayIntegration:
-    """Test VisionGateway integration with UnifiedVisionAdapter"""
+    """Test VisionGateway integration with UnifiedVisionAdapter."""
 
     @pytest.mark.asyncio
-    async def test_gateway_initialization_with_adapter(self, vision_gateway):
-        """Test gateway initializes with unified adapter [CA]"""
+    async def test_gateway_initialization_with_adapter(self, vision_gateway) -> None:
+        """Test gateway initializes with unified adapter [CA]."""
         assert hasattr(vision_gateway, "adapter")
         assert isinstance(vision_gateway.adapter, UnifiedVisionAdapter)
 
@@ -262,8 +261,8 @@ class TestGatewayIntegration:
         await vision_gateway.shutdown()
 
     @pytest.mark.asyncio
-    async def test_job_submission_through_gateway(self, vision_gateway, vision_request):
-        """Test job submission flows through unified adapter"""
+    async def test_job_submission_through_gateway(self, vision_gateway, vision_request) -> None:
+        """Test job submission flows through unified adapter."""
         # Mock adapter submission
         with patch.object(vision_gateway.adapter, "submit") as mock_submit:
             mock_submit.return_value = ("together:job_123", "together")
@@ -274,8 +273,8 @@ class TestGatewayIntegration:
             mock_submit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_status_polling_through_gateway(self, vision_gateway):
-        """Test status polling flows through unified adapter"""
+    async def test_status_polling_through_gateway(self, vision_gateway) -> None:
+        """Test status polling flows through unified adapter."""
         job_id = "together:job_123"
 
         # Mock adapter polling
@@ -300,44 +299,43 @@ class TestGatewayIntegration:
             mock_poll.assert_called_once_with(job_id)
 
     @pytest.mark.asyncio
-    async def test_result_fetching_through_gateway(self, vision_gateway, vision_request):
-        """Test result fetching flows through unified adapter"""
+    async def test_result_fetching_through_gateway(self, vision_gateway, vision_request) -> None:
+        """Test result fetching flows through unified adapter."""
         job_id = "together:job_123"
 
         # Mock adapter methods
-        with patch.object(vision_gateway.adapter, "poll") as mock_poll:
-            with patch.object(vision_gateway.adapter, "fetch_result") as mock_fetch:
-                # Mock completed status
-                mock_poll.return_value = UnifiedJobStatus(status=UnifiedStatus.COMPLETED, progress_percentage=100)
+        with patch.object(vision_gateway.adapter, "poll") as mock_poll, patch.object(vision_gateway.adapter, "fetch_result") as mock_fetch:
+            # Mock completed status
+            mock_poll.return_value = UnifiedJobStatus(status=UnifiedStatus.COMPLETED, progress_percentage=100)
 
-                # Mock result
-                mock_fetch.return_value = UnifiedResult(
-                    assets=["https://example.com/image.png"],
-                    final_cost=0.05,
-                    provider_used="together",
-                )
+            # Mock result
+            mock_fetch.return_value = UnifiedResult(
+                assets=["https://example.com/image.png"],
+                final_cost=0.05,
+                provider_used="together",
+            )
 
-                # Set up active job
-                vision_gateway.active_jobs[job_id] = {
-                    "request": vision_request,
-                    "start_time": asyncio.get_event_loop().time(),
-                }
+            # Set up active job
+            vision_gateway.active_jobs[job_id] = {
+                "request": vision_request,
+                "start_time": asyncio.get_event_loop().time(),
+            }
 
-                response = await vision_gateway.get_job_result(job_id)
+            response = await vision_gateway.get_job_result(job_id)
 
-                assert response is not None
-                urls = [str(p) for p in response.artifacts]
-                normalized_urls = [u.replace("https:/", "https://").replace("http:/", "http://") for u in urls]
-                assert normalized_urls == ["https://example.com/image.png"]
-                assert response.actual_cost == 0.05
-                assert job_id not in vision_gateway.active_jobs  # Should be cleaned up
+            assert response is not None
+            urls = [str(p) for p in response.artifacts]
+            normalized_urls = [u.replace("https:/", "https://").replace("http:/", "http://") for u in urls]
+            assert normalized_urls == ["https://example.com/image.png"]
+            assert response.actual_cost == 0.05
+            assert job_id not in vision_gateway.active_jobs  # Should be cleaned up
 
 
 class TestVisionModelOverride:
-    """Test VISION_MODEL environment variable override functionality"""
+    """Test VISION_MODEL environment variable override functionality."""
 
-    def test_vision_model_qwen_override(self, mock_config):
-        """Test VISION_MODEL override for Qwen endpoint"""
+    def test_vision_model_qwen_override(self, mock_config) -> None:
+        """Test VISION_MODEL override for Qwen endpoint."""
         config_with_override = mock_config.copy()
         config_with_override["VISION_MODEL"] = "novita:qwen-image"
 
@@ -353,8 +351,8 @@ class TestVisionModelOverride:
         assert selection.model_hint == "qwen-image"
         assert not selection.supports_advanced
 
-    def test_vision_model_aliases(self, mock_config):
-        """Test various VISION_MODEL alias formats"""
+    def test_vision_model_aliases(self, mock_config) -> None:
+        """Test various VISION_MODEL alias formats."""
         test_cases = [
             ("qwen-image", "novita", "qwen-image-txt2img"),
             ("novita:qwen-image", "novita", "qwen-image-txt2img"),
@@ -380,10 +378,10 @@ class TestVisionModelOverride:
 
 
 class TestQwenEndpointParameterNormalization:
-    """Test parameter normalization and warnings for Qwen endpoint"""
+    """Test parameter normalization and warnings for Qwen endpoint."""
 
-    def test_qwen_parameter_warnings(self, mock_config):
-        """Test parameter normalization and warnings for Qwen endpoint"""
+    def test_qwen_parameter_warnings(self, mock_config) -> None:
+        """Test parameter normalization and warnings for Qwen endpoint."""
         adapter = UnifiedVisionAdapter(mock_config)
 
         if "novita" not in adapter.providers:
@@ -419,8 +417,8 @@ class TestQwenEndpointParameterNormalization:
         assert "Custom guidance scale not supported" in warning_text
         assert "Custom seed not supported" in warning_text
 
-    def test_sdxl_parameter_support(self, mock_config):
-        """Test full parameter support for SDXL endpoint"""
+    def test_sdxl_parameter_support(self, mock_config) -> None:
+        """Test full parameter support for SDXL endpoint."""
         adapter = UnifiedVisionAdapter(mock_config)
 
         if "novita" not in adapter.providers:
@@ -463,10 +461,10 @@ class TestQwenEndpointParameterNormalization:
 
 
 class TestConfigurationHandling:
-    """Test configuration management and defaults [IV]"""
+    """Test configuration management and defaults [IV]."""
 
-    def test_default_provider_config_generation(self, mock_config):
-        """Test default configuration is properly generated"""
+    def test_default_provider_config_generation(self, mock_config) -> None:
+        """Test default configuration is properly generated."""
         adapter = UnifiedVisionAdapter(mock_config)
         config = adapter.provider_config
 
@@ -479,8 +477,8 @@ class TestConfigurationHandling:
         assert "budget_per_job_usd" in policy
         assert "auto_fallback" in policy
 
-    def test_provider_api_key_handling(self, mock_config):
-        """Test API key resolution for providers [SFT]"""
+    def test_provider_api_key_handling(self, mock_config) -> None:
+        """Test API key resolution for providers [SFT]."""
         adapter = UnifiedVisionAdapter(mock_config)
 
         # Should have initialized providers with API key
@@ -490,7 +488,7 @@ class TestConfigurationHandling:
 
 if __name__ == "__main__":
     # Run basic smoke tests
-    async def smoke_test():
+    async def smoke_test() -> None:
         config = {
             "VISION_ENABLED": True,
             "VISION_API_KEY": "test_key",
@@ -498,11 +496,8 @@ if __name__ == "__main__":
             "VISION_DEFAULT_PROVIDER": "together",
         }
 
-        print("🧪 Testing UnifiedVisionAdapter initialization...")
         adapter = UnifiedVisionAdapter(config)
-        print(f"✅ Initialized with {len(adapter.providers)} providers")
 
-        print("🧪 Testing request normalization...")
         request = VisionRequest(
             user_id="user",
             guild_id="guild",
@@ -510,19 +505,12 @@ if __name__ == "__main__":
             prompt="test prompt",
         )
         normalized = adapter.normalize_request(request)
-        print(f"✅ Normalized request: {normalized.task.value}")
 
-        print("🧪 Testing supported tasks...")
         tasks = adapter.get_supported_tasks()
-        print(f"✅ Supported tasks: {[t.value for t in tasks]}")
 
-        print("🧪 Testing VisionGateway integration...")
         gateway = VisionGateway(config)
         await gateway.startup()
-        print("✅ Gateway started with unified adapter")
         await gateway.shutdown()
-        print("✅ Gateway shutdown complete")
 
-        print("\n🎉 All smoke tests passed! Unified Vision Adapter is working correctly.")
 
     asyncio.run(smoke_test())

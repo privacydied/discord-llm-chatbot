@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Helper utilities for stub-safe access patterns in TTS engines.
+"""Helper utilities for stub-safe access patterns in TTS engines.
 
 Currently provides:
 - maybe_onnx_session(obj): Safely extract an ONNX session-like object from
@@ -9,12 +7,13 @@ Currently provides:
 """
 
 from __future__ import annotations
-from typing import Any, Optional
+
+from typing import Any
 
 __all__ = ["maybe_onnx_session"]
 
 
-def _maybe_attr(obj: Any, *names: str) -> Optional[Any]:
+def _maybe_attr(obj: Any, *names: str) -> Any | None:
     for name in names:
         try:
             val = getattr(obj, name, None)
@@ -25,7 +24,7 @@ def _maybe_attr(obj: Any, *names: str) -> Optional[Any]:
     return None
 
 
-def maybe_onnx_session(obj: Any) -> Optional[Any]:
+def maybe_onnx_session(obj: Any) -> Any | None:
     """Return an ONNX session-like object from obj if available.
 
     Checks common attributes used by our engines and tests ("onnx_session",

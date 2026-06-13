@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
-from ..exceptions import InferenceError
+from bot.exceptions import InferenceError
+
 from .runtime import ensure_stt_manager_ready
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 async def fetch_url_audio_with_span(

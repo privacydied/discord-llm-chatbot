@@ -9,7 +9,7 @@ from bot.router import BotAction, Router
 
 
 class DummyBot:
-    def __init__(self):
+    def __init__(self) -> None:
         self.user = SimpleNamespace(id=12345, mention="<@12345>")
         self.config = {
             "HYBRID_FORCE_PERCEPTION_ON_REPLY": True,
@@ -22,7 +22,7 @@ class DummyBot:
 
 
 @pytest.mark.asyncio
-async def test_harvested_reply_x_url_skips_reply_perception_gate(monkeypatch):
+async def test_harvested_reply_x_url_skips_reply_perception_gate(monkeypatch) -> None:
     bot = DummyBot()
     router = Router(bot)
 
@@ -71,7 +71,7 @@ async def test_harvested_reply_x_url_skips_reply_perception_gate(monkeypatch):
                 error=None,
             )
 
-    monkeypatch.setattr(router_mod, "get_retry_manager", lambda: _RetryManager())
+    monkeypatch.setattr(router_mod, "get_retry_manager", _RetryManager)
 
     router._prioritized_vision_route = AsyncMock(return_value=None)
     router._run_perception_notes = AsyncMock(return_value=("notes", None))

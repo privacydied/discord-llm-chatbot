@@ -1,18 +1,17 @@
-"""
-Tests for TTS output format, quality, and lexicon functionality.
-"""
+"""Tests for TTS output format, quality, and lexicon functionality."""
 
 import pytest
 
 # Skip all tests — require TTS engine binaries and model files
 pytestmark = pytest.mark.skip(reason="Requires TTS engine binaries and model files")
 
-import tempfile
-import subprocess
 import json
 import os
-import numpy as np
+import subprocess
+import tempfile
 from pathlib import Path
+
+import numpy as np
 
 # Import the modules we want to test
 try:
@@ -21,13 +20,13 @@ except ImportError:
     sf = None
 
 
-def test_ogg_opus_output():
+def test_ogg_opus_output() -> None:
     """Test that TTS outputs OGG/Opus format with correct parameters."""
     pytest.importorskip("soundfile", reason="soundfile required for audio format validation")
 
     # Mock the TTS manager to test output format
-    from bot.tts.interface import TTSManager
     from bot.tts.engines.stub import StubEngine
+    from bot.tts.interface import TTSManager
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         out_path = Path(tmp_dir) / "test.ogg"
@@ -92,12 +91,12 @@ def test_ogg_opus_output():
             pass
 
 
-def test_no_clipping_and_dc():
+def test_no_clipping_and_dc() -> None:
     """Test that audio output has no clipping and minimal DC offset."""
     pytest.importorskip("soundfile", reason="soundfile required for audio analysis")
 
-    from bot.tts.interface import TTSManager
     from bot.tts.engines.stub import StubEngine
+    from bot.tts.interface import TTSManager
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         wav_path = Path(tmp_dir) / "test.wav"
@@ -119,10 +118,10 @@ def test_no_clipping_and_dc():
         async def mock_generate():
             return await manager.generate_tts(text, out_path=wav_path, output_format="wav")
 
-        path, mime = loop.run_until_complete(mock_generate())
+        path, _mime = loop.run_until_complete(mock_generate())
 
         # Analyze audio data
-        data, sr = sf.read(str(path), dtype="float32")
+        data, _sr = sf.read(str(path), dtype="float32")
 
         # Check for clipping (peak level should be under 0.99)
         peak_level = np.abs(data).max()
@@ -136,7 +135,7 @@ def test_no_clipping_and_dc():
         assert peak_level > 0.01, "Audio signal too quiet"
 
 
-def test_lexicon_applied():
+def test_lexicon_applied() -> None:
     """Test that lexicon entries are properly applied."""
     from bot.tts.eng_g2p_local import apply_lexicon
 
@@ -150,7 +149,7 @@ def test_lexicon_applied():
     assert "wɑts" in processed or "whats" not in processed
 
 
-def test_text_normalization():
+def test_text_normalization() -> None:
     """Test text normalization for numbers and contractions."""
     from bot.tts.eng_g2p_local import normalize_text
 
@@ -169,13 +168,13 @@ def test_text_normalization():
     assert "what's" not in normalized2
 
 
-def test_ipa_normalization():
+def test_ipa_normalization() -> None:
     """Test IPA symbol normalization and cleanup."""
     from bot.tts.ipa_vocab_loader import normalize_ipa
 
     # Create mock vocab with basic IPA symbols
     class MockVocab:
-        def __init__(self):
+        def __init__(self) -> None:
             self.phoneme_to_id = {
                 "k": 1,
                 "ə": 2,
@@ -210,10 +209,10 @@ def test_ipa_normalization():
     assert "ɚ" not in normalized
 
 
-def test_environment_variables():
+def test_environment_variables() -> None:
     """Test environment variable controls."""
     # Test KOKORO_FORCE_IPA and KOKORO_GRAPHEME_FALLBACK
-    from bot.tokenizer_registry import FORCE_IPA, ALLOW_GRAPHEME
+    from bot.tokenizer_registry import ALLOW_GRAPHEME, FORCE_IPA
 
     # These should be set according to our hardening
     assert FORCE_IPA  # Should default to True
@@ -221,9 +220,8 @@ def test_environment_variables():
 
 
 @pytest.mark.integration
-def test_end_to_end_synthesis():
+def test_end_to_end_synthesis() -> None:
     """Integration test for complete synthesis pipeline."""
-
     # This would require actual TTS setup, so we'll mock it
     from bot.tts.interface import TTSManager
 

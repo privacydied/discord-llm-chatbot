@@ -4,7 +4,7 @@ from bot.x_api_client import XApiClient
 
 
 @pytest.mark.parametrize(
-    "url,expected",
+    ("url", "expected"),
     [
         ("https://x.com/user/status/1234567890123456789", "1234567890123456789"),
         ("https://twitter.com/user/status/1234567890123456789", "1234567890123456789"),
@@ -38,11 +38,11 @@ from bot.x_api_client import XApiClient
         ),
     ],
 )
-def test_extract_tweet_id_variants(url: str, expected: str):
+def test_extract_tweet_id_variants(url: str, expected: str) -> None:
     assert XApiClient.extract_tweet_id(url) == expected
 
 
-def test_extract_tweet_id_none_cases():
+def test_extract_tweet_id_none_cases() -> None:
     assert XApiClient.extract_tweet_id("") is None
     assert XApiClient.extract_tweet_id("https://x.com/user") is None
     assert XApiClient.extract_tweet_id("https://example.com/not-twitter") is None

@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""
-Quick test to verify English IPA fix works correctly.
+"""Quick test to verify English IPA fix works correctly.
 This script tests that English text always goes through IPA phonemes
 and never falls back to graphemes.
 """
 
 import logging
-import sys
 import os
+import sys
 
 # Set up minimal environment
 os.environ["TTS_TOKENISER"] = ""  # Unset to let code decide
@@ -25,7 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def test_english_ipa_fix():
+def test_english_ipa_fix() -> bool | None:
     """Test that English text uses IPA phonemes and never graphemes."""
     try:
         from bot.tts.engines.kokoro import KokoroONNXEngine
@@ -35,14 +34,12 @@ def test_english_ipa_fix():
 
         test_text = "Hello world, this is a test of English speech synthesis."
 
-        print(f"\n🔍 Testing English IPA fix with text: '{test_text}'")
-        print("=" * 60)
 
         # Capture log messages during synthesis
         log_messages = []
 
         class LogCapture(logging.Handler):
-            def emit(self, record):
+            def emit(self, record) -> None:
                 log_messages.append(f"{record.levelname}: {record.getMessage()}")
 
         # Add our log capture handler
@@ -56,8 +53,6 @@ def test_english_ipa_fix():
 
             result = asyncio.run(engine.synthesize(test_text))
 
-            print("✅ Synthesis completed successfully!")
-            print(f"📊 Generated {len(result)} bytes of audio data")
 
             # Check log messages for expected behavior
             log_text = "\n".join(log_messages)
@@ -77,35 +72,30 @@ def test_english_ipa_fix():
                 "No known tokenization methods found",  # Discovery noise
             ]
 
-            print("\n📋 Log Analysis:")
-            print("-" * 30)
 
             for indicator in success_indicators:
                 if indicator in log_text:
-                    print(f"✅ Found expected: '{indicator}'")
+                    pass
                 else:
-                    print(f"⚠️  Missing expected: '{indicator}'")
+                    pass
 
             for indicator in problem_indicators:
                 if indicator in log_text:
-                    print(f"❌ Found problem: '{indicator}'")
+                    pass
                 else:
-                    print(f"✅ No problem: '{indicator}'")
+                    pass
 
             # Check if IPA path was taken
             if "English path: phoneme-only; using model IPA vocabulary." in log_text:
-                print("\n🎉 SUCCESS: English IPA path is working correctly!")
-                print("   English text is being converted to IPA phonemes as expected.")
+                pass
             else:
-                print("\n⚠️  WARNING: English IPA path may not be working.")
-                print("   Check if the IPA path is properly configured.")
+                pass
 
             # Check if grapheme fallback occurred
             if any(indicator in log_text for indicator in problem_indicators):
-                print("\n❌ FAILURE: Found grapheme fallback or tokenizer issues!")
-                print("   English is still falling back to graphemes.")
+                pass
             else:
-                print("\n✅ SUCCESS: No grapheme fallback detected!")
+                pass
 
             return True
 
@@ -114,7 +104,6 @@ def test_english_ipa_fix():
             logging.getLogger().removeHandler(capture_handler)
 
     except Exception as e:
-        print(f"\n❌ ERROR: Test failed with exception: {e}")
         import traceback
 
         traceback.print_exc()

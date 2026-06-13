@@ -1,22 +1,22 @@
-"""
-Optimized Discord Client - Connection reuse, smart enrichments, and rate limit handling.
+"""Optimized Discord Client - Connection reuse, smart enrichments, and rate limit handling.
 Implements REH (Robust Error Handling) and PA (Performance Awareness) rules.
 """
 
 import asyncio
-import time
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List
 import random
-from contextlib import asynccontextmanager
+import time
+from contextlib import asynccontextmanager, suppress
+from dataclasses import dataclass, field
+from typing import Any
 
 import discord
 from discord import Embed, File
 from discord.errors import HTTPException, RateLimited
 
+from bot.utils.logging import get_logger
+
 from .phase_constants import PhaseConstants as PC
-from .phase_timing import get_timing_manager, PipelineTracker
-from ..utils.logging import get_logger
+from .phase_timing import PipelineTracker, get_timing_manager
 
 logger = get_logger(__name__)
 
@@ -36,12 +36,11 @@ class RateLimitBucket:
         current_time = time.time()
         if self.reset_at > current_time:
             return self.remaining <= 0
-        else:
-            # Reset expired, assume available
-            self.remaining = 1
-            return False
+        # Reset expired, assume available
+        self.remaining = 1
+        return False
 
-    def update_from_response(self, headers: Dict[str, str]):
+    def update_from_response(self, headers: dict[str, str]) -> None:
         """Update bucket state from Discord response headers."""
         try:
             self.remaining = int(headers.get("x-ratelimit-remaining", 1))
@@ -90,11 +89,11 @@ class SendOptions:
 class OptimizedDiscordSender:
     """High-performance Discord message sender with connection reuse and rate limit handling."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
         # Rate limit tracking per route [REH]
-        self.rate_limit_buckets: Dict[str, RateLimitBucket] = {}
+        self.rate_limit_buckets: dict[str, RateLimitBucket] = {}
 
         # Connection and session reuse tracking
         self.session_stats = {
@@ -107,7 +106,7 @@ class OptimizedDiscordSender:
 
         # Priority queue for message sending
         self.send_queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
-        self.queue_processor_task: Optional[asyncio.Task] = None
+        self.queue_processor_task: asyncio.Task | None = None
 
         logger.info("🚀 OptimizedDiscordSender initialized")
 
@@ -121,7 +120,7 @@ class OptimizedDiscordSender:
             self.rate_limit_buckets[route] = RateLimitBucket(route=route)
         return self.rate_limit_buckets[route]
 
-    async def _wait_for_rate_limit(self, bucket: RateLimitBucket, route: str):
+    async def _wait_for_rate_limit(self, bucket: RateLimitBucket, route: str) -> None:
         """Wait for rate limit to reset with jitter [REH]."""
         if not bucket.is_rate_limited():
             return
@@ -131,7 +130,7 @@ class OptimizedDiscordSender:
             return
 
         # Add small jitter to avoid thundering herd [REH]
-        jitter = random.uniform(0.1, 0.3)  # 100-300ms jitter
+        jitter = random.uniform(0.1, 0.3)  # 100-300ms jitter  # nosec B311
         total_wait = wait_time + jitter
 
         self.session_stats["rate_limit_hits"] += 1
@@ -139,7 +138,7 @@ class OptimizedDiscordSender:
 
         await asyncio.sleep(total_wait)
 
-    def _should_skip_enrichment(self, content: str, options: SendOptions) -> Dict[str, bool]:
+    def _should_skip_enrichment(self, content: str, options: SendOptions) -> dict[str, bool]:
         """Determine which enrichments to skip for performance [PA]."""
         skip_decisions = {
             "embeds": options.skip_embeds or len(content) < 50,  # Skip embeds for short messages
@@ -159,21 +158,20 @@ class OptimizedDiscordSender:
         if skip_typing or len(content) < 30:
             # Direct send for short messages - no typing indicator
             return await channel.send(content, **kwargs)
-        else:
-            # Send with typing indicator for longer messages
-            async with channel.typing():
-                # Small delay to show typing (but don't overdo it)
-                typing_delay = min(len(content) / 100, 2.0)  # Max 2 seconds
-                await asyncio.sleep(typing_delay)
-                return await channel.send(content, **kwargs)
+        # Send with typing indicator for longer messages
+        async with channel.typing():
+            # Small delay to show typing (but don't overdo it)
+            typing_delay = min(len(content) / 100, 2.0)  # Max 2 seconds
+            await asyncio.sleep(typing_delay)
+            return await channel.send(content, **kwargs)
 
     async def _send_message_direct(
         self,
         channel,
         content: str,
         options: SendOptions,
-        embeds: Optional[List[Embed]] = None,
-        files: Optional[List[File]] = None,
+        embeds: list[Embed] | None = None,
+        files: list[File] | None = None,
         **kwargs,
     ) -> discord.Message:
         """Send message directly with optimizations [PA]."""
@@ -213,7 +211,7 @@ class OptimizedDiscordSender:
 
         except RateLimited as e:
             # Handle rate limit with exponential backoff [REH]
-            retry_after = e.retry_after + random.uniform(0.1, 0.5)  # Add jitter
+            retry_after = e.retry_after + random.uniform(0.1, 0.5)  # Add jitter  # nosec B311
             logger.warning(f"⚠️ Discord rate limit: retrying after {retry_after:.2f}s")
 
             await asyncio.sleep(retry_after)
@@ -230,18 +228,17 @@ class OptimizedDiscordSender:
             # Handle other HTTP errors [REH]
             if e.status == 429:  # Additional rate limit handling
                 retry_after = float(e.response.headers.get("retry-after", 1))
-                await asyncio.sleep(retry_after + random.uniform(0.1, 0.3))
+                await asyncio.sleep(retry_after + random.uniform(0.1, 0.3))  # nosec B311
                 return await self._send_message_direct(channel, content, options, embeds, files, **kwargs)
-            else:
-                self._update_send_stats(int((time.time() - start_time) * 1000), success=False)
-                raise
+            self._update_send_stats(int((time.time() - start_time) * 1000), success=False)
+            raise
 
         except Exception as e:
             self._update_send_stats(int((time.time() - start_time) * 1000), success=False)
-            logger.error(f"❌ Discord send error: {e}")
+            logger.exception(f"❌ Discord send error: {e}")
             raise
 
-    def _update_send_stats(self, send_time_ms: int, success: bool):
+    def _update_send_stats(self, send_time_ms: int, success: bool) -> None:
         """Update sending statistics [PA]."""
         if success:
             self.session_stats["messages_sent"] += 1
@@ -256,20 +253,16 @@ class OptimizedDiscordSender:
         self,
         channel,
         content: str,
-        tracker: Optional[PipelineTracker] = None,
-        options: Optional[SendOptions] = None,
-        embeds: Optional[List[Embed]] = None,
-        files: Optional[List[File]] = None,
+        tracker: PipelineTracker | None = None,
+        options: SendOptions | None = None,
+        embeds: list[Embed] | None = None,
+        files: list[File] | None = None,
         **kwargs,
     ):
         """Send Discord message with full optimization and tracking [REH][PA]."""
-
         # Use smart defaults based on content
         if options is None:
-            if len(content) < 100 and not embeds and not files:
-                options = SendOptions.for_simple_text(len(content))
-            else:
-                options = SendOptions.for_multimodal()
+            options = SendOptions.for_simple_text(len(content)) if len(content) < 100 and not embeds and not files else SendOptions.for_multimodal()
 
         timing_manager = get_timing_manager()
 
@@ -295,14 +288,14 @@ class OptimizedDiscordSender:
                             "discord_msg_id": message.id,
                             "enrichments_skipped": sum(1 for skip in self._should_skip_enrichment(content, options).values() if skip),
                             "rate_limit_bucket": self._get_route_key(channel.id),
-                        }
+                        },
                     )
 
                     yield message
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     phase_metric.metadata["timeout"] = True
-                    logger.error(f"❌ Discord send timeout after {options.timeout_ms}ms")
+                    logger.exception(f"❌ Discord send timeout after {options.timeout_ms}ms")
                     raise
                 except Exception as e:
                     phase_metric.metadata["error_type"] = type(e).__name__
@@ -315,7 +308,7 @@ class OptimizedDiscordSender:
             )
             yield message
 
-    async def send_simple_text(self, channel, content: str, tracker: Optional[PipelineTracker] = None) -> discord.Message:
+    async def send_simple_text(self, channel, content: str, tracker: PipelineTracker | None = None) -> discord.Message:
         """Optimized send for simple text messages [PA]."""
         options = SendOptions.for_simple_text(len(content))
 
@@ -326,9 +319,9 @@ class OptimizedDiscordSender:
         self,
         channel,
         content: str,
-        embeds: Optional[List[Embed]] = None,
-        files: Optional[List[File]] = None,
-        tracker: Optional[PipelineTracker] = None,
+        embeds: list[Embed] | None = None,
+        files: list[File] | None = None,
+        tracker: PipelineTracker | None = None,
     ) -> discord.Message:
         """Optimized send for multimodal responses [PA]."""
         options = SendOptions.for_multimodal()
@@ -336,7 +329,7 @@ class OptimizedDiscordSender:
         async with self.send_message_optimized(channel, content, tracker, options, embeds, files) as message:
             return message
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get Discord sender performance statistics."""
         total_buckets = len(self.rate_limit_buckets)
         active_rate_limits = sum(1 for bucket in self.rate_limit_buckets.values() if bucket.is_rate_limited())
@@ -356,53 +349,51 @@ class OptimizedDiscordSender:
 class MessagePriorityQueue:
     """Priority queue for Discord message sending [PA]."""
 
-    def __init__(self, sender: OptimizedDiscordSender):
+    def __init__(self, sender: OptimizedDiscordSender) -> None:
         self.sender = sender
         self.queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
-        self.processor_task: Optional[asyncio.Task] = None
+        self.processor_task: asyncio.Task | None = None
         self.is_processing = False
 
-    async def start_processing(self):
+    async def start_processing(self) -> None:
         """Start background queue processing."""
         if self.processor_task and not self.processor_task.done():
             return
 
-        async def process_queue():
+        async def process_queue() -> None:
             self.is_processing = True
             while self.is_processing:
                 try:
                     # Get next message with timeout
-                    priority, timestamp, send_task = await asyncio.wait_for(self.queue.get(), timeout=1.0)
+                    _priority, _timestamp, send_task = await asyncio.wait_for(self.queue.get(), timeout=1.0)
 
                     # Execute send task
                     await send_task
                     self.queue.task_done()
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue  # Check for shutdown
                 except Exception as e:
-                    logger.error(f"❌ Queue processing error: {e}")
+                    logger.exception(f"❌ Queue processing error: {e}")
 
         self.processor_task = asyncio.create_task(process_queue())
 
-    async def stop_processing(self):
+    async def stop_processing(self) -> None:
         """Stop queue processing [RM]."""
         self.is_processing = False
         if self.processor_task:
             self.processor_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self.processor_task
-            except asyncio.CancelledError:
-                pass
 
     async def enqueue_send(
         self,
         channel,
         content: str,
         priority: int = 2,
-        tracker: Optional[PipelineTracker] = None,
+        tracker: PipelineTracker | None = None,
         **kwargs,
-    ):
+    ) -> None:
         """Enqueue message for priority sending [PA]."""
         timestamp = time.time()
 
@@ -415,7 +406,7 @@ class MessagePriorityQueue:
 
 
 # Global Discord sender instance [PA]
-_discord_sender_instance: Optional[OptimizedDiscordSender] = None
+_discord_sender_instance: OptimizedDiscordSender | None = None
 
 
 def get_discord_sender(bot) -> OptimizedDiscordSender:
@@ -429,7 +420,7 @@ def get_discord_sender(bot) -> OptimizedDiscordSender:
     return _discord_sender_instance
 
 
-def reset_discord_sender():
+def reset_discord_sender() -> None:
     """Reset global Discord sender instance [RM]."""
     global _discord_sender_instance
     _discord_sender_instance = None

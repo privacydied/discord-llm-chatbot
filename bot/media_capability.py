@@ -1,5 +1,4 @@
-"""
-Media capability detection module for smart URL routing.
+"""Media capability detection module for smart URL routing.
 Determines whether URLs contain downloadable media that yt-dlp can handle.
 """
 
@@ -11,8 +10,7 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Tuple
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from .utils.logging import get_logger
 
@@ -62,32 +60,32 @@ class ProbeResult:
     is_media_capable: bool
     reason: str
     cached: bool = False
-    probe_duration_ms: Optional[float] = None
+    probe_duration_ms: float | None = None
 
 
 class MediaCapabilityDetector:
     """Detects whether URLs contain media that can be processed by yt-dlp."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.cache_dir = CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_file = self.cache_dir / "probe_cache.json"
-        self._cache: Dict[str, Dict] = {}
+        self._cache: dict[str, dict] = {}
         self._load_cache()
         logger.info(f"✔ MediaCapabilityDetector initialized with cache: {self.cache_dir}")
 
-    def _load_cache(self):
+    def _load_cache(self) -> None:
         """Load probe cache from disk."""
         try:
             if self.cache_file.exists():
-                with open(self.cache_file, "r") as f:
+                with open(self.cache_file) as f:
                     self._cache = json.load(f)
                 logger.debug(f"Loaded {len(self._cache)} cached probe results")
         except Exception as e:
             logger.warning(f"Failed to load probe cache: {e}")
             self._cache = {}
 
-    def _save_cache(self):
+    def _save_cache(self) -> None:
         """Save probe cache to disk."""
         try:
             with open(self.cache_file, "w") as f:
@@ -99,7 +97,7 @@ class MediaCapabilityDetector:
         """Generate cache key for URL."""
         return hashlib.sha256(url.encode()).hexdigest()[:16]
 
-    def _is_cache_valid(self, cache_entry: Dict) -> bool:
+    def _is_cache_valid(self, cache_entry: dict) -> bool:
         """Check if cache entry is still valid based on TTL."""
         if "timestamp" not in cache_entry:
             return False
@@ -114,16 +112,14 @@ class MediaCapabilityDetector:
             domain = parsed.netloc.lower()
 
             # Remove www. prefix if present
-            if domain.startswith("www."):
-                domain = domain[4:]
+            domain = domain.removeprefix("www.")
 
             return domain in MEDIA_CAPABLE_DOMAINS
         except Exception:
             return False
 
-    async def _probe_url_lightweight(self, url: str) -> Tuple[bool, str]:
-        """
-        Lightweight probe to check if URL has downloadable media.
+    async def _probe_url_lightweight(self, url: str) -> tuple[bool, str]:
+        """Lightweight probe to check if URL has downloadable media.
         Uses yt-dlp's --simulate flag for fast, non-destructive checking.
         """
         logger.debug(f"🔍 Probing URL for media capability: {url}")
@@ -188,31 +184,30 @@ class MediaCapabilityDetector:
                 error_output = stderr.decode().lower()
                 if "unsupported url" in error_output or "no video" in error_output:
                     return False, "unsupported url format"
-                elif "private" in error_output or "unavailable" in error_output:
+                if "private" in error_output or "unavailable" in error_output:
                     return False, "content unavailable"
-                elif "not a video" in error_output or "no formats" in error_output:
+                if "not a video" in error_output or "no formats" in error_output:
                     return False, "no video formats available"
-                else:
-                    return False, f"probe failed: {error_output[:100]}"
+                return False, f"probe failed: {error_output[:100]}"
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return False, "probe timeout"
         except FileNotFoundError:
-            logger.error("yt-dlp not found - media capability detection disabled")
+            logger.exception("yt-dlp not found - media capability detection disabled")
             return False, "yt-dlp not available"
         except Exception as e:
             logger.debug(f"Probe exception for {url}: {e}")
             return False, f"probe error: {str(e)[:50]}"
 
     async def is_media_capable(self, url: str) -> ProbeResult:
-        """
-        Determine if URL contains media that can be processed by yt-dlp.
+        """Determine if URL contains media that can be processed by yt-dlp.
 
         Args:
             url: URL to check
 
         Returns:
             ProbeResult with capability decision and reasoning
+
         """
         start_time = time.time()
 
@@ -236,10 +231,9 @@ class MediaCapabilityDetector:
                     cached=True,
                     probe_duration_ms=cache_entry.get("probe_duration_ms", 0),
                 )
-            else:
-                # Remove expired entry
-                del self._cache[cache_key]
-                cache_expired = True
+            # Remove expired entry
+            del self._cache[cache_key]
+            cache_expired = True
         else:
             cache_expired = False
 
@@ -247,8 +241,7 @@ class MediaCapabilityDetector:
         try:
             parsed = urlparse(url)
             domain = (parsed.netloc or "").lower()
-            if domain.startswith("www."):
-                domain = domain[4:]
+            domain = domain.removeprefix("www.")
             if "youtube.com" in domain or "youtu.be" in domain:
                 # Extract video ID
                 video_id = None
@@ -264,9 +257,9 @@ class MediaCapabilityDetector:
                         cached=False,
                         probe_duration_ms=duration_ms,
                     )
-        except Exception:
+        except Exception as exc:
             # Fall back to normal probe on parsing issues
-            pass
+            logger.debug(f"Failed to read cached probe: {exc}")
 
         # Perform actual probe
         try:
@@ -298,7 +291,7 @@ class MediaCapabilityDetector:
 
         except Exception as e:
             probe_duration_ms = (time.time() - start_time) * 1000
-            logger.error(f"Media capability probe failed for {url}: {e}")
+            logger.exception(f"Media capability probe failed for {url}: {e}")
 
             return ProbeResult(
                 is_media_capable=False,
@@ -308,8 +301,7 @@ class MediaCapabilityDetector:
             )
 
     async def is_twitter_video_present(self, url: str) -> ProbeResult:
-        """
-        Specialized check for Twitter/X URLs to detect video presence.
+        """Specialized check for Twitter/X URLs to detect video presence.
         This is more thorough than the general probe for Twitter-specific cases.
         """
         if not any(domain in url.lower() for domain in ["twitter.com", "x.com"]):
@@ -337,15 +329,13 @@ class MediaCapabilityDetector:
             probe_duration_ms=general_result.probe_duration_ms,
         )
 
-    def cleanup_expired_cache(self):
+    def cleanup_expired_cache(self) -> None:
         """Remove expired entries from cache."""
         current_time = time.time()
         expired_keys = []
 
         for key, entry in self._cache.items():
-            if "timestamp" not in entry:
-                expired_keys.append(key)
-            elif current_time - entry["timestamp"] > PROBE_CACHE_TTL_SECONDS:
+            if "timestamp" not in entry or current_time - entry["timestamp"] > PROBE_CACHE_TTL_SECONDS:
                 expired_keys.append(key)
 
         for key in expired_keys:
@@ -355,7 +345,7 @@ class MediaCapabilityDetector:
             logger.debug(f"Cleaned up {len(expired_keys)} expired cache entries")
             self._save_cache()
 
-    def get_cache_stats(self) -> Dict[str, int]:
+    def get_cache_stats(self) -> dict[str, int]:
         """Get cache statistics for monitoring."""
         valid_entries = 0
         expired_entries = 0
@@ -380,14 +370,14 @@ media_detector = MediaCapabilityDetector()
 
 
 async def is_media_capable_url(url: str) -> ProbeResult:
-    """
-    Convenience function to check if URL is media-capable.
+    """Convenience function to check if URL is media-capable.
 
     Args:
         url: URL to check
 
     Returns:
         ProbeResult with capability decision
+
     """
     result = media_detector.is_media_capable(url)
     if inspect.isawaitable(result):
@@ -396,14 +386,14 @@ async def is_media_capable_url(url: str) -> ProbeResult:
 
 
 async def is_twitter_video_url(url: str) -> ProbeResult:
-    """
-    Convenience function to check for Twitter/X video presence.
+    """Convenience function to check for Twitter/X video presence.
 
     Args:
         url: Twitter/X URL to check
 
     Returns:
         ProbeResult with video presence decision
+
     """
     result = media_detector.is_twitter_video_present(url)
     if inspect.isawaitable(result):

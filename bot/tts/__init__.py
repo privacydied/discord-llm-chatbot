@@ -1,5 +1,4 @@
-"""
-TTS (Text-to-Speech) package for the Discord bot.
+"""TTS (Text-to-Speech) package for the Discord bot.
 
 This package contains modules for TTS functionality, including
 TTSManager, engine implementations, and tokenizer utilities.
@@ -8,8 +7,8 @@ TTSManager, engine implementations, and tokenizer utilities.
 import os
 from pathlib import Path
 
-from .stub import generate_stub_wav
 from .errors import SynthesisError
+from .stub import generate_stub_wav
 
 
 async def generate_tts(text: str, user_id: str) -> Path:
@@ -66,10 +65,10 @@ class TTS:  # pragma: no cover - test helper symbol
 
 
 __all__ = [
-    "TTSManager",
     "TTS",
-    "generate_tts",
+    "TTSManager",
     "cleanup_tts",
+    "generate_tts",
 ]
 
 

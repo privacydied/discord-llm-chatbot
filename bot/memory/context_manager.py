@@ -1,14 +1,15 @@
 import asyncio
 import json
-import os
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
 import logging
+import os
 import stat
-from bot.utils.env import get_bool
-from bot.config import load_config as _load_config
+from pathlib import Path
+from typing import Any
 
 import discord
+
+from bot.config import load_config as _load_config
+from bot.utils.env import get_bool
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +21,8 @@ def _load_int_config(key: str, default: int) -> int:
         val = cfg.get(key)
         if val is not None:
             return int(val)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to load int config {key}: {e}")
     return default
 
 
@@ -32,14 +33,13 @@ def _load_bool_config(key: str, default: bool) -> bool:
         val = cfg.get(key)
         if val is not None:
             return bool(val)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to load bool config {key}: {e}")
     return default
 
 
 class ContextManager:
-    """
-    Manages ephemeral conversation context, storing recent messages in a JSON file
+    """Manages ephemeral conversation context, storing recent messages in a JSON file
     or in-memory, with separation for guilds/channels and DMs.
     """
 
@@ -48,13 +48,13 @@ class ContextManager:
         bot: discord.Client,
         filepath: str = "runtime/context.json",
         max_messages: int = 10,
-    ):
-        """
-        Initializes the ContextManager.
+    ) -> None:
+        """Initializes the ContextManager.
 
         Args:
             filepath (str): The path to the JSON file for context storage.
             max_messages (int): The maximum number of messages to store per context.
+
         """
         self.bot = bot
         self.filepath = filepath
@@ -64,13 +64,12 @@ class ContextManager:
         self.max_chars_per_message = _load_int_config("CONTEXT_MAX_CHARS_PER_MESSAGE", 2000)
         self.max_total_chars = _load_int_config("CONTEXT_MAX_TOTAL_CHARS", 8000)
         self.ignore_continuation_chunks = _load_bool_config("CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS", True)
-        self.memory: Dict[str, Any] = {}
+        self.memory: dict[str, Any] = {}
         self._load()
         logger.info(f"ContextManager initialized. In-memory only: {self.in_memory_only}, Max messages: {self.max_messages}, Max chars/msg: {self.max_chars_per_message}, Max total chars: {self.max_total_chars}")
 
-    def _get_source_keys(self, message: discord.Message) -> Tuple[str, Optional[str]]:
-        """
-        Determines the primary and secondary keys for context storage from a message.
+    def _get_source_keys(self, message: discord.Message) -> tuple[str, str | None]:
+        """Determines the primary and secondary keys for context storage from a message.
 
         For guild messages, returns (guild_id_key, channel_id_key).
         For DMs, returns (dm_user_id_key, None).
@@ -80,13 +79,13 @@ class ContextManager:
 
         Returns:
             Tuple[str, Optional[str]]: A tuple containing the primary and secondary keys.
+
         """
         if message.guild:
             return f"guild_{message.guild.id}", f"channel_{message.channel.id}"
-        else:
-            return f"dm_{message.author.id}", None
+        return f"dm_{message.author.id}", None
 
-    def _load(self):
+    def _load(self) -> None:
         """Loads the context from the JSON file into memory."""
         if self.in_memory_only:
             logger.info("Context storage is in-memory only. Skipping file load.")
@@ -94,16 +93,16 @@ class ContextManager:
 
         try:
             if os.path.exists(self.filepath):
-                with open(self.filepath, "r", encoding="utf-8") as f:
+                with open(self.filepath, encoding="utf-8") as f:
                     self.memory = json.load(f)
                 logger.info(f"Successfully loaded context from {self.filepath}")
             else:
                 logger.info(f"Context file not found at {self.filepath}. Starting with empty context.")
-        except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"Failed to load or parse context file at {self.filepath}. Using in-memory fallback. Error: {e}")
+        except (OSError, json.JSONDecodeError) as e:
+            logger.exception(f"Failed to load or parse context file at {self.filepath}. Using in-memory fallback. Error: {e}")
             self.memory = {}
 
-    async def _save(self):
+    async def _save(self) -> None:
         """Saves the current in-memory context to the JSON file atomically.
 
         This is part of the storage backend, which could be replaced by Redis, etc.
@@ -140,13 +139,13 @@ class ContextManager:
                             mode,
                             self.filepath,
                         )
-            except Exception:
+            except Exception as e:
                 # Never fail route on permission checks
-                pass
-        except IOError as e:
-            logger.error(f"Failed to save context to {self.filepath}. Error: {e}")
+                logger.debug(f"Permission check failed: {e}")
+        except OSError as e:
+            logger.exception(f"Failed to save context to {self.filepath}. Error: {e}")
 
-    def append(self, message: discord.Message):
+    def append(self, message: discord.Message) -> None:
         """Appends a message to the appropriate context history."""
         primary_key, secondary_key = self._get_source_keys(message)
 
@@ -180,19 +179,19 @@ class ContextManager:
                     )
                     if not t.cancelled() and t.exception()
                     else None
-                )
+                ),
             )
         except RuntimeError:
             pass
 
-    def get_context(self, message: discord.Message) -> List[Dict[str, str]]:
+    def get_context(self, message: discord.Message) -> list[dict[str, str]]:
         """Retrieves the context for a given message's source."""
         primary_key, secondary_key = self._get_source_keys(message)
 
         if secondary_key:  # Guild message
             return self.memory.get(primary_key, {}).get(secondary_key, [])
-        else:  # DM
-            return self.memory.get(primary_key, [])
+        # DM
+        return self.memory.get(primary_key, [])
 
     async def get_context_string(self, message: discord.Message) -> str:
         """Retrieves and formats the context into a string for the LLM prompt."""
@@ -217,7 +216,7 @@ class ContextManager:
         total_chars = 0
 
         # Cache for user details
-        user_cache: Dict[str, str] = {}
+        user_cache: dict[str, str] = {}
 
         for entry in reversed(filtered):
             content = entry.get("content", "")

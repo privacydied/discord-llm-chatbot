@@ -8,16 +8,20 @@ liveness/readiness checks, and comprehensive health reporting with degraded mode
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
-import asyncio
-import psutil
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple, Union, Callable
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import psutil
 
 from bot.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class HealthStatus(Enum):
@@ -45,13 +49,13 @@ class ConfigConstraint:
 
     key: str
     required: bool = False
-    value_type: Optional[type] = None
-    allowed_values: Optional[Set[str]] = None
-    min_value: Optional[Union[int, float]] = None
-    max_value: Optional[Union[int, float]] = None
+    value_type: type | None = None
+    allowed_values: set[str] | None = None
+    min_value: int | float | None = None
+    max_value: int | float | None = None
     file_must_exist: bool = False
-    validator: Optional[Callable[[str], bool]] = None
-    error_message: Optional[str] = None
+    validator: Callable[[str], bool] | None = None
+    error_message: str | None = None
 
 
 @dataclass
@@ -60,8 +64,8 @@ class ComponentHealth:
 
     name: str
     status: HealthStatus
-    last_init_timestamp: Optional[float] = None
-    last_error: Optional[str] = None
+    last_init_timestamp: float | None = None
+    last_error: str | None = None
     check_count: int = 0
     consecutive_failures: int = 0
 
@@ -71,10 +75,10 @@ class SystemHealth:
     """Overall system health with component details."""
 
     status: HealthStatus
-    components: Dict[str, ComponentHealth] = field(default_factory=dict)
+    components: dict[str, ComponentHealth] = field(default_factory=dict)
     prometheus_enabled: bool = False
     degraded_mode: bool = False
-    degraded_reasons: List[str] = field(default_factory=list)
+    degraded_reasons: list[str] = field(default_factory=list)
     uptime_seconds: float = 0.0
     rss_mb: float = 0.0
     event_loop_lag_ms: float = 0.0
@@ -95,10 +99,10 @@ class ConfigValidator:
     [RAT: IV, SFT] - Input Validation, Security-First Thinking
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize configuration validator."""
         self.logger = get_logger(__name__)
-        self.constraints: List[ConfigConstraint] = []
+        self.constraints: list[ConfigConstraint] = []
         self._define_constraints()
 
     def _define_constraints(self) -> None:
@@ -117,7 +121,7 @@ class ConfigValidator:
                     allowed_values={"default", "all", "messages", "guild_messages"},
                     error_message="DISCORD_INTENTS must be one of: default, all, messages, guild_messages",
                 ),
-            ]
+            ],
         )
 
         # AI/LLM configuration
@@ -133,7 +137,7 @@ class ConfigValidator:
                     required=False,
                     error_message="Anthropic API key required for Claude models",
                 ),
-            ]
+            ],
         )
 
         # Observability configuration
@@ -171,7 +175,7 @@ class ConfigValidator:
                     max_value=65535,
                     error_message="PROMETHEUS_PORT must be between 1024-65535",
                 ),
-            ]
+            ],
         )
 
         # Logging configuration
@@ -189,7 +193,7 @@ class ConfigValidator:
                     file_must_exist=False,  # Will be created if doesn't exist
                     error_message="LOG_JSONL_PATH must be a valid file path",
                 ),
-            ]
+            ],
         )
 
         # RAG system configuration
@@ -201,14 +205,15 @@ class ConfigValidator:
                     allowed_values={"true", "false"},
                     error_message="RAG_EAGER_VECTOR_LOAD must be 'true' or 'false'",
                 ),
-            ]
+            ],
         )
 
-    def validate(self) -> Tuple[bool, List[str]]:
+    def validate(self) -> tuple[bool, list[str]]:
         """Validate configuration against all defined constraints.
 
         Returns:
             Tuple of (is_valid, error_messages)
+
         """
         errors = []
 
@@ -227,7 +232,7 @@ class ConfigValidator:
 
         return len(errors) == 0, errors
 
-    def _validate_constraint(self, constraint: ConfigConstraint) -> Optional[str]:
+    def _validate_constraint(self, constraint: ConfigConstraint) -> str | None:
         """Validate a single configuration constraint."""
         value = os.getenv(constraint.key)
 
@@ -289,7 +294,7 @@ class ConfigValidator:
 
         return None
 
-    def _validate_cross_field_constraints(self) -> List[str]:
+    def _validate_cross_field_constraints(self) -> list[str]:
         """Validate constraints that depend on multiple configuration fields."""
         errors = []
 
@@ -344,8 +349,8 @@ class ConfigValidator:
                     "config:text_fallback_duplicates models=%s",
                     ", ".join(duplicates),
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Failed to validate text fallback duplicates: {e}")
 
     def _validate_vision_fallback_ladder(self) -> None:
         """Log a warning if VISION_IMAGE_FALLBACK_MODELS contains duplicates."""
@@ -368,8 +373,8 @@ class ConfigValidator:
                     "config:vision_fallback_duplicates models=%s",
                     ", ".join(duplicates),
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Failed to validate vision fallback duplicates: {e}")
 
     def _validate_timeout_ladder_mismatch(self) -> None:
         """Warn when timeout ladder length differs from model ladder length."""
@@ -389,8 +394,8 @@ class ConfigValidator:
                     model_count,
                     timeout_count,
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Failed to validate timeout ladder mismatch: {e}")
 
     def _validate_tts_v8_experimental(self) -> None:
         """Warn if TTS_BACKEND=kokoro-v8 without explicit experimental opt-in."""
@@ -400,10 +405,10 @@ class ConfigValidator:
                 allow_experimental = os.getenv("TTS_ALLOW_EXPERIMENTAL", "false").lower() in ("true", "1", "yes")
                 if not allow_experimental:
                     self.logger.warning(
-                        "config:tts_backend_experimental TTS_BACKEND=kokoro-v8 is experimental and not production-ready. Set TTS_ALLOW_EXPERIMENTAL=true to acknowledge this, or use TTS_BACKEND=kokoro-onnx (recommended)."
+                        "config:tts_backend_experimental TTS_BACKEND=kokoro-v8 is experimental and not production-ready. Set TTS_ALLOW_EXPERIMENTAL=true to acknowledge this, or use TTS_BACKEND=kokoro-onnx (recommended).",
                     )
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Failed to validate tts v8 experimental: {e}")
 
 
 class HealthMonitor:
@@ -419,11 +424,11 @@ class HealthMonitor:
     [RAT: SFT, PA] - Security-First Thinking, Performance Awareness
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize health monitor."""
         self.logger = get_logger(__name__)
         self.start_time = time.time()
-        self.components: Dict[str, ComponentHealth] = {}
+        self.components: dict[str, ComponentHealth] = {}
         self._last_event_loop_check = time.time()
 
     def register_component(self, name: str, status: HealthStatus = HealthStatus.NOT_READY) -> None:
@@ -434,7 +439,7 @@ class HealthMonitor:
             extra={"subsys": "health"},
         )
 
-    def update_component_health(self, name: str, status: HealthStatus, error: Optional[str] = None) -> None:
+    def update_component_health(self, name: str, status: HealthStatus, error: str | None = None) -> None:
         """Update the health status of a component."""
         if name not in self.components:
             self.register_component(name)
@@ -466,6 +471,7 @@ class HealthMonitor:
 
         Returns:
             True if process is alive and event loop is responsive
+
         """
         try:
             # Basic process aliveness
@@ -482,14 +488,15 @@ class HealthMonitor:
             return response_time < 100.0
 
         except Exception as e:
-            self.logger.error(f"Liveness check failed: {e}", extra={"subsys": "health"})
+            self.logger.exception(f"Liveness check failed: {e}", extra={"subsys": "health"})
             return False
 
-    async def check_readiness(self) -> Tuple[bool, List[str]]:
+    async def check_readiness(self) -> tuple[bool, list[str]]:
         """Check if all required components are ready or have fallbacks active.
 
         Returns:
             Tuple of (is_ready, reasons_if_not_ready)
+
         """
         not_ready_reasons = []
 
@@ -504,13 +511,13 @@ class HealthMonitor:
                 memory_percent = process.memory_percent()
                 if memory_percent > 90.0:  # 90% memory usage threshold
                     not_ready_reasons.append(f"High memory usage: {memory_percent:.1f}%")
-            except Exception:
-                pass  # Non-critical check
+            except Exception as e:
+                self.logger.debug(f"Memory check failed (non-critical): {e}")  # Non-critical check
 
             return len(not_ready_reasons) == 0, not_ready_reasons
 
         except Exception as e:
-            self.logger.error(f"Readiness check failed: {e}", extra={"subsys": "health"})
+            self.logger.exception(f"Readiness check failed: {e}", extra={"subsys": "health"})
             return False, [f"Readiness check error: {e}"]
 
     async def measure_event_loop_lag(self) -> float:
@@ -534,16 +541,15 @@ class HealthMonitor:
 
         Returns:
             SystemHealth object with all component and system metrics
+
         """
         try:
             # Perform health checks
             is_alive = await self.check_liveness()
-            is_ready, ready_reasons = await self.check_readiness()
+            is_ready, _ready_reasons = await self.check_readiness()
 
             # Determine overall status
-            if not is_alive:
-                overall_status = HealthStatus.NOT_READY
-            elif not is_ready:
+            if not is_alive or not is_ready:
                 overall_status = HealthStatus.NOT_READY
             elif any(c.status == HealthStatus.DEGRADED for c in self.components.values()):
                 overall_status = HealthStatus.DEGRADED
@@ -560,7 +566,7 @@ class HealthMonitor:
             event_loop_lag_ms = await self.measure_event_loop_lag()
 
             # Check for degraded mode from metrics system
-            from bot.metrics import is_degraded_mode, get_degraded_reasons
+            from bot.metrics import get_degraded_reasons, is_degraded_mode
 
             degraded_mode = is_degraded_mode()
             degraded_reasons = get_degraded_reasons() if degraded_mode else []
@@ -593,7 +599,7 @@ class HealthMonitor:
                 last_health_check=time.time(),
             )
 
-    def get_health_summary_json(self, health: SystemHealth) -> Dict[str, Any]:
+    def get_health_summary_json(self, health: SystemHealth) -> dict[str, Any]:
         """Convert SystemHealth to JSON-serializable summary for logging/API."""
         components_data = []
         for name, component in health.components.items():
@@ -605,7 +611,7 @@ class HealthMonitor:
                     "last_error": component.last_error,
                     "check_count": component.check_count,
                     "consecutive_failures": component.consecutive_failures,
-                }
+                },
             )
 
         return {
@@ -622,7 +628,7 @@ class HealthMonitor:
 
 
 # Global health monitor instance
-_health_monitor: Optional[HealthMonitor] = None
+_health_monitor: HealthMonitor | None = None
 
 
 def get_health_monitor() -> HealthMonitor:

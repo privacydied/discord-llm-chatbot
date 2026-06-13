@@ -1,9 +1,8 @@
-"""
-Text Flow Performance Constants - All timing budgets and thresholds.
+"""Text Flow Performance Constants - All timing budgets and thresholds.
 Implementation of CMV (Constants over Magic Values) rule.
 """
 
-from typing import Dict, Final
+from typing import Final
 
 
 # Phase timing constants [CMV]
@@ -73,7 +72,7 @@ class PhaseConstants:
         ]
 
     @classmethod
-    def get_slo_targets(cls) -> Dict[str, int]:
+    def get_slo_targets(cls) -> dict[str, int]:
         """Get SLO targets by phase."""
         return {
             cls.PHASE_ROUTER_DISPATCH: 80,  # 80ms target

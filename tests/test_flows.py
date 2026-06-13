@@ -1,5 +1,4 @@
-"""
-Integration tests for the four canonical user-to-bot interaction flows.
+"""Integration tests for the four canonical user-to-bot interaction flows.
 
 Ensures that:
 1. TEXT -> TEXT
@@ -14,12 +13,13 @@ import pytest
 
 pytestmark = pytest.mark.skip(reason="End-to-end flow tests requiring full bot infrastructure")
 
-import discord
-from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import discord
 
 from bot.core.bot import LLMBot
-from bot.router import Router, OutputModality
+from bot.router import OutputModality, Router
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def mock_message():
 
 @pytest.mark.asyncio
 @patch("bot.router.brain_infer", new_callable=AsyncMock)
-async def test_flow_text_to_text(mock_brain_infer, mock_bot, mock_message):
+async def test_flow_text_to_text(mock_brain_infer, mock_bot, mock_message) -> None:
     """1. TEXT -> TEXT: Test a standard text command returns a text response."""
     # Arrange
     mock_message.content = "!chat Hello there"
@@ -72,7 +72,7 @@ async def test_flow_text_to_text(mock_brain_infer, mock_bot, mock_message):
 
 @pytest.mark.asyncio
 @patch("bot.router.brain_infer", new_callable=AsyncMock)
-async def test_flow_text_to_tts(mock_brain_infer, mock_bot, mock_message):
+async def test_flow_text_to_tts(mock_brain_infer, mock_bot, mock_message) -> None:
     """2. TEXT -> TTS: Test a text input returns a voice message."""
     # Arrange
     mock_message.content = "!chat Hello there"
@@ -95,7 +95,7 @@ async def test_flow_text_to_tts(mock_brain_infer, mock_bot, mock_message):
 @pytest.mark.asyncio
 @patch("bot.router.brain_infer", new_callable=AsyncMock)
 @patch("bot.router.see_infer", new_callable=AsyncMock)
-async def test_flow_image_to_text(mock_see_infer, mock_brain_infer, mock_bot, mock_message):
+async def test_flow_image_to_text(mock_see_infer, mock_brain_infer, mock_bot, mock_message) -> None:
     """3. IMAGE -> TEXT: Test an image upload returns a text description."""
     # Arrange
     mock_attachment = MagicMock(spec=discord.Attachment)
@@ -131,7 +131,7 @@ async def test_flow_image_to_text(mock_see_infer, mock_brain_infer, mock_bot, mo
 @patch("bot.router.os.remove")
 @patch("bot.router.brain_infer", new_callable=AsyncMock)
 @patch("bot.router.Router._process_document", new_callable=AsyncMock)
-async def test_flow_document_to_text(mock_process_document, mock_brain_infer, mock_os_remove, mock_bot, mock_message):
+async def test_flow_document_to_text(mock_process_document, mock_brain_infer, mock_os_remove, mock_bot, mock_message) -> None:
     """4. DOCUMENT -> TEXT: Test a document upload returns a text summary."""
     # Arrange
     mock_attachment = MagicMock(spec=discord.Attachment)

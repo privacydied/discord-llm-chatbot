@@ -6,10 +6,13 @@ import asyncio
 import logging
 import sqlite3
 import threading
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +23,10 @@ _SCHEMA_VERSION = 1
 class MemoryRecord:
     memory_id: str
     user_id: str
-    guild_id: Optional[str]
-    channel_id: Optional[str]
-    thread_id: Optional[str]
-    source_message_id: Optional[str]
+    guild_id: str | None
+    channel_id: str | None
+    thread_id: str | None
+    source_message_id: str | None
     context_type: str
     text: str
     summary: str
@@ -31,26 +34,26 @@ class MemoryRecord:
     confidence: float
     created_at: str
     updated_at: str
-    last_accessed_at: Optional[str]
-    expires_at: Optional[str]
+    last_accessed_at: str | None
+    expires_at: str | None
     source: str
-    deleted_at: Optional[str]
-    chroma_id: Optional[str]
+    deleted_at: str | None
+    chroma_id: str | None
     metadata_json: str
 
     @classmethod
-    def from_row(cls, row: sqlite3.Row | Dict[str, Any]) -> "MemoryRecord":
+    def from_row(cls, row: sqlite3.Row | dict[str, Any]) -> MemoryRecord:
         payload = dict(row)
         return cls(**payload)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
 class PersistentMemoryStore:
     """SQLite control-plane store for curated memories."""
 
-    def __init__(self, sqlite_path: str | Path):
+    def __init__(self, sqlite_path: str | Path) -> None:
         self.sqlite_path = Path(sqlite_path)
         self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
@@ -128,7 +131,7 @@ class PersistentMemoryStore:
                 ON curated_memories(context_type, deleted_at, expires_at);
             CREATE INDEX IF NOT EXISTS idx_curated_memories_last_accessed
                 ON curated_memories(last_accessed_at);
-            """
+            """,
         )
 
     async def upsert_memory(self, record: MemoryRecord) -> MemoryRecord:
@@ -228,11 +231,11 @@ class PersistentMemoryStore:
             finally:
                 conn.close()
 
-    async def get_memory(self, memory_id: str) -> Optional[MemoryRecord]:
+    async def get_memory(self, memory_id: str) -> MemoryRecord | None:
         await self.initialize()
         return await asyncio.to_thread(self._get_memory_sync, memory_id)
 
-    def _get_memory_sync(self, memory_id: str) -> Optional[MemoryRecord]:
+    def _get_memory_sync(self, memory_id: str) -> MemoryRecord | None:
         with self._lock:
             conn = self._connect()
             try:
@@ -244,13 +247,13 @@ class PersistentMemoryStore:
     async def list_memories(
         self,
         *,
-        user_id: Optional[str] = None,
-        guild_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        thread_id: Optional[str] = None,
+        user_id: str | None = None,
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
         include_deleted: bool = False,
         limit: int = 20,
-    ) -> List[MemoryRecord]:
+    ) -> list[MemoryRecord]:
         await self.initialize()
         return await asyncio.to_thread(
             self._list_memories_sync,
@@ -264,13 +267,13 @@ class PersistentMemoryStore:
 
     def _list_memories_sync(
         self,
-        user_id: Optional[str],
-        guild_id: Optional[str],
-        channel_id: Optional[str],
-        thread_id: Optional[str],
+        user_id: str | None,
+        guild_id: str | None,
+        channel_id: str | None,
+        thread_id: str | None,
         include_deleted: bool,
         limit: int,
-    ) -> List[MemoryRecord]:
+    ) -> list[MemoryRecord]:
         clauses = []
         params: list[Any] = []
         if user_id is not None:
@@ -308,12 +311,12 @@ class PersistentMemoryStore:
         self,
         query: str,
         *,
-        user_id: Optional[str] = None,
-        guild_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        thread_id: Optional[str] = None,
+        user_id: str | None = None,
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
         limit: int = 20,
-    ) -> List[MemoryRecord]:
+    ) -> list[MemoryRecord]:
         await self.initialize()
         return await asyncio.to_thread(
             self._search_memories_sync,
@@ -328,12 +331,12 @@ class PersistentMemoryStore:
     def _search_memories_sync(
         self,
         query: str,
-        user_id: Optional[str],
-        guild_id: Optional[str],
-        channel_id: Optional[str],
-        thread_id: Optional[str],
+        user_id: str | None,
+        guild_id: str | None,
+        channel_id: str | None,
+        thread_id: str | None,
         limit: int,
-    ) -> List[MemoryRecord]:
+    ) -> list[MemoryRecord]:
         like = f"%{query.strip()}%"
         clauses = ["deleted_at IS NULL", "(expires_at IS NULL OR expires_at > ?)"]
         params: list[Any] = [self._now_iso()]
@@ -403,11 +406,11 @@ class PersistentMemoryStore:
             finally:
                 conn.close()
 
-    async def wipe_user_memories(self, user_id: str) -> List[str]:
+    async def wipe_user_memories(self, user_id: str) -> list[str]:
         await self.initialize()
         return await asyncio.to_thread(self._wipe_user_memories_sync, str(user_id))
 
-    def _wipe_user_memories_sync(self, user_id: str) -> List[str]:
+    def _wipe_user_memories_sync(self, user_id: str) -> list[str]:
         with self._lock:
             conn = self._connect()
             try:
@@ -451,11 +454,11 @@ class PersistentMemoryStore:
             finally:
                 conn.close()
 
-    async def active_ids_for_user(self, user_id: str) -> List[str]:
+    async def active_ids_for_user(self, user_id: str) -> list[str]:
         await self.initialize()
         return await asyncio.to_thread(self._active_ids_for_user_sync, str(user_id))
 
-    def _active_ids_for_user_sync(self, user_id: str) -> List[str]:
+    def _active_ids_for_user_sync(self, user_id: str) -> list[str]:
         with self._lock:
             conn = self._connect()
             try:
@@ -475,11 +478,11 @@ class PersistentMemoryStore:
     async def active_ids_for_scope(
         self,
         *,
-        user_id: Optional[str] = None,
-        guild_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        thread_id: Optional[str] = None,
-    ) -> List[str]:
+        user_id: str | None = None,
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
+    ) -> list[str]:
         records = await self.list_memories(
             user_id=user_id,
             guild_id=guild_id,
@@ -491,15 +494,15 @@ class PersistentMemoryStore:
         return [record.memory_id for record in records]
 
     def _now_iso(self) -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
-    async def fetch_active_by_ids(self, memory_ids: Sequence[str]) -> List[MemoryRecord]:
+    async def fetch_active_by_ids(self, memory_ids: Sequence[str]) -> list[MemoryRecord]:
         if not memory_ids:
             return []
         await self.initialize()
         return await asyncio.to_thread(self._fetch_active_by_ids_sync, list(memory_ids))
 
-    def _fetch_active_by_ids_sync(self, memory_ids: Sequence[str]) -> List[MemoryRecord]:
+    def _fetch_active_by_ids_sync(self, memory_ids: Sequence[str]) -> list[MemoryRecord]:
         placeholders = ",".join(["?"] * len(memory_ids))
         sql = f"SELECT * FROM curated_memories WHERE memory_id IN ({placeholders}) AND deleted_at IS NULL AND (expires_at IS NULL OR expires_at > ?)"  # nosec B608  # nosec B608
         params: list[Any] = [*memory_ids, self._now_iso()]
@@ -515,11 +518,10 @@ class PersistentMemoryStore:
         self,
         *,
         user_id: str,
-        guild_id: Optional[str],
+        guild_id: str | None,
         normalized_text: str,
-    ) -> Optional[MemoryRecord]:
-        """
-        Find an active memory with the same (user+guild) and identical
+    ) -> MemoryRecord | None:
+        """Find an active memory with the same (user+guild) and identical
         normalized summary text for deduplication.
         """
         await self.initialize()
@@ -533,9 +535,9 @@ class PersistentMemoryStore:
     def _find_by_normalized_text_sync(
         self,
         user_id: str,
-        guild_id: Optional[str],
+        guild_id: str | None,
         normalized_text: str,
-    ) -> Optional[MemoryRecord]:
+    ) -> MemoryRecord | None:
         # Use a LIKE match on summary with normalized input for robustness.
         like = f"%{normalized_text}%"
         clauses: list[str] = [

@@ -1,30 +1,29 @@
-"""
-DuckDuckGo search provider using the official duckduckgo_search (ddgs) client.
+"""DuckDuckGo search provider using the official duckduckgo_search (ddgs) client.
 Falls back to legacy HTML parsing if ddgs is unavailable.
-[CA][REH][IV][PA]
+[CA][REH][IV][PA].
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import List, Optional, Set
+import importlib
+import logging
 from urllib.parse import urlencode
 
 import httpx
 from bs4 import BeautifulSoup  # beautifulsoup4 is in requirements
-import importlib
-import logging
 
-from bot.utils.logging import get_logger
 from bot.config import load_config
+from bot.utils.logging import get_logger
+
+from ..factory import get_search_client
 from ..types import (
+    SafeSearch,
+    SearchCategory,
     SearchQueryParams,
     SearchResult,
     SearchResults,
-    SafeSearch,
-    SearchCategory,
 )
-from ..factory import get_search_client
 
 logger = get_logger(__name__)
 
@@ -41,7 +40,7 @@ class DDGSearchProvider:
             pass
 
     async def search(self, params: SearchQueryParams) -> SearchResults:
-        """Execute a web search using ddgs with fallback to HTML parsing. [REH]"""
+        """Execute a web search using ddgs with fallback to HTML parsing. [REH]."""
         query = params.query.strip()
         if not query:
             return []
@@ -62,8 +61,8 @@ class DDGSearchProvider:
         # Try official client first (non-blocking via thread pool)
         try:
 
-            async def _ddgs_call() -> List[dict]:
-                def _worker() -> List[dict]:
+            async def _ddgs_call() -> list[dict]:
+                def _worker() -> list[dict]:
                     # Prefer 'ddgs' package first
                     try:
                         mod = importlib.import_module("ddgs")
@@ -71,7 +70,7 @@ class DDGSearchProvider:
                         if DDGS_cls is not None:
                             with DDGS_cls() as client:
                                 method_name = self._map_category_to_method(category)
-                                fn = getattr(client, method_name, None) or getattr(client, "text")
+                                fn = getattr(client, method_name, None) or client.text
                                 return list(
                                     self._invoke_ddgs(
                                         fn,
@@ -79,7 +78,7 @@ class DDGSearchProvider:
                                         region,
                                         safesearch,
                                         params.max_results,
-                                    )
+                                    ),
                                 )
                     except Exception:
                         # Try next fallback
@@ -89,18 +88,19 @@ class DDGSearchProvider:
                     mod = importlib.import_module("duckduckgo_search")
                     DDGS_cls = getattr(mod, "DDGS", None)
                     if DDGS_cls is None:
-                        raise ImportError("duckduckgo_search.DDGS not found")
+                        msg = "duckduckgo_search.DDGS not found"
+                        raise ImportError(msg)
                     with DDGS_cls() as client:
                         method_name = self._map_category_to_method(category)
-                        fn = getattr(client, method_name, None) or getattr(client, "text")
+                        fn = getattr(client, method_name, None) or client.text
                         return list(self._invoke_ddgs(fn, query, region, safesearch, params.max_results))
 
                 return await asyncio.to_thread(_worker)
 
-            raw: List[dict] = await asyncio.wait_for(_ddgs_call(), timeout=timeout_s)
+            raw: list[dict] = await asyncio.wait_for(_ddgs_call(), timeout=timeout_s)
 
             # Normalize, deduplicate, and rank
-            prelim: List[SearchResult] = []
+            prelim: list[SearchResult] = []
             for item in raw:
                 title, url, snippet = self._extract_item(item)
                 if not url:
@@ -112,7 +112,7 @@ class DDGSearchProvider:
                         title=title,
                         url=norm_url or url,
                         snippet=(snippet.strip() or None) if isinstance(snippet, str) else snippet,
-                    )
+                    ),
                 )
 
             return self._dedup_and_rank(prelim, params.max_results)
@@ -121,7 +121,7 @@ class DDGSearchProvider:
             # Fallback to HTML provider if ddgs not installed
             logger.warning("duckduckgo_search not installed; falling back to HTML parsing provider. Install 'duckduckgo_search' for better results.")
             return await self._search_via_html(query, params, timeout_s)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("DDGS call timed out")
             return []
         except Exception as e:
@@ -145,15 +145,14 @@ class DDGSearchProvider:
         except Exception:
             return "moderate"
 
-    def _map_locale(self, locale: Optional[str]) -> Optional[str]:
+    def _map_locale(self, locale: str | None) -> str | None:
         """Map locale to ddgs region code if possible. Defaults to world (wt-wt)."""
         if not locale:
             return None
-        loc = locale.replace("_", "-")
-        return loc
+        return locale.replace("_", "-")
 
     def _map_category_to_method(self, cat: SearchCategory) -> str:
-        """Map category to DDGS method name. Defaults to 'text'. [CMV]"""
+        """Map category to DDGS method name. Defaults to 'text'. [CMV]."""
         try:
             mapping = {
                 SearchCategory.TEXT: "text",
@@ -165,8 +164,8 @@ class DDGSearchProvider:
         except Exception:
             return "text"
 
-    def _invoke_ddgs(self, fn, query: str, region: Optional[str], safesearch: str, max_results: int):
-        """Invoke a DDGS method with tolerant signature handling. [REH]"""
+    def _invoke_ddgs(self, fn, query: str, region: str | None, safesearch: str, max_results: int):
+        """Invoke a DDGS method with tolerant signature handling. [REH]."""
         # Try full signature, then progressively simpler fallbacks to avoid TypeError across versions.
         try:
             return fn(
@@ -194,8 +193,8 @@ class DDGSearchProvider:
                 except TypeError:
                     return fn(query, max_results=max_results)
 
-    def _extract_item(self, item: dict) -> tuple[str, str, Optional[str]]:
-        """Best-effort field extraction across ddgs variants. [IV][REH]"""
+    def _extract_item(self, item: dict) -> tuple[str, str, str | None]:
+        """Best-effort field extraction across ddgs variants. [IV][REH]."""
         title = (item.get("title") or item.get("text") or item.get("name") or "").strip()
         # Try common URL keys
         url = item.get("href") or item.get("url") or item.get("link") or item.get("content_url") or item.get("source") or ""
@@ -205,10 +204,10 @@ class DDGSearchProvider:
             snippet = snippet.strip() or None
         return title, url, snippet
 
-    def _normalize_url(self, url: str) -> tuple[Optional[str], Optional[str]]:
-        """Normalize URL and produce a deduplication key. [IV][CMV]"""
+    def _normalize_url(self, url: str) -> tuple[str | None, str | None]:
+        """Normalize URL and produce a deduplication key. [IV][CMV]."""
         try:
-            from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+            from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
             if not url or not isinstance(url, str):
                 return None, None
@@ -267,14 +266,14 @@ class DDGSearchProvider:
             norm = urlunparse((scheme, netloc, path, "", query, fragment))
 
             # Dedup key ignores scheme and leading www.
-            netloc_key = netloc[4:] if netloc.startswith("www.") else netloc
+            netloc_key = netloc.removeprefix("www.")
             dedup_key = f"{netloc_key}{path}?{query}" if query else f"{netloc_key}{path}"
             return norm, dedup_key
         except Exception:
             return url, url
 
     def _score(self, r: SearchResult) -> int:
-        """Simple heuristic ranking score. [PA]"""
+        """Simple heuristic ranking score. [PA]."""
         try:
             score = 0
             if r.snippet:
@@ -292,11 +291,11 @@ class DDGSearchProvider:
         except Exception:
             return 0
 
-    def _dedup_and_rank(self, items: List[SearchResult], max_results: int) -> SearchResults:
-        """Deduplicate by normalized key and rank by heuristic while keeping stability. [CA][REH]"""
-        seen: Set[str] = set()
-        pruned: List[SearchResult] = []
-        keys: List[str] = []
+    def _dedup_and_rank(self, items: list[SearchResult], max_results: int) -> SearchResults:
+        """Deduplicate by normalized key and rank by heuristic while keeping stability. [CA][REH]."""
+        seen: set[str] = set()
+        pruned: list[SearchResult] = []
+        keys: list[str] = []
         for r in items:
             norm_url, key = self._normalize_url(r.url)
             if key and key not in seen:
@@ -313,11 +312,10 @@ class DDGSearchProvider:
         # Rank with stable sort
         indexed = list(enumerate(pruned))
         indexed.sort(key=lambda kv: (-self._score(kv[1]), kv[0]))
-        final = [kv[1] for kv in indexed][:max_results]
-        return final
+        return [kv[1] for kv in indexed][:max_results]
 
     async def _search_via_html(self, query: str, params: SearchQueryParams, timeout_s: float) -> SearchResults:
-        """Legacy HTML parsing fallback using duckduckgo.com/html. [REH]"""
+        """Legacy HTML parsing fallback using duckduckgo.com/html. [REH]."""
         # Build query params. Keep minimal for robustness.
         q = {"q": query}
         url = self.endpoint
@@ -343,7 +341,7 @@ class DDGSearchProvider:
             logger.warning(f"DDG HTML HTTP error: {e}")
             return []
 
-        results: List[SearchResult] = []
+        results: list[SearchResult] = []
         try:
             soup = BeautifulSoup(resp.text, "html.parser")
             anchors = soup.find_all("a", class_="result__a")
@@ -365,7 +363,7 @@ class DDGSearchProvider:
                         title=title or (norm_url or href),
                         url=(norm_url or href),
                         snippet=snippet,
-                    )
+                    ),
                 )
         except Exception as e:
             logger.debug(f"DDG HTML parse error: {e}")

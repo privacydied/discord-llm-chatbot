@@ -1,13 +1,11 @@
 import os
 from pathlib import Path
 
+from bot.memory import profiles
 
-from bot.memory import profiles as profiles
 
-
-def test_server_profile_backup_over_readonly_bak(tmp_path, monkeypatch):
-    """
-    Ensure that saving a server profile succeeds even when an existing
+def test_server_profile_backup_over_readonly_bak(tmp_path, monkeypatch) -> None:
+    """Ensure that saving a server profile succeeds even when an existing
     .json.bak file is read-only by removing it before copying.
     """
 
@@ -51,7 +49,7 @@ def test_server_profile_backup_over_readonly_bak(tmp_path, monkeypatch):
     assert bak_text == before_text
 
 
-def test_save_server_profile_without_cache_does_not_deadlock(tmp_path, monkeypatch):
+def test_save_server_profile_without_cache_does_not_deadlock(tmp_path, monkeypatch) -> None:
     """Saving a missing server profile should initialize and return promptly."""
 
     def fake_load_config():
@@ -62,7 +60,7 @@ def test_save_server_profile_without_cache_does_not_deadlock(tmp_path, monkeypat
 
     result = {}
 
-    def worker():
+    def worker() -> None:
         result["ok"] = profiles.save_server_profile("deadlock_free")
 
     import threading

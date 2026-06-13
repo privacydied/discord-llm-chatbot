@@ -1,15 +1,13 @@
-"""
-Tests for the tokenizer registry implementation.
-"""
+"""Tests for the tokenizer registry implementation."""
 
 import pytest
 
 # Skip — requires system-level tokenizer binaries
 pytestmark = pytest.mark.skip(reason="Requires system-level tokenizer binaries")
 
-import unittest
-from unittest.mock import patch, MagicMock
 import os
+import unittest
+from unittest.mock import MagicMock, patch
 
 # Import the module under test
 from bot.tokenizer_registry import TokenizerRegistry
@@ -18,7 +16,7 @@ from bot.tokenizer_registry import TokenizerRegistry
 class TestTokenizerRegistry(unittest.TestCase):
     """Test suite for tokenizer registry functionality."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test environment."""
         # Save original environment
         self.original_env = os.environ.copy()
@@ -27,7 +25,7 @@ class TestTokenizerRegistry(unittest.TestCase):
         self.registry = TokenizerRegistry()
         TokenizerRegistry._instance = self.registry
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up after tests."""
         # Restore original environment
         os.environ.clear()
@@ -38,7 +36,7 @@ class TestTokenizerRegistry(unittest.TestCase):
 
     @patch("bot.tokenizer_registry.TokenizerRegistry._dump_environment_diagnostics")
     @patch("subprocess.run")
-    def test_discovery_post_boot(self, mock_run, mock_dump):
+    def test_discovery_post_boot(self, mock_run, mock_dump) -> None:
         """Test tokenizer discovery after boot process."""
         # Mock environment diagnostics to return espeak available
         mock_dump.return_value = {
@@ -56,26 +54,26 @@ class TestTokenizerRegistry(unittest.TestCase):
 
         # First import should initialize with empty set
         registry1 = TokenizerRegistry.get_instance()
-        self.assertEqual(len(registry1._available_tokenizers), 0)
-        self.assertFalse(registry1._initialized)
+        assert len(registry1._available_tokenizers) == 0
+        assert not registry1._initialized
 
         # Discover tokenizers
         registry1.discover_tokenizers()
 
         # Verify discovery results
-        self.assertTrue(registry1._initialized)
-        self.assertTrue("espeak" in registry1._available_tokenizers)
-        self.assertTrue("grapheme" in registry1._available_tokenizers)
+        assert registry1._initialized
+        assert "espeak" in registry1._available_tokenizers
+        assert "grapheme" in registry1._available_tokenizers
 
         # Second import should get the same instance with populated set
         registry2 = TokenizerRegistry.get_instance()
-        self.assertIs(registry1, registry2)
-        self.assertTrue("espeak" in registry2._available_tokenizers)
-        self.assertTrue("grapheme" in registry2._available_tokenizers)
+        assert registry1 is registry2
+        assert "espeak" in registry2._available_tokenizers
+        assert "grapheme" in registry2._available_tokenizers
 
     @patch("bot.tokenizer_registry.TokenizerRegistry._dump_environment_diagnostics")
     @patch("subprocess.run")
-    def test_env_override_blank(self, mock_run, mock_dump):
+    def test_env_override_blank(self, mock_run, mock_dump) -> None:
         """Test that blank TTS_TOKENISER environment variable is ignored."""
         # Mock diagnostics: g2p_en available (in English preferences)
         mock_dump.return_value = {
@@ -96,16 +94,16 @@ class TestTokenizerRegistry(unittest.TestCase):
         # Set blank TTS_TOKENISER
         with patch.dict(os.environ, {"TTS_TOKENISER": ""}):
             tokenizer = registry.select_tokenizer_for_language("en")
-            self.assertTrue(tokenizer)
+            assert tokenizer
 
         # Set whitespace TTS_TOKENISER
         with patch.dict(os.environ, {"TTS_TOKENISER": "  "}):
             tokenizer = registry.select_tokenizer_for_language("en")
-            self.assertTrue(tokenizer)
+            assert tokenizer
 
     @patch("bot.tokenizer_registry.TokenizerRegistry._dump_environment_diagnostics")
     @patch("subprocess.run")
-    def test_registry_persistence(self, mock_run, mock_dump):
+    def test_registry_persistence(self, mock_run, mock_dump) -> None:
         """Test that the registry persists across imports in different modules."""
         # Mock diagnostics with g2p_en (in English preferences)
         mock_dump.return_value = {
@@ -136,22 +134,22 @@ class TestTokenizerRegistry(unittest.TestCase):
         registry2 = TokenizerRegistry.get_instance()
 
         # Verify it's the same object (singleton pattern)
-        self.assertIs(registry1, registry2)
+        assert registry1 is registry2
 
         # Verify registry is empty after corruption
-        self.assertEqual(len(registry2._available_tokenizers), 0)
+        assert len(registry2._available_tokenizers) == 0
 
         # But size_at_init should still be set from first initialization
-        self.assertEqual(registry2._size_at_init, len(known))
+        assert registry2._size_at_init == len(known)
 
         # Selecting a tokenizer should trigger rediscovery due to corruption detection
         with patch.object(registry2, "discover_tokenizers", wraps=registry2.discover_tokenizers) as mock_discover:
             tokenizer = registry2.select_tokenizer_for_language("en")
             mock_discover.assert_called_once_with(force=True)
-            self.assertTrue(tokenizer)
+            assert tokenizer
 
     @patch("bot.tokenizer_registry.TokenizerRegistry._dump_environment_diagnostics")
-    def test_language_canonicalization(self, mock_dump):
+    def test_language_canonicalization(self, mock_dump) -> None:
         """Test language code canonicalization."""
         # Mock environment diagnostics
         mock_dump.return_value = {
@@ -165,21 +163,21 @@ class TestTokenizerRegistry(unittest.TestCase):
         registry = TokenizerRegistry.get_instance()
 
         # Test various language code formats
-        self.assertEqual(registry._canonicalize_language("en"), "en")
-        self.assertEqual(registry._canonicalize_language("EN"), "en")
-        self.assertEqual(registry._canonicalize_language("en-US"), "en")
-        self.assertEqual(registry._canonicalize_language("en_US"), "en_us")  # Underscores preserved
-        self.assertEqual(registry._canonicalize_language("eng"), "en")
-        self.assertEqual(registry._canonicalize_language("  en  "), "en")
-        self.assertEqual(registry._canonicalize_language("ja-JP"), "ja")
-        self.assertEqual(registry._canonicalize_language("jpn"), "ja")
-        self.assertEqual(registry._canonicalize_language("zh-CN"), "zh")
-        self.assertEqual(registry._canonicalize_language("zho"), "zh")
-        self.assertEqual(registry._canonicalize_language(""), "en")  # Default
-        self.assertEqual(registry._canonicalize_language(None), "en")  # Default
+        assert registry._canonicalize_language("en") == "en"
+        assert registry._canonicalize_language("EN") == "en"
+        assert registry._canonicalize_language("en-US") == "en"
+        assert registry._canonicalize_language("en_US") == "en_us"  # Underscores preserved
+        assert registry._canonicalize_language("eng") == "en"
+        assert registry._canonicalize_language("  en  ") == "en"
+        assert registry._canonicalize_language("ja-JP") == "ja"
+        assert registry._canonicalize_language("jpn") == "ja"
+        assert registry._canonicalize_language("zh-CN") == "zh"
+        assert registry._canonicalize_language("zho") == "zh"
+        assert registry._canonicalize_language("") == "en"  # Default
+        assert registry._canonicalize_language(None) == "en"  # Default
 
     @patch("bot.tokenizer_registry.TokenizerRegistry._dump_environment_diagnostics")
-    def test_warning_message_format(self, mock_dump):
+    def test_warning_message_format(self, mock_dump) -> None:
         """Test warning message formatting for different languages."""
         # Mock environment diagnostics
         mock_dump.return_value = {
@@ -194,28 +192,28 @@ class TestTokenizerRegistry(unittest.TestCase):
 
         # Test English warning message
         en_message = registry.get_tokenizer_warning_message("en")
-        self.assertIn("English phonetic tokeniser missing", en_message)
-        self.assertIn("espeak", en_message)
-        self.assertIn("phonemizer", en_message)
-        self.assertIn("g2p_en", en_message)
+        assert "English phonetic tokeniser missing" in en_message
+        assert "espeak" in en_message
+        assert "phonemizer" in en_message
+        assert "g2p_en" in en_message
 
         # Test Japanese warning message
         ja_message = registry.get_tokenizer_warning_message("ja")
-        self.assertIn("Asian language tokenizer missing", ja_message)
-        self.assertIn("misaki", ja_message)
-        self.assertIn("ja speech", ja_message)
+        assert "Asian language tokenizer missing" in ja_message
+        assert "misaki" in ja_message
+        assert "ja speech" in ja_message
 
         # Test Chinese warning message
         zh_message = registry.get_tokenizer_warning_message("zh")
-        self.assertIn("Asian language tokenizer missing", zh_message)
-        self.assertIn("misaki", zh_message)
-        self.assertIn("zh speech", zh_message)
+        assert "Asian language tokenizer missing" in zh_message
+        assert "misaki" in zh_message
+        assert "zh speech" in zh_message
 
         # Test other language warning message
         fr_message = registry.get_tokenizer_warning_message("fr")
-        self.assertIn("Phonetic tokeniser missing for fr", fr_message)
-        self.assertIn("phonemizer", fr_message)
-        self.assertIn("espeak", fr_message)
+        assert "Phonetic tokeniser missing for fr" in fr_message
+        assert "phonemizer" in fr_message
+        assert "espeak" in fr_message
 
 
 if __name__ == "__main__":

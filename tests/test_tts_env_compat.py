@@ -1,22 +1,21 @@
-"""
-Test TTS environment variable compatibility and tokenizer selection.
-"""
+"""Test TTS environment variable compatibility and tokenizer selection."""
 
 import os
-import unittest
 import tempfile
+import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+from bot.tts.kokoro_direct import KokoroDirect, TokenizationMethod
 
 # Import the modules we want to test
 from bot.tts.manager import TTSManager
-from bot.tts.kokoro_direct import KokoroDirect, TokenizationMethod
 
 
 class TestTTSEnvVarCompat(unittest.TestCase):
     """Test TTS environment variable compatibility."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test environment."""
         # Create temporary directory for test files
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -27,13 +26,13 @@ class TestTTSEnvVarCompat(unittest.TestCase):
             "tts": {
                 "model_path": str(self.temp_path / "model.onnx"),
                 "voices_path": str(self.temp_path / "voices.bin"),
-            }
+            },
         }
 
         # Save original environment
         self.original_env = os.environ.copy()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up after tests."""
         # Restore original environment
         os.environ.clear()
@@ -43,7 +42,7 @@ class TestTTSEnvVarCompat(unittest.TestCase):
         self.temp_dir.cleanup()
 
     @patch("bot.tts.manager.KokoroDirect")
-    def test_new_env_vars(self, mock_kokoro):
+    def test_new_env_vars(self, mock_kokoro) -> None:
         """Test that new environment variables are used correctly."""
         # Set new environment variables
         os.environ["TTS_MODEL_PATH"] = str(self.temp_path / "new_model.onnx")
@@ -57,12 +56,12 @@ class TestTTSEnvVarCompat(unittest.TestCase):
 
         # Check that KokoroDirect was initialized with correct paths
         mock_kokoro.assert_called_once()
-        args, kwargs = mock_kokoro.call_args
-        self.assertEqual(kwargs["model_path"], str(self.temp_path / "new_model.onnx"))
-        self.assertEqual(kwargs["voices_path"], str(self.temp_path / "new_voices.bin"))
+        _args, kwargs = mock_kokoro.call_args
+        assert kwargs["model_path"] == str(self.temp_path / "new_model.onnx")
+        assert kwargs["voices_path"] == str(self.temp_path / "new_voices.bin")
 
     @patch("bot.tts.manager.KokoroDirect")
-    def test_old_env_vars(self, mock_kokoro):
+    def test_old_env_vars(self, mock_kokoro) -> None:
         """Test that old environment variables are used as fallback."""
         # Set old environment variables
         os.environ["TTS_MODEL_FILE"] = str(self.temp_path / "old_model.onnx")
@@ -76,12 +75,12 @@ class TestTTSEnvVarCompat(unittest.TestCase):
 
         # Check that KokoroDirect was initialized with correct paths
         mock_kokoro.assert_called_once()
-        args, kwargs = mock_kokoro.call_args
-        self.assertEqual(kwargs["model_path"], str(self.temp_path / "old_model.onnx"))
-        self.assertEqual(kwargs["voices_path"], str(self.temp_path / "old_voices.bin"))
+        _args, kwargs = mock_kokoro.call_args
+        assert kwargs["model_path"] == str(self.temp_path / "old_model.onnx")
+        assert kwargs["voices_path"] == str(self.temp_path / "old_voices.bin")
 
     @patch("bot.tts.manager.KokoroDirect")
-    def test_new_vars_override_old(self, mock_kokoro):
+    def test_new_vars_override_old(self, mock_kokoro) -> None:
         """Test that new environment variables override old ones."""
         # Set both old and new environment variables
         os.environ["TTS_MODEL_FILE"] = str(self.temp_path / "old_model.onnx")
@@ -97,9 +96,9 @@ class TestTTSEnvVarCompat(unittest.TestCase):
 
         # Check that KokoroDirect was initialized with new paths
         mock_kokoro.assert_called_once()
-        args, kwargs = mock_kokoro.call_args
-        self.assertEqual(kwargs["model_path"], str(self.temp_path / "new_model.onnx"))
-        self.assertEqual(kwargs["voices_path"], str(self.temp_path / "new_voices.bin"))
+        _args, kwargs = mock_kokoro.call_args
+        assert kwargs["model_path"] == str(self.temp_path / "new_model.onnx")
+        assert kwargs["voices_path"] == str(self.temp_path / "new_voices.bin")
 
 
 class TestTokenizerSelection(unittest.TestCase):
@@ -107,7 +106,7 @@ class TestTokenizerSelection(unittest.TestCase):
 
     @patch("bot.tts.kokoro_direct.importlib.util.find_spec")
     @patch("bot.tts.kokoro_direct.shutil.which")
-    def test_tokenizer_discovery(self, mock_which, mock_find_spec):
+    def test_tokenizer_discovery(self, mock_which, mock_find_spec) -> None:
         """Test that tokenizer methods are correctly discovered."""
         # Mock tokenizer
         mock_tokenizer = MagicMock()
@@ -125,13 +124,13 @@ class TestTokenizerSelection(unittest.TestCase):
             kokoro._detect_tokenization_methods()
 
         # Check that the correct methods were detected
-        self.assertIn(TokenizationMethod.PHONEME_ENCODE, kokoro.available_tokenization_methods)
-        self.assertIn(TokenizationMethod.PHONEME_TO_ID, kokoro.available_tokenization_methods)
-        self.assertIn(TokenizationMethod.ESPEAK, kokoro.available_tokenization_methods)
-        self.assertIn(TokenizationMethod.PHONEMIZER, kokoro.available_tokenization_methods)
-        self.assertNotIn(TokenizationMethod.MISAKI, kokoro.available_tokenization_methods)
+        assert TokenizationMethod.PHONEME_ENCODE in kokoro.available_tokenization_methods
+        assert TokenizationMethod.PHONEME_TO_ID in kokoro.available_tokenization_methods
+        assert TokenizationMethod.ESPEAK in kokoro.available_tokenization_methods
+        assert TokenizationMethod.PHONEMIZER in kokoro.available_tokenization_methods
+        assert TokenizationMethod.MISAKI not in kokoro.available_tokenization_methods
 
-    def test_phonemizer_selection_english(self):
+    def test_phonemizer_selection_english(self) -> None:
         """Test that the correct phonemizer is selected for English."""
         # Create KokoroDirect with mocked methods
         with (
@@ -142,9 +141,9 @@ class TestTokenizerSelection(unittest.TestCase):
 
             # Test English language
             phonemizer = kokoro._select_phonemiser("en")
-            self.assertEqual(phonemizer, "espeak")
+            assert phonemizer == "espeak"
 
-    def test_phonemizer_selection_japanese(self):
+    def test_phonemizer_selection_japanese(self) -> None:
         """Test that the correct phonemizer is selected for Japanese."""
         # Create KokoroDirect with mocked methods
         with (
@@ -155,9 +154,9 @@ class TestTokenizerSelection(unittest.TestCase):
 
             # Test Japanese language
             phonemizer = kokoro._select_phonemiser("ja")
-            self.assertEqual(phonemizer, "misaki")
+            assert phonemizer == "misaki"
 
-    def test_phonemizer_env_override(self):
+    def test_phonemizer_env_override(self) -> None:
         """Test that environment variable can override phonemizer selection."""
         # Set environment variable
         os.environ["TTS_PHONEMISER"] = "custom_phonemizer"
@@ -172,7 +171,7 @@ class TestTokenizerSelection(unittest.TestCase):
 
                 # Test that environment variable overrides language-based selection
                 phonemizer = kokoro._select_phonemiser("en")
-                self.assertEqual(phonemizer, "custom_phonemizer")
+                assert phonemizer == "custom_phonemizer"
         finally:
             # Clean up environment
             if "TTS_PHONEMISER" in os.environ:

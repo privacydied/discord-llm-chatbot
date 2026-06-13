@@ -5,7 +5,7 @@ class _Logger:
     def __init__(self) -> None:
         self.calls = []
 
-    def info(self, msg, *args):
+    def info(self, msg, *args) -> None:
         self.calls.append((msg, args))
 
 

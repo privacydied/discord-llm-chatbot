@@ -11,7 +11,7 @@ def _pbs_legacy(url_base: str, size_suffix: str = ":large") -> str:
     return f"https://pbs.twimg.com/media/{url_base}{size_suffix}"
 
 
-def test_native_over_card_prefers_photos_only(monkeypatch):
+def test_native_over_card_prefers_photos_only(monkeypatch) -> None:
     tw = {
         "text": "A caption",
         "photos": [
@@ -26,7 +26,7 @@ def test_native_over_card_prefers_photos_only(monkeypatch):
     assert res["had_card"] is True
 
 
-def test_multi_photo_order_and_highres():
+def test_multi_photo_order_and_highres() -> None:
     tw = {
         "text": "Multi",
         "photos": [
@@ -43,7 +43,7 @@ def test_multi_photo_order_and_highres():
     ]
 
 
-def test_quoted_fallback_when_primary_empty(monkeypatch):
+def test_quoted_fallback_when_primary_empty(monkeypatch) -> None:
     monkeypatch.setenv("SYND_INCLUDE_QUOTED_MEDIA", "1")
     tw = {"text": "", "quoted_tweet": {"photos": [{"url": _pbs("QQ1")}]}}
     res = extract_text_and_images_from_syndication(tw)
@@ -51,7 +51,7 @@ def test_quoted_fallback_when_primary_empty(monkeypatch):
     assert res["image_urls"] == [upgrade_pbs_to_orig(_pbs("QQ1"))]
 
 
-def test_card_fallback_when_no_native():
+def test_card_fallback_when_no_native() -> None:
     tw = {
         "text": "Link card only",
         "card": {"binding_values": {"thumbnail_image_large": {"image_value": {"url": _pbs("CARDX", size="small")}}}},
@@ -61,7 +61,7 @@ def test_card_fallback_when_no_native():
     assert res["image_urls"] == [upgrade_pbs_to_orig(_pbs("CARDX", size="small"))]
 
 
-def test_dedup_when_card_and_native_same_asset():
+def test_dedup_when_card_and_native_same_asset() -> None:
     base_native = _pbs("SAME1", size="small")
     base_card = _pbs("SAME1", size="large")
     tw = {
@@ -73,7 +73,7 @@ def test_dedup_when_card_and_native_same_asset():
     assert res["image_urls"] == [upgrade_pbs_to_orig(base_native)]
 
 
-def test_video_poster_thumbnail_used_from_entities():
+def test_video_poster_thumbnail_used_from_entities() -> None:
     tw = {
         "text": "Video",
         "extended_entities": {
@@ -81,20 +81,20 @@ def test_video_poster_thumbnail_used_from_entities():
                 {
                     "type": "video",
                     "thumbnail_url": _pbs("THUMBVID", size="small"),
-                }
-            ]
+                },
+            ],
         },
     }
     res = extract_text_and_images_from_syndication(tw)
     assert res["image_urls"] == [upgrade_pbs_to_orig(_pbs("THUMBVID", size="small"))]
 
 
-def test_legacy_size_suffix_normalized_to_orig():
+def test_legacy_size_suffix_normalized_to_orig() -> None:
     url = _pbs_legacy("LEG111", ":large")
     assert upgrade_pbs_to_orig(url).endswith("name=orig")
 
 
-def test_regression_wrong_card_previously_selected():
+def test_regression_wrong_card_previously_selected() -> None:
     # Previously picked card image; ensure native photo chosen now
     tw = {
         "text": "A nice picture",

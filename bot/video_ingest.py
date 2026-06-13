@@ -1,27 +1,27 @@
-"""
-URL-based video ingestion module for YouTube/TikTok audio extraction and STT processing.
+"""URL-based video ingestion module for YouTube/TikTok audio extraction and STT processing.
 Integrates with existing hear_infer() pipeline for consistent audio processing.
 """
 
-import os
-import re
 import asyncio
+import contextlib
 import hashlib
 import html
 import json
+import os
+import re
 import shutil
 import tempfile
 import urllib.request
-from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
-from urllib.parse import ParseResult, urlparse, urlunparse
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+from urllib.parse import ParseResult, urlparse, urlunparse
 
-from .utils.logging import get_logger
-from .exceptions import InferenceError
 from .config import load_config
+from .exceptions import InferenceError
 from .utils.external_api import _is_private_hostname
+from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -38,7 +38,7 @@ CACHE_EXPIRY_DAYS = int(os.getenv("VIDEO_CACHE_EXPIRY_DAYS", "7"))
 # Scope control via VIDEO_COOKIES_SITES (comma-separated, defaults to tiktok only)
 YTDLP_COOKIES_FROM_BROWSER = os.getenv("VIDEO_COOKIES_FROM_BROWSER")
 YTDLP_COOKIES_FILE = os.getenv("VIDEO_COOKIES_FILE")
-YTDLP_COOKIES_SITES = set(s.strip().lower() for s in os.getenv("VIDEO_COOKIES_SITES", "tiktok").split(",") if s.strip())
+YTDLP_COOKIES_SITES = {s.strip().lower() for s in os.getenv("VIDEO_COOKIES_SITES", "tiktok").split(",") if s.strip()}
 
 # Supported URL patterns - must match MEDIA_CAPABLE_DOMAINS from media_capability.py
 SUPPORTED_PATTERNS = [
@@ -182,7 +182,7 @@ SUPPORTED_PATTERNS = [
 _download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
 
 # Domain-to-extractor mapping for metadata validation and identity canonicalization [CMV]
-_DOMAIN_EXTRACTOR_MAP: Dict[str, str] = {
+_DOMAIN_EXTRACTOR_MAP: dict[str, str] = {
     "youtube.com": "youtube",
     "youtu.be": "youtube",
     "www.youtube.com": "youtube",
@@ -244,7 +244,7 @@ class DownloadedAudio:
     download_key: str
     format_id: str
     resolved_url: str
-    content_length: Optional[int]
+    content_length: int | None
     cache_hit: bool
     ext: str
     timestamp: datetime
@@ -253,7 +253,7 @@ class DownloadedAudio:
 
 @dataclass
 class ProcessedAudio:
-    """Backward-compatible audio artifact shape for legacy tests/callers. [CA][REH]
+    """Backward-compatible audio artifact shape for legacy tests/callers. [CA][REH].
 
     NOTE: The current STT pipeline consumes DownloadedAudio + preprocess stage.
     This shim exists to keep older imports from breaking.
@@ -264,7 +264,7 @@ class ProcessedAudio:
     processed_duration_seconds: float = 0.0
     speedup_factor: float = 1.0
     cache_hit: bool = False
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     demux_fallback: bool = False
 
     @property
@@ -275,17 +275,16 @@ class ProcessedAudio:
 class VideoIngestError(InferenceError):
     """Specific error for video ingestion failures."""
 
-    pass
 
 
 class VideoIngestionManager:
     """Manages video URL ingestion, caching, and raw audio acquisition."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.cache_dir = CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_index_path = self.cache_dir / "index.json"
-        self._index: Dict[str, Dict[str, Any]] = self._load_cache_index()
+        self._index: dict[str, dict[str, Any]] = self._load_cache_index()
         # Ensure cache index exists for deterministic behavior in tests/runtime. [RM]
         if not self.cache_index_path.exists():
             self._save_cache_index()
@@ -297,11 +296,11 @@ class VideoIngestionManager:
         self._size_guard_bytes = max_mb * 1024 * 1024
         logger.info(f"🎥 VideoIngestionManager initialized with cache={self.cache_dir} size_guard={self._size_guard_bytes // (1024 * 1024)}MB")
 
-    def _load_cache_index(self) -> Dict[str, Dict[str, Any]]:
+    def _load_cache_index(self) -> dict[str, dict[str, Any]]:
         if not self.cache_index_path.exists():
             return {}
         try:
-            with open(self.cache_index_path, "r") as f:
+            with open(self.cache_index_path) as f:
                 data = json.load(f)
             if isinstance(data, dict):
                 return data
@@ -316,7 +315,7 @@ class VideoIngestionManager:
         except Exception as exc:
             logger.warning(f"⚠️ Failed to persist video cache index: {exc}")
 
-    def _purge_if_stale(self, key: str) -> Optional[Dict[str, Any]]:
+    def _purge_if_stale(self, key: str) -> dict[str, Any] | None:
         entry = self._index.get(key)
         if not entry:
             return None
@@ -332,7 +331,7 @@ class VideoIngestionManager:
         if cached_at:
             try:
                 cached_dt = datetime.fromisoformat(cached_at)
-                age_days = (datetime.now(timezone.utc) - cached_dt).days
+                age_days = (datetime.now(UTC) - cached_dt).days
                 if age_days > CACHE_EXPIRY_DAYS:
                     logger.info("🗑️ Cache entry expired key=%s age_days=%s", key, age_days)
                     try:
@@ -364,8 +363,7 @@ class VideoIngestionManager:
 
     @staticmethod
     def _canonicalize_instagram_url_for_ytdlp(url: str) -> str:
-        """
-        Map supported kkinstagram mirror URLs to instagram.com for yt-dlp.
+        """Map supported kkinstagram mirror URLs to instagram.com for yt-dlp.
         d.vxinstagram pages expose direct media and are resolved separately to avoid Instagram login walls.
         Preserves path and query, drops fragments, and leaves unsupported paths/hosts unchanged.
         """
@@ -398,7 +396,7 @@ class VideoIngestionManager:
             return False
 
     @staticmethod
-    def _extract_vxinstagram_direct_media_url(html_text: str) -> Optional[str]:
+    def _extract_vxinstagram_direct_media_url(html_text: str) -> str | None:
         for pattern in (
             r'<meta[^>]+property=["\']og:video(?::secure_url)?["\'][^>]+content=["\']([^"\']+)["\']',
             r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:video(?::secure_url)?["\']',
@@ -414,11 +412,11 @@ class VideoIngestionManager:
                 return candidate
         return None
 
-    async def _resolve_vxinstagram_direct_media_url(self, url: str, timeout_s: float) -> Optional[str]:
+    async def _resolve_vxinstagram_direct_media_url(self, url: str, timeout_s: float) -> str | None:
         if not self._is_vxinstagram_page_url(url):
             return None
 
-        def _worker() -> Optional[str]:
+        def _worker() -> str | None:
             req = urllib.request.Request(url.split("#", 1)[0], method="GET")
             req.add_header(
                 "User-Agent",
@@ -470,7 +468,7 @@ class VideoIngestionManager:
         except ValueError:
             return len(preference)
 
-    def _select_audio_format(self, metadata: Dict[str, Any], url: str) -> Tuple[Dict[str, Any], bool]:
+    def _select_audio_format(self, metadata: dict[str, Any], url: str) -> tuple[dict[str, Any], bool]:
         formats = metadata.get("requested_downloads") or metadata.get("formats") or []
         audio_formats = []
         muxed_formats = []
@@ -490,7 +488,7 @@ class VideoIngestionManager:
             elif acodec and acodec != "none":
                 muxed_formats.append(fmt)
 
-        def _key(fmt: Dict[str, Any]) -> tuple:
+        def _key(fmt: dict[str, Any]) -> tuple:
             abr = fmt.get("abr") or fmt.get("tbr") or float("inf")
             if isinstance(abr, str):
                 try:
@@ -511,9 +509,10 @@ class VideoIngestionManager:
             return selected_audio, False
 
         if not muxed_formats:
-            raise VideoIngestError(f"No audio-capable formats available for URL: {url}")
+            msg = f"No audio-capable formats available for URL: {url}"
+            raise VideoIngestError(msg)
 
-        def _mux_key(fmt: Dict[str, Any]) -> tuple:
+        def _mux_key(fmt: dict[str, Any]) -> tuple:
             abr = fmt.get("abr") or fmt.get("tbr") or float("inf")
             if isinstance(abr, str):
                 try:
@@ -544,11 +543,10 @@ class VideoIngestionManager:
 
     @staticmethod
     def _normalize_tiktok_url(url: str) -> str:
-        """
-        Normalize TikTok URLs to a canonical form for consistent cache keying.
+        """Normalize TikTok URLs to a canonical form for consistent cache keying.
         Strips tracking params and normalizes scheme/host variations.
         Also extracts video ID from player/embed URLs to map them to canonical identity.
-        [REH][CA]
+        [REH][CA].
         """
         if not url:
             return url
@@ -584,10 +582,9 @@ class VideoIngestionManager:
 
     @staticmethod
     def _is_tiktok_player_url(url: str) -> bool:
-        """
-        Check if URL is a TikTok player/embed URL that yt-dlp cannot handle directly.
+        """Check if URL is a TikTok player/embed URL that yt-dlp cannot handle directly.
         These URLs should be skipped for STT or deduplicated against the canonical URL.
-        [REH][IV]
+        [REH][IV].
         """
         if not url:
             return False
@@ -610,11 +607,10 @@ class VideoIngestionManager:
 
     @staticmethod
     def _normalize_youtube_url(url: str) -> str:
-        """
-        Normalize YouTube URLs to a canonical form for consistent cache keying.
+        """Normalize YouTube URLs to a canonical form for consistent cache keying.
         Extracts video ID from all URL variants: watch, shorts, embed, live, youtu.be.
         Returns canonical form: youtube://video/{VIDEO_ID}
-        [REH][CA]
+        [REH][CA].
         """
         if not url:
             return url
@@ -651,11 +647,10 @@ class VideoIngestionManager:
         return url
 
     @staticmethod
-    def _get_expected_extractor(url: str) -> Optional[str]:
-        """
-        Get expected yt-dlp extractor for a URL based on domain.
+    def _get_expected_extractor(url: str) -> str | None:
+        """Get expected yt-dlp extractor for a URL based on domain.
         Returns None if domain is unknown (allows generic extractor).
-        [IV]
+        [IV].
         """
         try:
             parsed = urlparse(url)
@@ -667,13 +662,12 @@ class VideoIngestionManager:
     @staticmethod
     def _canonicalize_video_identity(
         original_url: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
-        """
-        Canonicalize video identity for cache keying across all providers.
+        """Canonicalize video identity for cache keying across all providers.
         Uses yt-dlp metadata (extractor + id) when available, falls back to
         provider-specific URL normalization for known domains.
-        [REH][CA]
+        [REH][CA].
         """
         # If we have yt-dlp metadata, use extractor:id as the canonical identity
         if metadata:
@@ -707,12 +701,11 @@ class VideoIngestionManager:
         self,
         resolved_url: str,
         fmt_id: str,
-        content_length: Optional[int],
-        original_url: Optional[str] = None,
-        video_identity: Optional[str] = None,
+        content_length: int | None,
+        original_url: str | None = None,
+        video_identity: str | None = None,
     ) -> str:
-        """
-        Compute a unique cache key for a download job.
+        """Compute a unique cache key for a download job.
 
         ALWAYS includes video identity to prevent cross-contamination across
         different videos that may share CDN URLs or similar resolved paths.
@@ -733,7 +726,7 @@ class VideoIngestionManager:
 
         return base_key
 
-    def _get_cache_entry(self, download_key: str) -> Optional[Tuple[Dict[str, Any], Path]]:
+    def _get_cache_entry(self, download_key: str) -> tuple[dict[str, Any], Path] | None:
         entry = self._purge_if_stale(download_key)
         if not entry:
             return None
@@ -758,7 +751,7 @@ class VideoIngestionManager:
             logger.debug("🔑 Applying cookies file for yt-dlp")
         return cmd
 
-    async def _run_subprocess(self, cmd: list, timeout_s: float, label: str) -> Tuple[bytes, bytes]:
+    async def _run_subprocess(self, cmd: list, timeout_s: float, label: str) -> tuple[bytes, bytes]:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -766,16 +759,16 @@ class VideoIngestionManager:
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
-        except asyncio.TimeoutError:
-            try:
+        except TimeoutError:
+            with contextlib.suppress(Exception):
                 proc.kill()
-            except Exception:
-                pass
-            logger.error("stt.fail reason=download_timeout stage=%s", label)
-            raise VideoIngestError(f"{label} timed out after {timeout_s:.0f}s")
+            logger.exception("stt.fail reason=download_timeout stage=%s", label)
+            msg = f"{label} timed out after {timeout_s:.0f}s"
+            raise VideoIngestError(msg)
         if proc.returncode != 0:
             err = stderr.decode(errors="replace").strip()
-            raise VideoIngestError(f"{label} failed: {err or 'unknown error'}")
+            msg = f"{label} failed: {err or 'unknown error'}"
+            raise VideoIngestError(msg)
         return stdout, stderr
 
     @staticmethod
@@ -789,19 +782,21 @@ class VideoIngestionManager:
         url: str,
         ext: str,
         timeout_s: float,
-    ) -> Tuple[Path, Optional[int]]:
+    ) -> tuple[Path, int | None]:
         # Validate URL scheme and block private/internal IPs (SSRF protection)
         _ssrf_parsed = urlparse(url)
         if _ssrf_parsed.scheme not in ("http", "https"):
-            raise VideoIngestError(f"Unsupported URL scheme: {_ssrf_parsed.scheme}")
+            msg = f"Unsupported URL scheme: {_ssrf_parsed.scheme}"
+            raise VideoIngestError(msg)
         _ssrf_hostname = _ssrf_parsed.hostname or ""
         if _is_private_hostname(_ssrf_hostname):
-            raise VideoIngestError(f"SSRF blocked: {_ssrf_hostname}")
+            msg = f"SSRF blocked: {_ssrf_hostname}"
+            raise VideoIngestError(msg)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
             temp_path = Path(tmp.name)
 
-        def _worker() -> Optional[int]:
+        def _worker() -> int | None:
             req = urllib.request.Request(url, method="GET")
             req.add_header(
                 "User-Agent",
@@ -819,15 +814,14 @@ class VideoIngestionManager:
         try:
             content_length = await asyncio.to_thread(_worker)
         except Exception as exc:
-            try:
+            with contextlib.suppress(Exception):
                 temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            raise VideoIngestError(f"Direct media download failed: {exc}") from exc
+            msg = f"Direct media download failed: {exc}"
+            raise VideoIngestError(msg) from exc
 
         return temp_path, content_length
 
-    async def _probe_metadata(self, url: str, timeout_s: float) -> Dict[str, Any]:
+    async def _probe_metadata(self, url: str, timeout_s: float) -> dict[str, Any]:
         # Log the exact URL being probed for STT debugging [REH]
         logger.info(
             "stt.ytdlp.probe url=%s",
@@ -839,7 +833,8 @@ class VideoIngestionManager:
         try:
             metadata = json.loads(stdout.decode())
         except json.JSONDecodeError as exc:
-            raise VideoIngestError(f"Failed to parse yt-dlp metadata: {exc}")
+            msg = f"Failed to parse yt-dlp metadata: {exc}"
+            raise VideoIngestError(msg)
 
         # Log the resolved URL from yt-dlp for debugging [REH]
         resolved_id = metadata.get("id") or "unknown"
@@ -897,10 +892,12 @@ class VideoIngestionManager:
         stdout, _ = await self._run_subprocess(cmd, timeout_s, "yt-dlp download")
         filepath = stdout.decode().strip()
         if not filepath:
-            raise VideoIngestError("yt-dlp did not emit output filepath")
+            msg = "yt-dlp did not emit output filepath"
+            raise VideoIngestError(msg)
         path = Path(filepath)
         if not path.exists():
-            raise VideoIngestError(f"Downloaded file missing: {filepath}")
+            msg = f"Downloaded file missing: {filepath}"
+            raise VideoIngestError(msg)
         if path.suffix.lower() != f".{ext.lower()}":
             # Ensure suffix matches expectation for consistent caching
             target = path.with_suffix(f".{ext.lower()}")
@@ -912,13 +909,13 @@ class VideoIngestionManager:
         return path
 
     async def fetch_and_prepare_url_audio(self, url: str, force_refresh: bool = False) -> DownloadedAudio:
-        """
-        Fetch raw audio for URL via yt-dlp using audio-only formats.
+        """Fetch raw audio for URL via yt-dlp using audio-only formats.
 
         Returns a DownloadedAudio artifact that downstream preprocessing can consume.
         """
         if not self._is_supported_url(url):
-            raise VideoIngestError(f"Unsupported URL format: {url}")
+            msg = f"Unsupported URL format: {url}"
+            raise VideoIngestError(msg)
 
         async with _download_semaphore:
             metadata_timeout = float(os.getenv("YTDLP_METADATA_TIMEOUT_S", "10"))
@@ -990,7 +987,8 @@ class VideoIngestionManager:
                         webpage_url[:80] if webpage_url else "none",
                         url_no_fragment[:80],
                     )
-                    raise VideoIngestError(f"yt-dlp returned unexpected content: expected {expected_extractor}, got {actual_extractor}")
+                    msg = f"yt-dlp returned unexpected content: expected {expected_extractor}, got {actual_extractor}"
+                    raise VideoIngestError(msg)
 
             # Additional validation: verify video ID from URL matches metadata ID [REH][IV]
             # This prevents cross-contamination when yt-dlp resolves to wrong video
@@ -1005,7 +1003,8 @@ class VideoIngestionManager:
                             metadata_video_id,
                             url_no_fragment[:60],
                         )
-                        raise VideoIngestError(f"Video ID mismatch: URL suggests {url_video_id} but yt-dlp returned {metadata_video_id}")
+                        msg = f"Video ID mismatch: URL suggests {url_video_id} but yt-dlp returned {metadata_video_id}"
+                        raise VideoIngestError(msg)
             elif expected_extractor == "tiktok":
                 normalized = self._normalize_tiktok_url(url_no_fragment)
                 if normalized.startswith("tiktok://video/"):
@@ -1017,7 +1016,8 @@ class VideoIngestionManager:
                             metadata_video_id,
                             url_no_fragment[:60],
                         )
-                        raise VideoIngestError(f"Video ID mismatch: URL suggests {url_video_id} but yt-dlp returned {metadata_video_id}")
+                        msg = f"Video ID mismatch: URL suggests {url_video_id} but yt-dlp returned {metadata_video_id}"
+                        raise VideoIngestError(msg)
 
             # Compute canonical video identity for cache keying [REH]
             video_identity = self._canonicalize_video_identity(url, metadata)
@@ -1034,7 +1034,8 @@ class VideoIngestionManager:
             ext = (selected.get("ext") or "m4a").lower()
             duration = float(metadata.get("duration") or 0.0)
             if duration and duration > MAX_DURATION_SECONDS:
-                raise VideoIngestError(f"Video too long: {duration:.1f}s (max {MAX_DURATION_SECONDS}s)")
+                msg = f"Video too long: {duration:.1f}s (max {MAX_DURATION_SECONDS}s)"
+                raise VideoIngestError(msg)
             title = metadata.get("title", "Unknown Title")
             uploader = metadata.get("uploader", "Unknown")
             upload_date = metadata.get("upload_date", "")
@@ -1048,7 +1049,8 @@ class VideoIngestionManager:
                 content_length = int(content_length)
 
             if content_length and content_length > self._size_guard_bytes:
-                raise VideoIngestError(f"Audio payload too large: {content_length} bytes (limit {self._size_guard_bytes})")
+                msg = f"Audio payload too large: {content_length} bytes (limit {self._size_guard_bytes})"
+                raise VideoIngestError(msg)
 
             download_key = self._compute_download_key(
                 resolved_url,
@@ -1111,7 +1113,7 @@ class VideoIngestionManager:
                         content_length=content_length,
                         cache_hit=True,
                         ext=ext,
-                        timestamp=datetime.now(timezone.utc),
+                        timestamp=datetime.now(UTC),
                         demux_fallback=demux_required,
                     )
 
@@ -1136,13 +1138,15 @@ class VideoIngestionManager:
                             exc,
                         )
                         if attempt == attempts:
-                            logger.error(
+                            logger.exception(
                                 "stt.fail reason=download_timeout stage=yt-dlp retries=%s",
                                 attempts,
                             )
-                            raise VideoIngestError("Failed to download audio after retries") from exc
+                            msg = "Failed to download audio after retries"
+                            raise VideoIngestError(msg) from exc
                 else:
-                    raise VideoIngestError("yt-dlp retry loop exhausted")
+                    msg = "yt-dlp retry loop exhausted"
+                    raise VideoIngestError(msg)
 
                 raw_cache_path = self.cache_dir / f"{download_key}.{ext}"
                 raw_cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1158,7 +1162,8 @@ class VideoIngestionManager:
                     try:
                         shutil.copy2(str(raw_download), raw_cache_path)
                     except Exception as copy_exc:
-                        raise VideoIngestError(f"Failed to persist downloaded audio: {copy_exc}") from copy_exc
+                        msg = f"Failed to persist downloaded audio: {copy_exc}"
+                        raise VideoIngestError(msg) from copy_exc
 
             stat_size = raw_cache_path.stat().st_size if raw_cache_path.exists() else 0
             self._index[download_key] = {
@@ -1167,7 +1172,7 @@ class VideoIngestionManager:
                 "format_id": fmt_id,
                 "ext": ext,
                 "source_url": url,
-                "cached_at": datetime.now(timezone.utc).isoformat(),
+                "cached_at": datetime.now(UTC).isoformat(),
                 "demux_fallback": demux_required,
             }
             self._save_cache_index()
@@ -1196,7 +1201,7 @@ class VideoIngestionManager:
                 content_length=content_length,
                 cache_hit=cache_hit,
                 ext=ext,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 demux_fallback=demux_required,
             )
 
@@ -1240,7 +1245,7 @@ class VideoIngestionManager:
                     content_length=entry.get("content_length"),
                     cache_hit=True,
                     ext=ext,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     demux_fallback=demux_flag,
                 )
 
@@ -1269,7 +1274,7 @@ class VideoIngestionManager:
             "format_id": "direct",
             "ext": ext,
             "source_url": original_url,
-            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "cached_at": datetime.now(UTC).isoformat(),
             "duration_seconds": 0.0,
             "demux_fallback": demux_flag,
         }
@@ -1290,7 +1295,7 @@ class VideoIngestionManager:
             content_length=content_length or stat_size,
             cache_hit=False,
             ext=ext,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             demux_fallback=demux_flag,
         )
 
@@ -1300,7 +1305,5 @@ video_manager = VideoIngestionManager()
 
 
 async def fetch_and_prepare_url_audio(url: str, force_refresh: bool = False) -> DownloadedAudio:
-    """
-    Convenience wrapper returning a DownloadedAudio artifact.
-    """
+    """Convenience wrapper returning a DownloadedAudio artifact."""
     return await video_manager.fetch_and_prepare_url_audio(url, force_refresh)

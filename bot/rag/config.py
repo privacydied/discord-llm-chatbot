@@ -1,21 +1,20 @@
-"""
-RAG system configuration management.
-"""
+"""RAG system configuration management."""
 
 import os
-from typing import Optional
+
+from bot.utils.logging import get_logger
+
 from .vector_schema import HybridSearchConfig
-from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 def load_rag_config() -> HybridSearchConfig:
-    """
-    Load RAG configuration from environment variables.
+    """Load RAG configuration from environment variables.
 
     Returns:
         HybridSearchConfig with values from environment or defaults
+
     """
     config = HybridSearchConfig(
         # Vector search parameters
@@ -62,19 +61,19 @@ def load_rag_config() -> HybridSearchConfig:
         logger.debug("[RAG] Configuration loaded and validated successfully")
         return config
     except ValueError as e:
-        logger.error(f"[RAG] Invalid configuration: {e}")
+        logger.exception(f"[RAG] Invalid configuration: {e}")
         logger.warning("[RAG] Using default configuration")
         return HybridSearchConfig()
 
 
 def get_rag_environment_info() -> dict:
-    """
-    Get information about RAG-related environment variables.
+    """Get information about RAG-related environment variables.
 
     Returns:
         Dictionary with environment variable status
+
     """
-    env_vars = {
+    return {
         # Core RAG settings
         "ENABLE_RAG": os.getenv("ENABLE_RAG", "true"),
         "RAG_DB_PATH": os.getenv("RAG_DB_PATH", "./chroma_db"),
@@ -108,15 +107,14 @@ def get_rag_environment_info() -> dict:
         "RAG_LAZY_LOAD_TIMEOUT": os.getenv("RAG_LAZY_LOAD_TIMEOUT", "30.0"),
     }
 
-    return env_vars
 
 
 def validate_rag_environment() -> tuple[bool, list[str]]:
-    """
-    Validate RAG environment configuration.
+    """Validate RAG environment configuration.
 
     Returns:
         Tuple of (is_valid, list_of_issues)
+
     """
     issues = []
 
@@ -175,7 +173,7 @@ def validate_rag_environment() -> tuple[bool, list[str]]:
 
 
 # Global configuration instance
-_rag_config: Optional[HybridSearchConfig] = None
+_rag_config: HybridSearchConfig | None = None
 
 
 def get_rag_config() -> HybridSearchConfig:

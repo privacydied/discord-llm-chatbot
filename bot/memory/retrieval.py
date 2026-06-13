@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .service import build_memory_prompt_block, get_memory_service
 
 
 async def get_relevant_memories(
     *,
-    user_id: Optional[str],
-    guild_id: Optional[str],
-    channel_id: Optional[str],
-    thread_id: Optional[str],
+    user_id: str | None,
+    guild_id: str | None,
+    channel_id: str | None,
+    thread_id: str | None,
     query: str,
     top_k: int = 6,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     # Low-resource top_k cap [Phase 6-9]
-    from ..config import load_config as _retrieval_load_config
+    from bot.config import load_config as _retrieval_load_config
 
     _rc = _retrieval_load_config()
     lr_top_k = int(_rc.get("MEMORY_LOW_RESOURCE_TOP_K", top_k))

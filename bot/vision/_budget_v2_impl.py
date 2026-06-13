@@ -1,5 +1,4 @@
-"""
-Canonical v2 Vision Budget Manager implementation [CA][REH][RM]
+"""Canonical v2 Vision Budget Manager implementation [CA][REH][RM].
 
 This module contains the Money + atomic I/O implementation, factored into an
 internal implementation module so that `bot/vision/budget_manager.py` can be the
@@ -8,43 +7,44 @@ that re-exports these canonical symbols from `budget_manager.py`.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Dict, Optional, Any
+
 import asyncio
 import json
 import os
 import tempfile
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any
 
-from bot.vision.money import Money
-from bot.vision.types import VisionRequest, VisionProvider
-from bot.vision.pricing_loader import get_pricing_table
 from bot.utils.logging import get_logger
+from bot.vision.money import Money
+from bot.vision.pricing_loader import get_pricing_table
+from bot.vision.types import VisionProvider, VisionRequest
 
 logger = get_logger(__name__)
 
 
 @dataclass
 class UserBudget:
-    """User budget tracking with Money type [CA]"""
+    """User budget tracking with Money type [CA]."""
 
     user_id: str
 
     # Daily limits and tracking (all Money objects stored as strings for JSON)
     daily_limit: str = "5.00"
     daily_spent: str = "0.00"
-    daily_reset_time: Optional[str] = None
+    daily_reset_time: str | None = None
 
     # Weekly limits and tracking
     weekly_limit: str = "20.00"
     weekly_spent: str = "0.00"
-    weekly_reset_time: Optional[str] = None
+    weekly_reset_time: str | None = None
 
     # Monthly limits and tracking
     monthly_limit: str = "50.00"
     monthly_spent: str = "0.00"
-    monthly_reset_time: Optional[str] = None
+    monthly_reset_time: str | None = None
 
     # Reserved amounts for pending jobs
     reserved_amount: str = "0.00"
@@ -54,16 +54,16 @@ class UserBudget:
     total_jobs: int = 0
 
     # Metadata
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dict for JSON serialization"""
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict for JSON serialization."""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "UserBudget":
-        """Create from dict during JSON deserialization"""
+    def from_dict(cls, data: dict[str, Any]) -> UserBudget:
+        """Create from dict during JSON deserialization."""
         return cls(**data)
 
     # Money property helpers
@@ -100,21 +100,21 @@ class UserBudget:
 
 @dataclass
 class BudgetResult:
-    """Result of budget check with Money amounts"""
+    """Result of budget check with Money amounts."""
 
     approved: bool
     reason: str
     user_message: str
     remaining_budget: Money = Money("0.00")
     estimated_cost: Money = Money("0.00")
-    reset_time: Optional[datetime] = None
+    reset_time: datetime | None = None
     # Legacy/extended optional fields for compatibility with older tests/DTOs
-    daily_remaining: Optional[Money] = None
-    weekly_remaining: Optional[Money] = None
-    monthly_remaining: Optional[Money] = None
-    daily_reserved: Optional[Money] = None
-    weekly_reserved: Optional[Money] = None
-    monthly_reserved: Optional[Money] = None
+    daily_remaining: Money | None = None
+    weekly_remaining: Money | None = None
+    monthly_remaining: Money | None = None
+    daily_reserved: Money | None = None
+    weekly_reserved: Money | None = None
+    monthly_reserved: Money | None = None
 
     def __post_init__(self) -> None:
         """Normalize types to Money for robustness [IV][REH]."""
@@ -125,7 +125,7 @@ class BudgetResult:
             self.estimated_cost = Money(self.estimated_cost)
 
         # Helper to coerce optional fields
-        def _to_money_opt(v: Optional[Money]) -> Optional[Money]:
+        def _to_money_opt(v: Money | None) -> Money | None:
             if v is None:
                 return None
             return v if isinstance(v, Money) else Money(v)
@@ -140,31 +140,30 @@ class BudgetResult:
 
 @dataclass
 class TransactionRecord:
-    """Transaction log entry for audit trail [REH]"""
+    """Transaction log entry for audit trail [REH]."""
 
     timestamp: str
     user_id: str
     transaction_type: str  # "reserve", "finalize", "release", "reset"
-    job_id: Optional[str]
+    job_id: str | None
     amount: str  # Money as string
     reserved_amount: str  # Money as string
-    actual_amount: Optional[str] = None  # Money as string for finalize
-    discrepancy_ratio: Optional[float] = None
-    provider: Optional[str] = None
-    task: Optional[str] = None
+    actual_amount: str | None = None  # Money as string for finalize
+    discrepancy_ratio: float | None = None
+    provider: str | None = None
+    task: str | None = None
     daily_balance: str = "0.00"
     weekly_balance: str = "0.00"
     monthly_balance: str = "0.00"
-    notes: Optional[str] = None
+    notes: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dict for JSON serialization"""
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict for JSON serialization."""
         return asdict(self)
 
 
 class VisionBudgetManager:
-    """
-    Manages vision generation budgets with atomic persistence [CA][REH][RM]
+    """Manages vision generation budgets with atomic persistence [CA][REH][RM].
 
     Features:
     - Type-safe Money calculations
@@ -173,8 +172,8 @@ class VisionBudgetManager:
     - Proper reservation tracking
     """
 
-    def __init__(self, config: Dict[str, Any]):
-        """Initialize budget manager with config"""
+    def __init__(self, config: dict[str, Any]) -> None:
+        """Initialize budget manager with config."""
         self.config = config
         self.data_dir = Path(config.get("VISION_DATA_DIR", "data/vision"))
         self.budgets_file = self.data_dir / "budgets.json"
@@ -185,7 +184,7 @@ class VisionBudgetManager:
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         # User locks for concurrent access
-        self._user_locks: Dict[str, asyncio.Lock] = {}
+        self._user_locks: dict[str, asyncio.Lock] = {}
         self._lock_manager = asyncio.Lock()
 
         # Pricing table
@@ -194,14 +193,13 @@ class VisionBudgetManager:
         logger.info(f"VisionBudgetManager initialized with data_dir: {self.data_dir}")
 
     def _get_user_lock(self, user_id: str) -> asyncio.Lock:
-        """Get or create per-user lock [REH]"""
+        """Get or create per-user lock [REH]."""
         if user_id not in self._user_locks:
             self._user_locks[user_id] = asyncio.Lock()
         return self._user_locks[user_id]
 
     def _atomic_write_json(self, file_path: Path, data: Any) -> None:
-        """
-        Atomic JSON write with temp file + fsync + rename [RM][REH]
+        """Atomic JSON write with temp file + fsync + rename [RM][REH].
 
         This is SYNCHRONOUS to avoid AsyncTextIOWrapper.fsync errors.
         """
@@ -232,8 +230,7 @@ class VisionBudgetManager:
             raise
 
     def _append_jsonl(self, file_path: Path, record: Any) -> None:
-        """
-        Append to JSONL file with fsync [RM][REH]
+        """Append to JSONL file with fsync [RM][REH].
 
         This is SYNCHRONOUS to avoid AsyncTextIOWrapper.fsync errors.
         """
@@ -255,13 +252,13 @@ class VisionBudgetManager:
             f.flush()
             os.fsync(f.fileno())
 
-    async def _load_all_budgets(self) -> Dict[str, UserBudget]:
-        """Load all user budgets from JSON [REH]"""
+    async def _load_all_budgets(self) -> dict[str, UserBudget]:
+        """Load all user budgets from JSON [REH]."""
         if not self.budgets_file.exists():
             return {}
 
         try:
-            with open(self.budgets_file, "r") as f:
+            with open(self.budgets_file) as f:
                 data = json.load(f)
 
             budgets = {}
@@ -270,16 +267,16 @@ class VisionBudgetManager:
             return budgets
 
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"Failed to load budgets: {e}")
+            logger.exception(f"Failed to load budgets: {e}")
             return {}
 
-    async def _save_all_budgets(self, budgets: Dict[str, UserBudget]) -> None:
-        """Save all user budgets atomically [RM]"""
+    async def _save_all_budgets(self, budgets: dict[str, UserBudget]) -> None:
+        """Save all user budgets atomically [RM]."""
         data = {user_id: budget.to_dict() for user_id, budget in budgets.items()}
         self._atomic_write_json(self.budgets_file, data)
 
     async def _load_user_budget(self, user_id: str) -> UserBudget:
-        """Load or create user budget [REH]"""
+        """Load or create user budget [REH]."""
         budgets = await self._load_all_budgets()
 
         if user_id not in budgets:
@@ -296,16 +293,16 @@ class VisionBudgetManager:
         return budgets[user_id]
 
     async def _save_user_budget(self, budget: UserBudget) -> None:
-        """Save user budget atomically [RM]"""
-        budget.updated_at = datetime.now(timezone.utc).isoformat()
+        """Save user budget atomically [RM]."""
+        budget.updated_at = datetime.now(UTC).isoformat()
 
         budgets = await self._load_all_budgets()
         budgets[budget.user_id] = budget
         await self._save_all_budgets(budgets)
 
     def _reset_expired_periods(self, budget: UserBudget) -> None:
-        """Reset budget periods that have expired [CMV]"""
-        now = datetime.now(timezone.utc)
+        """Reset budget periods that have expired [CMV]."""
+        now = datetime.now(UTC)
 
         # Check daily reset
         if budget.daily_reset_time:
@@ -336,22 +333,15 @@ class VisionBudgetManager:
             if now >= reset_time:
                 budget.set_monthly_spent(Money.zero())
                 # First day of next month
-                if now.month == 12:
-                    next_month = now.replace(year=now.year + 1, month=1, day=1)
-                else:
-                    next_month = now.replace(month=now.month + 1, day=1)
+                next_month = now.replace(year=now.year + 1, month=1, day=1) if now.month == 12 else now.replace(month=now.month + 1, day=1)
                 budget.monthly_reset_time = next_month.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
         else:
             # Initialize to first of next month
-            if now.month == 12:
-                next_month = now.replace(year=now.year + 1, month=1, day=1)
-            else:
-                next_month = now.replace(month=now.month + 1, day=1)
+            next_month = now.replace(year=now.year + 1, month=1, day=1) if now.month == 12 else now.replace(month=now.month + 1, day=1)
             budget.monthly_reset_time = next_month.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
 
     async def check_budget(self, request: VisionRequest) -> BudgetResult:
-        """
-        Check if user has sufficient budget for request [REH][CMV]
+        """Check if user has sufficient budget for request [REH][CMV].
 
         Considers both spent and reserved amounts.
         """
@@ -426,7 +416,7 @@ class VisionBudgetManager:
             )
 
     async def reserve_budget(self, user_id: str, amount: Money) -> None:
-        """Reserve budget for pending job [REH]"""
+        """Reserve budget for pending job [REH]."""
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
             current_reserved = budget.get_reserved_amount()
@@ -438,7 +428,7 @@ class VisionBudgetManager:
             self._append_jsonl(
                 self.transactions_file,
                 TransactionRecord(
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     user_id=user_id,
                     transaction_type="reserve",
                     job_id=None,
@@ -453,15 +443,12 @@ class VisionBudgetManager:
             logger.info(f"Reserved budget - user: {user_id}, amount: {amount}, total_reserved: {new_reserved}")
 
     async def release_reservation(self, user_id: str, amount: Money) -> None:
-        """Release reserved budget (job cancelled/failed) [REH]"""
+        """Release reserved budget (job cancelled/failed) [REH]."""
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
             current_reserved = budget.get_reserved_amount()
             # Avoid constructing negative Money to prevent noisy warnings [REH]
-            if amount >= current_reserved:
-                new_reserved = Money.zero()
-            else:
-                new_reserved = current_reserved - amount
+            new_reserved = Money.zero() if amount >= current_reserved else current_reserved - amount
             budget.set_reserved_amount(new_reserved)
             await self._save_user_budget(budget)
 
@@ -469,7 +456,7 @@ class VisionBudgetManager:
             self._append_jsonl(
                 self.transactions_file,
                 TransactionRecord(
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     user_id=user_id,
                     transaction_type="release",
                     job_id=None,
@@ -488,12 +475,11 @@ class VisionBudgetManager:
         user_id: str,
         reserved_amount: Money,
         actual_cost: Money,
-        provider: Optional[str] = None,
-        task: Optional[str] = None,
-        job_id: Optional[str] = None,
+        provider: str | None = None,
+        task: str | None = None,
+        job_id: str | None = None,
     ) -> None:
-        """
-        Record actual job cost and adjust budget [REH][CMV]
+        """Record actual job cost and adjust budget [REH][CMV].
 
         Handles discrepancy checking and capping.
         """
@@ -519,10 +505,7 @@ class VisionBudgetManager:
             # Release reservation and add actual spend
             current_reserved = budget.get_reserved_amount()
             # Prevent negative intermediate results [REH]
-            if reserved_amount >= current_reserved:
-                new_reserved = Money.zero()
-            else:
-                new_reserved = current_reserved - reserved_amount
+            new_reserved = Money.zero() if reserved_amount >= current_reserved else current_reserved - reserved_amount
             budget.set_reserved_amount(new_reserved)
 
             # Update spent amounts
@@ -546,7 +529,7 @@ class VisionBudgetManager:
             self._append_jsonl(
                 self.transactions_file,
                 TransactionRecord(
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     user_id=user_id,
                     transaction_type="finalize",
                     job_id=job_id,
@@ -565,15 +548,12 @@ class VisionBudgetManager:
 
             # Also log to spend ledger for compatibility
             # Compute non-negative savings without creating negative Money [REH]
-            if reserved_amount > capped_cost:
-                savings = reserved_amount - capped_cost
-            else:
-                savings = Money.zero()
+            savings = reserved_amount - capped_cost if reserved_amount > capped_cost else Money.zero()
 
             self._append_jsonl(
                 self.spend_ledger_file,
                 {
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "user_id": user_id,
                     "reserved_amount": reserved_amount.to_json_value(),
                     "actual_cost": actual_cost.to_json_value(),
@@ -594,7 +574,7 @@ class VisionBudgetManager:
                 f"reserved: {reserved_amount}, "
                 f"ratio: {discrepancy_ratio:.2f}, "
                 f"daily_total: {daily_spent}, "
-                f"monthly_total: {monthly_spent}"
+                f"monthly_total: {monthly_spent}",
             )
 
     async def finalize_reservation(
@@ -603,9 +583,9 @@ class VisionBudgetManager:
         reserved_amount: Money,
         actual_cost: Money,
         *,
-        job_id: Optional[str] = None,
-        provider: Optional[str] = None,
-        task: Optional[str] = None,
+        job_id: str | None = None,
+        provider: str | None = None,
+        task: str | None = None,
     ) -> None:
         """Alias for record_actual_cost to maintain orchestrator compatibility [REH][CA].
         This forwards to record_actual_cost with identical semantics.
@@ -620,20 +600,21 @@ class VisionBudgetManager:
         )
 
     async def reset_user_budget(self, user_id: str, period: str) -> None:
-        """Admin command to reset user's budget [REH]"""
+        """Admin command to reset user's budget [REH]."""
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
             if period == "daily":
                 budget.set_daily_spent(Money.zero())
-                budget.daily_reset_time = (datetime.now(timezone.utc) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+                budget.daily_reset_time = (datetime.now(UTC) + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
             elif period == "weekly":
                 budget.set_weekly_spent(Money.zero())
-                budget.weekly_reset_time = (datetime.now(timezone.utc) + timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+                budget.weekly_reset_time = (datetime.now(UTC) + timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
             elif period == "monthly":
                 budget.set_monthly_spent(Money.zero())
-                budget.monthly_reset_time = (datetime.now(timezone.utc) + timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+                budget.monthly_reset_time = (datetime.now(UTC) + timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
             else:
-                raise ValueError("Invalid period")
+                msg = "Invalid period"
+                raise ValueError(msg)
 
             await self._save_user_budget(budget)
 
@@ -641,7 +622,7 @@ class VisionBudgetManager:
             self._append_jsonl(
                 self.transactions_file,
                 TransactionRecord(
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     user_id=user_id,
                     transaction_type="reset",
                     job_id=None,
@@ -666,8 +647,8 @@ class VisionBudgetManager:
     async def reset_user_monthly_budget(self, user_id: str) -> None:
         await self.reset_user_budget(user_id, "monthly")
 
-    async def get_user_stats(self, user_id: str) -> Dict[str, Any]:
-        """Get user budget statistics [PA]"""
+    async def get_user_stats(self, user_id: str) -> dict[str, Any]:
+        """Get user budget statistics [PA]."""
         async with self._get_user_lock(user_id):
             budget = await self._load_user_budget(user_id)
             self._reset_expired_periods(budget)
@@ -715,8 +696,8 @@ class VisionBudgetManager:
             }
 
     def _format_time_until(self, target_time: datetime) -> str:
-        """Format time until target as human-readable string"""
-        now = datetime.now(timezone.utc)
+        """Format time until target as human-readable string."""
+        now = datetime.now(UTC)
         delta = target_time - now
 
         if delta.total_seconds() <= 0:
@@ -728,7 +709,6 @@ class VisionBudgetManager:
         if hours > 24:
             days = hours // 24
             return f"{days} day{'s' if days != 1 else ''}"
-        elif hours > 0:
+        if hours > 0:
             return f"{hours}h {minutes}m"
-        else:
-            return f"{minutes} minute{'s' if minutes != 1 else ''}"
+        return f"{minutes} minute{'s' if minutes != 1 else ''}"

@@ -11,7 +11,7 @@ def _read_fixture(name: str) -> str:
 
 
 @pytest.mark.asyncio
-async def test_single_tweet_minimal(monkeypatch):
+async def test_single_tweet_minimal(monkeypatch) -> None:
     html = _read_fixture("single_tweet.html")
 
     async def fake_fetch(url: str, timeout_s: float):
@@ -32,7 +32,7 @@ async def test_single_tweet_minimal(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_mid_thread_collects_all_in_order(monkeypatch):
+async def test_mid_thread_collects_all_in_order(monkeypatch) -> None:
     html = _read_fixture("thread_7_mid.html")
 
     async def fake_fetch(url: str, timeout_s: float):
@@ -57,7 +57,7 @@ async def test_mid_thread_collects_all_in_order(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_non_author_replies_are_skipped(monkeypatch):
+async def test_non_author_replies_are_skipped(monkeypatch) -> None:
     html = _read_fixture("with_other_replies.html")
 
     async def fake_fetch(url: str, timeout_s: float):
@@ -79,7 +79,7 @@ async def test_non_author_replies_are_skipped(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_limits_cap_items_and_mark_truncated(monkeypatch):
+async def test_limits_cap_items_and_mark_truncated(monkeypatch) -> None:
     from datetime import datetime
 
     # Generate 45 tweet HTMLs for same author
@@ -93,7 +93,7 @@ async def test_limits_cap_items_and_mark_truncated(monkeypatch):
             f'<a href="/author">@author</a>'
             f'<time datetime="{datetime.utcfromtimestamp(ts).isoformat()}Z"></time>'
             f'<div data-testid="tweetText">Tweet number {i + 1}.</div>'
-            f"</article>"
+            f"</article>",
         )
     parts.append("</body></html>")
     html = "".join(parts)
@@ -116,8 +116,8 @@ async def test_limits_cap_items_and_mark_truncated(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_dom_change_or_timeout_fallback(monkeypatch):
-    async def fake_fetch(url: str, timeout_s: float):
+async def test_dom_change_or_timeout_fallback(monkeypatch) -> None:
+    async def fake_fetch(url: str, timeout_s: float) -> str:
         return "<html><body><div>No tweet structure here</div></body></html>"
 
     async def no_expand(url: str, timeout_s: float):
@@ -134,7 +134,7 @@ async def test_dom_change_or_timeout_fallback(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_mirrors_and_mobile_urls_normalize(monkeypatch):
+async def test_mirrors_and_mobile_urls_normalize(monkeypatch) -> None:
     # Use a valid HTML so fetch path works
     html = _read_fixture("single_tweet.html")
 
@@ -162,7 +162,7 @@ async def test_mirrors_and_mobile_urls_normalize(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_fx_meta_redirect_single_block(monkeypatch):
+async def test_fx_meta_redirect_single_block(monkeypatch) -> None:
     """If fx/vx mirrors only expose meta + redirect, synthesize a single block from meta."""
     html = (
         "<!DOCTYPE html><html><head>"

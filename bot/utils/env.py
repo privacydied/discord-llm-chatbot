@@ -1,4 +1,4 @@
-"""Environment parsing helpers for consistent boolean/numeric handling. [IV]"""
+"""Environment parsing helpers for consistent boolean/numeric handling. [IV]."""
 
 from __future__ import annotations
 

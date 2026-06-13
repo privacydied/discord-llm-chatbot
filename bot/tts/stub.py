@@ -1,9 +1,9 @@
-import wave
 import math
 import struct
+import wave
 
 
-def generate_stub_wav(path: str, duration=0.25, freq=440):
+def generate_stub_wav(path: str, duration=0.25, freq=440) -> None:
     rate = 16000
     frames = int(rate * duration)
     with wave.open(path, "w") as w:

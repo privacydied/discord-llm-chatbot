@@ -6,7 +6,6 @@ handler in the extraction protocol (Phase 12).
 
 from __future__ import annotations
 
-
 from bot.routing.base import RouteContext, RouteHandler, RouteResult
 
 

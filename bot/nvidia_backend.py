@@ -1,5 +1,4 @@
-"""
-NVIDIA NIM Backend - OpenAI-compatible endpoint for NVIDIA NIM models.
+"""NVIDIA NIM Backend - OpenAI-compatible endpoint for NVIDIA NIM models.
 
 This module provides integration with NVIDIA NIM by reusing the existing OpenAI
 backend infrastructure. NVIDIA NIM uses an OpenAI-compatible API, so we can
@@ -20,10 +19,12 @@ Or use NVIDIA-specific overrides:
 References:
 - NVIDIA NIM Documentation: https://docs.nvidia.com/nim/
 - API Reference: https://docs.api.nvidia.com/
+
 """
 
-from typing import Any, AsyncGenerator, Dict, Union
 import os
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from bot.config import load_config
 from bot.exceptions import APIError
@@ -35,16 +36,15 @@ logger = get_logger(__name__)
 async def generate_nvidia_response(
     prompt: str,
     context: str = "",
-    system_prompt: str = None,
-    user_id: str = None,
-    guild_id: str = None,
-    temperature: float = None,
-    max_tokens: int = None,
+    system_prompt: str | None = None,
+    user_id: str | None = None,
+    guild_id: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     stream: bool = False,
     **kwargs,
-) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
-    """
-    Generate a response using NVIDIA NIM via OpenAI-compatible API.
+) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+    """Generate a response using NVIDIA NIM via OpenAI-compatible API.
 
     This function delegates to the OpenAI backend, which automatically uses
     NVIDIA configuration when TEXT_BACKEND=nvidia.
@@ -62,6 +62,7 @@ async def generate_nvidia_response(
 
     Returns:
         Dictionary with the generated text and metadata
+
     """
     # Import here to avoid circular imports
     from bot.openai_backend import generate_openai_response
@@ -105,24 +106,24 @@ async def generate_nvidia_response(
         return result
 
     except Exception as e:
-        logger.error(f"❌ NVIDIA NIM backend failed: {e}")
+        logger.exception(f"❌ NVIDIA NIM backend failed: {e}")
         raise
 
 
 async def generate_nvidia_vl_response(
     image_url: str,
     user_prompt: str = "",
-    user_id: str = None,
-    guild_id: str = None,
-    temperature: float = None,
-    max_tokens: int = None,
+    user_id: str | None = None,
+    guild_id: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     **kwargs,
-) -> Dict[str, Any]:
-    """
-    Generate a vision-language response using NVIDIA NIM.
+) -> dict[str, Any]:
+    """Generate a vision-language response using NVIDIA NIM.
 
     Note: NVIDIA NIM currently focuses on text models. Vision tasks should
     use the default OpenAI/OpenRouter backend.
     """
     logger.warning("NVIDIA NIM vision-language not supported. NVIDIA NIM currently focuses on text models. Vision tasks will use the default backend.")
-    raise APIError("NVIDIA NIM vision-language processing not available. Please use the default vision backend for image processing.")
+    msg = "NVIDIA NIM vision-language processing not available. Please use the default vision backend for image processing."
+    raise APIError(msg)

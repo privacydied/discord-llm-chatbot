@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from bot.stt_pipeline.result_payload import build_url_transcript_result
@@ -26,7 +26,7 @@ def test_build_url_transcript_result_shapes_metadata() -> None:
     download = SimpleNamespace(
         metadata=metadata,
         cache_hit=True,
-        timestamp=datetime(2026, 2, 17, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 2, 17, tzinfo=UTC),
         demux_fallback=True,
     )
     pre = SimpleNamespace(duration_out=10.0, atempo_applied=True)
@@ -77,7 +77,7 @@ def test_build_url_transcript_result_defaults_abort_reason_and_demux() -> None:
     download = SimpleNamespace(
         metadata=metadata,
         cache_hit=False,
-        timestamp=datetime(2026, 2, 17, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 2, 17, tzinfo=UTC),
     )
     pre = SimpleNamespace(duration_out=42.5, atempo_applied=False)
 

@@ -2,9 +2,10 @@
 
 import logging
 import time
-from typing import Dict, Any, Optional, Callable
+from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +28,12 @@ TTS_WARNINGS_SHOWN = {
 }
 
 
-def log_tts_config(config: Dict[str, Any]) -> None:
-    """
-    Log the TTS configuration at startup.
+def log_tts_config(config: dict[str, Any]) -> None:
+    """Log the TTS configuration at startup.
 
     Args:
         config: Dictionary containing TTS configuration
+
     """
     # Filter out sensitive information
     safe_config = {k: v for k, v in config.items() if not k.lower().endswith(("key", "secret", "password", "token"))}
@@ -75,14 +76,14 @@ def log_tts_config(config: Dict[str, Any]) -> None:
         )
 
 
-def log_phonemiser_selection(language: str, selected: str, available: Dict[str, bool]) -> None:
-    """
-    Log the phonemiser selection for a language.
+def log_phonemiser_selection(language: str, selected: str, available: dict[str, bool]) -> None:
+    """Log the phonemiser selection for a language.
 
     Args:
         language: The language code
         selected: The selected phonemiser
         available: Dictionary of available phonemisers
+
     """
     logger.info(
         f"Selected phonemiser '{selected}' for language '{language}'",
@@ -97,13 +98,13 @@ def log_phonemiser_selection(language: str, selected: str, available: Dict[str, 
 
 
 def log_voice_loading(voice_id: str, vector_shape: tuple, vector_norm: float) -> None:
-    """
-    Log voice loading details.
+    """Log voice loading details.
 
     Args:
         voice_id: The voice identifier
         vector_shape: Shape of the voice vector
         vector_norm: Norm of the voice vector
+
     """
     logger.debug(
         f"Loaded voice '{voice_id}' with shape {vector_shape} and norm {vector_norm:.4f}",
@@ -118,14 +119,14 @@ def log_voice_loading(voice_id: str, vector_shape: tuple, vector_norm: float) ->
 
 
 def log_tts_generation(text: str, voice_id: str, output_path: Path, duration_ms: float) -> None:
-    """
-    Log TTS generation details.
+    """Log TTS generation details.
 
     Args:
         text: The input text (truncated)
         voice_id: The voice identifier
         output_path: Path to the output file
         duration_ms: Generation duration in milliseconds
+
     """
     # Truncate text for logging
     text_truncated = text[:50] + "..." if len(text) > 50 else text
@@ -148,14 +149,14 @@ def log_tts_generation(text: str, voice_id: str, output_path: Path, duration_ms:
     TTS_METRICS["tts_generation_time_total"] += duration_ms / 1000.0  # Convert to seconds
 
 
-def log_tts_error(error_type: str, error_message: str, details: Optional[Dict[str, Any]] = None) -> None:
-    """
-    Log TTS error details.
+def log_tts_error(error_type: str, error_message: str, details: dict[str, Any] | None = None) -> None:
+    """Log TTS error details.
 
     Args:
         error_type: Type of error
         error_message: Error message
         details: Additional error details
+
     """
     if details is None:
         details = {}
@@ -176,12 +177,12 @@ def log_tts_error(error_type: str, error_message: str, details: Optional[Dict[st
     TTS_METRICS["tts_generation_errors"] += 1
 
 
-def log_gibberish_detection(metrics: Dict[str, float]) -> None:
-    """
-    Log gibberish detection details.
+def log_gibberish_detection(metrics: dict[str, float]) -> None:
+    """Log gibberish detection details.
 
     Args:
         metrics: Dictionary of gibberish detection metrics
+
     """
     logger.warning(
         f"Gibberish audio detected with metrics: {metrics}",
@@ -194,12 +195,12 @@ def log_gibberish_detection(metrics: Dict[str, float]) -> None:
 
 
 def log_cache_event(text_hash: str, hit: bool) -> None:
-    """
-    Log TTS cache hit/miss.
+    """Log TTS cache hit/miss.
 
     Args:
         text_hash: Hash of the input text
         hit: True if cache hit, False if miss
+
     """
     event = "hit" if hit else "miss"
 
@@ -217,14 +218,14 @@ def log_cache_event(text_hash: str, hit: bool) -> None:
 
 
 def timed_function(func: Callable) -> Callable:
-    """
-    Decorator to time a function and log its execution time.
+    """Decorator to time a function and log its execution time.
 
     Args:
         func: Function to time
 
     Returns:
         Wrapped function
+
     """
 
     @wraps(func)
@@ -252,8 +253,8 @@ def timed_function(func: Callable) -> Callable:
             duration_ms = (end_time - start_time) * 1000
 
             # Log function error
-            logger.error(
-                f"{func.__name__} failed after {duration_ms:.2f}ms: {str(e)}",
+            logger.exception(
+                f"{func.__name__} failed after {duration_ms:.2f}ms: {e!s}",
                 extra={
                     "subsys": "tts",
                     "event": "function.error",
@@ -268,12 +269,12 @@ def timed_function(func: Callable) -> Callable:
     return wrapper
 
 
-def get_tts_metrics() -> Dict[str, Any]:
-    """
-    Get current TTS metrics.
+def get_tts_metrics() -> dict[str, Any]:
+    """Get current TTS metrics.
 
     Returns:
         Dictionary of TTS metrics
+
     """
     global TTS_METRICS
 

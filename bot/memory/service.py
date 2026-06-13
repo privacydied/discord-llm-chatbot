@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from ..config import load_config
+from bot.config import load_config
+
 from .curator import CuratedMemoryCurator, MemoryCandidate
 from .ingestion_queue import CuratedMemoryIngestionQueue
 from .persistent_store import MemoryRecord, PersistentMemoryStore
@@ -17,14 +19,14 @@ from .semantic_store import CuratedMemorySemanticStore
 
 logger = logging.getLogger(__name__)
 
-_memory_service: Optional["CuratedMemoryService"] = None
+_memory_service: CuratedMemoryService | None = None
 _memory_service_lock = asyncio.Lock()
 
 
 class CuratedMemoryService:
     """Single curated-memory pipeline; no parallel brain."""
 
-    def __init__(self, bot: Any | None = None):
+    def __init__(self, bot: Any | None = None) -> None:
         cfg = load_config()
         self.bot = bot
         self.enabled = bool(cfg.get("PERSISTENT_MEMORY_ENABLE", True))
@@ -87,13 +89,13 @@ class CuratedMemoryService:
         *,
         user_id: str,
         text: str,
-        guild_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        thread_id: Optional[str] = None,
-        source_message_id: Optional[str] = None,
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
+        source_message_id: str | None = None,
         context_type: str = "user_preference",
         source: str = "explicit_memory_command",
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> MemoryRecord:
         # Check user's memory preference
         from bot.memory.profiles import get_profile
@@ -101,10 +103,12 @@ class CuratedMemoryService:
         profile = get_profile(user_id)
         user_pref = profile.get("preferences", {}).get("memory_enabled", True)
         if not user_pref:
-            raise RuntimeError("Persistent memory is disabled by user preference")
+            msg = "Persistent memory is disabled by user preference"
+            raise RuntimeError(msg)
 
         if not self.enabled:
-            raise RuntimeError("Persistent memory is disabled")
+            msg = "Persistent memory is disabled"
+            raise RuntimeError(msg)
 
         candidate = self.curator.build_explicit_candidate(
             user_id=user_id,
@@ -118,7 +122,8 @@ class CuratedMemoryService:
             metadata=metadata,
         )
         if candidate is None:
-            raise ValueError("Memory content was rejected by the curator")
+            msg = "Memory content was rejected by the curator"
+            raise ValueError(msg)
 
         await self._persist_candidate(candidate)
         persisted = await self.store.get_memory(candidate.memory_id)
@@ -129,11 +134,11 @@ class CuratedMemoryService:
         *,
         user_id: str,
         text: str,
-        guild_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        thread_id: Optional[str] = None,
-        source_message_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
+        source_message_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         # Check user's memory preference
         from bot.memory.profiles import get_profile
@@ -190,7 +195,7 @@ class CuratedMemoryService:
                 logger.warning("Chroma wipe failed for user %s", user_id, exc_info=True)
         return len(ids)
 
-    async def list_user_memories(self, user_id: str, limit: int = 20) -> List[MemoryRecord]:
+    async def list_user_memories(self, user_id: str, limit: int = 20) -> list[MemoryRecord]:
         if not self.enabled:
             return []
         return await self.store.list_memories(user_id=user_id, limit=limit)
@@ -200,11 +205,11 @@ class CuratedMemoryService:
         user_id: str,
         query: str,
         *,
-        guild_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        thread_id: Optional[str] = None,
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
         limit: int = 8,
-    ) -> List[MemoryRecord]:
+    ) -> list[MemoryRecord]:
         if not self.enabled:
             return []
         query = (query or "").strip()
@@ -229,12 +234,12 @@ class CuratedMemoryService:
         self,
         query: str,
         *,
-        user_id: Optional[str] = None,
-        guild_id: Optional[str] = None,
-        channel_id: Optional[str] = None,
-        thread_id: Optional[str] = None,
-        top_k: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        user_id: str | None = None,
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+        thread_id: str | None = None,
+        top_k: int | None = None,
+    ) -> list[dict[str, Any]]:
         if not self.enabled:
             return []
 
@@ -248,7 +253,7 @@ class CuratedMemoryService:
         if not scope_filters:
             return []
 
-        combined: dict[str, Dict[str, Any]] = {}
+        combined: dict[str, dict[str, Any]] = {}
         for scope_name, where, boost in scope_filters:
             try:
                 results = await self.semantic_store.query(query, top_k=top_k, where=where)
@@ -295,7 +300,7 @@ class CuratedMemoryService:
 
         records = await self.store.fetch_active_by_ids(list(combined.keys()))
         record_map = {record.memory_id: record for record in records}
-        final: list[Dict[str, Any]] = []
+        final: list[dict[str, Any]] = []
         for memory_id, payload in combined.items():
             record = record_map.get(memory_id)
             if not record:
@@ -307,7 +312,7 @@ class CuratedMemoryService:
                     **payload,
                     "record": record.to_dict(),
                     "score": payload["score"],
-                }
+                },
             )
 
         final.sort(key=lambda item: item["score"], reverse=True)
@@ -316,13 +321,13 @@ class CuratedMemoryService:
     async def build_prompt_block(
         self,
         *,
-        user_id: Optional[str],
-        guild_id: Optional[str],
-        channel_id: Optional[str],
-        thread_id: Optional[str],
+        user_id: str | None,
+        guild_id: str | None,
+        channel_id: str | None,
+        thread_id: str | None,
         query: str,
-        max_chars: Optional[int] = None,
-        top_k: Optional[int] = None,
+        max_chars: int | None = None,
+        top_k: int | None = None,
         allow_sensitive: bool = False,
     ) -> str:
         if not self.enabled or not user_id:
@@ -367,7 +372,7 @@ class CuratedMemoryService:
         candidates_after = len(filtered)
 
         # Logging (no memory bodies)
-        try:
+        with contextlib.suppress(Exception):
             logger.info(
                 "memory.recall_scope user_id=%s candidates_before=%d candidates_after=%d",
                 requester,
@@ -384,8 +389,6 @@ class CuratedMemoryService:
                     },
                 },
             )
-        except Exception:
-            pass
 
         if not filtered:
             # If we had candidates but all were sensitive, acknowledge it
@@ -408,7 +411,7 @@ class CuratedMemoryService:
             used += len(line) + 1
         return "\n".join(lines) if len(lines) > 1 else ""
 
-    async def _persist_batch(self, candidates: List[MemoryCandidate]) -> dict[str, int]:
+    async def _persist_batch(self, candidates: list[MemoryCandidate]) -> dict[str, int]:
         if not candidates:
             return {"attempted": 0, "inserted": 0, "merged": 0}
         await self.store.initialize()
@@ -456,9 +459,8 @@ class CuratedMemoryService:
                 raise
         return {"attempted": len(candidates), "inserted": inserted, "merged": merged}
 
-    async def _dedupe_or_merge(self, candidate: MemoryCandidate) -> Optional[MemoryCandidate]:
-        """
-        Before inserting an inferred memory, check for near-duplicate.
+    async def _dedupe_or_merge(self, candidate: MemoryCandidate) -> MemoryCandidate | None:
+        """Before inserting an inferred memory, check for near-duplicate.
         - If found, update that existing memory (summary/importance/confidence/timestamp).
         - Returns the original candidate if we should still insert it as-new,
           or None if it was merged and should be skipped.
@@ -550,17 +552,15 @@ class CuratedMemoryService:
         import re as _re
 
         t = (text or "").lower().strip()
-        t = _re.sub(r"\s+", " ", t)
-        return t
+        return _re.sub(r"\s+", " ", t)
 
     async def _merge_into_existing(self, existing: MemoryRecord, candidate: MemoryCandidate) -> None:
-        """
-        Merge candidate into existing memory:
+        """Merge candidate into existing memory:
         - Update summary if candidate is longer/more specific.
         - Increase importance/confidence slightly.
         - Refresh updated_at.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Use candidate's summary if it's more informative (longer and meaningful)
         new_summary = candidate.summary if len(candidate.summary or "") > len(existing.summary or "") else existing.summary
@@ -623,13 +623,13 @@ class CuratedMemoryService:
 
     def _scope_allows(
         self,
-        metadata: Dict[str, Any],
+        metadata: dict[str, Any],
         scope_name: str,
         *,
-        user_id: Optional[str],
-        guild_id: Optional[str],
-        channel_id: Optional[str],
-        thread_id: Optional[str],
+        user_id: str | None,
+        guild_id: str | None,
+        channel_id: str | None,
+        thread_id: str | None,
     ) -> bool:
         if scope_name == "user":
             return user_id is None or str(metadata.get("user_id") or "") == str(user_id)
@@ -640,9 +640,7 @@ class CuratedMemoryService:
             meta_thread = metadata.get("thread_id")
             if meta_thread not in (None, "", thread_id):
                 return False
-            if meta_channel not in (None, "", channel_id):
-                return False
-            return True
+            return meta_channel in (None, "", channel_id)
         if scope_name == "channel":
             return channel_id is not None and str(metadata.get("channel_id") or "") == str(channel_id)
         if scope_name == "thread":
@@ -652,12 +650,12 @@ class CuratedMemoryService:
     def _scope_filters(
         self,
         *,
-        user_id: Optional[str],
-        guild_id: Optional[str],
-        channel_id: Optional[str],
-        thread_id: Optional[str],
-    ) -> list[tuple[str, Dict[str, Any], float]]:
-        filters: list[tuple[str, Dict[str, Any], float]] = []
+        user_id: str | None,
+        guild_id: str | None,
+        channel_id: str | None,
+        thread_id: str | None,
+    ) -> list[tuple[str, dict[str, Any], float]]:
+        filters: list[tuple[str, dict[str, Any], float]] = []
         if user_id is not None:
             filters.append(("user", {"user_id": str(user_id)}, 0.04))
         if guild_id is not None:
@@ -715,7 +713,7 @@ async def build_memory_prompt_block(**kwargs: Any) -> str:
     return await service.build_prompt_block(**kwargs)
 
 
-async def list_user_memories(user_id: str, limit: int = 20) -> List[MemoryRecord]:
+async def list_user_memories(user_id: str, limit: int = 20) -> list[MemoryRecord]:
     service = await get_memory_service()
     return await service.list_user_memories(user_id, limit=limit)
 
@@ -734,11 +732,11 @@ async def search_user_memories(
     user_id: str,
     query: str,
     *,
-    guild_id: Optional[str] = None,
-    channel_id: Optional[str] = None,
-    thread_id: Optional[str] = None,
+    guild_id: str | None = None,
+    channel_id: str | None = None,
+    thread_id: str | None = None,
     limit: int = 8,
-) -> List[MemoryRecord]:
+) -> list[MemoryRecord]:
     service = await get_memory_service()
     return await service.search_user_memories(
         user_id,

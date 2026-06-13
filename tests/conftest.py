@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import Mock
+
+import pytest
 
 from bot.commands.image_upgrade_commands import ImageUpgradeManager
 

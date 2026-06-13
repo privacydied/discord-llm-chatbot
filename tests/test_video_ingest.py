@@ -1,12 +1,10 @@
-"""
-Tests for video ingestion utilities and URL-based transcription helpers.
-"""
+"""Tests for video ingestion utilities and URL-based transcription helpers."""
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Tuple
+from typing import Never
 from unittest.mock import patch
 
 import pytest
@@ -19,7 +17,6 @@ from bot.video_ingest import (
     VideoIngestionManager,
     VideoMetadata,
 )
-
 
 # ---------------------------------------------------------------------------
 # Video ingestion manager helpers
@@ -99,14 +96,14 @@ def test_cache_entry_validation(manager: VideoIngestionManager, tmp_path: Path) 
     # Missing file should return None
     manager._index[cache_key] = {
         "raw_path": str(cached_file),
-        "cached_at": datetime.now(timezone.utc).isoformat(),
+        "cached_at": datetime.now(UTC).isoformat(),
     }
     assert manager._get_cache_entry(cache_key) is None
 
     # Create the file to make the cache entry valid
     manager._index[cache_key] = {
         "raw_path": str(cached_file),
-        "cached_at": datetime.now(timezone.utc).isoformat(),
+        "cached_at": datetime.now(UTC).isoformat(),
     }
     cached_file.touch()
     entry, path = manager._get_cache_entry(cache_key) or ({}, None)
@@ -135,7 +132,7 @@ def test_instagram_alias_urls_are_supported_for_stt(
 
 
 def test_instagram_alias_urls_canonicalize_to_instagram_before_ytdlp() -> None:
-    """kkinstagram mirror URLs should be passed to yt-dlp as instagram.com URLs."""
+    """Kkinstagram mirror URLs should be passed to yt-dlp as instagram.com URLs."""
     expected = "https://www.instagram.com/reel/DWjQyv_Dt4k/"
 
     assert VideoIngestionManager._canonicalize_instagram_url_for_ytdlp("https://www.kkinstagram.com/reel/DWjQyv_Dt4k/") == expected
@@ -185,7 +182,7 @@ async def test_fetch_uses_canonical_instagram_url_for_ytdlp(manager: VideoIngest
                     "acodec": "mp4a",
                     "url": "https://cdn.example.com/audio.m4a",
                     "filesize": 4,
-                }
+                },
             ],
         }
 
@@ -219,9 +216,10 @@ async def test_vxinstagram_reel_resolves_to_direct_media_without_instagram_ytdlp
         seen["resolved"] = url_arg
         return media_url
 
-    async def fake_probe(url_arg: str, timeout_s: float):
+    async def fake_probe(url_arg: str, timeout_s: float) -> Never:
         seen["probe"] = True
-        raise AssertionError("yt-dlp probe should not run for resolved vxinstagram media")
+        msg = "yt-dlp probe should not run for resolved vxinstagram media"
+        raise AssertionError(msg)
 
     async def fake_download_direct(media_url_arg: str, ext: str, timeout_s: float):
         seen["direct_download"] = media_url_arg
@@ -258,8 +256,9 @@ async def test_vxinstagram_media_capability_short_circuits_ytdlp_probe(
 ) -> None:
     from bot.media_capability import MediaCapabilityDetector
 
-    async def fail_create_subprocess_exec(*_args, **_kwargs):
-        raise AssertionError("yt-dlp probe should not run for vxinstagram media pages")
+    async def fail_create_subprocess_exec(*_args, **_kwargs) -> Never:
+        msg = "yt-dlp probe should not run for vxinstagram media pages"
+        raise AssertionError(msg)
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", fail_create_subprocess_exec)
 
@@ -275,9 +274,10 @@ async def test_vxinstagram_offload_mp4_uses_direct_media_fallback(manager: Video
     url = "https://d.vxinstagram.com/offload/DVMPNJtE50x/0.mp4"
     seen = {"metadata_probe": None, "direct_download": None}
 
-    async def fake_probe(url_arg: str, timeout_s: float):
+    async def fake_probe(url_arg: str, timeout_s: float) -> Never:
         seen["metadata_probe"] = url_arg
-        raise VideoIngestError("metadata unavailable")
+        msg = "metadata unavailable"
+        raise VideoIngestError(msg)
 
     async def fake_download_direct(media_url: str, ext: str, timeout_s: float):
         seen["direct_download"] = media_url
@@ -304,12 +304,11 @@ async def test_vxinstagram_offload_mp4_uses_direct_media_fallback(manager: Video
 
 
 @pytest.fixture
-def stub_hear(monkeypatch, tmp_path: Path) -> Tuple[SimpleNamespace, DownloadedAudio]:
-    """
-    Stub expensive helpers in bot.hear to make hear_infer_from_url deterministic.
+def stub_hear(monkeypatch, tmp_path: Path) -> tuple[SimpleNamespace, DownloadedAudio]:
+    """Stub expensive helpers in bot.hear to make hear_infer_from_url deterministic.
     Returns the module reference and the DownloadedAudio instance used by fetch stub.
     """
-    import bot.hear as hear
+    from bot import hear
 
     audio_path = tmp_path / "audio.wav"
     audio_path.write_bytes(b"data")
@@ -331,36 +330,36 @@ def stub_hear(monkeypatch, tmp_path: Path) -> Tuple[SimpleNamespace, DownloadedA
         content_length=4,
         cache_hit=False,
         ext="m4a",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         demux_fallback=False,
     )
 
     # Lightweight RAM guard and job implementations
     class DummyGuard:
-        def __init__(self, *_args, **_kwargs):
+        def __init__(self, *_args, **_kwargs) -> None:
             pass
 
-        def check(self, *_args, **_kwargs):
+        def check(self, *_args, **_kwargs) -> None:
             return None
 
     class DummyJob:
-        def __init__(self, *_args, **_kwargs):
+        def __init__(self, *_args, **_kwargs) -> None:
             self.download = None
             self.pre = None
 
-        def register_download(self, download_obj):
+        def register_download(self, download_obj) -> None:
             self.download = download_obj
 
-        def register_pre(self, pre):
+        def register_pre(self, pre) -> None:
             self.pre = pre
 
         async def finish_success(self, payload):
             return payload
 
-        async def finish_failure(self, exc):
+        async def finish_failure(self, exc) -> Never:
             raise exc
 
-        async def close(self):
+        async def close(self) -> None:
             return None
 
     monkeypatch.setattr(hear, "STTRAMGuard", DummyGuard)
@@ -443,8 +442,9 @@ async def test_hear_infer_from_url_video_ingest_error(monkeypatch, stub_hear) ->
     """Video ingestion errors should surface as InferenceError for callers."""
     hear, _ = stub_hear
 
-    async def failing_fetch(url: str, force_refresh: bool = False):
-        raise VideoIngestError("download failed")
+    async def failing_fetch(url: str, force_refresh: bool = False) -> Never:
+        msg = "download failed"
+        raise VideoIngestError(msg)
 
     monkeypatch.setattr(hear, "fetch_and_prepare_url_audio", failing_fetch)
 

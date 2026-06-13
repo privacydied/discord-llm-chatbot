@@ -1,7 +1,7 @@
 from importlib import reload
 
 
-def test_tts_tokenizer_env_alias(monkeypatch):
+def test_tts_tokenizer_env_alias(monkeypatch) -> None:
     # Ensure alias is picked when canonical is unset
     monkeypatch.delenv("TTS_TOKENISER", raising=False)
     monkeypatch.setenv("TTS_TOKENIZER", "espeak")

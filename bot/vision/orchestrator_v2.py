@@ -1,5 +1,4 @@
-"""
-Vision Job Orchestrator V2 - With Money type and proper quota logic [CA][REH][RM]
+"""Vision Job Orchestrator V2 - With Money type and proper quota logic [CA][REH][RM].
 
 Handles the complete lifecycle of vision generation jobs:
 - Job submission and validation with Money-based budgets
@@ -14,38 +13,40 @@ Follows Clean Architecture (CA) and Robust Error Handling (REH) principles.
 """
 
 from __future__ import annotations
+
 import asyncio
+import contextlib
 import inspect
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Any
 
-from bot.utils.logging import get_logger
 from bot.config import load_config
+from bot.utils.logging import get_logger
 from bot.vision.money import Money
 from bot.vision.pricing_loader import get_pricing_table
 from bot.vision.provider_usage_parser import ProviderUsageParser
-from .types import (
-    VisionRequest,
-    VisionJob,
-    VisionJobState,
-    VisionError,
-    VisionErrorType,
-    VisionProvider,
-    VisionTask,
-)
+
+from .budget_manager_v2 import VisionBudgetManager
 from .gateway import VisionGateway
 from .job_store import VisionJobStore
 from .safety_filter import VisionSafetyFilter
-from .budget_manager_v2 import VisionBudgetManager
+from .types import (
+    VisionError,
+    VisionErrorType,
+    VisionJob,
+    VisionJobState,
+    VisionProvider,
+    VisionRequest,
+    VisionTask,
+)
 
 logger = get_logger(__name__)
 
 
 class VisionOrchestratorV2:
-    """
-    Async orchestrator for vision generation jobs with Money type support
+    """Async orchestrator for vision generation jobs with Money type support.
 
     Manages the complete job lifecycle from submission to completion:
     - Validates requests against safety and budget policies
@@ -56,7 +57,7 @@ class VisionOrchestratorV2:
     - Uses Money type for all cost calculations
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         self.config = config or load_config()
         self.logger = get_logger("vision.orchestrator_v2")
 
@@ -73,18 +74,17 @@ class VisionOrchestratorV2:
         self.max_user_concurrent_jobs = self.config.get("VISION_MAX_USER_CONCURRENT_JOBS", 2)
 
         # Active job tracking
-        self.active_jobs: Dict[str, asyncio.Task] = {}
-        self.user_job_counts: Dict[str, int] = {}
+        self.active_jobs: dict[str, asyncio.Task] = {}
+        self.user_job_counts: dict[str, int] = {}
 
         # Background task for cleanup and monitoring
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
         self._background_tasks_started = False
 
         self.logger.info(f"Vision Orchestrator V2 initialized - max_concurrent: {self.max_concurrent_jobs}, max_per_user: {self.max_user_concurrent_jobs}")
 
     async def submit_job(self, request: VisionRequest) -> VisionJob:
-        """
-        Submit vision generation job for async processing
+        """Submit vision generation job for async processing.
 
         Args:
             request: Validated vision generation request
@@ -94,6 +94,7 @@ class VisionOrchestratorV2:
 
         Raises:
             VisionError: On validation, safety, or quota failures
+
         """
         # Generate unique job ID
         job_id = str(uuid.uuid4())
@@ -161,15 +162,15 @@ class VisionOrchestratorV2:
             return job
 
         except Exception as e:
-            self.logger.error(f"Failed to submit job: {e}")
+            self.logger.exception(f"Failed to submit job: {e}")
             raise
 
-    async def get_job_status(self, job_id: str) -> Optional[VisionJob]:
-        """Get current status of job"""
+    async def get_job_status(self, job_id: str) -> VisionJob | None:
+        """Get current status of job."""
         return await self.job_store.load_job(job_id)
 
     async def cancel_job(self, job_id: str, user_id: str) -> bool:
-        """Cancel running job if owned by user"""
+        """Cancel running job if owned by user."""
         job = await self.job_store.load_job(job_id)
 
         if not job:
@@ -200,7 +201,7 @@ class VisionOrchestratorV2:
         return True
 
     async def _check_concurrency_limits(self, user_id: str) -> None:
-        """Check if user can start new job within concurrency limits [CMV]"""
+        """Check if user can start new job within concurrency limits [CMV]."""
         # Check global limit
         if len(self.active_jobs) >= self.max_concurrent_jobs:
             raise VisionError(
@@ -219,7 +220,7 @@ class VisionOrchestratorV2:
             )
 
     def _estimate_job_cost_money(self, request: VisionRequest) -> Money:
-        """Estimate job cost using pricing table and Money type [CMV]"""
+        """Estimate job cost using pricing table and Money type [CMV]."""
         try:
             # Use pricing table for accurate estimation
             return self.pricing_table.estimate_cost(
@@ -244,7 +245,7 @@ class VisionOrchestratorV2:
             return fallback_costs.get(request.task, Money("0.006"))
 
     async def _execute_job(self, job: VisionJob) -> None:
-        """Execute vision generation job asynchronously [CA][REH]"""
+        """Execute vision generation job asynchronously [CA][REH]."""
         job_id = job.job_id
         self.logger.info(f"Starting job execution: {job_id[:8]}")
 
@@ -341,23 +342,23 @@ class VisionOrchestratorV2:
             estimated_cost = Money(job.request.estimated_cost)
             await self.budget_manager.release_reservation(job.request.user_id, estimated_cost)
 
-            self.logger.error(f"Job failed with VisionError - job_id: {job_id[:8]}, error_type: {e.error_type.value}, message: {e.message}")
+            self.logger.exception(f"Job failed with VisionError - job_id: {job_id[:8]}, error_type: {e.error_type.value}, message: {e.message}")
 
         except Exception as e:
             # Handle unexpected errors
             error = VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
-                message=f"Unexpected error: {str(e)}",
+                message=f"Unexpected error: {e!s}",
                 user_message="An internal error occurred during generation.",
             )
             job.error = error
-            job.transition_to(VisionJobState.FAILED, f"Unexpected error: {str(e)}")
+            job.transition_to(VisionJobState.FAILED, f"Unexpected error: {e!s}")
 
             estimated_cost = Money(job.request.estimated_cost)
             await self.budget_manager.release_reservation(job.request.user_id, estimated_cost)
 
             self.logger.error(
-                f"Job failed with unexpected error - job_id: {job_id[:8]}, error: {str(e)}",
+                f"Job failed with unexpected error - job_id: {job_id[:8]}, error: {e!s}",
                 exc_info=True,
             )
 
@@ -377,14 +378,14 @@ class VisionOrchestratorV2:
                     del self.user_job_counts[user_id]
 
     async def _start_background_tasks(self) -> None:
-        """Start background monitoring and cleanup tasks [PA]"""
+        """Start background monitoring and cleanup tasks [PA]."""
         if not self._background_tasks_started:
             self._cleanup_task = asyncio.create_task(self._background_cleanup())
             self._background_tasks_started = True
             self.logger.info("Background tasks started")
 
     async def _background_cleanup(self) -> None:
-        """Background task for cleanup and monitoring [RM]"""
+        """Background task for cleanup and monitoring [RM]."""
         while True:
             try:
                 await asyncio.sleep(60)  # Run every minute
@@ -407,10 +408,10 @@ class VisionOrchestratorV2:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Background cleanup error: {e}")
+                self.logger.exception(f"Background cleanup error: {e}")
 
     async def _cleanup_expired_jobs(self) -> None:
-        """Mark expired jobs as failed and cleanup [RM]"""
+        """Mark expired jobs as failed and cleanup [RM]."""
         timeout_seconds = self.config.get("VISION_JOB_TIMEOUT_SECONDS", 300)
 
         # Load all active jobs
@@ -435,16 +436,16 @@ class VisionOrchestratorV2:
                     self.logger.warning(f"Job expired: {job_id[:8]}")
 
             except Exception as e:
-                self.logger.error(f"Error cleaning up job {job_id[:8]}: {e}")
+                self.logger.exception(f"Error cleaning up job {job_id[:8]}: {e}")
 
     async def _cleanup_old_artifacts(self) -> None:
-        """Remove old artifact files based on TTL [RM]"""
+        """Remove old artifact files based on TTL [RM]."""
         artifacts_dir = Path(self.config.get("VISION_ARTIFACTS_DIR", "data/vision/artifacts"))
         if not artifacts_dir.exists():
             return
 
         ttl_days = self.config.get("VISION_ARTIFACT_TTL_DAYS", 7)
-        cutoff_time = datetime.now(timezone.utc).timestamp() - (ttl_days * 24 * 3600)
+        cutoff_time = datetime.now(UTC).timestamp() - (ttl_days * 24 * 3600)
 
         cleaned_count = 0
         cleaned_size = 0
@@ -467,28 +468,24 @@ class VisionOrchestratorV2:
                 )
 
         except Exception as e:
-            self.logger.error(f"Artifact cleanup error: {e}")
+            self.logger.exception(f"Artifact cleanup error: {e}")
 
     async def close(self) -> None:
-        """Shutdown orchestrator and cleanup resources [RM]"""
+        """Shutdown orchestrator and cleanup resources [RM]."""
         self.logger.info("Shutting down Vision Orchestrator V2")
 
         # Cancel background tasks
         if self._cleanup_task:
             self._cleanup_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._cleanup_task
-            except asyncio.CancelledError:
-                pass
 
         # Cancel all active jobs (only real asyncio Tasks/Futures)
         awaitables = []
         for job_id, task in list(self.active_jobs.items()):
             if isinstance(task, asyncio.Task) or asyncio.isfuture(task) or inspect.isawaitable(task):
-                try:
+                with contextlib.suppress(Exception):
                     task.cancel()
-                except Exception:
-                    pass
                 awaitables.append(task)
                 self.logger.debug(f"Cancelled job during shutdown: {job_id[:8]}")
             else:
@@ -499,7 +496,7 @@ class VisionOrchestratorV2:
         if awaitables:
             try:
                 await asyncio.wait_for(asyncio.gather(*awaitables, return_exceptions=True), timeout=30.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self.logger.warning("Some jobs did not complete during shutdown")
 
         # Close gateway

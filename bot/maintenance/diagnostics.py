@@ -34,7 +34,7 @@ def _dir_size_sync(path: str) -> int:
         except OSError:
             return 0
     total = 0
-    for dirpath, dirnames, filenames in os.walk(path):
+    for dirpath, _dirnames, filenames in os.walk(path):
         for f in filenames:
             fp = os.path.join(dirpath, f)
             try:
@@ -139,8 +139,8 @@ async def get_storage_status() -> str:
                 lines.append(f"WARNING: volume {used_pct:.0f}% full (critical)")
             elif used_pct >= 80:
                 lines.append(f"CAUTION: volume {used_pct:.0f}% full")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"Failed to check disk usage: {exc}")
 
     return "\n".join(lines)
 
@@ -183,5 +183,5 @@ async def checkpoint_wal(db_path: str) -> bool:
 
         return await asyncio.to_thread(_do_checkpoint)
     except Exception as exc:
-        logger.error("checkpoint_wal failed for %s: %s", db_path, exc)
+        logger.exception("checkpoint_wal failed for %s: %s", db_path, exc)
         return False

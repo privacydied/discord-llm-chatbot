@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
+
+from .utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
-def _normalize_text(value: Optional[str]) -> str:
+def _normalize_text(value: str | None) -> str:
     if not value:
         return ""
     return "\n".join(part.strip() for part in str(value).splitlines() if part.strip()).strip()
@@ -17,6 +21,7 @@ def _trim_text(value: str, max_chars: int) -> str:
         return value
     if max_chars <= 3:
         return value[: max_chars - 3] + "..."
+    return None
 
 
 @dataclass(slots=True)
@@ -26,12 +31,12 @@ class EvidenceSection:
     kind: str
     title: str
     body: str
-    provenance: Dict[str, Any] = field(default_factory=dict)
+    provenance: dict[str, Any] = field(default_factory=dict)
 
-    def as_tuple(self) -> Tuple[str, str, str]:
+    def as_tuple(self) -> tuple[str, str, str]:
         return self.kind, self.title, self.body
 
-    def trimmed(self, limit: int) -> "EvidenceSection":  # [CMV]
+    def trimmed(self, limit: int) -> EvidenceSection:  # [CMV]
         return EvidenceSection(
             kind=self.kind,
             title=self.title,
@@ -46,15 +51,15 @@ class EvidenceBundle:
 
     source_platform: str = ""
     source_url: str = ""
-    primary_tweet_id: Optional[str] = None  # Anchor for deterministic media selection
-    selected_tweet_id: Optional[str] = None  # Actual media host tweet id (may equal primary)
+    primary_tweet_id: str | None = None  # Anchor for deterministic media selection
+    selected_tweet_id: str | None = None  # Actual media host tweet id (may equal primary)
     caption_text: str = ""
     quoted_text: str = ""  # For quote tweets and retweets
     media_transcript: str = ""
     media_vision_notes: str = ""
     media_ocr_text: str = ""
     media_alt_text: str = ""
-    extra_sections: List[EvidenceSection] = field(default_factory=list)
+    extra_sections: list[EvidenceSection] = field(default_factory=list)
     # Local flag for telemetry and routing decisions when STT yields no/low speech [REH]
     stt_no_speech: bool = False
 
@@ -64,7 +69,7 @@ class EvidenceBundle:
         kind: str,
         title: str,
         body: str,
-        provenance: Optional[Dict[str, Any]] = None,
+        provenance: dict[str, Any] | None = None,
     ) -> None:
         section = EvidenceSection(
             kind=kind,
@@ -75,7 +80,7 @@ class EvidenceBundle:
         if section.body:
             self.extra_sections.append(section)
 
-    def merge_text(self, attr: str, value: Optional[str]) -> None:
+    def merge_text(self, attr: str, value: str | None) -> None:
         if not value:
             return
         normalized = _normalize_text(value)
@@ -114,7 +119,7 @@ class EvidenceBundle:
         # Check if shorter is substantially contained in longer
         return shorter in longer and len(shorter) / len(longer) > 0.8
 
-    def get_evidence_sections(self) -> List[EvidenceSection]:
+    def get_evidence_sections(self) -> list[EvidenceSection]:
         """Get ordered evidence sections for prompt composition."""
         sections = []
 
@@ -126,7 +131,7 @@ class EvidenceBundle:
                     title="Tweet Caption",
                     body=self.caption_text.strip(),
                     provenance={"source": "tweet_text"},
-                )
+                ),
             )
 
         if self.quoted_text.strip():
@@ -136,7 +141,7 @@ class EvidenceBundle:
                     title="Quoted Text",
                     body=self.quoted_text.strip(),
                     provenance={"source": "quoted_tweet"},
-                )
+                ),
             )
 
         # Choose between transcript and vision (prioritize transcript if present)
@@ -156,7 +161,7 @@ class EvidenceBundle:
                     title=media_title,
                     body=media_body,
                     provenance={"source": "media_processing"},
-                )
+                ),
             )
 
         if self.media_ocr_text.strip():
@@ -166,7 +171,7 @@ class EvidenceBundle:
                     title="OCR Text",
                     body=self.media_ocr_text.strip(),
                     provenance={"source": "ocr_extraction"},
-                )
+                ),
             )
 
         if self.media_alt_text.strip():
@@ -176,7 +181,7 @@ class EvidenceBundle:
                     title="Alt Text",
                     body=self.media_alt_text.strip(),
                     provenance={"source": "alt_text"},
-                )
+                ),
             )
 
         # Add any extra sections
@@ -203,14 +208,15 @@ class EvidenceBundle:
         return sections
 
     def compose_prompt_text(self, *, token_budget: int = 0, section_limit: int = 0) -> str:
-        """
-        Compose evidence into final prompt text with token guard and ordering.
+        """Compose evidence into final prompt text with token guard and ordering.
+
         Args:
             token_budget: Maximum total characters (0 for unlimited)
             section_limit: Max sections per kind (0 for unlimited)
 
         Returns:
             Formatted evidence string for LLM consumption
+
         """
         sections = self.get_evidence_sections()
 
@@ -285,8 +291,8 @@ class EvidenceBundle:
                     },
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to log evidence compose breadcrumb: {e}")
 
         return composed
 

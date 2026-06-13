@@ -1,5 +1,4 @@
-"""
-Comprehensive test suite for Twitter image-only tweet processing flow.
+"""Comprehensive test suite for Twitter image-only tweet processing flow.
 
 Tests cover unit, integration, and fault-injection scenarios.
 """
@@ -10,14 +9,14 @@ import pytest
 pytestmark = pytest.mark.skip(reason="Requires live X/Twitter API and vision service integration")
 
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
 import json
+from unittest.mock import AsyncMock, Mock, patch
 
-from bot.router import Router
 from bot.commands.image_upgrade_commands import (
     ImageUpgradeCommands,
     ImageUpgradeManager,
 )
+from bot.router import Router
 
 
 class TestImageOnlyTweetFlow:
@@ -84,13 +83,13 @@ class TestImageOnlyTweetFlow:
                     "url": "https://pbs.twimg.com/media/view.jpg",
                     "width": 1600,
                     "height": 900,
-                }
+                },
             ],
             "user": {"screen_name": "photographer", "name": "Photo Grapher"},
             "created_at": "2024-01-01T15:30:00Z",
         }
 
-    def test_is_image_only_tweet_detection(self, router, sample_image_only_tweet, sample_mixed_content_tweet):
+    def test_is_image_only_tweet_detection(self, router, sample_image_only_tweet, sample_mixed_content_tweet) -> None:
         """Test detection of image flow tweets (images present, no video)."""
         # Test image-only tweet (empty text + photos)
         assert router._is_image_only_tweet(sample_image_only_tweet)
@@ -117,7 +116,7 @@ class TestImageOnlyTweetFlow:
         assert not router._is_image_only_tweet(mixed_media)
 
     @pytest.mark.asyncio
-    async def test_handle_image_only_tweet_single_image(self, router, sample_image_only_tweet):
+    async def test_handle_image_only_tweet_single_image(self, router, sample_image_only_tweet) -> None:
         """Test processing single image in image-only tweet."""
         # Mock vision API response
         vision_response = {
@@ -164,7 +163,7 @@ class TestImageOnlyTweetFlow:
                     assert "https://pbs.twimg.com/media/test1.jpg" in str(call_args)
 
     @pytest.mark.asyncio
-    async def test_handle_image_only_tweet_multiple_images(self, router, sample_image_only_tweet):
+    async def test_handle_image_only_tweet_multiple_images(self, router, sample_image_only_tweet) -> None:
         """Test processing multiple images in image-only tweet."""
         vision_responses = [
             {
@@ -212,7 +211,7 @@ class TestImageOnlyTweetFlow:
                     assert mock_vision.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_handle_image_only_tweet_includes_article_caption(self, router, sample_image_only_tweet):
+    async def test_handle_image_only_tweet_includes_article_caption(self, router, sample_image_only_tweet) -> None:
         """Image-only flow should carry X article text into composed evidence."""
         tweet_with_article = {
             **sample_image_only_tweet,
@@ -245,7 +244,7 @@ class TestImageOnlyTweetFlow:
         assert "image summary" in result
 
     @pytest.mark.asyncio
-    async def test_toxic_content_filtering(self, router):
+    async def test_toxic_content_filtering(self, router) -> None:
         """Test that toxic content is filtered from vision responses."""
         toxic_tweet = {
             "text": "",
@@ -314,7 +313,7 @@ class TestImageUpgradeSystem:
         return payload
 
     @pytest.mark.asyncio
-    async def test_upgrade_context_caching(self, upgrade_manager):
+    async def test_upgrade_context_caching(self, upgrade_manager) -> None:
         """Test upgrade context is properly cached and retrieved."""
         message_id = 123456789
         url = "https://twitter.com/test/status/123"
@@ -334,7 +333,7 @@ class TestImageUpgradeSystem:
         assert retrieved["original_analysis"] == original_analysis
 
     @pytest.mark.asyncio
-    async def test_detailed_caption_upgrade(self, upgrade_manager, mock_reaction_payload):
+    async def test_detailed_caption_upgrade(self, upgrade_manager, mock_reaction_payload) -> None:
         """Test 🖼️ detailed caption upgrade."""
         # Setup upgrade context
         context = {
@@ -363,7 +362,7 @@ class TestImageUpgradeSystem:
             mock_detailed.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_ocr_upgrade(self, upgrade_manager, mock_reaction_payload):
+    async def test_ocr_upgrade(self, upgrade_manager, mock_reaction_payload) -> None:
         """Test 🔎 OCR details upgrade."""
         mock_reaction_payload.emoji.name = "🔎"
 
@@ -391,7 +390,7 @@ class TestImageUpgradeSystem:
             mock_ocr.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_thread_context_upgrade(self, upgrade_manager, mock_reaction_payload):
+    async def test_thread_context_upgrade(self, upgrade_manager, mock_reaction_payload) -> None:
         """Test ↩️ thread context upgrade."""
         mock_reaction_payload.emoji.name = "↩️"
 
@@ -451,7 +450,7 @@ class TestFaultInjection:
         return bot
 
     @pytest.mark.asyncio
-    async def test_vision_api_failure_handling(self, router):
+    async def test_vision_api_failure_handling(self, router) -> None:
         """Test graceful handling of vision API failures."""
         failing_tweet = {
             "text": "",
@@ -474,7 +473,7 @@ class TestFaultInjection:
             router.logger.error.assert_called()
 
     @pytest.mark.asyncio
-    async def test_malformed_syndication_data(self, router):
+    async def test_malformed_syndication_data(self, router) -> None:
         """Test handling of malformed syndication data."""
         malformed_cases = [
             # Missing photos array
@@ -495,7 +494,7 @@ class TestFaultInjection:
             assert len(result) > 0
 
     @pytest.mark.asyncio
-    async def test_concurrent_upgrade_requests(self, upgrade_manager):
+    async def test_concurrent_upgrade_requests(self, upgrade_manager) -> None:
         """Test handling of concurrent upgrade requests on same message."""
         message_id = 123456789
         context = {
@@ -527,7 +526,7 @@ class TestFaultInjection:
                 assert isinstance(result, str)
 
     @pytest.mark.asyncio
-    async def test_rate_limit_simulation(self, router):
+    async def test_rate_limit_simulation(self, router) -> None:
         """Test behavior under simulated rate limiting."""
         rate_limited_tweet = {
             "text": "",

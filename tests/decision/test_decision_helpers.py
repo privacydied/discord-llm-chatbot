@@ -1,27 +1,26 @@
 import sys
 import types
 
-# ruff: noqa: E402
 # Provide lightweight stand-ins for optional third-party modules that are
 # imported transitively by the logging helpers.
 sys.modules.setdefault("httpx", types.ModuleType("httpx"))
 
 from bot.decision_helpers import (
-    resolve_scope,
-    extract_chat_text,
-    detect_media_intent,
-    harvest_in_scope_io,
     choose_route,
-    select_reply_target,
     compose_context,
-)  # noqa: E402
+    detect_media_intent,
+    extract_chat_text,
+    harvest_in_scope_io,
+    resolve_scope,
+    select_reply_target,
+)
 
 
 class Dummy:
     pass
 
 
-def test_resolve_scope_plain():
+def test_resolve_scope_plain() -> None:
     msg = Dummy()
     msg.id = "1"
     res = resolve_scope(msg)
@@ -29,9 +28,9 @@ def test_resolve_scope_plain():
     assert res.scope_id == "1"
 
 
-def test_resolve_scope_thread_and_reply():
+def test_resolve_scope_thread_and_reply() -> None:
     class Thread:
-        def __init__(self, id: str):
+        def __init__(self, id: str) -> None:
             self.id = id
 
     thread = Thread("t1")
@@ -51,7 +50,7 @@ def test_resolve_scope_thread_and_reply():
     assert res_reply.scope_id == "p1"
 
 
-def test_extract_and_intent_and_route():
+def test_extract_and_intent_and_route() -> None:
     messages = ["<@123> hi", "there!"]
     result = extract_chat_text(messages)
     assert result["has_text_flag"] is True
@@ -62,7 +61,7 @@ def test_extract_and_intent_and_route():
     assert route == "nag"
 
 
-def test_select_reply_and_compose_context():
+def test_select_reply_and_compose_context() -> None:
     target = select_reply_target("thread", "5", now=0)
     assert target == "5"
 

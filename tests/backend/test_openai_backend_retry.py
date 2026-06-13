@@ -1,16 +1,18 @@
 import types
-import pytest
-import httpx
+from typing import Never
 
-from bot.exceptions import APIError
+import httpx
+import pytest
+
 from bot import retry_utils as retry_utils_mod
-from bot.openai_backend import generate_openai_response
-from bot.nvidia_backend import generate_nvidia_response
 from bot.enhanced_retry import (
     EnhancedRetryManager,
-    ProviderStatus,
     ProviderConfig,
+    ProviderStatus,
 )
+from bot.exceptions import APIError
+from bot.nvidia_backend import generate_nvidia_response
+from bot.openai_backend import generate_openai_response
 
 
 def make_httpx_429(retry_after: float) -> httpx.HTTPStatusError:
@@ -20,7 +22,7 @@ def make_httpx_429(retry_after: float) -> httpx.HTTPStatusError:
 
 
 class FakeChatCompletions:
-    def __init__(self, create_fn):
+    def __init__(self, create_fn) -> None:
         self._create = create_fn
 
     async def create(self, **kwargs):
@@ -28,17 +30,17 @@ class FakeChatCompletions:
 
 
 class FakeChat:
-    def __init__(self, create_fn):
+    def __init__(self, create_fn) -> None:
         self.completions = FakeChatCompletions(create_fn)
 
 
 class FakeOpenAIClient:
-    def __init__(self, create_fn):
+    def __init__(self, create_fn) -> None:
         self.chat = FakeChat(create_fn)
 
 
 @pytest.mark.asyncio
-async def test_text_backend_openrouter_alias_routes_to_openai_backend(monkeypatch):
+async def test_text_backend_openrouter_alias_routes_to_openai_backend(monkeypatch) -> None:
     def fake_load_config():
         return {"TEXT_BACKEND": "openrouter"}
 
@@ -55,7 +57,7 @@ async def test_text_backend_openrouter_alias_routes_to_openai_backend(monkeypatc
     assert result["text"] == "ok"
 
 
-def test_text_ladder_env_can_force_single_attempt_per_model(monkeypatch):
+def test_text_ladder_env_can_force_single_attempt_per_model(monkeypatch) -> None:
     monkeypatch.setenv(
         "TEXT_FALLBACK_MODELS",
         "nvidia|deepseek-ai/deepseek-v4-pro,nvidia|qwen/qwen3.5-397b-a17b",
@@ -71,7 +73,7 @@ def test_text_ladder_env_can_force_single_attempt_per_model(monkeypatch):
     ]
 
 
-def test_text_ladder_env_dedupes_exact_duplicate_entries(monkeypatch):
+def test_text_ladder_env_dedupes_exact_duplicate_entries(monkeypatch) -> None:
     monkeypatch.setenv(
         "TEXT_FALLBACK_MODELS",
         "openrouter|minimax/minimax-m2.5:free,openrouter|tencent/hy3-preview:free,openrouter|minimax/minimax-m2.5:free",
@@ -87,14 +89,14 @@ def test_text_ladder_env_dedupes_exact_duplicate_entries(monkeypatch):
     ]
 
 
-def test_empty_text_response_is_retryable_for_ladder():
+def test_empty_text_response_is_retryable_for_ladder() -> None:
     mgr = EnhancedRetryManager()
 
     assert mgr._is_retryable_error(APIError("Response normalization failed: APIError: Empty text response from model tencent/hy3-preview:free"))
 
 
 @pytest.mark.asyncio
-async def test_nvidia_backend_preserves_actual_ladder_model(monkeypatch):
+async def test_nvidia_backend_preserves_actual_ladder_model(monkeypatch) -> None:
     monkeypatch.setenv(
         "TEXT_FALLBACK_MODELS",
         "nvidia|deepseek-ai/deepseek-v4-pro,nvidia|z-ai/glm-5.1",
@@ -121,7 +123,7 @@ async def test_nvidia_backend_preserves_actual_ladder_model(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_retry_after_affects_backoff_delay(monkeypatch):
+async def test_retry_after_affects_backoff_delay(monkeypatch) -> None:
     # Patch config to use OpenAI base (no OpenRouter fallback)
     def fake_load_config():
         return {
@@ -139,7 +141,7 @@ async def test_retry_after_affects_backoff_delay(monkeypatch):
 
     delays = []
 
-    async def fake_sleep(d):
+    async def fake_sleep(d) -> None:
         delays.append(d)
         # do not actually sleep
 
@@ -189,7 +191,7 @@ async def test_retry_after_affects_backoff_delay(monkeypatch):
 @pytest.mark.asyncio
 async def test_rate_limit_apierror_carries_retry_after_seconds_when_no_retry(
     monkeypatch,
-):
+) -> None:
     def fake_load_config():
         return {
             "OPENAI_API_KEY": "test-key",
@@ -202,7 +204,7 @@ async def test_rate_limit_apierror_carries_retry_after_seconds_when_no_retry(
     # Disable retry so the first APIError is propagated
     retry_utils_mod.API_RETRY_CONFIG.max_attempts = 1
 
-    async def fake_create(**kwargs):
+    async def fake_create(**kwargs) -> Never:
         raise make_httpx_429(3.5)
 
     monkeypatch.setattr(
@@ -219,7 +221,7 @@ async def test_rate_limit_apierror_carries_retry_after_seconds_when_no_retry(
 
 
 @pytest.mark.asyncio
-async def test_nvidia_base_uses_text_fallback_ladder_and_nvidia_key(monkeypatch):
+async def test_nvidia_base_uses_text_fallback_ladder_and_nvidia_key(monkeypatch) -> None:
     def fake_load_config():
         return {
             "TEXT_BACKEND": "nvidia",
@@ -282,7 +284,7 @@ async def test_nvidia_base_uses_text_fallback_ladder_and_nvidia_key(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_text_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch):
+async def test_text_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch) -> None:
     def fake_load_config():
         return {
             "OPENAI_API_KEY": "openrouter-key",
@@ -347,7 +349,7 @@ async def test_text_ladder_can_mix_openrouter_and_nvidia_endpoints(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_text_ladder_falls_back_after_empty_model_response(monkeypatch):
+async def test_text_ladder_falls_back_after_empty_model_response(monkeypatch) -> None:
     def fake_load_config():
         return {
             "OPENAI_API_KEY": "openrouter-key",
@@ -403,7 +405,7 @@ async def test_text_ladder_falls_back_after_empty_model_response(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_openrouter_fallback_ladder_selects_second_model(monkeypatch):
+async def test_openrouter_fallback_ladder_selects_second_model(monkeypatch) -> None:
     # Force OpenRouter base to engage fallback ladder in openai_backend
     def fake_load_config():
         return {
@@ -459,7 +461,7 @@ async def test_openrouter_fallback_ladder_selects_second_model(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_enhanced_retry_manager_attempts_and_fallback_flags_text():
+async def test_enhanced_retry_manager_attempts_and_fallback_flags_text() -> None:
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     mgr.provider_configs["text"] = [
@@ -468,9 +470,10 @@ async def test_enhanced_retry_manager_attempts_and_fallback_flags_text():
     ]
 
     def factory(pc: ProviderConfig):
-        async def run():
+        async def run() -> str:
             if pc.model == "fail-a":
-                raise Exception("429 Too Many Requests")
+                msg = "429 Too Many Requests"
+                raise Exception(msg)
             return "OK"
 
         return run
@@ -483,7 +486,7 @@ async def test_enhanced_retry_manager_attempts_and_fallback_flags_text():
 
 
 @pytest.mark.asyncio
-async def test_streaming_bypasses_fallback_and_streams_chunks(monkeypatch):
+async def test_streaming_bypasses_fallback_and_streams_chunks(monkeypatch) -> None:
     # Even if OpenRouter base, streaming path bypasses fallback ladder
     def fake_load_config():
         return {
@@ -499,11 +502,11 @@ async def test_streaming_bypasses_fallback_and_streams_chunks(monkeypatch):
     async def stream_iter():
         # Yield three chunks resembling OpenAI streaming deltas
         class _Delta:
-            def __init__(self, content):
+            def __init__(self, content) -> None:
                 self.content = content
 
         class _Choice:
-            def __init__(self, content):
+            def __init__(self, content) -> None:
                 self.delta = _Delta(content)
 
         # Yield a few chunks
@@ -532,7 +535,7 @@ async def test_streaming_bypasses_fallback_and_streams_chunks(monkeypatch):
     assert call_log["count"] == 1
 
 
-def test_text_fallback_env_ladder_is_not_overridden_by_openai_text_model(monkeypatch):
+def test_text_fallback_env_ladder_is_not_overridden_by_openai_text_model(monkeypatch) -> None:
     monkeypatch.setenv("TEXT_FALLBACK_MODELS", "openrouter|model-a,openrouter|model-b")
     monkeypatch.setenv("OPENAI_TEXT_MODEL", "dead-model-not-in-ladder")
     monkeypatch.delenv("TEXT_FALLBACK_TIMEOUTS", raising=False)
@@ -543,7 +546,7 @@ def test_text_fallback_env_ladder_is_not_overridden_by_openai_text_model(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_404_no_endpoints_opens_long_cooldown_and_skips_next_call(monkeypatch):
+async def test_404_no_endpoints_opens_long_cooldown_and_skips_next_call(monkeypatch) -> None:
     monkeypatch.delenv("TEXT_FALLBACK_MODELS", raising=False)
     monkeypatch.delenv("TEXT_FALLBACK_TIMEOUTS", raising=False)
     monkeypatch.setenv("OPENROUTER_DEAD_MODEL_COOLDOWN_S", "1800")
@@ -557,10 +560,11 @@ async def test_404_no_endpoints_opens_long_cooldown_and_skips_next_call(monkeypa
     calls = {"dead": 0, "ok": 0}
 
     def factory(pc: ProviderConfig):
-        async def run():
+        async def run() -> str:
             if pc.model == "dead-model":
                 calls["dead"] += 1
-                raise Exception("NotFoundError: Error code: 404 - {'error': {'message': 'No endpoints found for dead-model.'}}")
+                msg = "NotFoundError: Error code: 404 - {'error': {'message': 'No endpoints found for dead-model.'}}"
+                raise Exception(msg)
             calls["ok"] += 1
             return "OK"
 
@@ -583,7 +587,7 @@ async def test_404_no_endpoints_opens_long_cooldown_and_skips_next_call(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_circuit_probe_window_prevents_zero_attempt_exhaustion(monkeypatch):
+async def test_circuit_probe_window_prevents_zero_attempt_exhaustion(monkeypatch) -> None:
     monkeypatch.setenv("CIRCUIT_PROBE_WINDOW_S", "0.5")
 
     mgr = EnhancedRetryManager()
@@ -604,10 +608,11 @@ async def test_circuit_probe_window_prevents_zero_attempt_exhaustion(monkeypatch
     calls = {"a": 0, "b": 0}
 
     def factory(pc: ProviderConfig):
-        async def run():
+        async def run() -> str:
             if pc.model == "model-a":
                 calls["a"] += 1
-                raise Exception("429 Too Many Requests")
+                msg = "429 Too Many Requests"
+                raise Exception(msg)
             calls["b"] += 1
             return "OK-B"
 
@@ -622,7 +627,7 @@ async def test_circuit_probe_window_prevents_zero_attempt_exhaustion(monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_auth_401_aborts_ladder_and_sets_provider_used():
+async def test_auth_401_aborts_ladder_and_sets_provider_used() -> None:
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
     mgr.provider_configs["text"] = [
@@ -633,10 +638,11 @@ async def test_auth_401_aborts_ladder_and_sets_provider_used():
     calls = {"auth": 0, "next": 0}
 
     def factory(pc: ProviderConfig):
-        async def run():
+        async def run() -> str:
             if pc.model == "auth-fail-model":
                 calls["auth"] += 1
-                raise Exception("AuthenticationError: Error code: 401 - {'error': {'message': 'User not found.', 'code': 401}}")
+                msg = "AuthenticationError: Error code: 401 - {'error': {'message': 'User not found.', 'code': 401}}"
+                raise Exception(msg)
             calls["next"] += 1
             return "OK"
 

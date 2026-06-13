@@ -5,15 +5,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Awaitable, Callable, List
+from datetime import UTC, datetime
 
 from .curator import MemoryCandidate
 
 logger = logging.getLogger(__name__)
 
-PersistCallback = Callable[[List[MemoryCandidate]], Awaitable[None]]
+PersistCallback = Callable[[list[MemoryCandidate]], Awaitable[None]]
 
 
 @dataclass(slots=True)
@@ -23,7 +23,7 @@ class QueueStats:
     dropped: int = 0
     overflow: int = 0
     failed: int = 0
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class CuratedMemoryIngestionQueue:
@@ -37,7 +37,7 @@ class CuratedMemoryIngestionQueue:
         workers: int = 1,
         batch_size: int = 8,
         enabled: bool = True,
-    ):
+    ) -> None:
         self.persist_callback = persist_callback
         self.max_size = max(1, int(max_size))
         self.workers = max(1, int(workers))
@@ -74,7 +74,7 @@ class CuratedMemoryIngestionQueue:
         self._shutdown.set()
         try:
             await asyncio.wait_for(self._queue.join(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "Timed out while draining curated memory queue",
                 extra={"subsys": "memory", "event": "memory_queue_drain_timeout"},
@@ -144,7 +144,7 @@ class CuratedMemoryIngestionQueue:
                     )
                     for _ in batch:
                         self._queue.task_done()
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
                 except asyncio.CancelledError:
                     break

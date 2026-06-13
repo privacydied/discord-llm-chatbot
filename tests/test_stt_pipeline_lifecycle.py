@@ -13,7 +13,7 @@ class _Logger:
     def __init__(self) -> None:
         self.debug_calls = []
 
-    def debug(self, msg, *args, **kwargs):
+    def debug(self, msg, *args, **kwargs) -> None:
         self.debug_calls.append((msg, args, kwargs))
 
 
@@ -27,7 +27,8 @@ class _StreamOK:
 
 class _StreamFail:
     async def abort(self) -> None:
-        raise RuntimeError("boom")
+        msg = "boom"
+        raise RuntimeError(msg)
 
 
 class _Job:
@@ -147,11 +148,11 @@ def test_create_stt_job_builds_spans_guard_and_job() -> None:
         pass
 
     class _Guard:
-        def __init__(self, limit):
+        def __init__(self, limit) -> None:
             self.limit = limit
 
     class _JobObj:
-        def __init__(self, **kwargs):
+        def __init__(self, **kwargs) -> None:
             self.kwargs = kwargs
 
     spans, guard, job = create_stt_job(

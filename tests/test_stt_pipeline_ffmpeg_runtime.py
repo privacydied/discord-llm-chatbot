@@ -83,4 +83,5 @@ def test_resolve_ffmpeg_bin_raises_when_missing(monkeypatch) -> None:
     except RuntimeError as exc:
         assert "ffmpeg executable not found" in str(exc)
     else:
-        raise AssertionError("Expected resolve_ffmpeg_bin to raise RuntimeError")
+        msg = "Expected resolve_ffmpeg_bin to raise RuntimeError"
+        raise AssertionError(msg)

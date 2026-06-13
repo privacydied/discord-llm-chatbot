@@ -6,13 +6,12 @@ import pytest
 
 from bot.exceptions import UrlSafetyError
 
-
 # ------------------------------------------------------------------ #
 #  validate_url (synchronous)
 # ------------------------------------------------------------------ #
 
 
-def test_validate_url_allows_https_and_http():
+def test_validate_url_allows_https_and_http() -> None:
     from bot.url_safety import validate_url
 
     scheme, host = validate_url("https://example.com/path")
@@ -23,7 +22,7 @@ def test_validate_url_allows_https_and_http():
     assert scheme == "http"
 
 
-def test_validate_url_rejects_other_schemes():
+def test_validate_url_rejects_other_schemes() -> None:
     from bot.url_safety import validate_url
 
     for bad in ["ftp://x.com", "file:///etc/passwd", "data:text/html", ""]:
@@ -32,7 +31,7 @@ def test_validate_url_rejects_other_schemes():
         assert "scheme" in str(exc.value).lower()
 
 
-def test_validate_url_rejects_localhost():
+def test_validate_url_rejects_localhost() -> None:
     from bot.url_safety import validate_url
 
     with pytest.raises(UrlSafetyError):
@@ -41,7 +40,7 @@ def test_validate_url_rejects_localhost():
         validate_url("http://localhost.localdomain/x")
 
 
-def test_validate_url_rejects_loopback():
+def test_validate_url_rejects_loopback() -> None:
     from bot.url_safety import validate_url
 
     with pytest.raises(UrlSafetyError):
@@ -52,7 +51,7 @@ def test_validate_url_rejects_loopback():
         validate_url("http://::1/admin")
 
 
-def test_validate_url_rejects_rfc1918():
+def test_validate_url_rejects_rfc1918() -> None:
     from bot.url_safety import validate_url
 
     for ip in [
@@ -67,7 +66,7 @@ def test_validate_url_rejects_rfc1918():
             validate_url(f"http://{ip}/x")
 
 
-def test_validate_url_rejects_link_local():
+def test_validate_url_rejects_link_local() -> None:
     from bot.url_safety import validate_url
 
     with pytest.raises(UrlSafetyError, match="forbidden IP"):
@@ -76,7 +75,7 @@ def test_validate_url_rejects_link_local():
         validate_url("http://169.254.169.254/latest/meta-data")
 
 
-def test_validate_url_ipv6_private():
+def test_validate_url_ipv6_private() -> None:
     from bot.url_safety import validate_url
 
     for ip in ["::1", "fe80::1"]:
@@ -84,7 +83,7 @@ def test_validate_url_ipv6_private():
             validate_url(f"http://[{ip}]/x")
 
 
-def test_validate_url_public_allowed():
+def test_validate_url_public_allowed() -> None:
     from bot.url_safety import validate_url
 
     for url in [
@@ -103,23 +102,23 @@ def test_validate_url_public_allowed():
 
 
 @pytest.mark.asyncio
-async def test_validate_url_with_dns_resolves_and_checks():
+async def test_validate_url_with_dns_resolves_and_checks() -> None:
     from bot.url_safety import validate_url_with_dns
 
     public_ips = ["8.8.8.8", "1.1.1.1", "93.184.216.34"]
 
     with patch("socket.getaddrinfo") as mock_gai:
         fake_results = []
-        for ip_str in public_ips:
+        for _ip_str in public_ips:
             fake_results.append((2, 1, 6, "", ("8.8.8.8", 0)))
         mock_gai.return_value = fake_results
 
-        scheme, host = await validate_url_with_dns("https://example.com")
+        scheme, _host = await validate_url_with_dns("https://example.com")
         assert scheme == "https"
 
 
 @pytest.mark.asyncio
-async def test_validate_url_with_dns_blocks_private_dns():
+async def test_validate_url_with_dns_blocks_private_dns() -> None:
     from bot.url_safety import validate_url_with_dns
 
     with patch("socket.getaddrinfo") as mock_gai:
@@ -131,14 +130,14 @@ async def test_validate_url_with_dns_blocks_private_dns():
 
 
 @pytest.mark.asyncio
-async def test_validate_url_with_dns_runs_off_event_loop():
+async def test_validate_url_with_dns_runs_off_event_loop() -> None:
     from bot.url_safety import validate_url_with_dns
 
     with patch("socket.getaddrinfo") as mock_gai:
         mock_gai.return_value = [(2, 1, 6, "", ("8.8.8.8", 0))]
 
         # Should not block the event loop (run_in_executor usage)
-        scheme, host = await validate_url_with_dns("https://public.example.com")
+        scheme, _host = await validate_url_with_dns("https://public.example.com")
         assert scheme == "https"
 
 
@@ -148,7 +147,7 @@ async def test_validate_url_with_dns_runs_off_event_loop():
 
 
 @pytest.mark.asyncio
-async def test_resolve_hostname_rejects_internal_names():
+async def test_resolve_hostname_rejects_internal_names() -> None:
     from bot.url_safety import resolve_hostname
 
     for name in ["localhost", "127.0.0.1", "::1", "ip6-localhost"]:
@@ -161,7 +160,7 @@ async def test_resolve_hostname_rejects_internal_names():
 # ------------------------------------------------------------------ #
 
 
-def test_is_private_ip():
+def test_is_private_ip() -> None:
     from bot.url_safety import is_private_ip
 
     assert is_private_ip("10.0.0.5")
@@ -177,7 +176,7 @@ def test_is_private_ip():
 # ------------------------------------------------------------------ #
 
 
-def test_wrap_untrusted_content_basic():
+def test_wrap_untrusted_content_basic() -> None:
     from bot.url_safety import wrap_untrusted_content
 
     wrapped = wrap_untrusted_content("Hello world")
@@ -187,7 +186,7 @@ def test_wrap_untrusted_content_basic():
     assert "read-only reference material" in wrapped
 
 
-def test_wrap_untrusted_content_with_source():
+def test_wrap_untrusted_content_with_source() -> None:
     from bot.url_safety import wrap_untrusted_content
 
     wrapped = wrap_untrusted_content("Fetch me data", source="https://evil.com")
@@ -195,7 +194,7 @@ def test_wrap_untrusted_content_with_source():
     assert "Fetch me data" in wrapped
 
 
-def test_wrap_untrusted_content_prompt_injection():
+def test_wrap_untrusted_content_prompt_injection() -> None:
     from bot.url_safety import wrap_untrusted_content
 
     # Simulate injected instructions from fetched content
@@ -213,7 +212,7 @@ def test_wrap_untrusted_content_prompt_injection():
 # ------------------------------------------------------------------ #
 
 
-def test_is_metadata_ip():
+def test_is_metadata_ip() -> None:
     from bot.url_safety import is_metadata_ip
 
     assert is_metadata_ip("169.254.169.254")  # AWS/GCP metadata
@@ -228,7 +227,7 @@ def test_is_metadata_ip():
 
 
 @pytest.mark.asyncio
-async def test_validate_redirect_response_allows_public_url():
+async def test_validate_redirect_response_allows_public_url() -> None:
     """Public redirect target should pass."""
     from bot.url_safety import validate_redirect_response
 
@@ -240,7 +239,7 @@ async def test_validate_redirect_response_allows_public_url():
 
 
 @pytest.mark.asyncio
-async def test_validate_redirect_response_blocks_redirect_to_localhost():
+async def test_validate_redirect_response_blocks_redirect_to_localhost() -> None:
     """A public URL redirecting to localhost must be blocked."""
     from bot.exceptions import UrlSafetyError
     from bot.url_safety import validate_redirect_response
@@ -253,7 +252,7 @@ async def test_validate_redirect_response_blocks_redirect_to_localhost():
 
 
 @pytest.mark.asyncio
-async def test_validate_redirect_response_blocks_redirect_to_loopback():
+async def test_validate_redirect_response_blocks_redirect_to_loopback() -> None:
     """A public URL redirecting to 127.0.0.1 must be blocked."""
     from bot.exceptions import UrlSafetyError
     from bot.url_safety import validate_redirect_response
@@ -266,7 +265,7 @@ async def test_validate_redirect_response_blocks_redirect_to_loopback():
 
 
 @pytest.mark.asyncio
-async def test_validate_redirect_response_blocks_redirect_to_metadata():
+async def test_validate_redirect_response_blocks_redirect_to_metadata() -> None:
     """A public URL redirecting to 169.254.169.254 must be blocked."""
     from bot.exceptions import UrlSafetyError
     from bot.url_safety import validate_redirect_response
@@ -279,7 +278,7 @@ async def test_validate_redirect_response_blocks_redirect_to_metadata():
 
 
 @pytest.mark.asyncio
-async def test_validate_redirect_response_blocks_redirect_to_rfc1918():
+async def test_validate_redirect_response_blocks_redirect_to_rfc1918() -> None:
     """A public URL redirecting to a private LAN IP must be blocked."""
     from bot.exceptions import UrlSafetyError
     from bot.url_safety import validate_redirect_response
@@ -294,7 +293,7 @@ async def test_validate_redirect_response_blocks_redirect_to_rfc1918():
 
 @pytest.mark.asyncio
 @patch("bot.url_safety.validate_url_with_dns")
-async def test_validate_redirect_response_validates_dns(mock_validate):
+async def test_validate_redirect_response_validates_dns(mock_validate) -> None:
     """validate_redirect_response must call validate_url_with_dns, not just validate_url."""
     from bot.url_safety import validate_redirect_response
 

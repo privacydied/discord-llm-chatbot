@@ -1,5 +1,4 @@
-"""
-Bounded async concurrency for multimodal item processing. [PA][RM]
+"""Bounded async concurrency for multimodal item processing. [PA][RM].
 
 This module provides utilities for parallelizing independent item processing
 with clear timeout budgets and controlled concurrency.
@@ -17,18 +16,15 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from typing import (
-    Any,
-    Callable,
-    Coroutine,
-    List,
-    Optional,
-    Tuple,
     TYPE_CHECKING,
+    Any,
 )
 
 from .utils.logging import get_logger
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
+
     from discord import Message
 
 logger = get_logger(__name__)
@@ -75,8 +71,7 @@ def _normalize_url_for_dedup(url: str) -> str:
         p = urlparse(url.strip())
         # Normalize: lowercase domain, remove www, keep path (case sensitive for path)
         netloc = p.netloc.lower()
-        if netloc.startswith("www."):
-            netloc = netloc[4:]
+        netloc = netloc.removeprefix("www.")
         # Remove common tracking params
         from urllib.parse import parse_qsl, urlencode
 
@@ -89,7 +84,7 @@ def _normalize_url_for_dedup(url: str) -> str:
         return url.strip()
 
 
-def _get_url_key(item: Any, modality: Any) -> Optional[str]:
+def _get_url_key(item: Any, modality: Any) -> str | None:
     """Extract coalescing key from item if it's URL-based."""
     from .modality import InputModality
 
@@ -111,8 +106,8 @@ def _get_url_key(item: Any, modality: Any) -> Optional[str]:
         payload = getattr(item, "payload", None)
         if source_type == "url" and payload and isinstance(payload, str):
             return _normalize_url_for_dedup(payload)
-    except Exception:
-        pass
+    except (AttributeError, TypeError) as e:
+        logger.debug(f"Failed to get URL for deduplication: {e}")
 
     return None
 
@@ -122,9 +117,9 @@ async def _process_item_with_budget(
     modality: Any,  # InputModality
     handler_fn: Callable[..., Coroutine[Any, Any, str]],
     timeout: float,
-    message: Optional["Message"],
+    message: Message | None,
 ) -> ProcessedResult:
-    """Process a single item with clear timeout budget. [PA][REH]"""
+    """Process a single item with clear timeout budget. [PA][REH]."""
     import time
 
     start_time = time.time()
@@ -146,7 +141,7 @@ async def _process_item_with_budget(
             attempts=1,
         )
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         duration = time.time() - start_time
         logger.warning(f"process_item.timeout | modality={modality.name} timeout={timeout}s")
         return ProcessedResult(
@@ -176,11 +171,10 @@ async def _process_item_with_coalescing(
     modality: Any,
     handler_fn: Callable[..., Coroutine[Any, Any, str]],
     timeout: float,
-    message: Optional["Message"],
+    message: Message | None,
     config: BatchConfig,
 ) -> ProcessedResult:
     """Process item with optional request coalescing."""
-
     # Check if coalescing applies
     if not config.enable_coalescing:
         return await _process_item_with_budget(item, modality, handler_fn, timeout, message)
@@ -214,7 +208,7 @@ async def _process_item_with_coalescing(
             duration=duration,
             attempts=1,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         duration = __import__("time").time() - start_time
         return ProcessedResult(
             item=item,
@@ -237,13 +231,12 @@ async def _process_item_with_coalescing(
 
 
 async def process_independent_items_concurrently(
-    items: List[Tuple[Any, Any, Callable[..., Coroutine[Any, Any, str]]]],
-    message: Optional["Message"],
-    config: Optional[BatchConfig] = None,
-    progress_logger: Optional[Callable[[int, int, str], None]] = None,
-) -> List[ProcessedResult]:
-    """
-    Process independent items concurrently with bounded concurrency.
+    items: list[tuple[Any, Any, Callable[..., Coroutine[Any, Any, str]]]],
+    message: Message | None,
+    config: BatchConfig | None = None,
+    progress_logger: Callable[[int, int, str], None] | None = None,
+) -> list[ProcessedResult]:
+    """Process independent items concurrently with bounded concurrency.
 
     Args:
         items: List of (item, modality, handler_fn) tuples
@@ -259,6 +252,7 @@ async def process_independent_items_concurrently(
         - Results are returned in input order for consistency
         - Partial success is preserved (failures don't cancel other items)
         - Clear timeout budget: network=30s, heavy=120s
+
     """
     if not items:
         return []
@@ -268,8 +262,8 @@ async def process_independent_items_concurrently(
     cfg = config or BatchConfig()
 
     # Categorize items by work type
-    network_items: List[Tuple[int, Tuple]] = []  # (index, (item, modality, handler))
-    heavy_items: List[Tuple[int, Tuple]] = []  # (index, (item, modality, handler))
+    network_items: list[tuple[int, tuple]] = []  # (index, (item, modality, handler))
+    heavy_items: list[tuple[int, tuple]] = []  # (index, (item, modality, handler))
 
     for i, (item, modality, handler) in enumerate(items):
         if modality in (InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE):
@@ -287,7 +281,7 @@ async def process_independent_items_concurrently(
             # URLs, screenshots are network-bound
             network_items.append((i, (item, modality, handler)))
 
-    results: List[Optional[ProcessedResult]] = [None] * len(items)
+    results: list[ProcessedResult | None] = [None] * len(items)
 
     async def _process_with_semaphore(
         index: int,
@@ -296,7 +290,7 @@ async def process_independent_items_concurrently(
         handler_fn: Callable,
         sem: asyncio.Semaphore,
         timeout: float,
-    ) -> Tuple[int, ProcessedResult]:
+    ) -> tuple[int, ProcessedResult]:
         """Process item with semaphore-controlled concurrency."""
         async with sem:
             # Log progress before processing
@@ -310,8 +304,8 @@ async def process_independent_items_concurrently(
                         elif item.source_type == "attachment":
                             fname = getattr(item.payload, "filename", "attachment")
                             desc = f"{modality.name} ({fname})"
-                except Exception:
-                    pass
+                except (AttributeError, TypeError) as e:
+                    logger.debug(f"Failed to build progress description: {e}")
                 progress_logger(index + 1, len(items), desc)
 
             result = await _process_item_with_coalescing(item, modality, handler_fn, timeout, message, cfg)
@@ -322,7 +316,7 @@ async def process_independent_items_concurrently(
     heavy_sem = asyncio.Semaphore(cfg.max_heavy_concurrency)
 
     # Build task list
-    tasks: List[Coroutine] = []
+    tasks: list[Coroutine] = []
 
     for index, (item, modality, handler) in network_items:
         tasks.append(_process_with_semaphore(index, item, modality, handler, network_sem, cfg.network_timeout))
@@ -345,18 +339,17 @@ async def process_independent_items_concurrently(
 
 
 async def process_items_sequential_with_timeout(
-    items: List[Tuple[Any, Any, Callable[..., Coroutine[Any, Any, str]]]],
-    message: Optional["Message"],
+    items: list[tuple[Any, Any, Callable[..., Coroutine[Any, Any, str]]]],
+    message: Message | None,
     timeout_per_item: float = 30.0,
-    progress_logger: Optional[Callable[[int, int, str], None]] = None,
-) -> List[ProcessedResult]:
-    """
-    Process items sequentially with per-item timeout (original behavior).
+    progress_logger: Callable[[int, int, str], None] | None = None,
+) -> list[ProcessedResult]:
+    """Process items sequentially with per-item timeout (original behavior).
 
     Use this when order matters or when items must be processed one at a time.
     Preserves original sequential semantics.
     """
-    results: List[ProcessedResult] = []
+    results: list[ProcessedResult] = []
 
     for i, (item, modality, handler_fn) in enumerate(items):
         # Log progress

@@ -2,20 +2,24 @@
 
 from __future__ import annotations
 
-from html import unescape
+import contextlib
 import re
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
+from html import unescape
+from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, unquote, urlparse, urlunparse
 
 from bot.x_api_client import XApiClient
 
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable, Iterable
 
-def parse_twitter_status_id(url: str) -> Optional[str]:
+
+def parse_twitter_status_id(url: str) -> str | None:
     """Extract tweet/status ID from a Twitter/X URL."""
     return XApiClient.extract_tweet_id(url)
 
 
-def extract_primary_tweet_id(url: str) -> Optional[str]:
+def extract_primary_tweet_id(url: str) -> str | None:
     """Extract stable primary tweet ID, preferring explicit URL hint fragments."""
     raw_url = normalize_raw_url(url)
     if not raw_url:
@@ -37,7 +41,7 @@ def normalize_raw_url(url: Any) -> str:
     return str(url or "").strip()
 
 
-def parsed_primary_tweet_id(parsed: Any) -> Optional[str]:
+def parsed_primary_tweet_id(parsed: Any) -> str | None:
     """Resolve primary tweet-id candidate from parsed fragment/query params."""
     for params in primary_tweet_id_param_sources(parsed):
         candidate = primary_tweet_id_from_params(params)
@@ -46,7 +50,7 @@ def parsed_primary_tweet_id(parsed: Any) -> Optional[str]:
     return None
 
 
-def primary_tweet_id_from_params(params: Dict[str, List[str]]) -> Optional[str]:
+def primary_tweet_id_from_params(params: dict[str, list[str]]) -> str | None:
     """Resolve first valid tweet-id candidate from one params map."""
     for key in primary_tweet_id_hint_keys():
         candidate = first_digit_candidate(params.get(key) or [])
@@ -55,7 +59,7 @@ def primary_tweet_id_from_params(params: Dict[str, List[str]]) -> Optional[str]:
     return None
 
 
-def first_digit_candidate(values: List[str]) -> Optional[str]:
+def first_digit_candidate(values: list[str]) -> str | None:
     """Return first stripped all-digit candidate value."""
     if not values:
         return None
@@ -65,14 +69,14 @@ def first_digit_candidate(values: List[str]) -> Optional[str]:
     return None
 
 
-def primary_tweet_id_hint_keys() -> Tuple[str, ...]:
+def primary_tweet_id_hint_keys() -> tuple[str, ...]:
     """Return ordered hint keys checked for explicit tweet-id URL fragments."""
     return ("ptid", "primary", "tweet_id", "status_id", "id")
 
 
 def primary_tweet_id_param_sources(
     parsed: Any,
-) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """Return parsed fragment/query param maps checked for tweet-id hints."""
     return (
         parse_qs(str(getattr(parsed, "fragment", "") or "")),
@@ -129,7 +133,7 @@ def twitter_url_contains_domain_marker(lower_url: str) -> bool:
     return any(d in lower_url for d in twitter_url_domain_markers())
 
 
-def twitter_url_domain_markers() -> Tuple[str, ...]:
+def twitter_url_domain_markers() -> tuple[str, ...]:
     """Return domain markers used for lightweight Twitter/X URL detection."""
     return (
         "twitter.com/",
@@ -140,8 +144,8 @@ def twitter_url_domain_markers() -> Tuple[str, ...]:
     )
 
 
-def collect_x_candidate_urls(item: Any) -> List[str]:
-    urls: List[str] = []
+def collect_x_candidate_urls(item: Any) -> list[str]:
+    urls: list[str] = []
     try:
         source_type = x_candidate_source_type(item)
         urls.extend(collect_candidate_urls_for_item_source(item, source_type))
@@ -155,7 +159,7 @@ def x_candidate_source_type(item: Any) -> Any:
     return item.source_type
 
 
-def collect_candidate_urls_for_item_source(item: Any, source_type: Any) -> List[str]:
+def collect_candidate_urls_for_item_source(item: Any, source_type: Any) -> list[str]:
     """Collect candidate URLs for one item using resolved source-type dispatch."""
     if source_type == "url":
         return collect_url_item_candidate_urls(item)
@@ -166,65 +170,65 @@ def collect_candidate_urls_for_item_source(item: Any, source_type: Any) -> List[
     return []
 
 
-def filtered_candidate_urls(urls: List[str]) -> List[str]:
+def filtered_candidate_urls(urls: list[str]) -> list[str]:
     """Return candidate URL list with empty/falsy values removed."""
     return filter_non_empty_urls(urls)
 
 
-def append_url_item_payload(urls: List[str], item: Any) -> None:
+def append_url_item_payload(urls: list[str], item: Any) -> None:
     """Append normalized URL-item payload."""
     urls.append(str(item.payload))
 
 
-def filter_non_empty_urls(urls: List[str]) -> List[str]:
+def filter_non_empty_urls(urls: list[str]) -> list[str]:
     """Return URLs with falsy entries removed."""
     return [u for u in urls if u]
 
 
-def collect_url_item_candidate_urls(item: Any) -> List[str]:
+def collect_url_item_candidate_urls(item: Any) -> list[str]:
     """Collect candidate URLs from a URL source item."""
-    urls: List[str] = []
+    urls: list[str] = []
     append_url_item_payload(urls, item)
     return urls
 
 
-def collect_embed_candidate_urls(embed: Any) -> List[str]:
+def collect_embed_candidate_urls(embed: Any) -> list[str]:
     """Collect candidate URLs from an embed payload."""
-    urls: List[str] = []
+    urls: list[str] = []
     collect_embed_urls_into(urls, embed)
     return urls
 
 
-def collect_attachment_candidate_urls(attachment: Any) -> List[str]:
+def collect_attachment_candidate_urls(attachment: Any) -> list[str]:
     """Collect candidate URLs from an attachment payload."""
-    urls: List[str] = []
+    urls: list[str] = []
     collect_attachment_urls_into(urls, attachment)
     return urls
 
 
-def collect_embed_urls_into(urls: List[str], embed: Any) -> None:
+def collect_embed_urls_into(urls: list[str], embed: Any) -> None:
     """Collect embed primary and nested attribute URLs into target list."""
     append_embed_primary_url_if_present(urls, embed)
     append_embed_candidate_attr_urls(urls, embed)
 
 
-def collect_attachment_urls_into(urls: List[str], attachment: Any) -> None:
+def collect_attachment_urls_into(urls: list[str], attachment: Any) -> None:
     """Collect attachment URL fields into target list."""
     append_attachment_urls_if_present(urls, attachment)
 
 
-def x_candidate_embed_attr_names() -> Tuple[str, ...]:
+def x_candidate_embed_attr_names() -> tuple[str, ...]:
     """Return embed attribute names probed for candidate URLs."""
     return ("video", "image", "thumbnail")
 
 
-def append_embed_candidate_attr_urls(urls: List[str], embed: Any) -> None:
+def append_embed_candidate_attr_urls(urls: list[str], embed: Any) -> None:
     """Append candidate URLs for all supported embed media attributes."""
     for attr_name in x_candidate_embed_attr_names():
         append_embed_attr_url_if_present(urls, embed, attr_name)
 
 
-def append_embed_attr_url_if_present(urls: List[str], embed: Any, attr_name: str) -> None:
+def append_embed_attr_url_if_present(urls: list[str], embed: Any, attr_name: str) -> None:
     """Append nested embed attribute URL when present (e.g., video/image/thumbnail)."""
     attr = getattr(embed, attr_name, None)
     url = getattr(attr, "url", None) if attr else None
@@ -232,20 +236,20 @@ def append_embed_attr_url_if_present(urls: List[str], embed: Any, attr_name: str
         urls.append(url)
 
 
-def append_embed_primary_url_if_present(urls: List[str], embed: Any) -> None:
+def append_embed_primary_url_if_present(urls: list[str], embed: Any) -> None:
     """Append embed primary URL when present."""
     primary_url = getattr(embed, "url", None)
     if primary_url:
         urls.append(primary_url)
 
 
-def append_attachment_urls_if_present(urls: List[str], attachment: Any) -> None:
+def append_attachment_urls_if_present(urls: list[str], attachment: Any) -> None:
     """Append attachment URL and proxy URL when present."""
     append_attachment_url_attr_if_present(urls, attachment, "url")
     append_attachment_url_attr_if_present(urls, attachment, "proxy_url")
 
 
-def append_attachment_url_attr_if_present(urls: List[str], attachment: Any, attr_name: str) -> None:
+def append_attachment_url_attr_if_present(urls: list[str], attachment: Any, attr_name: str) -> None:
     """Append one attachment URL attribute when present."""
     value = getattr(attachment, attr_name, None)
     if value:
@@ -412,9 +416,7 @@ def is_disallowed_tweet_media_path(path: str) -> bool:
     """Return True when path is blocked metadata or poster/thumbnail asset."""
     if is_blocked_tweet_media_path(path):
         return True
-    if is_poster_tweet_media_path(path):
-        return True
-    return False
+    return bool(is_poster_tweet_media_path(path))
 
 
 def has_tweet_media_path_segment(path: str) -> bool:
@@ -432,7 +434,7 @@ def path_contains_tweet_media_segment(path: str) -> bool:
     return tweet_media_path_segment() in path
 
 
-def blocked_tweet_media_prefixes() -> Tuple[str, ...]:
+def blocked_tweet_media_prefixes() -> tuple[str, ...]:
     """Return blocked tweet-media metadata path prefixes."""
     return (
         "/profile_images/",
@@ -448,7 +450,7 @@ def is_blocked_tweet_media_path(path: str) -> bool:
     return path_starts_with_any_prefix(path, blocked_tweet_media_prefixes())
 
 
-def poster_tweet_media_prefixes() -> Tuple[str, ...]:
+def poster_tweet_media_prefixes() -> tuple[str, ...]:
     """Return poster/thumbnail tweet-media path markers."""
     return (
         "/amplify_video_thumb/",
@@ -462,12 +464,12 @@ def is_poster_tweet_media_path(path: str) -> bool:
     return path_contains_any_fragment(path, poster_tweet_media_prefixes())
 
 
-def path_starts_with_any_prefix(path: str, prefixes: Tuple[str, ...]) -> bool:
+def path_starts_with_any_prefix(path: str, prefixes: tuple[str, ...]) -> bool:
     """Return True when path starts with any prefix in the given tuple."""
     return any(path.startswith(prefix) for prefix in prefixes)
 
 
-def path_contains_any_fragment(path: str, fragments: Tuple[str, ...]) -> bool:
+def path_contains_any_fragment(path: str, fragments: tuple[str, ...]) -> bool:
     """Return True when path contains any fragment in the given tuple."""
     return any(fragment in path for fragment in fragments)
 
@@ -492,7 +494,7 @@ def parse_url_for_normalization(url: str) -> Any:
     return parse_url_value(url)
 
 
-def resolve_normalized_x_parts(parsed: Any) -> Tuple[str, str]:
+def resolve_normalized_x_parts(parsed: Any) -> tuple[str, str]:
     """Resolve normalized host/path parts for a parsed X/Twitter URL."""
     host = resolve_normalized_x_host(parsed)
     path = resolve_normalized_x_path(parsed)
@@ -595,7 +597,7 @@ def should_unwrap_x_media_host(host: str) -> bool:
     return is_unwrap_x_media_proxy_host(host)
 
 
-def parse_unwrap_x_media_params(parsed: Any) -> Dict[str, List[str]]:
+def parse_unwrap_x_media_params(parsed: Any) -> dict[str, list[str]]:
     """Parse query params used for unwrap-x media resolution."""
     return parse_qs(extract_unwrap_x_media_query(parsed))
 
@@ -611,7 +613,7 @@ def resolve_unwrap_x_media_candidate(parsed: Any) -> str:
     return first_unwrap_x_media_candidate(params)
 
 
-def first_unwrap_x_media_candidate(params: Dict[str, List[str]]) -> str:
+def first_unwrap_x_media_candidate(params: dict[str, list[str]]) -> str:
     """Return first decoded candidate from supported unwrap query params."""
     for key in unwrap_x_media_param_keys():
         values = params.get(key)
@@ -645,7 +647,7 @@ def is_unwrap_x_media_candidate_url(candidate: str) -> bool:
     return candidate.startswith(unwrap_x_media_candidate_url_prefix())
 
 
-def extract_x_api_primary_tweet(api_data: Any) -> Dict[str, Any]:
+def extract_x_api_primary_tweet(api_data: Any) -> dict[str, Any]:
     """Extract the primary tweet node from X API payload variants."""
     if not isinstance(api_data, dict):
         return {}
@@ -658,7 +660,7 @@ def extract_x_api_primary_tweet(api_data: Any) -> Dict[str, Any]:
     return {}
 
 
-def extract_x_api_data_field(api_data: Dict[str, Any]) -> Any:
+def extract_x_api_data_field(api_data: dict[str, Any]) -> Any:
     """Extract raw `data` field from X API payload."""
     return api_data.get("data")
 
@@ -673,7 +675,7 @@ def x_api_data_is_dict(data: Any) -> bool:
     return isinstance(data, dict)
 
 
-def extract_x_api_first_item(data: List[Any]) -> Any:
+def extract_x_api_first_item(data: list[Any]) -> Any:
     """Return first item from API data list or empty dict when list is empty."""
     return data[0] if data else {}
 
@@ -692,7 +694,7 @@ def normalize_x_api_text(text: Any) -> str:
     return str(text or "").strip()
 
 
-def extract_sparse_media_resolution(resolved_sparse: Any, *, default_url: str) -> tuple[str, List[str], str]:
+def extract_sparse_media_resolution(resolved_sparse: Any, *, default_url: str) -> tuple[str, list[str], str]:
     """Extract sparse media kind/images/url from resolved payload."""
     if not isinstance(resolved_sparse, dict):
         return ("unknown", [], default_url)
@@ -704,9 +706,9 @@ def extract_sparse_media_resolution(resolved_sparse: Any, *, default_url: str) -
 
 def sparse_media_resolution_tuple(
     sparse_kind: str,
-    sparse_images: List[str],
+    sparse_images: list[str],
     sparse_url: str,
-) -> tuple[str, List[str], str]:
+) -> tuple[str, list[str], str]:
     """Build normalized sparse media resolution tuple."""
     return (sparse_kind, sparse_images, sparse_url)
 
@@ -724,7 +726,7 @@ def normalize_sparse_url_value(value: Any, *, default_url: str) -> str:
     return sparse_url
 
 
-def normalize_sparse_images_value(value: Any) -> List[Any]:
+def normalize_sparse_images_value(value: Any) -> list[Any]:
     """Normalize sparse media images field to a list value."""
     sparse_images = value or []
     if not isinstance(sparse_images, list):
@@ -732,7 +734,7 @@ def normalize_sparse_images_value(value: Any) -> List[Any]:
     return sparse_images
 
 
-def extract_fxtwitter_tweet_node(payload: Any) -> Dict[str, Any]:
+def extract_fxtwitter_tweet_node(payload: Any) -> dict[str, Any]:
     """Extract the canonical tweet/status node from fx/vx payloads."""
     if not isinstance(payload, dict):
         return {}
@@ -755,8 +757,8 @@ def stt_transcription_value_is_present(value: Any) -> bool:
 def resolve_twitter_status_id(
     url: str,
     *,
-    tweet_id: Optional[str] = None,
-    parse_status_id: Optional[Callable[[str], Optional[str]]] = None,
+    tweet_id: str | None = None,
+    parse_status_id: Callable[[str], str | None] | None = None,
 ) -> str:
     """Resolve status ID from explicit hint first, otherwise parse from URL."""
     parser = resolve_twitter_status_parser(parse_status_id)
@@ -766,7 +768,7 @@ def resolve_twitter_status_id(
 def is_twitter_status_url(
     url: str,
     *,
-    parse_status_id: Optional[Callable[[str], Optional[str]]] = None,
+    parse_status_id: Callable[[str], str | None] | None = None,
 ) -> bool:
     """Check whether URL contains a parseable Twitter/X status id."""
     parser = resolve_twitter_status_parser(parse_status_id)
@@ -774,18 +776,18 @@ def is_twitter_status_url(
 
 
 def resolve_twitter_status_parser(
-    parse_status_id: Optional[Callable[[str], Optional[str]]] = None,
-) -> Callable[[str], Optional[str]]:
+    parse_status_id: Callable[[str], str | None] | None = None,
+) -> Callable[[str], str | None]:
     """Resolve status ID parser, defaulting to built-in Twitter status parser."""
     return parse_status_id or parse_twitter_status_id
 
 
-def classify_stt_error_reason(stt_err: Optional[str]) -> str:
+def classify_stt_error_reason(stt_err: str | None) -> str:
     """Map STT status token to canonical fallback reason."""
     return "error" if is_stt_hard_error(stt_err) else "no_speech"
 
 
-def is_stt_hard_error(stt_err: Optional[str]) -> bool:
+def is_stt_hard_error(stt_err: str | None) -> bool:
     """Return True when STT status token is the canonical hard-error value."""
     return stt_err == "error"
 
@@ -793,26 +795,26 @@ def is_stt_hard_error(stt_err: Optional[str]) -> bool:
 def build_stt_fail_log_payload(
     reason: str,
     *,
-    media_kind: Optional[str] = None,
-    msg_id: Optional[int] = None,
-) -> Dict[str, Any]:
+    media_kind: str | None = None,
+    msg_id: int | None = None,
+) -> dict[str, Any]:
     """Build structured payload for STT failure breadcrumb logging."""
     detail = build_stt_fail_detail(reason, media_kind=media_kind)
-    payload: Dict[str, Any] = build_event_with_detail_payload("stt.fail", detail)
+    payload: dict[str, Any] = build_event_with_detail_payload("stt.fail", detail)
     if msg_id is not None:
         payload["msg_id"] = msg_id
     return payload
 
 
-def build_stt_fail_detail(reason: str, *, media_kind: Optional[str] = None) -> Dict[str, Any]:
+def build_stt_fail_detail(reason: str, *, media_kind: str | None = None) -> dict[str, Any]:
     """Build detail object for STT failure breadcrumb payloads."""
-    detail: Dict[str, Any] = {"reason": reason}
+    detail: dict[str, Any] = {"reason": reason}
     if media_kind:
         detail["media_kind"] = media_kind
     return detail
 
 
-def build_caption_only_fallback_log_payload() -> Dict[str, Any]:
+def build_caption_only_fallback_log_payload() -> dict[str, Any]:
     """Build structured payload for caption-only fallback breadcrumb logging."""
     return build_event_with_detail_payload(
         "fallback",
@@ -820,7 +822,7 @@ def build_caption_only_fallback_log_payload() -> Dict[str, Any]:
     )
 
 
-def build_caption_only_fallback_detail() -> Dict[str, Any]:
+def build_caption_only_fallback_detail() -> dict[str, Any]:
     """Build detail object for caption-only fallback breadcrumb payloads."""
     return {"kind": "caption_only"}
 
@@ -828,8 +830,8 @@ def build_caption_only_fallback_detail() -> Dict[str, Any]:
 def build_x_video_stt_error_result_payload(
     *,
     url: str,
-    stt_error: Optional[str],
-) -> Dict[str, Any]:
+    stt_error: str | None,
+) -> dict[str, Any]:
     """Build the canonical STT error payload for video tweet formatting."""
     return {
         "transcription": None,
@@ -839,16 +841,16 @@ def build_x_video_stt_error_result_payload(
     }
 
 
-def normalize_stt_error_value(stt_error: Optional[str]) -> str:
+def normalize_stt_error_value(stt_error: str | None) -> str:
     """Normalize STT error token to canonical fallback value."""
     return stt_error or "transcription_failed"
 
 
 def resolve_caption_only_base_text(
     *,
-    api_text: Optional[str],
-    tweet_text: Optional[str],
-    base_text: Optional[str],
+    api_text: str | None,
+    tweet_text: str | None,
+    base_text: str | None,
 ) -> str:
     """Resolve caption-only base text using legacy precedence and strip semantics."""
     return normalize_base_text_value(api_text or tweet_text or base_text or "")
@@ -856,14 +858,14 @@ def resolve_caption_only_base_text(
 
 def resolve_video_stt_error_base_text(
     *,
-    tweet_text: Optional[str],
-    base_text: Optional[str],
+    tweet_text: str | None,
+    base_text: str | None,
 ) -> str:
     """Resolve video STT-error base text using legacy precedence and strip semantics."""
     return normalize_base_text_value(tweet_text or base_text or "")
 
 
-def normalize_base_text_value(value: Optional[str]) -> str:
+def normalize_base_text_value(value: str | None) -> str:
     """Normalize base text value using router strip semantics."""
     return (value or "").strip()
 
@@ -872,13 +874,10 @@ def syndication_article_has_blocks(article_node: Any) -> bool:
     """Check whether a syndication article payload contains at least one non-empty block."""
     if not isinstance(article_node, dict):
         return False
-    for block in iter_article_blocks(article_node):
-        if has_non_empty_block_text(block):
-            return True
-    return False
+    return any(has_non_empty_block_text(block) for block in iter_article_blocks(article_node))
 
 
-def has_non_empty_block_text(block: Dict[str, Any]) -> bool:
+def has_non_empty_block_text(block: dict[str, Any]) -> bool:
     """Return True when article/content block has non-empty text payload."""
     return bool(str(block.get("text") or "").strip())
 
@@ -892,15 +891,15 @@ def extract_x_article_text(article_node: Any) -> str:
     return truncate_x_article_text(merged)
 
 
-def build_article_text_parts(article_node: Dict[str, Any]) -> List[str]:
+def build_article_text_parts(article_node: dict[str, Any]) -> list[str]:
     """Build de-duplicated article text parts from title/preview/blocks."""
-    parts: List[str] = []
+    parts: list[str] = []
     append_article_header_parts(parts, article_node)
     append_unique_article_block_texts(parts, article_node)
     return parts
 
 
-def append_article_header_parts(parts: List[str], article_node: Dict[str, Any]) -> None:
+def append_article_header_parts(parts: list[str], article_node: dict[str, Any]) -> None:
     """Append title/preview text parts when present."""
     title = normalized_article_header_text(article_node, "title")
     preview = normalized_article_header_text(article_node, "preview_text")
@@ -910,18 +909,18 @@ def append_article_header_parts(parts: List[str], article_node: Dict[str, Any]) 
         parts.append(preview)
 
 
-def normalized_article_header_text(article_node: Dict[str, Any], key: str) -> str:
+def normalized_article_header_text(article_node: dict[str, Any], key: str) -> str:
     """Normalize article header text field by key using unescape+strip."""
     return unescape(str(article_node.get(key) or "").strip())
 
 
-def append_unique_article_block_texts(parts: List[str], article_node: Dict[str, Any]) -> None:
+def append_unique_article_block_texts(parts: list[str], article_node: dict[str, Any]) -> None:
     """Append unique normalized block texts to article text parts."""
     for text in iter_article_block_texts(article_node):
         append_unique_article_text_part(parts, text)
 
 
-def iter_article_block_texts(article_node: Dict[str, Any]) -> Iterable[str]:
+def iter_article_block_texts(article_node: dict[str, Any]) -> Iterable[str]:
     """Iterate normalized non-empty article block text values."""
     for block in iter_article_blocks(article_node):
         btxt = normalize_article_block_text(block)
@@ -929,32 +928,32 @@ def iter_article_block_texts(article_node: Dict[str, Any]) -> Iterable[str]:
             yield btxt
 
 
-def append_unique_article_text_part(parts: List[str], text: str) -> None:
+def append_unique_article_text_part(parts: list[str], text: str) -> None:
     """Append article text part only when not already present."""
     if text not in parts:
         parts.append(text)
 
 
-def join_article_text_parts(parts: List[str]) -> str:
+def join_article_text_parts(parts: list[str]) -> str:
     """Join article text parts with blank-line separators."""
     return "\n\n".join(parts).strip()
 
 
-def iter_article_blocks(article_node: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
+def iter_article_blocks(article_node: dict[str, Any]) -> Iterable[dict[str, Any]]:
     """Iterate dict-shaped article blocks from article content payload."""
     for block in extract_article_blocks(article_node):
         if isinstance(block, dict):
             yield block
 
 
-def extract_article_blocks(article_node: Dict[str, Any]) -> List[Any]:
+def extract_article_blocks(article_node: dict[str, Any]) -> list[Any]:
     """Extract raw blocks list from article content; fallback to empty list."""
     content = extract_article_content(article_node)
     blocks = content.get("blocks")
     return blocks if isinstance(blocks, list) else []
 
 
-def extract_article_content(article_node: Dict[str, Any]) -> Dict[str, Any]:
+def extract_article_content(article_node: dict[str, Any]) -> dict[str, Any]:
     """Extract article content node as dict; fallback to empty dict."""
     content = article_node.get("content") or {}
     return content if isinstance(content, dict) else {}
@@ -967,16 +966,16 @@ def truncate_x_article_text(text: str, *, max_chars: int = 12000) -> str:
     return text
 
 
-def normalize_article_block_text(block: Dict[str, Any]) -> str:
+def normalize_article_block_text(block: dict[str, Any]) -> str:
     """Normalize article content-block text by unescaping and stripping."""
     return unescape(str(block.get("text") or "")).strip()
 
 
 def syndication_needs_article_hydration(
-    syn: Dict[str, Any],
+    syn: dict[str, Any],
     *,
     allow_tco_pointer: bool = False,
-    article_has_blocks: Optional[Callable[[Any], bool]] = None,
+    article_has_blocks: Callable[[Any], bool] | None = None,
 ) -> bool:
     """Check whether a syndication payload should trigger X article hydration."""
     if not isinstance(syn, dict) or not syn:
@@ -999,17 +998,17 @@ def syndication_needs_article_hydration(
     return False
 
 
-def resolve_syndication_pointer_text(syn: Dict[str, Any]) -> str:
+def resolve_syndication_pointer_text(syn: dict[str, Any]) -> str:
     """Resolve pointer-probe text from syndication precedence (text/full_text/legacy.full_text)."""
     return str(syn.get("text") or "").strip() or str(syn.get("full_text") or "").strip() or str((syn.get("legacy") or {}).get("full_text") or "").strip()
 
 
-def article_has_metadata_hints(article: Dict[str, Any]) -> bool:
+def article_has_metadata_hints(article: dict[str, Any]) -> bool:
     """Return True when article payload contains identifying metadata fields."""
     return any(str(article.get(key) or "").strip() for key in ("id", "rest_id", "title", "preview_text"))
 
 
-def has_news_action_type(syn: Dict[str, Any]) -> bool:
+def has_news_action_type(syn: dict[str, Any]) -> bool:
     """Return True when syndication payload includes a non-empty news action type."""
     return bool(str(syn.get("news_action_type") or "").strip())
 
@@ -1028,7 +1027,7 @@ def extract_syndication_base_text(node: Any) -> str:
     return (base_text or "").strip()
 
 
-def extract_note_tweet_text(note: Any) -> Optional[str]:
+def extract_note_tweet_text(note: Any) -> str | None:
     """Extract text field from note_tweet payload when it is a dict."""
     return note.get("text") if isinstance(note, dict) else None
 
@@ -1071,7 +1070,7 @@ def base_text_contains_tco_link(base_text: str) -> bool:
 def extract_syndication_text(
     node: Any,
     *,
-    extract_article_text: Optional[Callable[[Any], str]] = None,
+    extract_article_text: Callable[[Any], str] | None = None,
 ) -> str:
     """Extract tweet body text from syndication payloads, including X article text."""
     if not isinstance(node, dict):
@@ -1090,7 +1089,7 @@ def extract_syndication_text(
 
 def extract_syndication_article_text(
     *,
-    node: Dict[str, Any],
+    node: dict[str, Any],
     article_extractor: Callable[[Any], str],
 ) -> str:
     """Extract hydrated article text from syndication payload; fail open on extractor errors."""
@@ -1100,7 +1099,7 @@ def extract_syndication_article_text(
         return ""
 
 
-def build_x_text_miss_log_payload(url: str) -> Dict[str, Any]:
+def build_x_text_miss_log_payload(url: str) -> dict[str, Any]:
     """Build structured breadcrumb payload when syndication text is empty."""
     return build_x_text_miss_payload(
         primary=extract_primary_tweet_id(url) or "",
@@ -1114,7 +1113,7 @@ def build_x_text_miss_payload(
     primary: str,
     layer: str,
     reason: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build structured breadcrumb payload for X text-miss events."""
     return build_event_with_detail_payload(
         "x.text.miss",
@@ -1131,14 +1130,14 @@ def build_syndication_non_200_log_payload(
     tweet_id: str,
     status: int,
     endpoint: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build structured payload for syndication non-200 breadcrumb logging."""
     return build_detail_payload(
         {
             "tweet_id": tweet_id,
             "status": status,
             "endpoint": endpoint,
-        }
+        },
     )
 
 
@@ -1146,7 +1145,7 @@ def build_syndication_non_200_metric_payload(
     *,
     status: int,
     endpoint: str,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Build metrics payload for syndication non-200 counters."""
     return {
         "status": str(status),
@@ -1158,13 +1157,13 @@ def build_syndication_fetch_failed_payload(
     *,
     tweet_id: str,
     error: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build structured payload for syndication fetch-failure breadcrumbs."""
     return build_detail_payload(
         {
             "tweet_id": tweet_id,
             "error": error,
-        }
+        },
     )
 
 
@@ -1172,7 +1171,7 @@ def build_x_text_canon_payload(
     *,
     url: str,
     primary: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build structured payload for X canonical-text breadcrumbs."""
     return build_event_with_detail_payload(
         "x.text.canon",
@@ -1188,7 +1187,7 @@ def build_x_text_resolve_payload(
     primary: str,
     source: str,
     chars: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build structured payload for X text-resolution breadcrumbs."""
     return build_event_with_detail_payload(
         "x.text.resolve",
@@ -1200,7 +1199,7 @@ def build_x_text_resolve_payload(
     )
 
 
-def build_event_with_detail_payload(event: str, detail: Dict[str, Any]) -> Dict[str, Any]:
+def build_event_with_detail_payload(event: str, detail: dict[str, Any]) -> dict[str, Any]:
     """Build payload with canonical event/detail shape."""
     return {
         "event": event,
@@ -1208,7 +1207,7 @@ def build_event_with_detail_payload(event: str, detail: Dict[str, Any]) -> Dict[
     }
 
 
-def build_detail_payload(detail: Dict[str, Any]) -> Dict[str, Any]:
+def build_detail_payload(detail: dict[str, Any]) -> dict[str, Any]:
     """Build payload containing only a detail object."""
     return {"detail": detail}
 
@@ -1226,7 +1225,7 @@ def build_oembed_text_payload(
     obj: Any,
     *,
     html_to_text: Callable[[Any], str] = extract_oembed_html_text,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Build syndication-like payload from oEmbed response object."""
     if not isinstance(obj, dict):
         return None
@@ -1245,8 +1244,8 @@ def build_oembed_text_payload(
 def extract_oembed_payload_from_response(
     response: Any,
     *,
-    build_payload: Callable[[Any], Optional[Dict[str, Any]]] = build_oembed_text_payload,
-) -> Optional[Dict[str, Any]]:
+    build_payload: Callable[[Any], dict[str, Any] | None] = build_oembed_text_payload,
+) -> dict[str, Any] | None:
     """Extract oEmbed text payload from an HTTP response-like object."""
     if response.status_code != 200:
         return None
@@ -1415,12 +1414,12 @@ def build_syndication_lang() -> str:
     return "en"
 
 
-def build_syndication_fetch_headers() -> Dict[str, str]:
+def build_syndication_fetch_headers() -> dict[str, str]:
     """Return canonical headers for CDN syndication fetches."""
     return build_syndication_fetch_headers_base()
 
 
-def build_syndication_fetch_headers_base() -> Dict[str, str]:
+def build_syndication_fetch_headers_base() -> dict[str, str]:
     """Return canonical base headers map for CDN syndication fetches."""
     return build_syndication_fetch_header_map(
         keys=build_syndication_fetch_header_keys(),
@@ -1430,17 +1429,17 @@ def build_syndication_fetch_headers_base() -> Dict[str, str]:
 
 def build_syndication_fetch_header_map(
     *,
-    keys: Tuple[str, str, str, str],
-    values: Tuple[str, str, str, str],
-) -> Dict[str, str]:
+    keys: tuple[str, str, str, str],
+    values: tuple[str, str, str, str],
+) -> dict[str, str]:
     """Build syndication header map from ordered keys and values tuples."""
     return build_ordered_header_map(keys, values)
 
 
 def build_ordered_header_map(
-    keys: Tuple[str, str, str, str],
-    values: Tuple[str, str, str, str],
-) -> Dict[str, str]:
+    keys: tuple[str, str, str, str],
+    values: tuple[str, str, str, str],
+) -> dict[str, str]:
     """Build ordered header map from aligned key/value tuples."""
     user_agent_key, accept_key, accept_language_key, referer_key = keys
     user_agent, accept, accept_language, referer = values
@@ -1452,12 +1451,12 @@ def build_ordered_header_map(
     }
 
 
-def build_syndication_fetch_header_keys() -> Tuple[str, str, str, str]:
+def build_syndication_fetch_header_keys() -> tuple[str, str, str, str]:
     """Return canonical header key tuple for syndication CDN fetches."""
     return ("User-Agent", "Accept", "Accept-Language", "Referer")
 
 
-def build_syndication_fetch_header_values() -> Tuple[str, str, str, str]:
+def build_syndication_fetch_header_values() -> tuple[str, str, str, str]:
     """Return canonical header value tuple for syndication CDN fetches."""
     return (
         build_syndication_fetch_user_agent(),
@@ -1471,16 +1470,16 @@ def build_syndication_fetch_params(
     tweet_id: str,
     *,
     include_dnt: bool = False,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Return canonical syndication fetch params for a tweet id."""
     params = build_syndication_fetch_params_core(tweet_id)
     return build_syndication_fetch_params_with_optional_dnt(params, include_dnt)
 
 
 def build_syndication_fetch_params_with_optional_dnt(
-    params: Dict[str, str],
+    params: dict[str, str],
     include_dnt: bool,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Return params map with optional DNT flag mutation applied."""
     return maybe_add_syndication_dnt_param(
         params=copy_syndication_params(params),
@@ -1488,23 +1487,23 @@ def build_syndication_fetch_params_with_optional_dnt(
     )
 
 
-def copy_syndication_params(params: Dict[str, str]) -> Dict[str, str]:
+def copy_syndication_params(params: dict[str, str]) -> dict[str, str]:
     """Return a shallow copy of syndication params map."""
     return dict(params)
 
 
 def maybe_add_syndication_dnt_param(
     *,
-    params: Dict[str, str],
+    params: dict[str, str],
     include_dnt: bool,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Mutate params with DNT entry when include_dnt is enabled."""
     if include_dnt:
         return with_syndication_dnt_param(params)
     return params
 
 
-def with_syndication_dnt_param(params: Dict[str, str]) -> Dict[str, str]:
+def with_syndication_dnt_param(params: dict[str, str]) -> dict[str, str]:
     """Return params map with canonical DNT key/value set."""
     params[build_syndication_dnt_key()] = build_syndication_dnt_value()
     return params
@@ -1525,7 +1524,7 @@ def build_syndication_lang_key() -> str:
     return "lang"
 
 
-def build_syndication_fetch_params_core(tweet_id: str) -> Dict[str, str]:
+def build_syndication_fetch_params_core(tweet_id: str) -> dict[str, str]:
     """Return core syndication fetch params for a tweet id (without DNT)."""
     return build_syndication_fetch_params_core_map(
         tweet_id,
@@ -1538,7 +1537,7 @@ def build_syndication_fetch_params_default_lang() -> str:
     return build_syndication_lang()
 
 
-def build_syndication_fetch_params_core_map(tweet_id: str, lang: str) -> Dict[str, str]:
+def build_syndication_fetch_params_core_map(tweet_id: str, lang: str) -> dict[str, str]:
     """Return core syndication fetch params map for explicit tweet id/lang values."""
     return {
         build_syndication_id_key(): tweet_id,
@@ -1548,14 +1547,14 @@ def build_syndication_fetch_params_core_map(tweet_id: str, lang: str) -> Dict[st
 
 def build_syndication_fetch_params_variants(
     tweet_id: str,
-) -> List[Tuple[str, Dict[str, str]]]:
+) -> list[tuple[str, dict[str, str]]]:
     """Return endpoint+params variants for CDN syndication fetch attempts."""
     return build_syndication_fetch_params_variants_list(tweet_id)
 
 
 def build_syndication_fetch_params_variants_list(
     tweet_id: str,
-) -> List[Tuple[str, Dict[str, str]]]:
+) -> list[tuple[str, dict[str, str]]]:
     """Return canonical ordered list of syndication fetch param variants."""
     return build_syndication_fetch_params_variant_list(
         build_syndication_fetch_params_variant_entries(tweet_id),
@@ -1564,7 +1563,7 @@ def build_syndication_fetch_params_variants_list(
 
 def build_syndication_fetch_params_variant_entries(
     tweet_id: str,
-) -> Tuple[Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]], Tuple[str, Dict[str, str]]]:
+) -> tuple[tuple[str, dict[str, str]], tuple[str, dict[str, str]], tuple[str, dict[str, str]]]:
     """Return canonical syndication fetch variant tuple entries."""
     return (
         build_syndication_widgets_params_variant(tweet_id),
@@ -1574,8 +1573,8 @@ def build_syndication_fetch_params_variant_entries(
 
 
 def build_syndication_fetch_params_variant_list(
-    entries: Tuple[Tuple[str, Dict[str, str]], ...],
-) -> List[Tuple[str, Dict[str, str]]]:
+    entries: tuple[tuple[str, dict[str, str]], ...],
+) -> list[tuple[str, dict[str, str]]]:
     """Return list materialization for syndication fetch variant entries."""
     return list(entries)
 
@@ -1584,7 +1583,7 @@ def build_syndication_widgets_params_variant(
     tweet_id: str,
     *,
     include_dnt: bool = False,
-) -> Tuple[str, Dict[str, str]]:
+) -> tuple[str, dict[str, str]]:
     """Return widgets endpoint params variant, optionally with DNT flag."""
     return (
         build_syndication_widgets_endpoint(),
@@ -1594,14 +1593,14 @@ def build_syndication_widgets_params_variant(
 
 def build_syndication_widgets_params_variant_with_dnt(
     tweet_id: str,
-) -> Tuple[str, Dict[str, str]]:
+) -> tuple[str, dict[str, str]]:
     """Return widgets endpoint params variant with DNT flag enabled."""
     return build_syndication_widgets_params_variant(tweet_id, include_dnt=True)
 
 
 def build_syndication_tweet_result_params_variant(
     tweet_id: str,
-) -> Tuple[str, Dict[str, str]]:
+) -> tuple[str, dict[str, str]]:
     """Return tweet-result endpoint params variant."""
     return (
         build_syndication_tweet_result_endpoint(),
@@ -1613,13 +1612,13 @@ def build_syndication_oembed_params(
     tweet_id: str,
     *,
     use_x_host: bool = False,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Build oEmbed request params for syndication fallback lookups."""
     host = build_syndication_oembed_host_for_flag(use_x_host)
     return build_syndication_oembed_params_bundle(host, tweet_id)
 
 
-def build_syndication_oembed_params_bundle(host: str, tweet_id: str) -> Dict[str, str]:
+def build_syndication_oembed_params_bundle(host: str, tweet_id: str) -> dict[str, str]:
     """Return merged core+options oEmbed params for a resolved host."""
     core, options = build_syndication_oembed_params_components(host, tweet_id)
     return build_syndication_oembed_params_map(core, options)
@@ -1628,7 +1627,7 @@ def build_syndication_oembed_params_bundle(host: str, tweet_id: str) -> Dict[str
 def build_syndication_oembed_params_components(
     host: str,
     tweet_id: str,
-) -> Tuple[Dict[str, str], Dict[str, str]]:
+) -> tuple[dict[str, str], dict[str, str]]:
     """Return core/options component maps for oEmbed params assembly."""
     return (
         build_syndication_oembed_params_core(host, tweet_id),
@@ -1637,22 +1636,22 @@ def build_syndication_oembed_params_components(
 
 
 def build_syndication_oembed_params_map(
-    core: Dict[str, str],
-    options: Dict[str, str],
-) -> Dict[str, str]:
+    core: dict[str, str],
+    options: dict[str, str],
+) -> dict[str, str]:
     """Return merged oEmbed params map from core and options maps."""
     return merge_syndication_param_maps(core, options)
 
 
 def merge_syndication_param_maps(
-    core: Dict[str, str],
-    options: Dict[str, str],
-) -> Dict[str, str]:
+    core: dict[str, str],
+    options: dict[str, str],
+) -> dict[str, str]:
     """Merge syndication parameter maps preserving options override semantics."""
     return {**core, **options}
 
 
-def build_syndication_oembed_params_core(host: str, tweet_id: str) -> Dict[str, str]:
+def build_syndication_oembed_params_core(host: str, tweet_id: str) -> dict[str, str]:
     """Return core oEmbed params (url + lang) for a resolved host."""
     return build_syndication_oembed_params_core_map(
         host,
@@ -1665,7 +1664,7 @@ def build_syndication_oembed_params_core_map(
     host: str,
     tweet_id: str,
     lang: str,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Return core oEmbed params map for explicit host/tweet/lang values."""
     return build_syndication_oembed_params_core_from_pairs(
         build_syndication_oembed_params_core_keys(),
@@ -1673,7 +1672,7 @@ def build_syndication_oembed_params_core_map(
     )
 
 
-def build_syndication_oembed_params_core_keys() -> Tuple[str, str]:
+def build_syndication_oembed_params_core_keys() -> tuple[str, str]:
     """Return stable key tuple for core oEmbed params."""
     return (build_syndication_oembed_url_key(), build_syndication_lang_key())
 
@@ -1682,15 +1681,15 @@ def build_syndication_oembed_params_core_values(
     host: str,
     tweet_id: str,
     lang: str,
-) -> Tuple[str, str]:
+) -> tuple[str, str]:
     """Return stable value tuple for core oEmbed params."""
     return (build_syndication_oembed_status_url(host, tweet_id), lang)
 
 
 def build_syndication_oembed_params_core_from_pairs(
-    keys: Tuple[str, str],
-    values: Tuple[str, str],
-) -> Dict[str, str]:
+    keys: tuple[str, str],
+    values: tuple[str, str],
+) -> dict[str, str]:
     """Return core oEmbed params map from aligned key/value tuples."""
     url_key, lang_key = keys
     url_value, lang_value = values
@@ -1731,12 +1730,12 @@ def build_syndication_status_path() -> str:
     return "i/status"
 
 
-def build_syndication_oembed_hosts() -> Tuple[str, str]:
+def build_syndication_oembed_hosts() -> tuple[str, str]:
     """Return ordered oEmbed host fallbacks for tweet lookups."""
     return build_syndication_oembed_hosts_tuple()
 
 
-def build_syndication_oembed_hosts_tuple() -> Tuple[str, str]:
+def build_syndication_oembed_hosts_tuple() -> tuple[str, str]:
     """Return canonical ordered host tuple for oEmbed fallback attempts."""
     return (build_syndication_twitter_host(), build_syndication_x_host())
 
@@ -1751,12 +1750,12 @@ def build_syndication_x_host() -> str:
     return "x.com"
 
 
-def build_syndication_oembed_options() -> Dict[str, str]:
+def build_syndication_oembed_options() -> dict[str, str]:
     """Return canonical oEmbed flags for privacy/script/thread behavior."""
     return build_syndication_oembed_options_map()
 
 
-def build_syndication_oembed_options_map() -> Dict[str, str]:
+def build_syndication_oembed_options_map() -> dict[str, str]:
     """Return canonical oEmbed option key/value map."""
     return build_syndication_oembed_options_map_from_pairs(
         build_syndication_oembed_option_keys(),
@@ -1765,9 +1764,9 @@ def build_syndication_oembed_options_map() -> Dict[str, str]:
 
 
 def build_syndication_oembed_options_map_from_pairs(
-    keys: Tuple[str, str, str],
-    values: Tuple[str, str, str],
-) -> Dict[str, str]:
+    keys: tuple[str, str, str],
+    values: tuple[str, str, str],
+) -> dict[str, str]:
     """Return oEmbed options map from aligned key/value tuples."""
     return build_syndication_oembed_options_map_from_entries(
         build_syndication_oembed_option_entries(keys, values),
@@ -1775,9 +1774,9 @@ def build_syndication_oembed_options_map_from_pairs(
 
 
 def build_syndication_oembed_option_entries(
-    keys: Tuple[str, str, str],
-    values: Tuple[str, str, str],
-) -> Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]]:
+    keys: tuple[str, str, str],
+    values: tuple[str, str, str],
+) -> tuple[tuple[str, str], tuple[str, str], tuple[str, str]]:
     """Return aligned option key/value entry tuples."""
     dnt_key, omit_script_key, hide_thread_key = keys
     dnt_value, omit_script_value, hide_thread_value = values
@@ -1789,13 +1788,13 @@ def build_syndication_oembed_option_entries(
 
 
 def build_syndication_oembed_options_map_from_entries(
-    entries: Tuple[Tuple[str, str], ...],
-) -> Dict[str, str]:
+    entries: tuple[tuple[str, str], ...],
+) -> dict[str, str]:
     """Return oEmbed options map from key/value entries."""
     return dict(entries)
 
 
-def build_syndication_oembed_option_keys() -> Tuple[str, str, str]:
+def build_syndication_oembed_option_keys() -> tuple[str, str, str]:
     """Return canonical oEmbed option keys in stable order."""
     return (
         build_syndication_oembed_dnt_key(),
@@ -1804,7 +1803,7 @@ def build_syndication_oembed_option_keys() -> Tuple[str, str, str]:
     )
 
 
-def build_syndication_oembed_option_values() -> Tuple[str, str, str]:
+def build_syndication_oembed_option_values() -> tuple[str, str, str]:
     """Return canonical oEmbed option values in stable key order."""
     return (
         build_syndication_dnt_value(),
@@ -1880,16 +1879,16 @@ def build_syndication_oembed_x_metric_endpoint() -> str:
 
 def build_syndication_oembed_fallback_params(
     tweet_id: str,
-) -> List[Tuple[str, Dict[str, str]]]:
+) -> list[tuple[str, dict[str, str]]]:
     """Return ordered oEmbed fallback variants and their metric endpoint labels."""
     return build_syndication_oembed_fallback_items_list(tweet_id)
 
 
 def build_syndication_oembed_fallback_items_list(
     tweet_id: str,
-) -> List[Tuple[str, Dict[str, str]]]:
+) -> list[tuple[str, dict[str, str]]]:
     """Return ordered list of oEmbed fallback items for a tweet id."""
-    items: List[Tuple[str, Dict[str, str]]] = []
+    items: list[tuple[str, dict[str, str]]] = []
     for host in iter_syndication_oembed_fallback_hosts():
         append_syndication_oembed_fallback_item(items, host, tweet_id)
     return items
@@ -1901,7 +1900,7 @@ def iter_syndication_oembed_fallback_hosts() -> Iterable[str]:
 
 
 def append_syndication_oembed_fallback_item(
-    items: List[Tuple[str, Dict[str, str]]],
+    items: list[tuple[str, dict[str, str]]],
     host: str,
     tweet_id: str,
 ) -> None:
@@ -1912,7 +1911,7 @@ def append_syndication_oembed_fallback_item(
 def build_syndication_oembed_fallback_item(
     host: str,
     tweet_id: str,
-) -> Tuple[str, Dict[str, str]]:
+) -> tuple[str, dict[str, str]]:
     """Return one oEmbed fallback item (metric endpoint + params) for a host."""
     endpoint = build_syndication_oembed_metric_endpoint(host)
     return (
@@ -1926,14 +1925,14 @@ def build_syndication_oembed_fallback_item(
 
 def build_syndication_oembed_fallback_plan(
     tweet_id: str,
-) -> Tuple[str, List[Tuple[str, Dict[str, str]]]]:
+) -> tuple[str, list[tuple[str, dict[str, str]]]]:
     """Return oEmbed fallback URL and ordered variant params."""
     return build_syndication_oembed_fallback_plan_components(tweet_id)
 
 
 def build_syndication_oembed_fallback_plan_components(
     tweet_id: str,
-) -> Tuple[str, List[Tuple[str, Dict[str, str]]]]:
+) -> tuple[str, list[tuple[str, dict[str, str]]]]:
     """Build canonical oEmbed fallback plan components from tweet id."""
     return build_syndication_oembed_fallback_plan_tuple(
         build_syndication_oembed_url(),
@@ -1943,22 +1942,22 @@ def build_syndication_oembed_fallback_plan_components(
 
 def build_syndication_oembed_fallback_plan_tuple(
     url: str,
-    variants: List[Tuple[str, Dict[str, str]]],
-) -> Tuple[str, List[Tuple[str, Dict[str, str]]]]:
+    variants: list[tuple[str, dict[str, str]]],
+) -> tuple[str, list[tuple[str, dict[str, str]]]]:
     """Return canonical oEmbed fallback plan tuple (url, variants)."""
     return url, variants
 
 
 def build_syndication_fetch_plan(
     tweet_id: str,
-) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
+) -> tuple[str, dict[str, str], list[tuple[str, dict[str, str]]]]:
     """Build base URL, headers, and endpoint param variants for syndication fetch."""
     return build_syndication_fetch_plan_components(tweet_id)
 
 
 def build_syndication_fetch_plan_components(
     tweet_id: str,
-) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
+) -> tuple[str, dict[str, str], list[tuple[str, dict[str, str]]]]:
     """Build canonical fetch plan components from tweet id."""
     base, headers, params_variants = build_syndication_fetch_plan_values(tweet_id)
     return build_syndication_fetch_plan_tuple(base, headers, params_variants)
@@ -1966,7 +1965,7 @@ def build_syndication_fetch_plan_components(
 
 def build_syndication_fetch_plan_values(
     tweet_id: str,
-) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
+) -> tuple[str, dict[str, str], list[tuple[str, dict[str, str]]]]:
     """Return canonical fetch plan values tuple (base, headers, variants)."""
     base = resolve_syndication_fetch_plan_base_url()
     headers = resolve_syndication_fetch_plan_headers()
@@ -1979,28 +1978,28 @@ def resolve_syndication_fetch_plan_base_url() -> str:
     return build_syndication_base_url()
 
 
-def resolve_syndication_fetch_plan_headers() -> Dict[str, str]:
+def resolve_syndication_fetch_plan_headers() -> dict[str, str]:
     """Resolve header map used by syndication fetch plan values."""
     return build_syndication_fetch_headers()
 
 
 def resolve_syndication_fetch_plan_params_variants(
     tweet_id: str,
-) -> List[Tuple[str, Dict[str, str]]]:
+) -> list[tuple[str, dict[str, str]]]:
     """Resolve endpoint/params variants used by syndication fetch plan values."""
     return build_syndication_fetch_params_variants(tweet_id)
 
 
 def build_syndication_fetch_plan_tuple(
     base: str,
-    headers: Dict[str, str],
-    params_variants: List[Tuple[str, Dict[str, str]]],
-) -> Tuple[str, Dict[str, str], List[Tuple[str, Dict[str, str]]]]:
+    headers: dict[str, str],
+    params_variants: list[tuple[str, dict[str, str]]],
+) -> tuple[str, dict[str, str], list[tuple[str, dict[str, str]]]]:
     """Return canonical (base, headers, variants) fetch plan tuple."""
     return base, headers, params_variants
 
 
-def build_syndication_fetch_metric_payload(endpoint: str) -> Dict[str, str]:
+def build_syndication_fetch_metric_payload(endpoint: str) -> dict[str, str]:
     """Build metric labels payload for syndication fetch endpoints."""
     return build_syndication_metric_payload_map(
         build_syndication_metric_endpoint_key(),
@@ -2008,7 +2007,7 @@ def build_syndication_fetch_metric_payload(endpoint: str) -> Dict[str, str]:
     )
 
 
-def build_syndication_metric_payload_map(key: str, value: str) -> Dict[str, str]:
+def build_syndication_metric_payload_map(key: str, value: str) -> dict[str, str]:
     """Build metric payload map from explicit key/value inputs."""
     return {key: value}
 
@@ -2086,7 +2085,7 @@ def classify_syndication_cache_hit(
     now_s: float,
     default_ttl_s: float,
     cached: Any,
-) -> Optional[str]:
+) -> str | None:
     """Classify cache hit kind as `neg`, `data`, or None when stale."""
     if not syndication_cache_is_fresh(now_s, default_ttl_s, cached):
         return None
@@ -2098,7 +2097,7 @@ def build_syndication_cache_hit_label(cached: Any) -> str:
     return syndication_cache_hit_label_for_negative_flag(syndication_cache_has_negative_flag(cached))
 
 
-def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
+def build_syndication_negative_cache_entry(now_s: float) -> dict[str, Any]:
     """Build negative syndication cache entry with timestamp."""
     return build_syndication_cache_entry_from_fields(
         build_syndication_negative_cache_flag_field(),
@@ -2106,7 +2105,7 @@ def build_syndication_negative_cache_entry(now_s: float) -> Dict[str, Any]:
     )
 
 
-def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
+def build_syndication_cache_entry(data: Any, now_s: float) -> dict[str, Any]:
     """Build positive syndication cache entry with timestamp."""
     return build_syndication_cache_entry_from_fields(
         build_syndication_cache_data_field(data),
@@ -2115,26 +2114,26 @@ def build_syndication_cache_entry(data: Any, now_s: float) -> Dict[str, Any]:
 
 
 def build_syndication_cache_entry_from_fields(
-    *fields: Dict[str, Any],
-) -> Dict[str, Any]:
+    *fields: dict[str, Any],
+) -> dict[str, Any]:
     """Build cache entry map by merging ordered field fragments."""
-    entry: Dict[str, Any] = {}
+    entry: dict[str, Any] = {}
     for field in fields:
         entry.update(field)
     return entry
 
 
-def build_syndication_cache_timestamp_field(now_s: float) -> Dict[str, float]:
+def build_syndication_cache_timestamp_field(now_s: float) -> dict[str, float]:
     """Build canonical cache timestamp field map."""
     return {build_syndication_cache_ts_key(): now_s}
 
 
-def build_syndication_negative_cache_flag_field() -> Dict[str, bool]:
+def build_syndication_negative_cache_flag_field() -> dict[str, bool]:
     """Build canonical negative-cache flag field map."""
     return {build_syndication_negative_cache_key(): True}
 
 
-def build_syndication_cache_data_field(data: Any) -> Dict[str, Any]:
+def build_syndication_cache_data_field(data: Any) -> dict[str, Any]:
     """Build canonical positive-cache data field map."""
     return {build_syndication_cache_data_key(): data}
 
@@ -2207,7 +2206,7 @@ def syndication_has_usable_payload(
 
 
 def syndication_node_has_media_hints(
-    node: Dict[str, Any],
+    node: dict[str, Any],
     media_hint_keys: Iterable[str],
 ) -> bool:
     """Return True when a syndication payload contains any media-hint key."""
@@ -2220,19 +2219,19 @@ def syndication_payload_is_mapping(node: Any) -> bool:
 
 
 def syndication_payload_has_text(
-    node: Dict[str, Any],
+    node: dict[str, Any],
     extract_text: Callable[[Any], str],
 ) -> bool:
     """Return True when extracted syndication text is non-empty."""
     return bool(extract_text(node))
 
 
-def has_any_mapping_key(node: Dict[str, Any], keys: Iterable[str]) -> bool:
+def has_any_mapping_key(node: dict[str, Any], keys: Iterable[str]) -> bool:
     """Return True when any key from iterable exists in a mapping."""
     return any(k in node for k in keys)
 
 
-def syndication_media_hint_keys() -> Tuple[str, ...]:
+def syndication_media_hint_keys() -> tuple[str, ...]:
     """Canonical syndication media-hint keys used in payload usability checks."""
     return (
         "media",
@@ -2340,7 +2339,7 @@ def format_syndication_header_parts(
     user: Any,
     created_at: Any,
     photos: Any,
-) -> Tuple[str, str, str]:
+) -> tuple[str, str, str]:
     """Resolve header prefix/stamp/media fragments before composing final line."""
     username = format_syndication_header_username(user)
     return (
@@ -2376,32 +2375,32 @@ def format_syndication_error_payload_max_chars() -> int:
     return 4000
 
 
-def extract_syndication_photo_urls(photos: Any) -> List[str]:
+def extract_syndication_photo_urls(photos: Any) -> list[str]:
     """Extract photo URLs from syndication `photos` payload."""
     return collect_syndication_photo_urls(photos)
 
 
-def collect_syndication_photo_urls(photos: Any) -> List[str]:
+def collect_syndication_photo_urls(photos: Any) -> list[str]:
     """Collect normalized syndication photo URLs from iterable payload items."""
-    urls: List[str] = []
+    urls: list[str] = []
     for photo in photos:
         append_syndication_photo_item_urls(urls=urls, photo=photo)
     return urls
 
 
-def append_syndication_photo_item_urls(*, urls: List[str], photo: Any) -> None:
+def append_syndication_photo_item_urls(*, urls: list[str], photo: Any) -> None:
     """Append URLs extracted from one syndication photo payload item."""
     item_urls = extract_syndication_photo_urls_from_item(photo)
     if item_urls:
         urls.extend(item_urls)
 
 
-def extract_syndication_photo_url_from_dict(photo: Dict[str, Any]) -> Any:
+def extract_syndication_photo_url_from_dict(photo: dict[str, Any]) -> Any:
     """Resolve canonical image URL from a syndication photo dict payload."""
     return photo.get("url") or photo.get("media_url_https") or photo.get("media_url")
 
 
-def extract_syndication_photo_urls_from_item(photo: Any) -> List[str]:
+def extract_syndication_photo_urls_from_item(photo: Any) -> list[str]:
     """Extract zero-or-more syndication photo URLs from one payload item."""
     if syndication_photo_item_is_mapping(photo):
         return syndication_photo_url_list_from_mapping(photo)
@@ -2425,7 +2424,7 @@ def syndication_photo_item_is_url_string(photo: Any) -> bool:
     return isinstance(photo, str)
 
 
-def syndication_photo_url_list_from_mapping(photo: Dict[str, Any]) -> List[str]:
+def syndication_photo_url_list_from_mapping(photo: dict[str, Any]) -> list[str]:
     """Return zero-or-one URL list extracted from a mapping-shaped photo item."""
     img_url = extract_syndication_photo_url_from_dict(photo)
     if syndication_photo_url_is_usable(img_url):
@@ -2433,7 +2432,7 @@ def syndication_photo_url_list_from_mapping(photo: Dict[str, Any]) -> List[str]:
     return []
 
 
-def syndication_photo_url_list_from_string(photo: str) -> List[str]:
+def syndication_photo_url_list_from_string(photo: str) -> list[str]:
     """Return URL list for string-shaped photo items."""
     return [photo]
 
@@ -2467,7 +2466,7 @@ def x_syn_timeout_with_offset_and_cap(value: float, offset: float, cap: float) -
     return x_syn_timeout_cap(float(value) + offset, cap)
 
 
-def build_syndication_photo_payload(text: Optional[str], image_urls: List[str]) -> Dict[str, Any]:
+def build_syndication_photo_payload(text: str | None, image_urls: list[str]) -> dict[str, Any]:
     """Build syndication-like payload consumed by the unified VL handler."""
     return {
         "text": text,
@@ -2475,12 +2474,12 @@ def build_syndication_photo_payload(text: Optional[str], image_urls: List[str]) 
     }
 
 
-def build_syndication_photo_items(image_urls: List[str]) -> List[Dict[str, str]]:
+def build_syndication_photo_items(image_urls: list[str]) -> list[dict[str, str]]:
     """Build canonical list of photo item dicts for syndication payloads."""
     return [{"url": url} for url in image_urls]
 
 
-def format_twitter_syndication_images_log_line(image_urls: List[str], *, msg_id: Optional[int] = None) -> str:
+def format_twitter_syndication_images_log_line(image_urls: list[str], *, msg_id: int | None = None) -> str:
     """Format canonical breadcrumb line for Twitter image-route detection."""
     first_host = resolve_first_image_host(image_urls)
     suffix = format_twitter_syndication_msg_suffix(msg_id)
@@ -2503,7 +2502,7 @@ def format_twitter_syndication_images_detail(
     return f"route.twitter.syndication | images={image_count} | {host_label}{suffix}"
 
 
-def format_twitter_syndication_msg_suffix(msg_id: Optional[int]) -> str:
+def format_twitter_syndication_msg_suffix(msg_id: int | None) -> str:
     """Return optional log suffix with message id for syndication breadcrumbs."""
     return f" | msg_id={msg_id}" if msg_id is not None else ""
 
@@ -2513,12 +2512,12 @@ def format_twitter_syndication_host_label(first_host: str) -> str:
     return first_host or "n/a"
 
 
-def format_twitter_syndication_image_count(image_urls: List[str]) -> int:
+def format_twitter_syndication_image_count(image_urls: list[str]) -> int:
     """Return image count used in syndication image-route breadcrumb lines."""
     return len(image_urls)
 
 
-def resolve_first_image_host(image_urls: List[str]) -> str:
+def resolve_first_image_host(image_urls: list[str]) -> str:
     """Resolve first parsed host from image URL list preserving legacy failures."""
     first_host = ""
     try:
@@ -2535,12 +2534,12 @@ def parse_image_host(image_url: str) -> str:
     return urlparse(image_url).netloc
 
 
-def resolve_first_image_url(image_urls: List[str]) -> str:
+def resolve_first_image_url(image_urls: list[str]) -> str:
     """Resolve first image URL from list preserving legacy failure behavior."""
     return first_list_item_or_empty(image_urls)
 
 
-def first_list_item_or_empty(items: List[str]) -> str:
+def first_list_item_or_empty(items: list[str]) -> str:
     """Return first list item when present; otherwise empty string."""
     try:
         if list_has_items(items):
@@ -2550,7 +2549,7 @@ def first_list_item_or_empty(items: List[str]) -> str:
     return ""
 
 
-def list_has_items(items: List[Any]) -> bool:
+def list_has_items(items: list[Any]) -> bool:
     """Return True when list-like value contains at least one item."""
     return bool(items)
 
@@ -2558,30 +2557,30 @@ def list_has_items(items: List[Any]) -> bool:
 async def resolve_and_probe_twitter_images(
     *,
     url: str,
-    tweet_id: Optional[str] = None,
+    tweet_id: str | None = None,
     resolve_status_id: Callable[..., str],
-    probe_images: Callable[..., Awaitable[List[str]]],
-) -> Tuple[str, List[str]]:
+    probe_images: Callable[..., Awaitable[list[str]]],
+) -> tuple[str, list[str]]:
     """Resolve status id and probe syndication image URLs with normalized defaults."""
     status_id = resolve_status_id(url, tweet_id=tweet_id)
     image_urls = await probe_images(url, status_id)
     return build_twitter_image_probe_result(status_id, image_urls)
 
 
-def normalize_probed_image_urls(image_urls: Optional[List[str]]) -> List[str]:
+def normalize_probed_image_urls(image_urls: list[str] | None) -> list[str]:
     """Normalize probed image URL payload to an always-list value."""
     return probed_image_urls_or_empty(image_urls)
 
 
-def probed_image_urls_or_empty(image_urls: Optional[List[str]]) -> List[str]:
+def probed_image_urls_or_empty(image_urls: list[str] | None) -> list[str]:
     """Return probed image URLs when present, otherwise empty list."""
     return image_urls or []
 
 
 def build_twitter_image_probe_result(
     status_id: str,
-    image_urls: Optional[List[str]],
-) -> Tuple[str, List[str]]:
+    image_urls: list[str] | None,
+) -> tuple[str, list[str]]:
     """Build normalized `(status_id, image_urls)` tuple for Twitter image probes."""
     return status_id, normalize_probed_image_urls(image_urls)
 
@@ -2591,7 +2590,7 @@ def extract_x_status_urls_from_text(
     *,
     is_status_url: Callable[[str], bool],
     canonicalize_status_url: Callable[[str], str],
-) -> List[str]:
+) -> list[str]:
     """Extract canonical X/Twitter status URLs from text preserving order."""
     urls = status_url_items_buffer()
     collect_status_urls_fail_open(
@@ -2604,7 +2603,7 @@ def extract_x_status_urls_from_text(
 
 
 def collect_status_urls_into_items(
-    items: List[str],
+    items: list[str],
     text: str,
     *,
     is_status_url: Callable[[str], bool],
@@ -2621,35 +2620,33 @@ def collect_status_urls_into_items(
 
 def collect_status_urls_fail_open(
     *,
-    items: List[str],
+    items: list[str],
     text: str,
     is_status_url: Callable[[str], bool],
     canonicalize_status_url: Callable[[str], str],
 ) -> None:
     """Collect status URLs while preserving fail-open behavior on parse errors."""
-    try:
+    with contextlib.suppress(Exception):
         collect_status_urls_into_items(
             items,
             text,
             is_status_url=is_status_url,
             canonicalize_status_url=canonicalize_status_url,
         )
-    except Exception:
-        pass
 
 
-def status_url_items_result(urls: List[str]) -> List[str]:
+def status_url_items_result(urls: list[str]) -> list[str]:
     """Return collected status URL items for extraction call sites."""
     return urls
 
 
-def status_url_items_buffer() -> List[str]:
+def status_url_items_buffer() -> list[str]:
     """Build mutable list buffer for extracted status URL collection."""
     return []
 
 
 def collect_status_urls_from_candidates(
-    items: List[str],
+    items: list[str],
     text: str,
     *,
     is_status_url: Callable[[str], bool],
@@ -2667,7 +2664,7 @@ def collect_status_urls_from_candidates(
 
 def append_status_url_candidate(
     *,
-    items: List[str],
+    items: list[str],
     raw: str,
     is_status_url: Callable[[str], bool],
     canonicalize_status_url: Callable[[str], str],
@@ -3001,14 +2998,14 @@ def x_url_extract_flags_literal() -> int:
     return re.IGNORECASE
 
 
-def extract_raw_urls_from_texts(texts: Iterable[str]) -> List[str]:
+def extract_raw_urls_from_texts(texts: Iterable[str]) -> list[str]:
     """Extract raw URLs from multiple text blobs in-order with de-duplication."""
     raw_urls = raw_url_items_buffer()
     collect_raw_urls_fail_open(items=raw_urls, texts=texts)
     return raw_url_items_result(raw_urls)
 
 
-def collect_raw_urls_fail_open(*, items: List[str], texts: Iterable[str]) -> None:
+def collect_raw_urls_fail_open(*, items: list[str], texts: Iterable[str]) -> None:
     """Collect raw URLs while preserving fail-open behavior on extraction errors."""
     try:
         url_re = raw_url_extract_regex()
@@ -3018,7 +3015,7 @@ def collect_raw_urls_fail_open(*, items: List[str], texts: Iterable[str]) -> Non
 
 
 def collect_raw_urls_into_items(
-    items: List[str],
+    items: list[str],
     texts: Iterable[str],
     *,
     url_re: Any,
@@ -3027,7 +3024,7 @@ def collect_raw_urls_into_items(
     collect_raw_urls_from_texts(items, texts, url_re=url_re)
 
 
-def raw_url_items_result(items: List[str]) -> List[str]:
+def raw_url_items_result(items: list[str]) -> list[str]:
     """Return collected raw URL items for extraction call sites."""
     return items
 
@@ -3047,23 +3044,23 @@ def raw_url_extract_regex_value() -> Any:
     return x_url_extract_regex()
 
 
-def raw_url_items_buffer() -> List[str]:
+def raw_url_items_buffer() -> list[str]:
     """Build mutable list buffer for extracted raw URL collection."""
     return raw_url_items_buffer_source()
 
 
-def raw_url_items_buffer_source() -> List[str]:
+def raw_url_items_buffer_source() -> list[str]:
     """Return source list buffer used by raw URL items helper."""
     return raw_url_items_buffer_value()
 
 
-def raw_url_items_buffer_value() -> List[str]:
+def raw_url_items_buffer_value() -> list[str]:
     """Return value used by raw URL items buffer source helper."""
     return []
 
 
 def collect_raw_urls_from_texts(
-    items: List[str],
+    items: list[str],
     texts: Iterable[str],
     *,
     url_re: Any,
@@ -3085,7 +3082,7 @@ def normalize_raw_url_candidate(raw_url: str) -> str:
     return raw_url_candidate_value(raw_url)
 
 
-def append_raw_url_candidate_to_items(items: List[str], raw_url: str) -> None:
+def append_raw_url_candidate_to_items(items: list[str], raw_url: str) -> None:
     """Append one normalized raw URL candidate into collection items."""
     append_raw_url_if_present(items, raw_url)
 
@@ -3271,7 +3268,7 @@ def filter_canonical_x_urls(
     *,
     is_x_url: Callable[[str], bool],
     canonicalize_x_url: Callable[[str], str],
-) -> List[str]:
+) -> list[str]:
     """Filter URL list to X/Twitter URLs and canonicalize with de-duplication."""
     out = canonical_x_url_items_buffer()
     for raw_url in iter_raw_urls_for_canonical_filter(raw_urls):
@@ -3289,22 +3286,22 @@ def iter_raw_urls_for_canonical_filter(raw_urls: Iterable[str]) -> Iterable[str]
     yield from raw_urls
 
 
-def canonical_x_url_items_buffer() -> List[str]:
+def canonical_x_url_items_buffer() -> list[str]:
     """Build mutable list buffer for canonicalized X URL collection."""
     return canonical_x_url_items_buffer_source()
 
 
-def canonical_x_url_items_buffer_source() -> List[str]:
+def canonical_x_url_items_buffer_source() -> list[str]:
     """Return source list buffer used by canonical X URL helper."""
     return canonical_x_url_items_buffer_for_source()
 
 
-def canonical_x_url_items_buffer_for_source() -> List[str]:
+def canonical_x_url_items_buffer_for_source() -> list[str]:
     """Return canonical X URL list buffer via source handoff helper."""
     return canonical_x_url_items_buffer_value()
 
 
-def canonical_x_url_items_buffer_value() -> List[str]:
+def canonical_x_url_items_buffer_value() -> list[str]:
     """Return value used by canonical X URL items buffer source helper."""
     return []
 
@@ -3346,7 +3343,7 @@ def is_x_url_candidate_for_result(
 
 
 def append_x_url_if_match(
-    items: List[str],
+    items: list[str],
     raw_url: str,
     *,
     is_x_url: Callable[[str], bool],
@@ -3384,44 +3381,44 @@ def x_url_matches_predicate_result(
     return is_x_url_candidate(raw_url, is_x_url=is_x_url)
 
 
-def append_unique_str(items: List[str], value: str) -> None:
+def append_unique_str(items: list[str], value: str) -> None:
     """Append value to list only when it is not already present."""
     maybe_append_unique_value(items, value)
 
 
-def maybe_append_unique_value(items: List[str], value: str) -> None:
+def maybe_append_unique_value(items: list[str], value: str) -> None:
     """Append one value only when unique under current membership rules."""
     if unique_value_missing(items, value):
         append_value(items, value)
 
 
-def append_value(items: List[str], value: str) -> None:
+def append_value(items: list[str], value: str) -> None:
     """Append one value to list preserving native list append semantics."""
     items.append(value)
 
 
-def unique_value_missing(items: List[str], value: str) -> bool:
+def unique_value_missing(items: list[str], value: str) -> bool:
     """Return whether value is missing from list used for unique append."""
     return unique_value_missing_source(items, value)
 
 
-def unique_value_missing_source(items: List[str], value: str) -> bool:
+def unique_value_missing_source(items: list[str], value: str) -> bool:
     """Return source membership check result for unique-value helper."""
     return unique_value_missing_result(items, value)
 
 
-def unique_value_missing_result(items: List[str], value: str) -> bool:
+def unique_value_missing_result(items: list[str], value: str) -> bool:
     """Return value used by unique-value-missing source helper."""
     return value not in items
 
 
-def append_raw_url_if_present(items: List[str], raw_url: str) -> None:
+def append_raw_url_if_present(items: list[str], raw_url: str) -> None:
     """Append extracted raw URL only when non-empty and not yet present."""
     if raw_url_should_append(raw_url):
         append_present_raw_url(items, raw_url)
 
 
-def append_present_raw_url(items: List[str], raw_url: str) -> None:
+def append_present_raw_url(items: list[str], raw_url: str) -> None:
     """Append a raw URL already verified as present/non-empty."""
     append_unique_str(items, raw_url)
 
@@ -3467,7 +3464,7 @@ def raw_url_is_present_for_result(raw_url: str) -> bool:
 
 
 def append_canonical_x_url(
-    items: List[str],
+    items: list[str],
     url: str,
     *,
     canonicalize_x_url: Callable[[str], str],
@@ -3496,7 +3493,7 @@ def canonical_x_raw_value_result(url: str) -> str:
 
 
 def append_canonical_status_url(
-    items: List[str],
+    items: list[str],
     raw_url: str,
     *,
     canonicalize_status_url: Callable[[str], str],
@@ -3525,7 +3522,7 @@ def canonical_status_raw_value_result(raw_url: str) -> str:
 
 
 def append_canonicalized_value(
-    items: List[str],
+    items: list[str],
     raw_value: str,
     *,
     canonicalize: Callable[[str], str],
@@ -3537,7 +3534,7 @@ def append_canonicalized_value(
     )
 
 
-def append_canonicalized_unique_value(*, items: List[str], canonical_value: str) -> None:
+def append_canonicalized_unique_value(*, items: list[str], canonical_value: str) -> None:
     """Append canonical value with uniqueness gating."""
     append_unique_str(items, canonical_value)
 
@@ -3579,7 +3576,7 @@ def canonicalized_value_for_result(
 
 
 def append_status_url_if_match(
-    items: List[str],
+    items: list[str],
     raw_url: str,
     *,
     is_status_url: Callable[[str], bool],
@@ -3670,7 +3667,7 @@ def is_status_url_candidate_for_result(
 
 
 def append_matched_status_url(
-    items: List[str],
+    items: list[str],
     raw_url: str,
     *,
     canonicalize_status_url: Callable[[str], str],
@@ -3709,7 +3706,7 @@ def matched_status_raw_value_for_result(raw_url: str) -> str:
 
 
 def append_matched_x_url(
-    items: List[str],
+    items: list[str],
     raw_url: str,
     *,
     canonicalize_x_url: Callable[[str], str],

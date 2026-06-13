@@ -1,20 +1,22 @@
-"""
-Comprehensive test suite for enhanced multimodal processing with provider fallback,
+"""Comprehensive test suite for enhanced multimodal processing with provider fallback,
 circuit breaker, per-item budget enforcement, and spam prevention.
 """
 
 import asyncio
+
 import pytest
 
 pytestmark = pytest.mark.skip(reason="Requires live multimodal sequential processing")
 import time
+from typing import Never
 from unittest.mock import AsyncMock, Mock, patch
 
-# Import the modules we're testing
-from bot.router import Router
 from bot.enhanced_retry import EnhancedRetryManager, ProviderConfig
 from bot.metrics.null_metrics import NoopMetrics
 from bot.rag.embedding_interface import create_embedding_model, is_rag_legacy_mode
+
+# Import the modules we're testing
+from bot.router import Router
 
 
 @pytest.fixture
@@ -49,22 +51,23 @@ class TestEnhancedRetrySystem:
     """Test the enhanced retry system with provider fallback and circuit breaker."""
 
     @pytest.mark.asyncio
-    async def test_provider_fallback_success(self, retry_manager):
+    async def test_provider_fallback_success(self, retry_manager) -> None:
         """Test successful fallback to secondary provider."""
         call_count = 0
 
         def create_coro_factory(provider_config: ProviderConfig):
-            async def coro():
+            async def coro() -> str:
                 nonlocal call_count
                 call_count += 1
 
                 # First provider fails twice, second succeeds
                 if provider_config.name == "openrouter" and provider_config.model == "moonshotai/kimi-vl-a3b-thinking:free":
-                    raise Exception("502 Bad Gateway - Provider returned error")
-                elif provider_config.name == "openrouter" and provider_config.model == "openai/gpt-4o-mini":
+                    msg = "502 Bad Gateway - Provider returned error"
+                    raise Exception(msg)
+                if provider_config.name == "openrouter" and provider_config.model == "openai/gpt-4o-mini":
                     return "Success with fallback provider"
-                else:
-                    raise Exception("Unexpected provider")
+                msg = "Unexpected provider"
+                raise Exception(msg)
 
             return coro
 
@@ -77,12 +80,12 @@ class TestEnhancedRetrySystem:
         assert call_count >= 2  # At least one failure + one success
 
     @pytest.mark.asyncio
-    async def test_per_item_budget_enforcement(self, retry_manager):
+    async def test_per_item_budget_enforcement(self, retry_manager) -> None:
         """Test that per-item budget is enforced."""
         start_time = time.time()
 
         def create_coro_factory(provider_config: ProviderConfig):
-            async def coro():
+            async def coro() -> str:
                 # Simulate slow operation that exceeds budget
                 await asyncio.sleep(2.0)
                 return "Should not reach here"
@@ -101,15 +104,16 @@ class TestEnhancedRetrySystem:
         assert "budget" in str(result.error).lower() or result.attempts == 0
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker_opens(self, retry_manager):
+    async def test_circuit_breaker_opens(self, retry_manager) -> None:
         """Test that circuit breaker opens after repeated failures."""
         failure_count = 0
 
         def create_coro_factory(provider_config: ProviderConfig):
-            async def coro():
+            async def coro() -> Never:
                 nonlocal failure_count
                 failure_count += 1
-                raise Exception("502 Bad Gateway")
+                msg = "502 Bad Gateway"
+                raise Exception(msg)
 
             return coro
 
@@ -127,15 +131,16 @@ class TestEnhancedRetrySystem:
         assert failure_count < initial_failures * 2
 
     @pytest.mark.asyncio
-    async def test_non_retryable_error_fast_fail(self, retry_manager):
+    async def test_non_retryable_error_fast_fail(self, retry_manager) -> None:
         """Test that non-retryable errors fail fast."""
         call_count = 0
 
         def create_coro_factory(provider_config: ProviderConfig):
-            async def coro():
+            async def coro() -> Never:
                 nonlocal call_count
                 call_count += 1
-                raise Exception("401 Unauthorized")  # Non-retryable
+                msg = "401 Unauthorized"
+                raise Exception(msg)  # Non-retryable
 
             return coro
 
@@ -150,7 +155,7 @@ class TestSequentialProcessing:
     """Test sequential multimodal processing with no parallelism."""
 
     @pytest.mark.asyncio
-    async def test_two_images_sequential(self, router):
+    async def test_two_images_sequential(self, router) -> None:
         """Test that two images are processed sequentially, never in parallel."""
         processing_times = []
         processing_active = []
@@ -201,14 +206,15 @@ class TestSequentialProcessing:
             # Verify text flow was called once with aggregated result
             router._invoke_text_flow.assert_called_once()
             aggregated_content = router._invoke_text_flow.call_args[0][0]
-            assert "1/2" in aggregated_content and "2/2" in aggregated_content
+            assert "1/2" in aggregated_content
+            assert "2/2" in aggregated_content
 
     @pytest.mark.asyncio
-    async def test_mixed_modalities_order(self, router):
+    async def test_mixed_modalities_order(self, router) -> None:
         """Test processing order matches message order for mixed modalities."""
         processing_order = []
 
-        async def mock_handlers(*args, **kwargs):
+        async def mock_handlers(*args, **kwargs) -> str:
             # Track which handler was called
             if "image" in str(args) or any("jpg" in str(arg) for arg in args):
                 processing_order.append("image")
@@ -247,7 +253,7 @@ class TestSequentialProcessing:
                 type="rich",
                 image=None,
                 thumbnail=None,
-            )
+            ),
         ]
 
         # Mock attachment save methods
@@ -261,15 +267,16 @@ class TestSequentialProcessing:
         assert processing_order == expected_order, f"Expected {expected_order}, got {processing_order}"
 
     @pytest.mark.asyncio
-    async def test_never_drop_items_on_failure(self, router):
+    async def test_never_drop_items_on_failure(self, router) -> None:
         """Test that failed items are still included in aggregated result."""
         call_count = 0
 
-        async def mock_image_handler(*args, **kwargs):
+        async def mock_image_handler(*args, **kwargs) -> str:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise Exception("First image processing failed")
+                msg = "First image processing failed"
+                raise Exception(msg)
             return "Second image processed successfully"
 
         router._process_image_from_attachment = AsyncMock(side_effect=mock_image_handler)
@@ -311,7 +318,7 @@ class TestSequentialProcessing:
 class TestMetricsInterface:
     """Test that metrics interface never throws exceptions."""
 
-    def test_noop_metrics_all_methods(self):
+    def test_noop_metrics_all_methods(self) -> None:
         """Test that NoopMetrics implements all expected methods safely."""
         metrics = NoopMetrics()
 
@@ -331,7 +338,7 @@ class TestMetricsInterface:
         assert True
 
     @pytest.mark.asyncio
-    async def test_router_metrics_never_throw(self, router):
+    async def test_router_metrics_never_throw(self, router) -> None:
         """Test that router metrics calls never throw exceptions."""
         # Test with NoopMetrics (should never throw)
         router._metric_inc("test_metric", {"key": "value"})
@@ -354,7 +361,7 @@ class TestMetricsInterface:
 class TestRAGMisconfigSuppression:
     """Test that RAG misconfig warnings are suppressed after first occurrence."""
 
-    def test_rag_misconfig_warn_once(self):
+    def test_rag_misconfig_warn_once(self) -> None:
         """Test that RAG misconfig warning appears only once."""
         # Reset global state
         import bot.rag.embedding_interface as embedding_module
@@ -376,7 +383,7 @@ class TestRAGMisconfigSuppression:
             assert is_rag_legacy_mode() is True
             mock_logger.warning.assert_not_called()  # No additional warning
 
-    def test_rag_legacy_mode_persistence(self):
+    def test_rag_legacy_mode_persistence(self) -> None:
         """Test that RAG legacy mode persists across calls."""
         # Reset global state
         import bot.rag.embedding_interface as embedding_module
@@ -400,7 +407,7 @@ class TestRAGMisconfigSuppression:
 class TestProviderConfiguration:
     """Test provider configuration and fallback ladder."""
 
-    def test_provider_config_loading(self, retry_manager):
+    def test_provider_config_loading(self, retry_manager) -> None:
         """Test that provider configurations are loaded correctly."""
         vision_providers = retry_manager.provider_configs.get("vision", [])
         text_providers = retry_manager.provider_configs.get("text", [])
@@ -415,7 +422,7 @@ class TestProviderConfiguration:
             assert hasattr(provider, "timeout")
             assert provider.timeout > 0
 
-    def test_circuit_breaker_state_management(self, retry_manager):
+    def test_circuit_breaker_state_management(self, retry_manager) -> None:
         """Test circuit breaker state management."""
         provider_key = "test_provider:test_model"
 

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import urlparse, urlunparse
 
 from bs4 import BeautifulSoup
@@ -13,7 +14,6 @@ from bot.http_client import RequestConfig, get_http_client
 from bot.utils.logging import get_logger
 from bot.utils.playwright_helpers import connect_browser as _pw_connect_browser
 
-
 logger = get_logger(__name__)
 
 
@@ -21,20 +21,20 @@ logger = get_logger(__name__)
 class TweetItem:
     index: int
     tweet_id: str
-    created_at_iso: Optional[str]
+    created_at_iso: str | None
     text_plain: str
-    urls_resolved: List[str]
-    media_summary: Dict[str, Any]
+    urls_resolved: list[str]
+    media_summary: dict[str, Any]
 
 
 @dataclass
 class ThreadContext:
     source: str
     author_handle: str
-    author_display: Optional[str]
+    author_display: str | None
     canonical_url: str
     tweet_count: int
-    items: List[TweetItem]
+    items: list[TweetItem]
     joined_text: str
     truncated: bool = False
 
@@ -49,21 +49,20 @@ _X_HOSTS = {
 }
 
 
-def _strip(s: Optional[str]) -> str:
+def _strip(s: str | None) -> str:
     return (s or "").strip()
 
 
 def _is_twitter_like(url: str) -> bool:
     try:
         host = urlparse(url).netloc.lower()
-        if host.startswith("www."):
-            host = host[4:]
+        host = host.removeprefix("www.")
         return host in _X_HOSTS or host.endswith(".twitter.com")
     except Exception:
         return False
 
 
-def _extract_status_id_from_path(path: str) -> Optional[str]:
+def _extract_status_id_from_path(path: str) -> str | None:
     try:
         m = re.search(r"/status/(\d{5,20})(?:\D|$)", path)
         return m.group(1) if m else None
@@ -71,7 +70,7 @@ def _extract_status_id_from_path(path: str) -> Optional[str]:
         return None
 
 
-def _extract_handle_from_path(path: str) -> Optional[str]:
+def _extract_handle_from_path(path: str) -> str | None:
     try:
         parts = [p for p in (path or "").split("/") if p]
         return parts[0] if parts else None
@@ -98,15 +97,15 @@ async def _expand_tco_if_needed(url: str, timeout_s: float) -> str:
         return url
 
 
-async def _fetch_html_http(url: str, timeout_s: float) -> Optional[str]:
-    """HTTP-only fetch for server-rendered mirrors. [PA][REH]
+async def _fetch_html_http(url: str, timeout_s: float) -> str | None:
+    """HTTP-only fetch for server-rendered mirrors. [PA][REH].
 
     Returns page text or None; logs DEBUG diagnostics when enabled.
     """
     try:
         http = await get_http_client()
     except Exception as e:
-        try:
+        with contextlib.suppress(Exception):
             logger.debug(
                 "threads.x: http_client_unavailable",
                 extra={
@@ -115,8 +114,6 @@ async def _fetch_html_http(url: str, timeout_s: float) -> Optional[str]:
                     "detail": {"url": url, "error": str(e)},
                 },
             )
-        except Exception:
-            pass
         return None
 
     cfg = RequestConfig(
@@ -128,7 +125,7 @@ async def _fetch_html_http(url: str, timeout_s: float) -> Optional[str]:
     try:
         r = await http.get(url, config=cfg)
         if r is None or r.status_code >= 400:
-            try:
+            with contextlib.suppress(Exception):
                 logger.debug(
                     "threads.x: http_fetch_non200",
                     extra={
@@ -137,11 +134,9 @@ async def _fetch_html_http(url: str, timeout_s: float) -> Optional[str]:
                         "detail": {"url": url, "code": getattr(r, "status_code", None)},
                     },
                 )
-            except Exception:
-                pass
             return None
         text = r.text
-        try:
+        with contextlib.suppress(Exception):
             logger.debug(
                 "threads.x: http_fetch_ok",
                 extra={
@@ -150,11 +145,9 @@ async def _fetch_html_http(url: str, timeout_s: float) -> Optional[str]:
                     "detail": {"url": url, "bytes": len(text or "")},
                 },
             )
-        except Exception:
-            pass
         return text
     except Exception as e:
-        try:
+        with contextlib.suppress(Exception):
             logger.debug(
                 "threads.x: http_fetch_error",
                 extra={
@@ -163,17 +156,14 @@ async def _fetch_html_http(url: str, timeout_s: float) -> Optional[str]:
                     "detail": {"url": url, "error": str(e)},
                 },
             )
-        except Exception:
-            pass
         return None
 
 
-def _canonicalize_status_url(url: str) -> Tuple[str, Optional[str], Optional[str]]:
+def _canonicalize_status_url(url: str) -> tuple[str, str | None, str | None]:
     try:
         p = urlparse(url)
         host = (p.netloc or "").lower()
-        if host.startswith("www."):
-            host = host[4:]
+        host = host.removeprefix("www.")
         if host not in _X_HOSTS and not host.endswith(".twitter.com"):
             return url, None, None
         # Always normalize to x.com
@@ -185,15 +175,15 @@ def _canonicalize_status_url(url: str) -> Tuple[str, Optional[str], Optional[str
         return url, None, None
 
 
-def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: Optional[str]) -> List[Dict[str, Any]]:
+def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: str | None) -> list[dict[str, Any]]:
     soup = BeautifulSoup(html, "html.parser")
-    blocks: List[Dict[str, Any]] = []
+    blocks: list[dict[str, Any]] = []
 
     # Prefer ARTICLE containers (x.com and mirrors commonly use them)
     articles = soup.find_all("article")
     if not articles:
         # Fallback: common mirror structures
-        articles = soup.find_all("div", attrs={"data-testid": re.compile("tweet", re.I)})
+        articles = soup.find_all("div", attrs={"data-testid": re.compile("tweet", re.IGNORECASE)})
 
     # Special-case: FixTweet/vx mirrors often contain only meta tags + redirect; synthesize a single block
     # from meta description when no tweet ARTICLEs are present. [REH][PA]
@@ -201,7 +191,7 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: Optional[str])
         try:
             # Resolve tweet_id from canonical link if present
             tw_id = None
-            canonical_link = soup.find("link", attrs={"rel": re.compile("canonical", re.I)})
+            canonical_link = soup.find("link", attrs={"rel": re.compile("canonical", re.IGNORECASE)})
             can_href = canonical_link.get("href") if canonical_link else None
             if can_href:
                 m = re.search(r"/status/(\d{5,20})(?:\D|$)", can_href)
@@ -210,7 +200,7 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: Optional[str])
 
             # Author from twitter:creator meta or canonical path
             author = None
-            m_creator = soup.find("meta", attrs={"property": re.compile("twitter:creator", re.I)})
+            m_creator = soup.find("meta", attrs={"property": re.compile("twitter:creator", re.IGNORECASE)})
             if m_creator and m_creator.get("content"):
                 c = m_creator.get("content")
                 if c.startswith("@"):
@@ -241,7 +231,7 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: Optional[str])
                         "urls": [can_href] if can_href else [],
                         "media": {},
                         "_dom_index": 0,
-                    }
+                    },
                 )
         except Exception:
             # swallow and continue with empty blocks
@@ -297,7 +287,7 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: Optional[str])
                 text = _strip(art.get_text(" "))
 
             # URLs resolved (best-effort)
-            urls: List[str] = []
+            urls: list[str] = []
             for a in art.find_all("a", href=True):
                 href = _strip(a.get("href"))
                 if not href:
@@ -311,7 +301,7 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: Optional[str])
             # Media summary
             img_tags = art.find_all("img")
             images = 0
-            alt_texts: List[str] = []
+            alt_texts: list[str] = []
             for im in img_tags:
                 # Skip profile/emoji heuristics
                 src = (im.get("src") or "").lower()
@@ -335,14 +325,14 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: Optional[str])
                     "urls": urls,
                     "media": media,
                     "_dom_index": idx,
-                }
+                },
             )
         except Exception:
             continue
 
     # Deduplicate by tweet_id preserving DOM order
     seen: set[str] = set()
-    uniq: List[Dict[str, Any]] = []
+    uniq: list[dict[str, Any]] = []
     for b in blocks:
         tid = str(b.get("tweet_id"))
         if tid and tid not in seen:
@@ -351,16 +341,16 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: Optional[str])
     return uniq
 
 
-def _format_joined_text(author: str, items: List[TweetItem]) -> str:
+def _format_joined_text(author: str, items: list[TweetItem]) -> str:
     n = len(items)
-    parts: List[str] = []
+    parts: list[str] = []
     for i, it in enumerate(items, start=1):
         ts = it.created_at_iso
         try:
             # Normalize to UTC without tz suffix if parseable
             if ts:
-                dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                ts = dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                dt = datetime.fromisoformat(ts)
+                ts = dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
         except Exception:
             pass
         header = f"[{i}/{n}] @{author} – {ts}" if ts else f"[{i}/{n}] @{author}"
@@ -370,7 +360,7 @@ def _format_joined_text(author: str, items: List[TweetItem]) -> str:
     return "\n".join(parts).strip()
 
 
-async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[str]:
+async def _fetch_html_with_playwright(url: str, timeout_s: float) -> str | None:
     """Fetch page HTML using Playwright with guarded errors.
 
     Returns None on any import/launch/navigation failure so callers can gracefully
@@ -380,7 +370,7 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
         from playwright.async_api import async_playwright
     except Exception as e:
         # Playwright not installed/available in this environment
-        try:
+        with contextlib.suppress(Exception):
             logger.debug(
                 "threads.x: playwright_unavailable",
                 extra={
@@ -389,8 +379,6 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
                     "detail": {"url": url, "error": str(e)},
                 },
             )
-        except Exception:
-            pass
         return None
 
     timeout_ms = int(max(1.0, timeout_s) * 1000)
@@ -398,7 +386,7 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
         async with async_playwright() as p:
             browser = await _pw_connect_browser(p.chromium)
             if browser is None:
-                try:
+                with contextlib.suppress(Exception):
                     logger.warning(
                         "threads.x: playwright_browser_unavailable",
                         extra={
@@ -407,15 +395,13 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
                             "detail": {"url": url},
                         },
                     )
-                except Exception:
-                    pass
                 return None
             try:
                 context = await browser.new_context(java_script_enabled=True)
                 page = await context.new_page()
                 await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                 html = await page.content()
-                try:
+                with contextlib.suppress(Exception):
                     logger.debug(
                         "threads.x: playwright_fetch_ok",
                         extra={
@@ -424,18 +410,14 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
                             "detail": {"url": url, "bytes": len(html or "")},
                         },
                     )
-                except Exception:
-                    pass
                 return html
             finally:
-                try:
+                with contextlib.suppress(Exception):
                     await context.close()
-                except Exception:
-                    pass
     except Exception as e:
         # Launch/navigation failure: log at WARNING so it is visible in
         # production, not buried at DEBUG.
-        try:
+        with contextlib.suppress(Exception):
             logger.warning(
                 "threads.x: playwright_fetch_error",
                 extra={
@@ -447,8 +429,6 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> Optional[st
                     },
                 },
             )
-        except Exception:
-            pass
         return None
 
 
@@ -458,14 +438,14 @@ async def unroll_author_thread(
     timeout_s: float,
     max_tweets: int,
     max_chars: int,
-) -> Tuple[Optional[ThreadContext], Optional[str]]:
+) -> tuple[ThreadContext | None, str | None]:
     # Eligibility gate: minimal, cheap checks
     try:
         if not _is_twitter_like(url):
             return None, "not_twitter"
         url = await _expand_tco_if_needed(url, timeout_s)
         canonical, tid, handle = _canonicalize_status_url(url)
-        try:
+        with contextlib.suppress(Exception):
             logger.debug(
                 "threads.x: unroll_normalized",
                 extra={
@@ -478,8 +458,6 @@ async def unroll_author_thread(
                     },
                 },
             )
-        except Exception:
-            pass
         if not tid:
             return None, "not_status"
     except Exception:
@@ -489,7 +467,7 @@ async def unroll_author_thread(
     try:
         ctx_json = await _unroll_via_mirror_json(tid, handle, timeout_s, max_tweets, max_chars)
         if ctx_json is not None and getattr(ctx_json, "joined_text", None):
-            try:
+            with contextlib.suppress(Exception):
                 logger.debug(
                     "threads.x: json_probe_ok",
                     extra={
@@ -498,25 +476,21 @@ async def unroll_author_thread(
                         "detail": {"tweets": ctx_json.tweet_count},
                     },
                 )
-            except Exception:
-                pass
             return ctx_json, None
     except Exception:
-        try:
+        with contextlib.suppress(Exception):
             logger.debug(
                 "threads.x: json_probe_error",
                 extra={"subsys": "threads.x", "event": "json_probe_error"},
             )
-        except Exception:
-            pass
 
     # Phase 1B: HTTP-only server-rendered mirrors (fast path, no browser)
-    html: Optional[str] = None
+    html: str | None = None
     try:
         p = urlparse(canonical)
         for host in ("fxtwitter.com", "vxtwitter.com", "fixupx.com"):
             mirror = urlunparse(("https", host, p.path, "", "", ""))
-            try:
+            with contextlib.suppress(Exception):
                 logger.debug(
                     "threads.x: http_probe_start",
                     extra={
@@ -525,13 +499,11 @@ async def unroll_author_thread(
                         "detail": {"mirror": mirror},
                     },
                 )
-            except Exception:
-                pass
             html_try = await _fetch_html_http(mirror, min(timeout_s, 6.0))
             if not html_try:
                 continue
             blocks_try = _parse_tweet_blocks(html_try, canonical, handle)
-            try:
+            with contextlib.suppress(Exception):
                 logger.debug(
                     "threads.x: http_probe_parse",
                     extra={
@@ -540,8 +512,6 @@ async def unroll_author_thread(
                         "detail": {"mirror": mirror, "blocks": len(blocks_try)},
                     },
                 )
-            except Exception:
-                pass
             if blocks_try:
                 html = html_try
                 break
@@ -559,7 +529,7 @@ async def unroll_author_thread(
             try:
                 p = urlparse(canonical)
                 mirror = urlunparse(("https", host, p.path, "", "", ""))
-                try:
+                with contextlib.suppress(Exception):
                     logger.debug(
                         "threads.x: mirror_probe",
                         extra={
@@ -568,8 +538,6 @@ async def unroll_author_thread(
                             "detail": {"mirror": mirror},
                         },
                     )
-                except Exception:
-                    pass
                 html = await _fetch_html_with_playwright(mirror, min(timeout_s, 10.0))
                 if html:
                     break
@@ -577,7 +545,7 @@ async def unroll_author_thread(
                 continue
 
     if not html:
-        try:
+        with contextlib.suppress(Exception):
             logger.debug(
                 "threads.x: fetch_failed",
                 extra={
@@ -586,13 +554,11 @@ async def unroll_author_thread(
                     "detail": {"url": canonical},
                 },
             )
-        except Exception:
-            pass
         return None, "fetch_failed"
 
     # Parse DOM into candidate blocks
     blocks = _parse_tweet_blocks(html, canonical, handle)
-    try:
+    with contextlib.suppress(Exception):
         logger.debug(
             "threads.x: parse_result",
             extra={
@@ -601,8 +567,6 @@ async def unroll_author_thread(
                 "detail": {"blocks": len(blocks)},
             },
         )
-    except Exception:
-        pass
     if not blocks:
         # Optional X API probe as a final chance before giving up [REH]
         ctx_api = await _maybe_xapi_unroll(canonical, tid, handle, timeout_s, max_tweets, max_chars)
@@ -617,7 +581,7 @@ async def unroll_author_thread(
         op_idx = 0
 
     # Build contiguous author-only chain around OP
-    def is_author(b: Dict[str, Any]) -> bool:
+    def is_author(b: dict[str, Any]) -> bool:
         a = _strip(b.get("author"))
         return bool(handle) and a.lower() == handle.lower()
 
@@ -632,10 +596,10 @@ async def unroll_author_thread(
     chain = blocks[start : end + 1]
 
     # Sort by timestamp if available; otherwise stable by DOM
-    def ts_key(b: Dict[str, Any]) -> Tuple[int, int]:
+    def ts_key(b: dict[str, Any]) -> tuple[int, int]:
         t = b.get("created_at_iso") or b.get("created_at")
         try:
-            dt = datetime.fromisoformat(str(t).replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(str(t))
             return (0, int(dt.timestamp()))
         except Exception:
             return (1, int(b.get("_dom_index", 0)))
@@ -643,7 +607,7 @@ async def unroll_author_thread(
     chain_sorted = sorted(chain, key=ts_key)
 
     # Enforce limits
-    items: List[TweetItem] = []
+    items: list[TweetItem] = []
     agg_chars = 0
     truncated = False
     for i, b in enumerate(chain_sorted, start=1):
@@ -662,7 +626,7 @@ async def unroll_author_thread(
                 text_plain=text,
                 urls_resolved=urls,
                 media_summary=media,
-            )
+            ),
         )
         agg_chars += extra
 
@@ -674,7 +638,7 @@ async def unroll_author_thread(
         return None, "no_items"
 
     joined_text = _format_joined_text(handle or "author", items)
-    try:
+    with contextlib.suppress(Exception):
         logger.debug(
             "threads.x: unroll_ok_internal",
             extra={
@@ -683,8 +647,6 @@ async def unroll_author_thread(
                 "detail": {"tweets": len(items), "truncated": truncated},
             },
         )
-    except Exception:
-        pass
 
     ctx = ThreadContext(
         source="twitter-thread",
@@ -700,13 +662,13 @@ async def unroll_author_thread(
 
 
 async def _unroll_via_mirror_json(
-    tweet_id: Optional[str],
-    author_handle: Optional[str],
+    tweet_id: str | None,
+    author_handle: str | None,
     timeout_s: float,
     max_tweets: int,
     max_chars: int,
-) -> Optional[ThreadContext]:
-    """Build a minimal author-only chain using fx/vx JSON endpoints. [PA][REH]
+) -> ThreadContext | None:
+    """Build a minimal author-only chain using fx/vx JSON endpoints. [PA][REH].
 
     - Fetch fx JSON for root; if unavailable, try vx JSON.
     - If JSON exposes a quoted tweet (same author) or raw_text link, chase within caps.
@@ -714,7 +676,7 @@ async def _unroll_via_mirror_json(
     if not tweet_id or not author_handle:
         return None
 
-    try:
+    with contextlib.suppress(Exception):
         logger.debug(
             "threads.x: json_probe_start",
             extra={
@@ -723,8 +685,6 @@ async def _unroll_via_mirror_json(
                 "detail": {"id": tweet_id},
             },
         )
-    except Exception:
-        pass
 
     try:
         http = await get_http_client()
@@ -737,7 +697,7 @@ async def _unroll_via_mirror_json(
         max_retries=1,
     )
 
-    async def _fx(id_: str) -> Optional[Dict[str, Any]]:
+    async def _fx(id_: str) -> dict[str, Any] | None:
         try:
             r = await http.get(f"https://api.fxtwitter.com/Tweet/status/{id_}", config=cfg)
             if r is None or r.status_code >= 400:
@@ -746,7 +706,7 @@ async def _unroll_via_mirror_json(
         except Exception:
             return None
 
-    async def _vx(id_: str) -> Optional[Dict[str, Any]]:
+    async def _vx(id_: str) -> dict[str, Any] | None:
         try:
             r = await http.get(f"https://api.vxtwitter.com/Tweet/status/{id_}", config=cfg)
             if r is None or r.status_code >= 400:
@@ -755,9 +715,9 @@ async def _unroll_via_mirror_json(
         except Exception:
             return None
 
-    items: List[TweetItem] = []
+    items: list[TweetItem] = []
     seen_ids: set[str] = set()
-    current_id: Optional[str] = str(tweet_id)
+    current_id: str | None = str(tweet_id)
     depth = 0
 
     while current_id and depth < max_tweets:
@@ -770,20 +730,19 @@ async def _unroll_via_mirror_json(
         t = None
         if isinstance(data.get("tweet"), dict):
             t = data["tweet"]
-        else:
-            # vx puts fields at top-level; map to t-like
-            if data.get("tweetID") and data.get("text"):
-                t = {
-                    "id": data.get("tweetID"),
-                    "text": data.get("text"),
-                    "author": {"screen_name": data.get("user_screen_name")},
-                    "created_timestamp": data.get("date_epoch"),
-                    "quote": {
-                        "id": (data.get("qrt") or {}).get("tweetID"),
-                        "author": {"screen_name": (data.get("qrt") or {}).get("user_screen_name")},
-                    },
-                    "raw_text": None,
-                }
+        # vx puts fields at top-level; map to t-like
+        elif data.get("tweetID") and data.get("text"):
+            t = {
+                "id": data.get("tweetID"),
+                "text": data.get("text"),
+                "author": {"screen_name": data.get("user_screen_name")},
+                "created_timestamp": data.get("date_epoch"),
+                "quote": {
+                    "id": (data.get("qrt") or {}).get("tweetID"),
+                    "author": {"screen_name": (data.get("qrt") or {}).get("user_screen_name")},
+                },
+                "raw_text": None,
+            }
         if not t:
             break
 
@@ -804,7 +763,7 @@ async def _unroll_via_mirror_json(
             break
 
         # Text and timestamp
-        text = _strip((t.get("text") or ""))
+        text = _strip(t.get("text") or "")
         ts_iso = None
         try:
             ts = t.get("created_timestamp")
@@ -823,7 +782,7 @@ async def _unroll_via_mirror_json(
                 text_plain=text,
                 urls_resolved=[],
                 media_summary={},
-            )
+            ),
         )
 
         # Follow quoted tweet if same author; else try raw_text facets
@@ -855,7 +814,7 @@ async def _unroll_via_mirror_json(
         return None
 
     # We walked backwards via quotes → reverse to chronological
-    items = list(reversed(items))
+    items.reverse()
     return ThreadContext(
         source="twitter-thread-json",
         author_handle=author_handle or "",
@@ -870,13 +829,13 @@ async def _unroll_via_mirror_json(
 
 async def _maybe_xapi_unroll(
     canonical_url: str,
-    tweet_id: Optional[str],
-    author_handle: Optional[str],
+    tweet_id: str | None,
+    author_handle: str | None,
     timeout_s: float,
     max_tweets: int,
     max_chars: int,
-) -> Optional[ThreadContext]:
-    """Optional X API fallback to collect self-replies within a conversation. [AS][REH]
+) -> ThreadContext | None:
+    """Optional X API fallback to collect self-replies within a conversation. [AS][REH].
 
     Uses v2 endpoints with Bearer token from env. Returns ThreadContext or None.
     """
@@ -935,13 +894,13 @@ async def _maybe_xapi_unroll(
     def _key(t):
         ts = t.get("created_at")
         try:
-            dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(str(ts))
             return (0, int(dt.timestamp()))
         except Exception:
             return (1, 0)
 
     rows_sorted = sorted(rows, key=_key)
-    items: List[TweetItem] = []
+    items: list[TweetItem] = []
     agg = 0
     for i, t in enumerate(rows_sorted, start=1):
         tx = _strip(t.get("text"))
@@ -955,7 +914,7 @@ async def _maybe_xapi_unroll(
                 text_plain=tx,
                 urls_resolved=[],
                 media_summary={},
-            )
+            ),
         )
         agg += len(tx)
     if not items:

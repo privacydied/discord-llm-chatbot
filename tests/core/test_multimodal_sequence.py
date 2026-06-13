@@ -1,5 +1,4 @@
-"""
-Change Summary:
+"""Change Summary:
 - Created comprehensive test suite for sequential multimodal processing
 - Tests mixed-modality batches (images + PDFs + URLs + videos) with proper handler invocation
 - Tests timeout scenarios with asyncio.TimeoutError simulation
@@ -7,24 +6,25 @@ Change Summary:
 - Tests no-input scenarios (text-only messages)
 - Uses pytest-asyncio for async test support
 - Mocks all external dependencies (vision, STT, PDF processing, web scraping)
-- Validates sequential processing order and _flow_process_text integration
+- Validates sequential processing order and _flow_process_text integration.
 
 This test suite ensures the refactored multimodal system processes all input types
 sequentially without skipping any modalities, with proper error handling and user feedback.
 """
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from discord import Message, Attachment, Embed, DMChannel
 
-from bot.router import Router
+import pytest
+from discord import Attachment, DMChannel, Embed, Message
+
 from bot.modality import (
-    InputModality,
     InputItem,
+    InputModality,
     collect_input_items,
     map_item_to_modality,
 )
+from bot.router import Router
 
 
 @pytest.fixture
@@ -88,7 +88,7 @@ class TestMultimodalSequence:
     """Test suite for sequential multimodal processing."""
 
     @pytest.mark.asyncio
-    async def test_mixed_attachments_and_urls(self, router, mock_message, mock_attachment, mock_pdf_attachment):
+    async def test_mixed_attachments_and_urls(self, router, mock_message, mock_attachment, mock_pdf_attachment) -> None:
         """Test processing message with mixed attachments and URLs."""
         # Setup message with multiple modalities
         mock_message.content = "Check this out: https://youtube.com/watch?v=test123 and https://example.com"
@@ -127,7 +127,7 @@ class TestMultimodalSequence:
             assert "PDF content: Important document" in call_args
 
     @pytest.mark.asyncio
-    async def test_attachment_plus_embed(self, router, mock_message, mock_attachment):
+    async def test_attachment_plus_embed(self, router, mock_message, mock_attachment) -> None:
         """Test processing message with attachment and embed."""
         # Setup message with attachment and embed
         mock_message.attachments = [mock_attachment]
@@ -150,13 +150,13 @@ class TestMultimodalSequence:
             assert mock_text_flow.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_timeout_handling(self, router, mock_message, mock_attachment):
+    async def test_timeout_handling(self, router, mock_message, mock_attachment) -> None:
         """Test timeout handling for slow handlers."""
         mock_message.attachments = [mock_attachment]
 
         with patch.object(router, "_handle_image", new_callable=AsyncMock) as mock_image:
             # Simulate timeout by making handler sleep longer than timeout
-            async def slow_handler(item):
+            async def slow_handler(item) -> str:
                 await asyncio.sleep(60)  # Longer than 30s timeout
                 return "Should not reach here"
 
@@ -171,7 +171,7 @@ class TestMultimodalSequence:
             assert "single_image" in reply_call.lower()
 
     @pytest.mark.asyncio
-    async def test_error_recovery(self, router, mock_message, mock_attachment, mock_pdf_attachment):
+    async def test_error_recovery(self, router, mock_message, mock_attachment, mock_pdf_attachment) -> None:
         """Test error recovery when one handler fails."""
         mock_message.attachments = [mock_attachment, mock_pdf_attachment]
 
@@ -201,7 +201,7 @@ class TestMultimodalSequence:
             assert "PDF content: Success" in call_args
 
     @pytest.mark.asyncio
-    async def test_no_inputs_text_only(self, router, mock_message):
+    async def test_no_inputs_text_only(self, router, mock_message) -> None:
         """Test processing of text-only message with no attachments or URLs."""
         mock_message.content = "Just a simple text message"
         mock_message.attachments = []
@@ -214,7 +214,7 @@ class TestMultimodalSequence:
             mock_text_flow.assert_called_once_with("Just a simple text message", mock_message, "test context")
 
     @pytest.mark.asyncio
-    async def test_mention_stripping(self, router, mock_message, mock_bot):
+    async def test_mention_stripping(self, router, mock_message, mock_bot) -> None:
         """Test that bot mentions are properly stripped from text content."""
         mock_message.content = f"<@{mock_bot.user.id}> Hello bot!"
         mock_message.mentions = [mock_bot.user]
@@ -226,7 +226,7 @@ class TestMultimodalSequence:
             mock_text_flow.assert_called_once_with("Hello bot!", mock_message, "test context")
 
     @pytest.mark.asyncio
-    async def test_url_stripping_from_text(self, router, mock_message):
+    async def test_url_stripping_from_text(self, router, mock_message) -> None:
         """Test that URLs are stripped from text content after being processed separately."""
         mock_message.content = "Check this https://example.com and this text"
 
@@ -251,10 +251,11 @@ class TestMultimodalSequence:
             # Check that final text processing call strips URLs
             final_call = mock_text_flow.call_args_list[-1]
             final_text = final_call[0][0]
-            assert "Check this" in final_text and "and this text" in final_text
+            assert "Check this" in final_text
+            assert "and this text" in final_text
 
     @pytest.mark.asyncio
-    async def test_empty_handler_results(self, router, mock_message, mock_attachment):
+    async def test_empty_handler_results(self, router, mock_message, mock_attachment) -> None:
         """Test handling of empty results from handlers."""
         mock_message.attachments = [mock_attachment]
 
@@ -274,7 +275,7 @@ class TestMultimodalSequence:
             assert call_args[0] == "Test message"
 
     @pytest.mark.asyncio
-    async def test_sequential_processing_order(self, router, mock_message):
+    async def test_sequential_processing_order(self, router, mock_message) -> None:
         """Test that items are processed in correct sequential order."""
         mock_message.content = "URL: https://example.com"
         mock_attachment1 = MagicMock(spec=Attachment)
@@ -287,15 +288,15 @@ class TestMultimodalSequence:
 
         call_order = []
 
-        async def track_url_call(item):
+        async def track_url_call(item) -> str:
             call_order.append("url")
             return "URL processed"
 
-        async def track_image_call(item):
+        async def track_image_call(item) -> str:
             call_order.append("image")
             return "Image processed"
 
-        async def track_pdf_call(item):
+        async def track_pdf_call(item) -> str:
             call_order.append("pdf")
             return "PDF processed"
 
@@ -314,7 +315,7 @@ class TestMultimodalSequence:
 class TestModalityDetection:
     """Test suite for modality detection and item collection."""
 
-    def test_collect_input_items_mixed(self, mock_message, mock_attachment):
+    def test_collect_input_items_mixed(self, mock_message, mock_attachment) -> None:
         """Test collection of mixed input items."""
         mock_message.content = "Check https://example.com and https://youtube.com/watch?v=123"
         mock_message.attachments = [mock_attachment]
@@ -330,35 +331,35 @@ class TestModalityDetection:
         assert items[3].source_type == "embed"
 
     @pytest.mark.asyncio
-    async def test_map_item_to_modality_attachment(self, mock_attachment):
+    async def test_map_item_to_modality_attachment(self, mock_attachment) -> None:
         """Test modality mapping for attachments."""
         item = InputItem("attachment", mock_attachment, 0)
         modality = await map_item_to_modality(item)
         assert modality == InputModality.SINGLE_IMAGE
 
     @pytest.mark.asyncio
-    async def test_map_item_to_modality_video_url(self):
+    async def test_map_item_to_modality_video_url(self) -> None:
         """Test modality mapping for video URLs."""
         item = InputItem("url", "https://youtube.com/watch?v=test123", 0)
         modality = await map_item_to_modality(item)
         assert modality == InputModality.VIDEO_URL
 
     @pytest.mark.asyncio
-    async def test_map_item_to_modality_general_url(self):
+    async def test_map_item_to_modality_general_url(self) -> None:
         """Test modality mapping for general URLs."""
         item = InputItem("url", "https://example.com/page", 0)
         modality = await map_item_to_modality(item)
         assert modality == InputModality.GENERAL_URL
 
     @pytest.mark.asyncio
-    async def test_map_item_to_modality_pdf_url(self):
+    async def test_map_item_to_modality_pdf_url(self) -> None:
         """Test modality mapping for PDF URLs."""
         item = InputItem("url", "https://example.com/document.pdf", 0)
         modality = await map_item_to_modality(item)
         assert modality == InputModality.PDF_DOCUMENT
 
     @pytest.mark.asyncio
-    async def test_map_item_to_modality_unknown(self):
+    async def test_map_item_to_modality_unknown(self) -> None:
         """Test modality mapping for unknown items."""
         item = InputItem("unknown_type", "unknown_payload", 0)
         modality = await map_item_to_modality(item)
@@ -369,7 +370,7 @@ class TestHandlerMethods:
     """Test suite for individual handler methods."""
 
     @pytest.mark.asyncio
-    async def test_handle_image_attachment(self, router, mock_attachment):
+    async def test_handle_image_attachment(self, router, mock_attachment) -> None:
         """Test image handler with attachment."""
         item = InputItem("attachment", mock_attachment, 0)
 
@@ -382,7 +383,7 @@ class TestHandlerMethods:
             assert "A beautiful image" in result
 
     @pytest.mark.asyncio
-    async def test_handle_video_url(self, router):
+    async def test_handle_video_url(self, router) -> None:
         """Test video URL handler."""
         item = InputItem("url", "https://youtube.com/watch?v=test123", 0)
 
@@ -395,7 +396,7 @@ class TestHandlerMethods:
             assert "Hello from video" in result
 
     @pytest.mark.asyncio
-    async def test_handle_pdf_attachment(self, router, mock_pdf_attachment):
+    async def test_handle_pdf_attachment(self, router, mock_pdf_attachment) -> None:
         """Test PDF handler with attachment."""
         router.pdf_processor = MagicMock()
         router.pdf_processor.process = AsyncMock(return_value="PDF text content")
@@ -408,7 +409,7 @@ class TestHandlerMethods:
         assert "PDF text content" in result
 
     @pytest.mark.asyncio
-    async def test_handle_general_url(self, router):
+    async def test_handle_general_url(self, router) -> None:
         """Test general URL handler."""
         item = InputItem("url", "https://example.com", 0)
 
@@ -421,7 +422,7 @@ class TestHandlerMethods:
             assert "Web page content" in result
 
     @pytest.mark.asyncio
-    async def test_handle_unknown(self, router):
+    async def test_handle_unknown(self, router) -> None:
         """Test unknown item handler."""
         item = InputItem("unknown", "unknown_payload", 0)
 

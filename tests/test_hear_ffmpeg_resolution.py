@@ -1,7 +1,7 @@
 import pytest
 
+from bot import hear
 from bot.exceptions import InferenceError
-import bot.hear as hear
 
 
 def _reset_ffmpeg_cache(monkeypatch) -> None:
@@ -19,7 +19,7 @@ def test_resolve_ffmpeg_prefers_ffmpeg7(monkeypatch) -> None:
         "ffmpeg7": "/usr/local/bin/ffmpeg7",
         "ffmpeg": "/bin/ffmpeg",
     }
-    monkeypatch.setattr(hear.shutil, "which", lambda name: mapping.get(name))
+    monkeypatch.setattr(hear.shutil, "which", mapping.get)
     monkeypatch.setattr(
         hear,
         "_ffmpeg_supports_aac_decoder",
@@ -42,7 +42,7 @@ def test_resolve_ffmpeg_honors_env_override(monkeypatch) -> None:
         "custom-ffmpeg": "/opt/custom/ffmpeg",
         "ffmpeg7": "/usr/local/bin/ffmpeg7",
     }
-    monkeypatch.setattr(hear.shutil, "which", lambda name: mapping.get(name))
+    monkeypatch.setattr(hear.shutil, "which", mapping.get)
     monkeypatch.setattr(hear, "_ffmpeg_supports_aac_decoder", lambda _path: True)
 
     resolved = hear._resolve_ffmpeg_bin()

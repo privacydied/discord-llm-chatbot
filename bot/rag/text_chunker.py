@@ -1,12 +1,12 @@
-"""
-Text chunking utilities for RAG document processing.
-"""
+"""Text chunking utilities for RAG document processing."""
 
 import hashlib
 import re
-from typing import List, Dict, Any, Optional, Set
+from typing import Any
+
+from bot.utils.logging import get_logger
+
 from .vector_schema import ChunkingResult, HybridSearchConfig
-from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -14,12 +14,11 @@ logger = get_logger(__name__)
 class TextChunker:
     """Handles intelligent text chunking for RAG ingestion."""
 
-    def __init__(self, config: HybridSearchConfig):
+    def __init__(self, config: HybridSearchConfig) -> None:
         self.config = config
 
-    def chunk_text(self, text: str, source_metadata: Optional[Dict[str, Any]] = None) -> ChunkingResult:
-        """
-        Chunk text into smaller pieces based on configuration.
+    def chunk_text(self, text: str, source_metadata: dict[str, Any] | None = None) -> ChunkingResult:
+        """Chunk text into smaller pieces based on configuration.
 
         Args:
             text: Input text to be chunked
@@ -27,6 +26,7 @@ class TextChunker:
 
         Returns:
             ChunkingResult with chunks and metadata
+
         """
         if not text.strip():
             logger.warning("[RAG] Empty text provided for chunking")
@@ -58,7 +58,7 @@ class TextChunker:
                 final_chunks.extend(sub_chunks)
 
         # Chunk dedup by content hash [Phase 6-9]
-        seen_chunk_hashes: Set[str] = set()
+        seen_chunk_hashes: set[str] = set()
         dedup_max = getattr(self.config, "dedup_chunks", 500)
         unique_chunks = []
         for chunk in final_chunks:
@@ -99,10 +99,8 @@ class TextChunker:
 
         return text.strip()
 
-    def _semantic_chunk(self, text: str) -> List[str]:
-        """
-        Chunk text semantically by preserving paragraph boundaries.
-        """
+    def _semantic_chunk(self, text: str) -> list[str]:
+        """Chunk text semantically by preserving paragraph boundaries."""
         # Split by double newlines (paragraphs)
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
 
@@ -125,12 +123,11 @@ class TextChunker:
                     current_chunk = overlap_text + "\n\n" + paragraph
                 else:
                     current_chunk = paragraph
+            # Add paragraph to current chunk
+            elif current_chunk:
+                current_chunk += "\n\n" + paragraph
             else:
-                # Add paragraph to current chunk
-                if current_chunk:
-                    current_chunk += "\n\n" + paragraph
-                else:
-                    current_chunk = paragraph
+                current_chunk = paragraph
 
         # Add final chunk
         if current_chunk.strip():
@@ -138,10 +135,8 @@ class TextChunker:
 
         return chunks
 
-    def _sentence_chunk(self, text: str) -> List[str]:
-        """
-        Chunk text by sentences when paragraph chunking fails.
-        """
+    def _sentence_chunk(self, text: str) -> list[str]:
+        """Chunk text by sentences when paragraph chunking fails."""
         # Simple sentence splitting (could be enhanced with NLTK/spaCy)
         sentences = re.split(r"[.!?]+\s+", text)
         sentences = [s.strip() for s in sentences if s.strip()]
@@ -160,21 +155,18 @@ class TextChunker:
                     current_chunk = overlap_text + " " + sentence
                 else:
                     current_chunk = sentence
+            elif current_chunk:
+                current_chunk += " " + sentence
             else:
-                if current_chunk:
-                    current_chunk += " " + sentence
-                else:
-                    current_chunk = sentence
+                current_chunk = sentence
 
         if current_chunk.strip():
             chunks.append(current_chunk.strip())
 
         return chunks
 
-    def _sliding_window_chunk(self, text: str) -> List[str]:
-        """
-        Apply sliding window chunking for large text segments.
-        """
+    def _sliding_window_chunk(self, text: str) -> list[str]:
+        """Apply sliding window chunking for large text segments."""
         chunks = []
         start = 0
 
@@ -200,9 +192,7 @@ class TextChunker:
         return chunks
 
     def _get_overlap_text(self, text: str) -> str:
-        """
-        Get overlap text from the end of a chunk.
-        """
+        """Get overlap text from the end of a chunk."""
         if len(text) <= self.config.chunk_overlap:
             return text
 
@@ -212,17 +202,14 @@ class TextChunker:
 
         if last_space > overlap_start:
             return text[last_space:].strip()
-        else:
-            return text[overlap_start:].strip()
+        return text[overlap_start:].strip()
 
 
 class MarkdownChunker(TextChunker):
     """Specialized chunker for Markdown documents."""
 
-    def _semantic_chunk(self, text: str) -> List[str]:
-        """
-        Chunk markdown by headers and sections.
-        """
+    def _semantic_chunk(self, text: str) -> list[str]:
+        """Chunk markdown by headers and sections."""
         # Split by headers (# ## ### etc.)
         header_pattern = r"\n(#{1,6}\s+[^\n]+)\n"
         sections = re.split(header_pattern, text)
@@ -298,7 +285,7 @@ class MarkdownChunker(TextChunker):
 class HTMLChunker(TextChunker):
     """Specialized chunker for HTML documents."""
 
-    def chunk_text(self, text: str, source_metadata: Optional[Dict[str, Any]] = None) -> ChunkingResult:
+    def chunk_text(self, text: str, source_metadata: dict[str, Any] | None = None) -> ChunkingResult:
         """Chunk HTML text with awareness of structure."""
         # Remove excessive whitespace and normalize
         text = re.sub(r"\n\s*\n\s*\n", "\n\n", text)
@@ -338,7 +325,7 @@ class HTMLChunker(TextChunker):
 
         return ChunkingResult.create(text, chunks, metadata)
 
-    def _process_parts(self, parts: List[str]) -> List[str]:
+    def _process_parts(self, parts: list[str]) -> list[str]:
         """Process parts of HTML content into chunks."""
         chunks = []
         current_chunk = ""
@@ -356,11 +343,10 @@ class HTMLChunker(TextChunker):
                     current_chunk = ""
                 else:
                     current_chunk = part
+            elif current_chunk:
+                current_chunk += "\n\n" + part
             else:
-                if current_chunk:
-                    current_chunk += "\n\n" + part
-                else:
-                    current_chunk = part
+                current_chunk = part
 
         # Add the last chunk if it exists
         if current_chunk:
@@ -372,7 +358,7 @@ class HTMLChunker(TextChunker):
 class PDFChunker(TextChunker):
     """Specialized chunker for PDF documents."""
 
-    def chunk_text(self, text: str, source_metadata: Optional[Dict[str, Any]] = None) -> ChunkingResult:
+    def chunk_text(self, text: str, source_metadata: dict[str, Any] | None = None) -> ChunkingResult:
         """Chunk PDF text with page awareness."""
         # PDFs often have page markers like [Page N]
         page_pattern = r"\[Page \d+\]"
@@ -387,7 +373,7 @@ class PDFChunker(TextChunker):
                     # Chunk each page section
                     page_chunks = self._sliding_window_chunk(section.strip())
                     # Add page context to chunks
-                    for j, chunk in enumerate(page_chunks):
+                    for _j, chunk in enumerate(page_chunks):
                         if i > 0:  # Skip first empty split
                             chunks.append(f"[Page {i}] {chunk}")
                         else:
@@ -409,7 +395,7 @@ class PDFChunker(TextChunker):
 
         return ChunkingResult.create(text, chunks, metadata)
 
-    def _paragraph_chunk(self, text: str) -> List[str]:
+    def _paragraph_chunk(self, text: str) -> list[str]:
         """Chunk text by paragraphs for PDF content."""
         # Split by paragraphs (double newlines)
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
@@ -433,12 +419,11 @@ class PDFChunker(TextChunker):
                     current_chunk = overlap_text + "\n\n" + paragraph
                 else:
                     current_chunk = paragraph
+            # Add paragraph to current chunk
+            elif current_chunk:
+                current_chunk += "\n\n" + paragraph
             else:
-                # Add paragraph to current chunk
-                if current_chunk:
-                    current_chunk += "\n\n" + paragraph
-                else:
-                    current_chunk = paragraph
+                current_chunk = paragraph
 
         # Add final chunk
         if current_chunk.strip():
@@ -450,7 +435,7 @@ class PDFChunker(TextChunker):
 class StructuredDocumentChunker(TextChunker):
     """Chunker for structured documents like EPUB and DOCX."""
 
-    def chunk_text(self, text: str, source_metadata: Optional[Dict[str, Any]] = None) -> ChunkingResult:
+    def chunk_text(self, text: str, source_metadata: dict[str, Any] | None = None) -> ChunkingResult:
         """Chunk structured document text with chapter/section awareness."""
         # Look for chapter markers
         chapter_pattern = r"\[Chapter \d+\]"
@@ -488,7 +473,7 @@ class StructuredDocumentChunker(TextChunker):
 
         return ChunkingResult.create(text, chunks, metadata)
 
-    def _paragraph_chunk(self, text: str) -> List[str]:
+    def _paragraph_chunk(self, text: str) -> list[str]:
         """Chunk text by paragraphs for structured documents."""
         # Split by paragraphs (double newlines)
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
@@ -512,12 +497,11 @@ class StructuredDocumentChunker(TextChunker):
                     current_chunk = overlap_text + "\n\n" + paragraph
                 else:
                     current_chunk = paragraph
+            # Add paragraph to current chunk
+            elif current_chunk:
+                current_chunk += "\n\n" + paragraph
             else:
-                # Add paragraph to current chunk
-                if current_chunk:
-                    current_chunk += "\n\n" + paragraph
-                else:
-                    current_chunk = paragraph
+                current_chunk = paragraph
 
         # Add final chunk
         if current_chunk.strip():
@@ -525,7 +509,7 @@ class StructuredDocumentChunker(TextChunker):
 
         return chunks
 
-    def _structure_aware_chunk(self, text: str) -> List[str]:
+    def _structure_aware_chunk(self, text: str) -> list[str]:
         """Chunk text with awareness of document structure."""
         # Look for table-like structures (| separated)
 
@@ -559,11 +543,10 @@ def create_chunker(file_type: str, config: HybridSearchConfig) -> TextChunker:
 
     if file_type == "markdown":
         return MarkdownChunker(config)
-    elif file_type == "html":
+    if file_type == "html":
         return HTMLChunker(config)
-    elif file_type == "pdf":
+    if file_type == "pdf":
         return PDFChunker(config)
-    elif file_type in ["epub", "docx"]:
+    if file_type in ["epub", "docx"]:
         return StructuredDocumentChunker(config)
-    else:
-        return TextChunker(config)
+    return TextChunker(config)

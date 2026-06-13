@@ -1,11 +1,11 @@
-"""
-Syndication handler for Twitter/X content to VL flow integration.
-"""
+"""Syndication handler for Twitter/X content to VL flow integration."""
 
-from typing import Dict, Any, Optional
-from .extract import extract_text_and_images_from_syndication
+import contextlib
 import logging
 import os
+from typing import Any
+
+from .extract import extract_text_and_images_from_syndication
 
 log = logging.getLogger(__name__)
 
@@ -27,15 +27,14 @@ except Exception:
 
 
 async def handle_twitter_syndication_to_vl(
-    tweet_json: Dict[str, Any],
+    tweet_json: dict[str, Any],
     url: str,
     unified_vl_pipeline_func,
-    prompt_guidelines: Optional[str] = None,
-    timeout_s: Optional[float] = None,
+    prompt_guidelines: str | None = None,
+    timeout_s: float | None = None,
     reply_style: str = "ack+thoughts",
 ) -> str:
-    """
-    Handle Twitter/X link to VL flow using syndication data and unified 1-hop pipeline.
+    """Handle Twitter/X link to VL flow using syndication data and unified 1-hop pipeline.
 
     Args:
         tweet_json: Syndication JSON data from Twitter/X
@@ -47,6 +46,7 @@ async def handle_twitter_syndication_to_vl(
 
     Returns:
         Single final response from unified pipeline (no preview sends)
+
     """
     data = extract_text_and_images_from_syndication(tweet_json)
 
@@ -66,7 +66,7 @@ async def handle_twitter_syndication_to_vl(
         debug_pick = False
     if debug_pick:
         try:
-            preview = ", ".join((image_urls[:2])) if image_urls else "(none)"
+            preview = ", ".join(image_urls[:2]) if image_urls else "(none)"
             log.info(
                 "SYND_MEDIA_PICK | source=%s count=%d preview=%s card_present=%s",
                 source,
@@ -82,12 +82,13 @@ async def handle_twitter_syndication_to_vl(
     if not image_urls:
         # No images - return text-only or fallback
         log.info("No images found via syndication; returning text only")
-        return text if text else "No content or images available."
+        return text or "No content or images available."
 
     # Use unified VL→Text pipeline (no midstream sends, enforces 1 out)
     try:
         # Download images to temp files
         import tempfile
+
         import aiohttp
 
         temp_paths = []
@@ -110,14 +111,12 @@ async def handle_twitter_syndication_to_vl(
         max_images = max(1, min(global_vl_max, x_vl_max))
         limited_urls = image_urls[:max_images]
         if len(image_urls) > len(limited_urls):
-            try:
+            with contextlib.suppress(Exception):
                 log.info(
                     "x.syndication.vl.cap images_in=%d images_used=%d",
                     len(image_urls),
                     len(limited_urls),
                 )
-            except Exception:
-                pass
 
         async with aiohttp.ClientSession() as session:
             for i, image_url in enumerate(limited_urls):
@@ -151,17 +150,14 @@ async def handle_twitter_syndication_to_vl(
             # Extract content from BotAction if that's what's returned
             if hasattr(result, "content"):
                 return result.content
-            else:
-                return str(result)
+            return str(result)
 
         finally:
             # Clean up temp files
             for path in temp_paths:
-                try:
+                with contextlib.suppress(Exception):
                     os.unlink(path)
-                except Exception:
-                    pass
 
     except Exception as e:
-        log.error(f"Unified VL pipeline failed for syndication: {e}")
+        log.exception(f"Unified VL pipeline failed for syndication: {e}")
         return f"Got the tweet but image analysis failed: {str(e)[:100]}"

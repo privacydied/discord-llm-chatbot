@@ -2,9 +2,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from bot import media_ingestion
 from bot.action import BotAction
 from bot.media_ingestion import MediaIngestionManager, MediaIngestionResult
-import bot.media_ingestion as media_ingestion
 
 
 def _make_bot():

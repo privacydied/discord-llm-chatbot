@@ -27,10 +27,9 @@ import pytest
 
 pytestmark = pytest.mark.skip(reason="CuratedMemoryService.delete_memory() user_id param not yet implemented")
 
-from bot.memory.service import CuratedMemoryService
-from bot.memory.persistent_store import MemoryRecord
 from bot.memory.curator import CuratedMemoryCurator
-
+from bot.memory.persistent_store import MemoryRecord
+from bot.memory.service import CuratedMemoryService
 
 # --------------- helpers ---------------
 
@@ -89,7 +88,6 @@ def _fake_persistent_store():
 
     async def fake_upsert(record: MemoryRecord) -> None:
         store._records[record.memory_id] = record
-        return None
 
     async def fake_get_memory(mid: str) -> MemoryRecord | None:
         return store._records.get(mid)
@@ -125,9 +123,9 @@ def _ctx_with_user(user_id: int, guild_id: int | None = None, channel_id: int | 
     ctx.author = MagicMock()
     ctx.author.id = user_id
     ctx.guild = MagicMock()
-    ctx.guild.id = guild_id if guild_id else 99999
+    ctx.guild.id = guild_id or 99999
     ctx.channel = MagicMock()
-    ctx.channel.id = channel_id if channel_id else 77777
+    ctx.channel.id = channel_id or 77777
     return ctx
 
 
@@ -160,7 +158,7 @@ def mock_service():
 
 
 @pytest.mark.asyncio
-async def test_user_sees_own_memory(mock_service):
+async def test_user_sees_own_memory(mock_service) -> None:
     rec = _make_record(memory_id="mem-aaa", user_id="111")
     await mock_service.store.upsert_memory(rec)
 
@@ -173,7 +171,7 @@ async def test_user_sees_own_memory(mock_service):
 
 
 @pytest.mark.asyncio
-async def test_user_b_cannot_see_user_a_memory(mock_service):
+async def test_user_b_cannot_see_user_a_memory(mock_service) -> None:
     rec = _make_record(memory_id="mem-aaa", user_id="111")
     await mock_service.store.upsert_memory(rec)
 
@@ -186,7 +184,7 @@ async def test_user_b_cannot_see_user_a_memory(mock_service):
 
 
 @pytest.mark.asyncio
-async def test_user_b_cannot_search_user_a_memory(mock_service):
+async def test_user_b_cannot_search_user_a_memory(mock_service) -> None:
     # Populate semantic query results that include User A's memory for User B's guild
     semantic_results = [
         {
@@ -203,7 +201,7 @@ async def test_user_b_cannot_search_user_a_memory(mock_service):
                 "source": "explicit_memory_command",
             },
             "semantic_score": 0.8,
-        }
+        },
     ]
     mock_service.semantic_store.query = AsyncMock(return_value=semantic_results)
 
@@ -221,7 +219,7 @@ async def test_user_b_cannot_search_user_a_memory(mock_service):
 
 
 @pytest.mark.asyncio
-async def test_no_cross_user_memory_injection(mock_service):
+async def test_no_cross_user_memory_injection(mock_service) -> None:
     """build_prompt_block with user_id=222 must not include User A's memory."""
     # Put one memory in the store for User A
     rec_a = _make_record(
@@ -261,7 +259,7 @@ async def test_no_cross_user_memory_injection(mock_service):
 
 
 @pytest.mark.asyncio
-async def test_parallel_user_memories_no_collision(mock_service):
+async def test_parallel_user_memories_no_collision(mock_service) -> None:
     rec_a = _make_record(memory_id="mem-aaa", user_id="111", summary="favorite color is red")
     rec_b = _make_record(memory_id="mem-bbb", user_id="222", summary="favorite color is blue")
 
@@ -285,7 +283,7 @@ async def test_parallel_user_memories_no_collision(mock_service):
 
 
 @pytest.mark.asyncio
-async def test_delete_blocks_foreign_user(mock_service):
+async def test_delete_blocks_foreign_user(mock_service) -> None:
     """delete_memory with user_id parameter blocks deleting another user's memory."""
     rec = _make_record(memory_id="mem-aaa", user_id="111")
     await mock_service.store.upsert_memory(rec)
@@ -304,7 +302,7 @@ async def test_delete_blocks_foreign_user(mock_service):
 
 
 @pytest.mark.asyncio
-async def test_delete_succeeds_for_owner(mock_service):
+async def test_delete_succeeds_for_owner(mock_service) -> None:
     rec = _make_record(memory_id="mem-aaa", user_id="111")
     await mock_service.store.upsert_memory(rec)
 
@@ -318,7 +316,7 @@ async def test_delete_succeeds_for_owner(mock_service):
 
 
 @pytest.mark.asyncio
-async def test_delete_without_user_id_fallback(mock_service):
+async def test_delete_without_user_id_fallback(mock_service) -> None:
     """delete_memory without user_id (legacy/admin call) still works."""
     rec = _make_record(memory_id="mem-aaa", user_id="111")
     await mock_service.store.upsert_memory(rec)
@@ -332,7 +330,7 @@ async def test_delete_without_user_id_fallback(mock_service):
 
 
 @pytest.mark.asyncio
-async def test_orphaned_memories_not_returned(mock_service):
+async def test_orphaned_memories_not_returned(mock_service) -> None:
     """Memories missing user_id field should not leak to any user."""
     rec = MemoryRecord(
         memory_id="mem-orphan",
@@ -368,7 +366,7 @@ async def test_orphaned_memories_not_returned(mock_service):
 
 
 @pytest.mark.asyncio
-async def test_dm_and_guild_paths_preserve_user_id():
+async def test_dm_and_guild_paths_preserve_user_id() -> None:
     """Verify that both DM and guild contexts pass the correct user_id through the pipeline."""
 
     # Simulate what the router does for both contexts
@@ -411,7 +409,7 @@ async def test_dm_and_guild_paths_preserve_user_id():
 
 
 @pytest.mark.asyncio
-async def test_scope_filters_include_user_filter(mock_service):
+async def test_scope_filters_include_user_filter(mock_service) -> None:
     """Even when guild_id is provided, a user-scoped filter must be present."""
     filters = mock_service._scope_filters(user_id="111", guild_id="555", channel_id=None, thread_id=None)
     scope_names = [f[0] for f in filters]
@@ -425,11 +423,11 @@ async def test_scope_filters_include_user_filter(mock_service):
 
 
 @pytest.mark.asyncio
-async def test_module_delete_memory_passes_user_id():
+async def test_module_delete_memory_passes_user_id() -> None:
     """Verify that the module-level delete_memory accepts and forwards user_id."""
-    from bot.memory.service import delete_memory as mod_delete
-
     import inspect
+
+    from bot.memory.service import delete_memory as mod_delete
 
     sig = inspect.signature(mod_delete)
     params = list(sig.parameters.keys())

@@ -1,5 +1,4 @@
-"""
-!img prefix command implementation
+"""!img prefix command implementation.
 
 Provides traditional prefix command interface for image generation that works
 with or without bot mention in guild channels. Delegates to the existing
@@ -11,17 +10,18 @@ Enhancements:
 - Add a debug log indicating the prompt source (inline|attachment)
 """
 
+import contextlib
+import json
 import os
 import re
-import json
 from pathlib import Path
+from typing import Any
+
 import discord
 from discord.ext import commands
-from typing import Optional, Tuple, Dict, Any
 
-from bot.utils.logging import get_logger
 from bot.config import load_config
-
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -33,7 +33,7 @@ IMG_ATTACHMENT_EXTS = [".txt", ".md", ".json", ".rtf", ".yaml", ".yml"]
 
 
 class ImgCommands(commands.Cog):
-    """Traditional !img prefix command cog"""
+    """Traditional !img prefix command cog."""
 
     def __init__(self, bot) -> None:
         self.bot = bot
@@ -64,11 +64,9 @@ class ImgCommands(commands.Cog):
 
         if ctype.startswith("text/"):
             return True
-        if "json" in ctype or "yaml" in ctype:
-            return True
-        return False
+        return bool("json" in ctype or "yaml" in ctype)
 
-    async def _read_attachment_text(self, att: discord.Attachment, limit_bytes: int) -> Optional[str]:
+    async def _read_attachment_text(self, att: discord.Attachment, limit_bytes: int) -> str | None:
         """Read and decode attachment text using Discord's API with size checks and sanitization."""
         try:
             # Read the full attachment, enforce limit after
@@ -84,7 +82,7 @@ class ImgCommands(commands.Cog):
                 try:
                     text = data.decode(encoding)
                     break
-                except Exception:
+                except UnicodeDecodeError:
                     continue
 
             if not text:
@@ -98,18 +96,18 @@ class ImgCommands(commands.Cog):
             self.logger.debug(f"Failed to read attachment {att.filename}: {e}")
             return None
 
-    def _parse_prompt_blob(self, blob: str) -> Tuple[Optional[str], Dict[str, Any]]:
+    def _parse_prompt_blob(self, blob: str) -> tuple[str | None, dict[str, Any]]:
         """Parse a blob into (prompt, params). Supports optional fenced JSON with keys.
-        Keys: prompt, negative_prompt, width, height, steps, guidance_scale, seed, model
+        Keys: prompt, negative_prompt, width, height, steps, guidance_scale, seed, model.
         """
-        params: Dict[str, Any] = {}
+        params: dict[str, Any] = {}
         if not blob:
             return None, params
 
         s = blob.strip()
         # Strip triple backtick code fences if present
         # e.g., ```json { ... } ``` or ``` { ... } ```
-        fence_match = re.match(r"^```[a-zA-Z0-9_-]*\s*(.*?)\s*```$", s, flags=re.S)
+        fence_match = re.match(r"^```[a-zA-Z0-9_-]*\s*(.*?)\s*```$", s, flags=re.DOTALL)
         if fence_match:
             s = fence_match.group(1).strip()
 
@@ -121,24 +119,19 @@ class ImgCommands(commands.Cog):
                 if isinstance(obj, dict):
                     # Prompt
                     p = obj.get("prompt")
-                    if isinstance(p, str):
-                        params_prompt = p.strip()
-                    else:
-                        params_prompt = None
+                    params_prompt = p.strip() if isinstance(p, str) else None
                     # Optional params
                     if "negative_prompt" in obj and isinstance(obj.get("negative_prompt"), str):
                         params["negative_prompt"] = obj.get("negative_prompt").strip()
                     for k in ("width", "height", "steps", "seed"):
                         if k in obj:
-                            try:
+                            with contextlib.suppress(Exception):
                                 params[k] = int(obj[k])
-                            except Exception:
-                                pass
                     if "guidance_scale" in obj:
                         try:
                             params["guidance_scale"] = float(obj["guidance_scale"])
-                        except Exception:
-                            pass
+                        except (ValueError, TypeError) as e:
+                            self.logger.debug(f"Failed to parse guidance_scale: {e}")
                     if "model" in obj and isinstance(obj.get("model"), str):
                         params["model"] = obj.get("model").strip()
 
@@ -148,18 +141,17 @@ class ImgCommands(commands.Cog):
                     # If no prompt key, fall back to plain text using the original blob
                     s_plain = s.strip()
                     return (s_plain[:2000] if s_plain else None), params
-            except Exception:
+            except json.JSONDecodeError as e:
                 # Fall through to treat as plain text
-                pass
+                self.logger.debug(f"JSON decode failed, treating as plain text: {e}")
 
         # Plain text prompt
         s = s.strip()
         return (s[:2000] if s else None), params
 
     @commands.command(name="img", aliases=["image"], help="Generate images from text prompts")
-    async def img_command(self, ctx: commands.Context, *, prompt: Optional[str] = None) -> None:
-        """
-        Handle !img prefix command - delegates to vision generation system
+    async def img_command(self, ctx: commands.Context, *, prompt: str | None = None) -> None:
+        """Handle !img prefix command - delegates to vision generation system.
 
         Usage:
         !img a kitten playing with yarn
@@ -170,8 +162,8 @@ class ImgCommands(commands.Cog):
             await ctx.send(embed=self._build_img_help_embed())
             return
 
-        final_prompt: Optional[str] = None
-        parsed_params: Dict[str, Any] = {}
+        final_prompt: str | None = None
+        parsed_params: dict[str, Any] = {}
         inline = (prompt or "").strip()
 
         self.logger.info(f"IMG: Raw prompt param: '{prompt}' (type: {type(prompt)}), stripped inline: '{inline}' (len: {len(inline)})")
@@ -182,8 +174,8 @@ class ImgCommands(commands.Cog):
             final_prompt = inline
             try:
                 self.logger.info(f"IMG.prompt_source=inline len={len(inline)} content='{inline[:50]}...' msg_id={ctx.message.id}")
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Failed to log inline prompt: {e}")
         else:
             # No inline prompt: collect attachments from current and referenced message
             attachments = list(getattr(ctx.message, "attachments", []) or [])
@@ -216,8 +208,8 @@ class ImgCommands(commands.Cog):
                 self.logger.info(f"IMG.attachments current={current_count} reply_has={reply_has} total={total} msg_id={ctx.message.id}")
                 for i, att in enumerate(attachments):
                     self.logger.info(f"IMG: Attachment {i}: {att.filename} ({att.size} bytes, type: {att.content_type})")
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Failed to log attachments: {e}")
 
             max_bytes = IMG_ATTACHMENT_MAX_BYTES
 
@@ -226,7 +218,8 @@ class ImgCommands(commands.Cog):
             for att in attachments:
                 try:
                     size_ok = int(getattr(att, "size", 0) or 0) <= max_bytes
-                except Exception:
+                except (ValueError, TypeError) as e:
+                    self.logger.debug(f"Failed to parse attachment size: {e}")
                     size_ok = True
                 if size_ok:
                     candidates.append(att)
@@ -250,13 +243,13 @@ class ImgCommands(commands.Cog):
                         parsed_params = params or {}
                         try:
                             self.logger.info(f"IMG.prompt_source=attachment file={cand.filename} size={getattr(cand, 'size', 0)} prompt='{p[:50]}...' msg_id={ctx.message.id}")
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            self.logger.debug(f"Failed to log attachment prompt source: {e}")
                         found = True
                         break
                 except Exception as e:
                     # Continue to next candidate on read/parse failure
-                    self.logger.error(f"IMG: Exception reading {cand.filename}: {e}")
+                    self.logger.exception(f"IMG: Exception reading {cand.filename}: {e}")
                     continue
 
             if not found:
@@ -279,7 +272,7 @@ class ImgCommands(commands.Cog):
 
         # Create a mock intent result that matches what the vision system expects
         class MockIntentParams:
-            def __init__(self, prompt: str):
+            def __init__(self, prompt: str) -> None:
                 self.task = VisionTask.TEXT_TO_IMAGE.value
                 self.prompt = prompt
                 self.negative_prompt = ""
@@ -292,7 +285,7 @@ class ImgCommands(commands.Cog):
                 self.model = None
 
         class MockIntentResult:
-            def __init__(self, prompt: str):
+            def __init__(self, prompt: str) -> None:
                 self.extracted_params = MockIntentParams(prompt)
 
         # Get router from bot and delegate
@@ -311,15 +304,11 @@ class ImgCommands(commands.Cog):
                         "seed",
                     ):
                         if k in parsed_params and parsed_params[k] is not None:
-                            try:
+                            with contextlib.suppress(Exception):
                                 setattr(ep, k, parsed_params[k])
-                            except Exception:
-                                pass
                     if "model" in parsed_params and isinstance(parsed_params["model"], str):
-                        try:
+                        with contextlib.suppress(Exception):
                             ep.model = parsed_params["model"]
-                        except Exception:
-                            pass
                 await self.bot.router._handle_vision_generation(
                     mock_intent,
                     ctx.message,
@@ -360,5 +349,5 @@ class ImgCommands(commands.Cog):
 
 
 async def setup(bot) -> None:
-    """Setup function for Discord cog loading"""
+    """Setup function for Discord cog loading."""
     await bot.add_cog(ImgCommands(bot))

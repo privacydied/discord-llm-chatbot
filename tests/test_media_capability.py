@@ -1,12 +1,11 @@
-"""
-Tests for media capability detection system.
-"""
+"""Tests for media capability detection system."""
 
 import asyncio
 import tempfile
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from bot.media_capability import (
@@ -30,16 +29,15 @@ class TestMediaCapabilityDetector:
     def detector(self, temp_cache_dir):
         """Create detector instance with temporary cache."""
         with patch("bot.media_capability.CACHE_DIR", temp_cache_dir):
-            detector = MediaCapabilityDetector()
-            return detector
+            return MediaCapabilityDetector()
 
-    def test_init(self, detector, temp_cache_dir):
+    def test_init(self, detector, temp_cache_dir) -> None:
         """Test detector initialization."""
         assert detector.cache_dir == temp_cache_dir
         assert detector.cache_file == temp_cache_dir / "probe_cache.json"
         assert isinstance(detector._cache, dict)
 
-    def test_get_cache_key(self, detector):
+    def test_get_cache_key(self, detector) -> None:
         """Test cache key generation."""
         url1 = "https://youtube.com/watch?v=test123"
         url2 = "https://youtube.com/watch?v=test456"
@@ -57,7 +55,7 @@ class TestMediaCapabilityDetector:
         key1_again = detector._get_cache_key(url1)
         assert key1 == key1_again
 
-    def test_is_whitelisted_domain(self, detector):
+    def test_is_whitelisted_domain(self, detector) -> None:
         """Test domain whitelist checking."""
         # Whitelisted domains
         assert detector._is_whitelisted_domain("https://youtube.com/watch?v=test")
@@ -76,7 +74,7 @@ class TestMediaCapabilityDetector:
         assert not detector._is_whitelisted_domain("not-a-url")
         assert not detector._is_whitelisted_domain("")
 
-    def test_is_cache_valid(self, detector):
+    def test_is_cache_valid(self, detector) -> None:
         """Test cache validity checking."""
         current_time = time.time()
 
@@ -93,7 +91,7 @@ class TestMediaCapabilityDetector:
         assert not detector._is_cache_valid(no_timestamp_entry)
 
     @pytest.mark.asyncio
-    async def test_probe_url_lightweight_success(self, detector):
+    async def test_probe_url_lightweight_success(self, detector) -> None:
         """Test successful URL probing."""
         url = "https://youtube.com/watch?v=test123"
 
@@ -102,15 +100,14 @@ class TestMediaCapabilityDetector:
         mock_proc.returncode = 0
         mock_proc.communicate.return_value = (b"Test Video Title\n120.5\n", b"")
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            with patch("asyncio.wait_for", return_value=mock_proc):
-                is_capable, reason = await detector._probe_url_lightweight(url)
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc), patch("asyncio.wait_for", return_value=mock_proc):
+            is_capable, reason = await detector._probe_url_lightweight(url)
 
         assert is_capable is True
         assert reason == "media available"
 
     @pytest.mark.asyncio
-    async def test_probe_url_lightweight_failure(self, detector):
+    async def test_probe_url_lightweight_failure(self, detector) -> None:
         """Test failed URL probing."""
         url = "https://example.com/not-a-video"
 
@@ -119,15 +116,14 @@ class TestMediaCapabilityDetector:
         mock_proc.returncode = 1
         mock_proc.communicate.return_value = (b"", b"ERROR: Unsupported URL")
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            with patch("asyncio.wait_for", return_value=mock_proc):
-                is_capable, reason = await detector._probe_url_lightweight(url)
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc), patch("asyncio.wait_for", return_value=mock_proc):
+            is_capable, reason = await detector._probe_url_lightweight(url)
 
         assert is_capable is False
         assert "unsupported url format" in reason
 
     @pytest.mark.asyncio
-    async def test_probe_url_lightweight_timeout(self, detector):
+    async def test_probe_url_lightweight_timeout(self, detector) -> None:
         """Test URL probing timeout."""
         url = "https://youtube.com/watch?v=test123"
 
@@ -138,7 +134,7 @@ class TestMediaCapabilityDetector:
         assert reason == "probe timeout"
 
     @pytest.mark.asyncio
-    async def test_probe_url_lightweight_ytdlp_not_found(self, detector):
+    async def test_probe_url_lightweight_ytdlp_not_found(self, detector) -> None:
         """Test handling when yt-dlp is not installed."""
         url = "https://youtube.com/watch?v=test123"
 
@@ -149,7 +145,7 @@ class TestMediaCapabilityDetector:
         assert reason == "yt-dlp not available"
 
     @pytest.mark.asyncio
-    async def test_is_media_capable_domain_not_whitelisted(self, detector):
+    async def test_is_media_capable_domain_not_whitelisted(self, detector) -> None:
         """Test capability check for non-whitelisted domain."""
         url = "https://example.com/video"
 
@@ -161,7 +157,7 @@ class TestMediaCapabilityDetector:
         assert result.probe_duration_ms == 0
 
     @pytest.mark.asyncio
-    async def test_is_media_capable_cache_hit(self, detector):
+    async def test_is_media_capable_cache_hit(self, detector) -> None:
         """Test capability check with cache hit."""
         url = "https://youtube.com/watch?v=test123"
         cache_key = detector._get_cache_key(url)
@@ -183,7 +179,7 @@ class TestMediaCapabilityDetector:
         assert result.probe_duration_ms == 150.0
 
     @pytest.mark.asyncio
-    async def test_is_media_capable_cache_expired(self, detector):
+    async def test_is_media_capable_cache_expired(self, detector) -> None:
         """Test capability check with expired cache entry."""
         url = "https://youtube.com/watch?v=test123"
         cache_key = detector._get_cache_key(url)
@@ -207,7 +203,7 @@ class TestMediaCapabilityDetector:
         assert cache_key not in detector._cache  # Expired entry should be removed
 
     @pytest.mark.asyncio
-    async def test_is_media_capable_fresh_probe(self, detector):
+    async def test_is_media_capable_fresh_probe(self, detector) -> None:
         """Test capability check with fresh probe."""
         url = "https://youtube.com/watch?v=test123"
 
@@ -228,7 +224,7 @@ class TestMediaCapabilityDetector:
         assert cached_entry["reason"] == "media available"
 
     @pytest.mark.asyncio
-    async def test_is_twitter_video_present_non_twitter_url(self, detector):
+    async def test_is_twitter_video_present_non_twitter_url(self, detector) -> None:
         """Test Twitter video detection for non-Twitter URL."""
         url = "https://youtube.com/watch?v=test123"
 
@@ -238,7 +234,7 @@ class TestMediaCapabilityDetector:
         assert result.reason == "not a twitter/x url"
 
     @pytest.mark.asyncio
-    async def test_is_twitter_video_present_success(self, detector):
+    async def test_is_twitter_video_present_success(self, detector) -> None:
         """Test successful Twitter video detection."""
         url = "https://twitter.com/user/status/123"
 
@@ -260,7 +256,7 @@ class TestMediaCapabilityDetector:
         assert result.probe_duration_ms == 100.0
 
     @pytest.mark.asyncio
-    async def test_is_twitter_video_present_no_video(self, detector):
+    async def test_is_twitter_video_present_no_video(self, detector) -> None:
         """Test Twitter video detection when no video is present."""
         url = "https://twitter.com/user/status/123"
 
@@ -281,7 +277,7 @@ class TestMediaCapabilityDetector:
         assert result.cached is False
         assert result.probe_duration_ms == 50.0
 
-    def test_cleanup_expired_cache(self, detector):
+    def test_cleanup_expired_cache(self, detector) -> None:
         """Test cleanup of expired cache entries."""
         current_time = time.time()
 
@@ -304,7 +300,7 @@ class TestMediaCapabilityDetector:
         assert "expired2" not in detector._cache
         assert "no_timestamp" not in detector._cache
 
-    def test_get_cache_stats(self, detector):
+    def test_get_cache_stats(self, detector) -> None:
         """Test cache statistics generation."""
         current_time = time.time()
 
@@ -327,7 +323,7 @@ class TestConvenienceFunctions:
     """Test convenience functions."""
 
     @pytest.mark.asyncio
-    async def test_is_media_capable_url(self):
+    async def test_is_media_capable_url(self) -> None:
         """Test is_media_capable_url convenience function."""
         url = "https://youtube.com/watch?v=test123"
 
@@ -341,7 +337,7 @@ class TestConvenienceFunctions:
             assert result.reason == "media available"
 
     @pytest.mark.asyncio
-    async def test_is_twitter_video_url(self):
+    async def test_is_twitter_video_url(self) -> None:
         """Test is_twitter_video_url convenience function."""
         url = "https://twitter.com/user/status/123"
 
@@ -360,7 +356,7 @@ class TestMediaCapabilityIntegration:
     """Integration tests requiring actual yt-dlp."""
 
     @pytest.mark.asyncio
-    async def test_real_youtube_url(self):
+    async def test_real_youtube_url(self) -> None:
         """Test with real YouTube URL (requires yt-dlp)."""
         # Skip if yt-dlp not available
         try:
@@ -384,7 +380,7 @@ class TestMediaCapabilityIntegration:
         assert result.probe_duration_ms > 0
 
     @pytest.mark.asyncio
-    async def test_real_invalid_url(self):
+    async def test_real_invalid_url(self) -> None:
         """Test with real invalid URL (requires yt-dlp)."""
         # Skip if yt-dlp not available
         try:

@@ -11,14 +11,14 @@ Extraction protocol:
 4. Imports outside router.py are preserved
 """
 
-from .base import RouteContext, RouteResult, RouteHandler
+from .base import RouteContext, RouteHandler, RouteResult
 from .screenshot_handler import ScreenshotHandler, handle_screenshot_url
 from .unknown_handler import UnknownHandler
 
 __all__ = [
     "RouteContext",
-    "RouteResult",
     "RouteHandler",
+    "RouteResult",
     "ScreenshotHandler",
     "UnknownHandler",
     "handle_screenshot_url",

@@ -9,7 +9,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class TaskEntry:
     task: asyncio.Task
     feature: str  # which feature this task belongs to (e.g. "memory", "tts", "janitor")
     created_at: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def state(self) -> TaskState:
@@ -56,7 +56,7 @@ class BackgroundTaskRegistry:
     """
 
     def __init__(self) -> None:
-        self._tasks: Dict[str, TaskEntry] = {}
+        self._tasks: dict[str, TaskEntry] = {}
         self._lock = asyncio.Lock() if asyncio.get_event_loop().is_running() else None
 
     def register(
@@ -65,7 +65,7 @@ class BackgroundTaskRegistry:
         *,
         name: str,
         feature: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> TaskEntry:
         """Register a background task in the registry.
 
@@ -107,11 +107,11 @@ class BackgroundTaskRegistry:
         )
         return entry
 
-    def unregister(self, name: str) -> Optional[TaskEntry]:
+    def unregister(self, name: str) -> TaskEntry | None:
         """Remove a task from the registry by name."""
         return self._tasks.pop(name, None)
 
-    def get(self, name: str) -> Optional[TaskEntry]:
+    def get(self, name: str) -> TaskEntry | None:
         """Look up a task by name."""
         return self._tasks.get(name)
 
@@ -120,10 +120,10 @@ class BackgroundTaskRegistry:
         entry = self._tasks.get(name)
         return entry is not None and not entry.task.done()
 
-    def list_tasks(self) -> List[Dict[str, Any]]:
+    def list_tasks(self) -> list[dict[str, Any]]:
         """Return a serialisable snapshot of all registered tasks."""
         result = []
-        for name, entry in self._tasks.items():
+        for entry in self._tasks.values():
             try:
                 done = entry.task.done()
                 cancelled = entry.task.cancelled()
@@ -138,14 +138,14 @@ class BackgroundTaskRegistry:
                     "done": done,
                     "cancelled": cancelled,
                     "metadata": entry.metadata,
-                }
+                },
             )
         return result
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """Return a summary of tasks by feature."""
-        features: Dict[str, Dict[str, int]] = {}
-        for name, entry in self._tasks.items():
+        features: dict[str, dict[str, int]] = {}
+        for entry in self._tasks.values():
             f = entry.feature
             if f not in features:
                 features[f] = {"total": 0, "running": 0, "done": 0, "cancelled": 0, "failed": 0}
@@ -165,13 +165,13 @@ class BackgroundTaskRegistry:
             "features": features,
         }
 
-    def get_active_names(self) -> Set[str]:
+    def get_active_names(self) -> set[str]:
         """Return names of tasks that are still running."""
         return {name for name, entry in self._tasks.items() if not entry.task.done()}
 
 
 # Global singleton
-_registry: Optional[BackgroundTaskRegistry] = None
+_registry: BackgroundTaskRegistry | None = None
 
 
 def get_registry() -> BackgroundTaskRegistry:

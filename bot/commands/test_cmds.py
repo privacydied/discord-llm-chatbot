@@ -1,9 +1,8 @@
-"""
-Test commands for debugging and basic functionality verification.
-"""
+"""Test commands for debugging and basic functionality verification."""
+
+import logging
 
 from discord.ext import commands
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -15,12 +14,10 @@ class TestCommands(commands.Cog):
         self.bot = bot
         self.config = {}
         self.router = None
-        print("✅ TestCommands cog initialized")
 
     @commands.command(name="ping")
-    async def ping(self, ctx):
+    async def ping(self, ctx) -> None:
         """Respond with 'Pong!' to verify the bot is working."""
-        print(f"🏓 Ping command received from {ctx.author}")
         await ctx.send("Pong! 🏓")
 
 

@@ -6,7 +6,7 @@ from bot.stt import ModelSpec
 class TestSTTLanguagePropagation:
     """Tests for language detection and propagation across chunks."""
 
-    def test_transcript_cache_key_includes_language(self):
+    def test_transcript_cache_key_includes_language(self) -> None:
         """Cache key should include language parameter."""
         from bot.hear import _transcript_cache_key
 
@@ -22,7 +22,7 @@ class TestSTTLanguagePropagation:
         assert key1 != key3
         assert key2 != key3
 
-    def test_transcript_cache_key_includes_task(self):
+    def test_transcript_cache_key_includes_task(self) -> None:
         """Cache key should include task mode (transcribe vs translate)."""
         from bot.hear import _transcript_cache_key
 
@@ -35,9 +35,9 @@ class TestSTTLanguagePropagation:
         # Keys should be different
         assert key1 != key2
 
-    def test_transcript_cache_key_includes_pipeline_version(self):
+    def test_transcript_cache_key_includes_pipeline_version(self) -> None:
         """Cache key should include pipeline version for cache invalidation."""
-        from bot.hear import _transcript_cache_key, STT_PIPELINE_VERSION
+        from bot.hear import STT_PIPELINE_VERSION, _transcript_cache_key
 
         spec = ModelSpec(size="base", compute_type="int8")
 
@@ -50,7 +50,7 @@ class TestSTTLanguagePropagation:
 class TestSTTConfidenceMetadata:
     """Tests for STT confidence metadata in transcript results."""
 
-    def test_transcript_result_has_confidence_fields(self):
+    def test_transcript_result_has_confidence_fields(self) -> None:
         """TranscriptResult should have confidence and language fields."""
         from bot.hear import TranscriptResult
 
@@ -78,7 +78,7 @@ class TestSTTConfidenceMetadata:
 class TestJoinSegments:
     """Tests for _join_segments function with various inputs."""
 
-    def test_join_segments_with_empty_input(self):
+    def test_join_segments_with_empty_input(self) -> None:
         """Empty segments should return empty string with unknown confidence."""
         from bot.hear import _join_segments
 
@@ -86,7 +86,7 @@ class TestJoinSegments:
         assert text == ""
         assert meta["confidence_status"] == "unknown"
 
-    def test_join_segments_sorts_by_timestamp(self):
+    def test_join_segments_sorts_by_timestamp(self) -> None:
         """Segments should be sorted by start timestamp."""
         from bot.hear import _join_segments
 
@@ -96,13 +96,13 @@ class TestJoinSegments:
             {"text": "third", "start": 10.0, "end": 11.0},
         ]
 
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         # Should be sorted: first, second, third
         assert "first" in text
         assert "second" in text
         assert "third" in text
 
-    def test_join_segments_skips_empty_text(self):
+    def test_join_segments_skips_empty_text(self) -> None:
         """Segments with empty text should be skipped."""
         from bot.hear import _join_segments
 
@@ -112,10 +112,10 @@ class TestJoinSegments:
             {"text": "", "start": 5.0, "end": 6.0},
         ]
 
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         assert text == "Hello"
 
-    def test_join_segments_handles_consecutive_duplicates(self):
+    def test_join_segments_handles_consecutive_duplicates(self) -> None:
         """Exact consecutive duplicates should be skipped."""
         from bot.hear import _join_segments
 
@@ -125,11 +125,11 @@ class TestJoinSegments:
             {"text": "world", "start": 3.0, "end": 4.0},
         ]
 
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         # Should only have "Hello world", not "Hello Hello world"
         assert text == "Hello world"
 
-    def test_join_segments_preserves_non_consecutive_duplicates(self):
+    def test_join_segments_preserves_non_consecutive_duplicates(self) -> None:
         """Non-consecutive duplicates (repeated phrases) should be preserved."""
         from bot.hear import _join_segments
 
@@ -139,11 +139,11 @@ class TestJoinSegments:
             {"text": "Hello", "start": 10.0, "end": 11.0},  # Later occurrence
         ]
 
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         # Should have "Hello" twice since it's not consecutive
         assert text == "Hello world Hello"
 
-    def test_join_segments_preserves_arabic_text(self):
+    def test_join_segments_preserves_arabic_text(self) -> None:
         """Arabic text should be preserved without mangling."""
         from bot.hear import _join_segments
 
@@ -152,7 +152,7 @@ class TestJoinSegments:
             {"text": "بصحب الزلالة", "start": 4.0, "end": 6.0},
         ]
 
-        text, meta = _join_segments(segments)
+        text, _meta = _join_segments(segments)
         assert "الرئيس" in text
         assert "جوبايدا" in text
         assert "بصحب" in text
@@ -161,7 +161,7 @@ class TestJoinSegments:
 class TestTupleFix:
     """Tests to verify the tuple unpacking fix in _join_segments."""
 
-    def test_join_segments_returns_tuple(self):
+    def test_join_segments_returns_tuple(self) -> None:
         """_join_segments should return (text, meta) tuple."""
         from bot.hear import _join_segments
 
@@ -180,7 +180,7 @@ class TestTupleFix:
         assert isinstance(result[1], dict)
         assert "confidence_status" in result[1]
 
-    def test_tuple_unpacking_in_caller(self):
+    def test_tuple_unpacking_in_caller(self) -> None:
         """Caller should correctly unpack the tuple."""
         from bot.hear import _join_segments
 

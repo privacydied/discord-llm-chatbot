@@ -1,9 +1,11 @@
 import asyncio
-import pytest
+from typing import Never
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from bot.router import Router
+import pytest
+
 from bot.action import BotAction
+from bot.router import Router
 
 
 @pytest.fixture
@@ -22,8 +24,7 @@ def mock_bot():
 @pytest.fixture
 def router(mock_bot):
     # Instantiate with VISION disabled to avoid heavy init; tests will toggle flags as needed
-    r = Router(mock_bot)
-    return r
+    return Router(mock_bot)
 
 
 @pytest.fixture
@@ -42,7 +43,7 @@ def mock_message():
 
 class TestPrioritizedVisionRoute:
     @pytest.mark.asyncio
-    async def test_cfg_disabled_returns_none_and_increments_skipped(self, router, mock_message):
+    async def test_cfg_disabled_returns_none_and_increments_skipped(self, router, mock_message) -> None:
         mock_message.content = "hello"
         router.config["VISION_ENABLED"] = False
 
@@ -53,7 +54,7 @@ class TestPrioritizedVisionRoute:
         metric_inc.assert_any_call("vision.route.skipped", {"reason": "cfg_disabled"})
 
     @pytest.mark.asyncio
-    async def test_direct_trigger_dry_run_returns_action_and_metrics(self, router, mock_message):
+    async def test_direct_trigger_dry_run_returns_action_and_metrics(self, router, mock_message) -> None:
         mock_message.content = "generate an image of a red cat"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = True
@@ -72,7 +73,7 @@ class TestPrioritizedVisionRoute:
         metric_inc.assert_any_call("vision.route.dry_run", {"path": "direct"})
 
     @pytest.mark.asyncio
-    async def test_direct_trigger_blocked_without_orchestrator(self, router, mock_message):
+    async def test_direct_trigger_blocked_without_orchestrator(self, router, mock_message) -> None:
         mock_message.content = "draw a dragon breathing fire"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = False
@@ -90,7 +91,7 @@ class TestPrioritizedVisionRoute:
         )
 
     @pytest.mark.asyncio
-    async def test_direct_trigger_calls_handler_when_ready(self, router, mock_message):
+    async def test_direct_trigger_calls_handler_when_ready(self, router, mock_message) -> None:
         mock_message.content = "create a picture of a beach at sunset"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = False
@@ -104,7 +105,7 @@ class TestPrioritizedVisionRoute:
         handle_vision.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_intent_dry_run_returns_action_and_metrics(self, router, mock_message):
+    async def test_intent_dry_run_returns_action_and_metrics(self, router, mock_message) -> None:
         mock_message.content = "this is a normal request"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = True
@@ -115,7 +116,7 @@ class TestPrioritizedVisionRoute:
             use_vision = True
 
         class IntentResult:
-            def __init__(self):
+            def __init__(self) -> None:
                 self.decision = Decision()
                 self.confidence = 0.72
                 self.extracted_params = MagicMock()
@@ -136,7 +137,7 @@ class TestPrioritizedVisionRoute:
         metric_inc.assert_any_call("vision.route.dry_run", {"path": "intent"})
 
     @pytest.mark.asyncio
-    async def test_intent_blocked_without_orchestrator(self, router, mock_message):
+    async def test_intent_blocked_without_orchestrator(self, router, mock_message) -> None:
         mock_message.content = "a regular sentence"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = False
@@ -147,7 +148,7 @@ class TestPrioritizedVisionRoute:
             use_vision = True
 
         class IntentResult:
-            def __init__(self):
+            def __init__(self) -> None:
                 self.decision = Decision()
                 self.confidence = 0.55
                 self.extracted_params = MagicMock()
@@ -167,7 +168,7 @@ class TestPrioritizedVisionRoute:
         )
 
     @pytest.mark.asyncio
-    async def test_intent_calls_handler_when_ready(self, router, mock_message):
+    async def test_intent_calls_handler_when_ready(self, router, mock_message) -> None:
         mock_message.content = "non trigger text"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = False
@@ -178,7 +179,7 @@ class TestPrioritizedVisionRoute:
             use_vision = True
 
         class IntentResult:
-            def __init__(self):
+            def __init__(self) -> None:
                 self.decision = Decision()
                 self.confidence = 0.61
                 self.extracted_params = MagicMock()
@@ -194,7 +195,7 @@ class TestPrioritizedVisionRoute:
         handle_vision.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_intent_error_returns_none_and_increments_metric(self, router, mock_message):
+    async def test_intent_error_returns_none_and_increments_metric(self, router, mock_message) -> None:
         mock_message.content = "plain message"
         router.config["VISION_ENABLED"] = True
         router.config["VISION_DRY_RUN_MODE"] = False
@@ -210,7 +211,7 @@ class TestPrioritizedVisionRoute:
 
 
 class TestDirectTriggerDetection:
-    def test_detect_direct_trigger_extracts_prompt(self, router):
+    def test_detect_direct_trigger_extracts_prompt(self, router) -> None:
         content = "generate an image of a fluffy dog playing fetch"
         out = router._detect_direct_vision_triggers(content)
         assert out is not None
@@ -219,27 +220,27 @@ class TestDirectTriggerDetection:
         assert out["prompt"].lower().startswith("fluffy dog")
         assert out["confidence"] >= 0.9
 
-    def test_no_direct_trigger_returns_none(self, router):
+    def test_no_direct_trigger_returns_none(self, router) -> None:
         content = "let's just chat about something"
         out = router._detect_direct_vision_triggers(content)
         assert out is None
 
 
 class TestMetricInc:
-    def test_metric_inc_uses_increment_method(self, router):
+    def test_metric_inc_uses_increment_method(self, router) -> None:
         metrics = MagicMock()
         router.bot.metrics = metrics
 
         router._metric_inc("test.metric", {"a": "b"})
         metrics.increment.assert_called_once_with("test.metric", {"a": "b"})
 
-    def test_metric_inc_falls_back_to_inc(self, router):
+    def test_metric_inc_falls_back_to_inc(self, router) -> None:
         class M:
-            def __init__(self):
+            def __init__(self) -> None:
                 self.increment = None  # simulate absence
                 self._called = False
 
-            def inc(self, metric_name, labels=None):
+            def inc(self, metric_name, labels=None) -> None:
                 self._called = True
                 assert metric_name == "test.metric"
                 assert labels == {"x": "y"}
@@ -250,10 +251,11 @@ class TestMetricInc:
         router._metric_inc("test.metric", {"x": "y"})
         assert m._called is True
 
-    def test_metric_inc_swallow_exceptions(self, router):
+    def test_metric_inc_swallow_exceptions(self, router) -> None:
         class M:
-            def increment(self, *args, **kwargs):
-                raise RuntimeError("fail")
+            def increment(self, *args, **kwargs) -> Never:
+                msg = "fail"
+                raise RuntimeError(msg)
 
         router.bot.metrics = M()
 

@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
 
 
 class AlertSessionStatus(Enum):
@@ -16,12 +15,12 @@ class AlertSessionStatus(Enum):
 
 @dataclass
 class AlertDestination:
-    guild_id: Optional[int]
-    channel_id: Optional[int]
-    channel_name: Optional[str]
-    guild_name: Optional[str] = None
+    guild_id: int | None
+    channel_id: int | None
+    channel_name: str | None
+    guild_name: str | None = None
     permissions_valid: bool = True
-    permission_issues: List[str] = field(default_factory=list)
+    permission_issues: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -34,15 +33,15 @@ class AlertSession:
     content: str = ""
     embed_title: str = ""
     embed_description: str = ""
-    destinations: List[AlertDestination] = field(default_factory=list)
+    destinations: list[AlertDestination] = field(default_factory=list)
     mention_everyone: bool = False
     current_step: str = "select_channels"
-    composer_message_id: Optional[int] = None
+    composer_message_id: int | None = None
     composer_ready: bool = False
     # Guild navigation pagination
     guild_page: int = 0
-    selected_guild_id: Optional[int] = None
+    selected_guild_id: int | None = None
     channel_page: int = 0
-    guilds_list: List = field(default_factory=list)
-    selection_message_id: Optional[int] = None
-    channel_message_id: Optional[int] = None
+    guilds_list: list = field(default_factory=list)
+    selection_message_id: int | None = None
+    channel_message_id: int | None = None

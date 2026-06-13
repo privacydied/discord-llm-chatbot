@@ -1,11 +1,10 @@
-"""
-Change Summary:
+"""Change Summary:
 - Created new modality.py module to support sequential multimodal processing
 - Introduced InputItem dataclass for unified input handling across attachments, URLs, and embeds
 - Implemented collect_input_items() to gather ALL inputs from a message in textual order
 - Implemented map_item_to_modality() for robust per-item modality detection
 - Extended InputModality enum with additional modalities for comprehensive coverage
-- Added comprehensive logging and error handling for modality detection
+- Added comprehensive logging and error handling for modality detection.
 
 This replaces the single-shot modality detection with a multi-pass system that processes
 each input item sequentially, enabling full multimodal support.
@@ -18,13 +17,14 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from functools import lru_cache
-from typing import List, Literal, Union, TYPE_CHECKING, Optional, Pattern
+from re import Pattern
+from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlparse
 
-import discord
 from .utils.logging import get_logger
 
 if TYPE_CHECKING:
+    import discord
     from discord import Message
 
 logger = get_logger(__name__)
@@ -38,7 +38,7 @@ _IMAGE_EXT_PATTERN = re.compile(
 _PDF_EXT_PATTERN = re.compile(r"\.pdf(\?.*)?$", re.IGNORECASE)
 
 # Cache for video patterns - loaded once and reused [PA]
-_VIDEO_PATTERNS: Optional[List[Pattern[str]]] = None
+_VIDEO_PATTERNS: list[Pattern[str]] | None = None
 _FALLBACK_PATTERNS = [
     re.compile(r"https?://(?:www\.)?youtube\.com/watch\?(?:.*&)?v=[\w-]+"),
     re.compile(r"https?://youtu\.be/[\w-]+"),
@@ -68,7 +68,7 @@ class InputItem:
     """Unified abstraction for all input types (attachments, URLs, embeds)."""
 
     source_type: Literal["attachment", "url", "embed"]
-    payload: Union[discord.Attachment, str, discord.Embed]
+    payload: discord.Attachment | str | discord.Embed
     order_index: int  # Preserve original message order
 
     def __post_init__(self):
@@ -76,18 +76,19 @@ class InputItem:
         if self.source_type not in ("attachment", "url", "embed"):
             logger.warning(f"Invalid source_type: {self.source_type}, treating as unknown")
         if self.order_index < 0:
-            raise ValueError(f"Invalid order_index: {self.order_index}")
+            msg = f"Invalid order_index: {self.order_index}"
+            raise ValueError(msg)
 
 
-def collect_input_items(message: Message) -> List[InputItem]:
-    """
-    Collect all input items from a message in textual order.
+def collect_input_items(message: Message) -> list[InputItem]:
+    """Collect all input items from a message in textual order.
 
     Args:
         message: Discord message to process
 
     Returns:
         List of InputItem objects in order of appearance
+
     """
     items = []
     order_index = 0
@@ -155,20 +156,20 @@ class ImageRef:
     """Reference to an image with metadata for high-res harvesting."""
 
     url: str
-    filename: Optional[str] = None
-    content_type: Optional[str] = None
-    fallback_urls: List[str] = field(default_factory=list)
+    filename: str | None = None
+    content_type: str | None = None
+    fallback_urls: list[str] = field(default_factory=list)
 
 
-def collect_image_urls_from_message(message: Message) -> List[ImageRef]:
-    """
-    Harvest high-resolution images from a message (attachments + image embeds) with fallback candidates.
+def collect_image_urls_from_message(message: Message) -> list[ImageRef]:
+    """Harvest high-resolution images from a message (attachments + image embeds) with fallback candidates.
 
     Args:
         message: Discord message to harvest images from
 
     Returns:
         List of ImageRef objects with deduplication and fallback URLs
+
     """
     images = []
     seen_urls = set()
@@ -180,28 +181,27 @@ def collect_image_urls_from_message(message: Message) -> List[ImageRef]:
 
     # 1. Attachments first (highest priority - full resolution)
     for attachment in message.attachments:
-        if attachment.content_type and attachment.content_type.startswith("image/"):
-            if attachment.url not in seen_urls:
-                # Build candidate URLs for robust fetching
-                candidates = [attachment.url]  # Full CDN URL first
+        if attachment.content_type and attachment.content_type.startswith("image/") and attachment.url not in seen_urls:
+            # Build candidate URLs for robust fetching
+            candidates = [attachment.url]  # Full CDN URL first
 
-                # Add proxy URL as fallback
-                if hasattr(attachment, "proxy_url") and attachment.proxy_url:
-                    candidates.append(attachment.proxy_url)
+            # Add proxy URL as fallback
+            if hasattr(attachment, "proxy_url") and attachment.proxy_url:
+                candidates.append(attachment.proxy_url)
 
-                # Add 4096 variant for media.discordapp.net
-                if "media.discordapp.net" in attachment.url and "?format=" not in attachment.url:
-                    candidates.append(f"{attachment.url}?format=png&size=4096")
+            # Add 4096 variant for media.discordapp.net
+            if "media.discordapp.net" in attachment.url and "?format=" not in attachment.url:
+                candidates.append(f"{attachment.url}?format=png&size=4096")
 
-                images.append(
-                    ImageRef(
-                        url=candidates[0],  # Primary URL
-                        filename=attachment.filename,
-                        content_type=attachment.content_type,
-                        fallback_urls=candidates[1:] if len(candidates) > 1 else [],
-                    )
-                )
-                seen_urls.add(attachment.url)
+            images.append(
+                ImageRef(
+                    url=candidates[0],  # Primary URL
+                    filename=attachment.filename,
+                    content_type=attachment.content_type,
+                    fallback_urls=candidates[1:] if len(candidates) > 1 else [],
+                ),
+            )
+            seen_urls.add(attachment.url)
 
     # 2. Image embeds (use .image.url for full size, with proxy fallback)
     for embed in message.embeds:
@@ -239,7 +239,7 @@ def collect_image_urls_from_message(message: Message) -> List[ImageRef]:
                 filename=None,  # Embeds usually don't have filenames
                 content_type="image/*",  # Generic type
                 fallback_urls=candidates[1:] if len(candidates) > 1 else [],
-            )
+            ),
         )
         seen_urls.add(primary)
 
@@ -247,25 +247,24 @@ def collect_image_urls_from_message(message: Message) -> List[ImageRef]:
 
 
 async def map_item_to_modality(item: InputItem) -> InputModality:
-    """
-    Map an input item to its appropriate modality.
+    """Map an input item to its appropriate modality.
 
     Args:
         item: InputItem to analyze
 
     Returns:
         InputModality enum value
+
     """
     try:
         if item.source_type == "attachment":
             return await _map_attachment_to_modality(item.payload)
-        elif item.source_type == "url":
+        if item.source_type == "url":
             return await _map_url_to_modality(item.payload)
-        elif item.source_type == "embed":
+        if item.source_type == "embed":
             return await _map_embed_to_modality(item.payload)
-        else:
-            logger.warning(f"Unknown source_type: {item.source_type}")
-            return InputModality.UNKNOWN
+        logger.warning(f"Unknown source_type: {item.source_type}")
+        return InputModality.UNKNOWN
 
     except Exception as e:
         logger.error(f"Error mapping item to modality: {e}", exc_info=True)
@@ -400,10 +399,9 @@ async def _map_url_to_modality(url: str) -> InputModality:
 
     # TikTok player/embed guard: skip STT for unsupported embed URLs
     # These URLs (e.g., /player/v1/<id>) cannot be processed by yt-dlp
-    if host in {"tiktok.com", "www.tiktok.com", "m.tiktok.com", "vm.tiktok.com"}:
-        if path.startswith("/player"):
-            logger.info(f"stt.tiktok.skip kind=player_embed url={url[:80]}")
-            return InputModality.GENERAL_URL
+    if host in {"tiktok.com", "www.tiktok.com", "m.tiktok.com", "vm.tiktok.com"} and path.startswith("/player"):
+        logger.info(f"stt.tiktok.skip kind=player_embed url={url[:80]}")
+        return InputModality.GENERAL_URL
 
     # Twitter/X status posts should go through API-first general URL path [SFT][CA]
     # but allow broadcasts (Spaces/live) to be handled as video-capable URLs.
@@ -473,8 +471,7 @@ async def _map_embed_to_modality(embed: discord.Embed) -> InputModality:
 
 
 async def detect_modality(message: Message) -> InputModality:
-    """
-    Legacy function for backward compatibility.
+    """Legacy function for backward compatibility.
     Returns the modality of the first detected input item.
 
     Args:
@@ -482,6 +479,7 @@ async def detect_modality(message: Message) -> InputModality:
 
     Returns:
         InputModality of first item, or TEXT_ONLY if no items
+
     """
     items = collect_input_items(message)
     if not items:
@@ -492,16 +490,16 @@ async def detect_modality(message: Message) -> InputModality:
 
 # New async bulk processing functions [PA]
 async def map_items_to_modalities_concurrent(
-    items: List[InputItem],
-) -> List[InputModality]:
-    """
-    Map multiple items to modalities concurrently for performance [PA].
+    items: list[InputItem],
+) -> list[InputModality]:
+    """Map multiple items to modalities concurrently for performance [PA].
 
     Args:
         items: List of InputItem objects to process
 
     Returns:
         List of InputModality enum values in same order
+
     """
     if not items:
         return []
@@ -514,7 +512,7 @@ async def map_items_to_modalities_concurrent(
     results = []
     for i, modality in enumerate(modalities):
         if isinstance(modality, Exception):
-            logger.error(f"Error processing item {i}: {modality}", exc_info=True)
+            logger.error(f"Error processing item {i}: {modality}")
             results.append(InputModality.UNKNOWN)
         else:
             results.append(modality)
@@ -524,8 +522,7 @@ async def map_items_to_modalities_concurrent(
 
 @lru_cache(maxsize=1000)  # Cache frequent pattern checks [PA]
 def _cached_url_check(url: str, pattern_type: str) -> bool:
-    """
-    Cached URL pattern checking for frequently accessed URLs [PA].
+    """Cached URL pattern checking for frequently accessed URLs [PA].
 
     Args:
         url: URL to check
@@ -533,9 +530,10 @@ def _cached_url_check(url: str, pattern_type: str) -> bool:
 
     Returns:
         True if URL matches pattern
+
     """
     if pattern_type == "image":
         return bool(_IMAGE_EXT_PATTERN.search(url))
-    elif pattern_type == "pdf":
+    if pattern_type == "pdf":
         return bool(_PDF_EXT_PATTERN.search(url))
     return False

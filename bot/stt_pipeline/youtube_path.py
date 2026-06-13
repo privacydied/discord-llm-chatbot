@@ -2,26 +2,29 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Dict, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from .logging import log_stt_job_complete
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 def build_youtube_transcript_result(
     *,
     url: str,
     transcript_text: str,
-    title: Optional[str],
-    uploader: Optional[str],
-    duration_s: Optional[float],
+    title: str | None,
+    uploader: str | None,
+    duration_s: float | None,
     cache_hit: bool,
-    source: Optional[str],
-    language: Optional[str],
-    timestamp_iso: Optional[str] = None,
-) -> Dict[str, Any]:
+    source: str | None,
+    language: str | None,
+    timestamp_iso: str | None = None,
+) -> dict[str, Any]:
     """Build canonical STT result payload for transcript-first YouTube path."""
-    now_iso = timestamp_iso or datetime.now(timezone.utc).isoformat()
+    now_iso = timestamp_iso or datetime.now(UTC).isoformat()
     dur = float(duration_s or 0.0)
     return {
         "transcription": transcript_text,
@@ -51,7 +54,7 @@ async def try_youtube_transcript_first(
     force_refresh: bool,
     resolver: Callable[..., Awaitable[Any]],
     logger: Any,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Resolve transcript-first payload for YouTube URLs, fail-open on resolver errors."""
     try:
         yt = await resolver(url, force_refresh=force_refresh)

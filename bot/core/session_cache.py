@@ -1,17 +1,18 @@
-"""
-Session Cache System - TTL-based caching for user profiles and context with token budgets.
+"""Session Cache System - TTL-based caching for user profiles and context with token budgets.
 Implements PA (Performance Awareness) and CMV (Constants over Magic Values) rules.
 """
 
 import asyncio
+import contextlib
 import time
-from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List
 from collections import OrderedDict
+from dataclasses import dataclass, field
+from typing import Any
+
+from bot.utils.logging import get_logger
 
 from .phase_constants import PhaseConstants as PC
-from .phase_timing import get_timing_manager, PipelineTracker
-from ..utils.logging import get_logger
+from .phase_timing import PipelineTracker, get_timing_manager
 
 logger = get_logger(__name__)
 
@@ -38,7 +39,7 @@ class CacheEntry:
         self.access_count += 1
         return self.data
 
-    def update_data(self, new_data: Any):
+    def update_data(self, new_data: Any) -> None:
         """Update cached data, resetting TTL."""
         self.data = new_data
         self.created_at = time.time()
@@ -67,13 +68,13 @@ class UserProfile:
     """User profile data structure."""
 
     user_id: str
-    preferences: Dict[str, Any] = field(default_factory=dict)
-    conversation_history: List[Dict[str, Any]] = field(default_factory=list)
+    preferences: dict[str, Any] = field(default_factory=dict)
+    conversation_history: list[dict[str, Any]] = field(default_factory=list)
     context_summary: str = ""
     last_interaction: float = field(default_factory=time.time)
     total_messages: int = 0
 
-    def add_message(self, role: str, content: str, timestamp: float = None):
+    def add_message(self, role: str, content: str, timestamp: float | None = None) -> None:
         """Add message to conversation history with token budget [CMV]."""
         if timestamp is None:
             timestamp = time.time()
@@ -87,7 +88,7 @@ class UserProfile:
         # Trim history based on token budget
         self._trim_history()
 
-    def _trim_history(self):
+    def _trim_history(self) -> None:
         """Trim conversation history to fit token budget [PA]."""
         max_tokens = PC.HISTORY_MAX_TOKENS_DM
         current_chars = sum(len(msg.get("content", "")) for msg in self.conversation_history)
@@ -101,7 +102,7 @@ class UserProfile:
             current_chars -= len(removed.get("content", ""))
             estimated_tokens = current_chars // 4
 
-    def get_recent_context(self, max_messages: int = 10) -> List[Dict[str, Any]]:
+    def get_recent_context(self, max_messages: int = 10) -> list[dict[str, Any]]:
         """Get recent conversation context [PA]."""
         return self.conversation_history[-max_messages:]
 
@@ -112,15 +113,15 @@ class ServerContext:
 
     guild_id: str
     server_notes: str = ""
-    settings: Dict[str, Any] = field(default_factory=dict)
-    active_users: Dict[str, float] = field(default_factory=dict)  # user_id -> last_seen
+    settings: dict[str, Any] = field(default_factory=dict)
+    active_users: dict[str, float] = field(default_factory=dict)  # user_id -> last_seen
     last_updated: float = field(default_factory=time.time)
 
 
 class SessionCache:
     """High-performance session cache with TTL and LRU eviction."""
 
-    def __init__(self, max_entries: int = 1000, default_ttl_seconds: int = None):
+    def __init__(self, max_entries: int = 1000, default_ttl_seconds: int | None = None) -> None:
         self.max_entries = max_entries
         self.default_ttl = default_ttl_seconds or PC.CONTEXT_CACHE_TTL_SECS
 
@@ -130,7 +131,7 @@ class SessionCache:
         self.generic_cache: OrderedDict[str, CacheEntry] = OrderedDict()
 
         # Background cleanup task
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
         self._cleanup_interval = 60  # Clean every 60 seconds
 
         # Performance statistics
@@ -148,7 +149,7 @@ class SessionCache:
         # Start background cleanup
         self._start_cleanup_task()
 
-    def _start_cleanup_task(self):
+    def _start_cleanup_task(self) -> None:
         """Start background cleanup task for expired entries [RM].
 
         Idempotent: if a cleanup task is already running, does nothing.
@@ -156,7 +157,7 @@ class SessionCache:
         if self._cleanup_task and not self._cleanup_task.done():
             return  # Already running — prevent duplication on reconnect
 
-        async def cleanup_loop():
+        async def cleanup_loop() -> None:
             while True:
                 try:
                     await asyncio.sleep(self._cleanup_interval)
@@ -164,17 +165,17 @@ class SessionCache:
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
-                    logger.error(f"❌ Cache cleanup error: {e}")
+                    logger.exception(f"❌ Cache cleanup error: {e}")
 
         self._cleanup_task = asyncio.create_task(cleanup_loop())
 
-    async def _cleanup_expired_entries(self):
+    async def _cleanup_expired_entries(self) -> None:
         """Remove expired entries from all caches [PA]."""
         cleanup_start = time.time()
         removed_count = 0
 
         # Clean all cache types
-        for cache_name, cache in [
+        for _cache_name, cache in [
             ("user_profiles", self.user_profiles),
             ("server_contexts", self.server_contexts),
             ("generic", self.generic_cache),
@@ -191,18 +192,18 @@ class SessionCache:
         if removed_count > 0:
             logger.debug(f"🗑️ Cleaned {removed_count} expired cache entries ({cleanup_time_ms}ms)")
 
-    def _evict_lru(self, cache: OrderedDict, max_size: int = None):
+    def _evict_lru(self, cache: OrderedDict, max_size: int | None = None) -> None:
         """Evict least recently used entries when cache is full [PA]."""
         if max_size is None:
             max_size = self.max_entries // 3  # Each cache gets 1/3 of total capacity
 
         while len(cache) > max_size:
             # Remove least recently used (first in OrderedDict)
-            key, entry = cache.popitem(last=False)
+            key, _entry = cache.popitem(last=False)
             self.stats["evictions"] += 1
             logger.debug(f"🗑️ Evicted LRU cache entry: {key}")
 
-    async def get_user_profile(self, user_id: str, tracker: Optional[PipelineTracker] = None) -> Optional[UserProfile]:
+    async def get_user_profile(self, user_id: str, tracker: PipelineTracker | None = None) -> UserProfile | None:
         """Get user profile from cache or return None if not found [PA]."""
         start_time = time.time()
 
@@ -230,20 +231,19 @@ class SessionCache:
 
             logger.debug(f"✅ User profile cache HIT: {user_id} ({access_time_ms}ms)")
             return profile
+        # Cache miss
+        self.stats["cache_misses"] += 1
+
+        if entry:  # Expired
+            del self.user_profiles[user_id]
+            self.stats["expirations"] += 1
+            logger.debug(f"🕐 User profile expired: {user_id}")
         else:
-            # Cache miss
-            self.stats["cache_misses"] += 1
+            logger.debug(f"❌ User profile cache MISS: {user_id}")
 
-            if entry:  # Expired
-                del self.user_profiles[user_id]
-                self.stats["expirations"] += 1
-                logger.debug(f"🕐 User profile expired: {user_id}")
-            else:
-                logger.debug(f"❌ User profile cache MISS: {user_id}")
+        return None
 
-            return None
-
-    async def set_user_profile(self, user_id: str, profile: UserProfile, ttl_seconds: Optional[int] = None):
+    async def set_user_profile(self, user_id: str, profile: UserProfile, ttl_seconds: int | None = None) -> None:
         """Cache user profile with TTL [PA]."""
         ttl = ttl_seconds or self.default_ttl
 
@@ -258,7 +258,7 @@ class SessionCache:
 
         logger.debug(f"💾 Cached user profile: {user_id} (ttl: {ttl}s)")
 
-    async def get_server_context(self, guild_id: str, tracker: Optional[PipelineTracker] = None) -> Optional[ServerContext]:
+    async def get_server_context(self, guild_id: str, tracker: PipelineTracker | None = None) -> ServerContext | None:
         """Get server context from cache [PA]."""
         start_time = time.time()
 
@@ -272,16 +272,15 @@ class SessionCache:
 
             logger.debug(f"✅ Server context cache HIT: {guild_id} ({access_time_ms}ms)")
             return context
-        else:
-            self.stats["cache_misses"] += 1
+        self.stats["cache_misses"] += 1
 
-            if entry:
-                del self.server_contexts[guild_id]
-                self.stats["expirations"] += 1
+        if entry:
+            del self.server_contexts[guild_id]
+            self.stats["expirations"] += 1
 
-            return None
+        return None
 
-    async def set_server_context(self, guild_id: str, context: ServerContext, ttl_seconds: Optional[int] = None):
+    async def set_server_context(self, guild_id: str, context: ServerContext, ttl_seconds: int | None = None) -> None:
         """Cache server context with TTL [PA]."""
         ttl = ttl_seconds or self.default_ttl
 
@@ -292,21 +291,20 @@ class SessionCache:
 
         logger.debug(f"💾 Cached server context: {guild_id} (ttl: {ttl}s)")
 
-    async def get_generic(self, key: str) -> Optional[Any]:
+    async def get_generic(self, key: str) -> Any | None:
         """Get generic cached data [PA]."""
         entry = self.generic_cache.get(key)
         if entry and not entry.is_expired():
             self.stats["cache_hits"] += 1
             self.generic_cache.move_to_end(key)
             return entry.access()
-        else:
-            self.stats["cache_misses"] += 1
-            if entry:
-                del self.generic_cache[key]
-                self.stats["expirations"] += 1
-            return None
+        self.stats["cache_misses"] += 1
+        if entry:
+            del self.generic_cache[key]
+            self.stats["expirations"] += 1
+        return None
 
-    async def set_generic(self, key: str, data: Any, ttl_seconds: Optional[int] = None):
+    async def set_generic(self, key: str, data: Any, ttl_seconds: int | None = None) -> None:
         """Cache generic data with TTL [PA]."""
         ttl = ttl_seconds or self.default_ttl
 
@@ -314,19 +312,19 @@ class SessionCache:
         self.generic_cache[key] = entry
         self._evict_lru(self.generic_cache)
 
-    async def invalidate_user(self, user_id: str):
+    async def invalidate_user(self, user_id: str) -> None:
         """Invalidate all cached data for a user [RM]."""
         if user_id in self.user_profiles:
             del self.user_profiles[user_id]
             logger.debug(f"🗑️ Invalidated user cache: {user_id}")
 
-    async def invalidate_server(self, guild_id: str):
+    async def invalidate_server(self, guild_id: str) -> None:
         """Invalidate server context cache [RM]."""
         if guild_id in self.server_contexts:
             del self.server_contexts[guild_id]
             logger.debug(f"🗑️ Invalidated server cache: {guild_id}")
 
-    async def update_user_interaction(self, user_id: str, message_content: str, role: str = "user"):
+    async def update_user_interaction(self, user_id: str, message_content: str, role: str = "user") -> None:
         """Update user profile with new interaction [PA]."""
         profile = await self.get_user_profile(user_id)
 
@@ -340,7 +338,7 @@ class SessionCache:
         # Re-cache updated profile
         await self.set_user_profile(user_id, profile)
 
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """Get detailed cache performance statistics [PA]."""
         total_requests = self.stats["cache_hits"] + self.stats["cache_misses"]
         hit_rate = self.stats["cache_hits"] / total_requests if total_requests > 0 else 0
@@ -376,14 +374,12 @@ class SessionCache:
             **self.stats,
         }
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         """Clean up resources and stop background tasks [RM]."""
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._cleanup_task
-            except asyncio.CancelledError:
-                pass
 
         # Clear all caches
         self.user_profiles.clear()
@@ -396,16 +392,16 @@ class SessionCache:
 class ContextManager:
     """High-level context manager using session cache [PA]."""
 
-    def __init__(self, session_cache: SessionCache):
+    def __init__(self, session_cache: SessionCache) -> None:
         self.cache = session_cache
 
     async def get_user_context(
         self,
         user_id: str,
-        tracker: Optional[PipelineTracker] = None,
+        tracker: PipelineTracker | None = None,
         include_history: bool = True,
         max_history_messages: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get comprehensive user context for prompt building [PA]."""
         timing_manager = get_timing_manager()
 
@@ -455,8 +451,8 @@ class ContextManager:
         user_id: str,
         user_message: str,
         bot_response: str,
-        update_preferences: Dict[str, Any] = None,
-    ):
+        update_preferences: dict[str, Any] | None = None,
+    ) -> None:
         """Update user conversation context [PA]."""
         profile = await self.cache.get_user_profile(user_id)
 
@@ -474,7 +470,7 @@ class ContextManager:
         # Re-cache updated profile
         await self.cache.set_user_profile(user_id, profile)
 
-    async def get_server_settings(self, guild_id: str) -> Dict[str, Any]:
+    async def get_server_settings(self, guild_id: str) -> dict[str, Any]:
         """Get server-specific settings and context [PA]."""
         context = await self.cache.get_server_context(guild_id)
 
@@ -495,8 +491,8 @@ class ContextManager:
 
 
 # Global session cache instance [PA]
-_session_cache_instance: Optional[SessionCache] = None
-_context_manager_instance: Optional[ContextManager] = None
+_session_cache_instance: SessionCache | None = None
+_context_manager_instance: ContextManager | None = None
 
 
 def get_session_cache() -> SessionCache:
@@ -522,7 +518,7 @@ def get_context_manager() -> ContextManager:
     return _context_manager_instance
 
 
-async def cleanup_session_cache():
+async def cleanup_session_cache() -> None:
     """Clean up global session cache [RM]."""
     global _session_cache_instance, _context_manager_instance
 

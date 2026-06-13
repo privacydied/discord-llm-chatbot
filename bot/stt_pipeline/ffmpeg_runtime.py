@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
 
-_FFMPEG_BIN_CACHE: Optional[str] = None
-_FFMPEG_BIN_HAS_AAC: Optional[bool] = None
+_FFMPEG_BIN_CACHE: str | None = None
+_FFMPEG_BIN_HAS_AAC: bool | None = None
 
 
-def ffmpeg_candidates_from_env() -> List[str]:
+def ffmpeg_candidates_from_env() -> list[str]:
     """Return ordered ffmpeg binary candidates with env override support."""
-    candidates: List[str] = []
+    candidates: list[str] = []
     for env_key in ("STT_FFMPEG_BIN", "FFMPEG_BIN", "FFMPEG_BINARY"):
         value = (os.getenv(env_key) or "").strip()
         if value:
@@ -24,7 +25,7 @@ def ffmpeg_candidates_from_env() -> List[str]:
     candidates.extend(["ffmpeg7", "ffmpeg"])
     # Preserve order while de-duplicating.
     seen = set()
-    ordered: List[str] = []
+    ordered: list[str] = []
     for c in candidates:
         if c in seen:
             continue
@@ -52,7 +53,7 @@ def ffmpeg_supports_aac_decoder(ffmpeg_bin: str) -> bool:
         return False
 
 
-def ffmpeg_bin_has_aac() -> Optional[bool]:
+def ffmpeg_bin_has_aac() -> bool | None:
     """Return cached AAC decoder availability for selected ffmpeg binary."""
     return _FFMPEG_BIN_HAS_AAC
 
@@ -85,14 +86,13 @@ def resolve_ffmpeg_bin(*, logger: Any | None = None) -> str:
         _FFMPEG_BIN_CACHE = ffmpeg_bin
         _FFMPEG_BIN_HAS_AAC = has_aac
         if logger is not None:
-            try:
+            with contextlib.suppress(Exception):
                 logger.info(
                     "stt.ffmpeg.selected path=%s aac_decoder=%s",
                     ffmpeg_bin,
                     str(has_aac).lower(),
                 )
-            except Exception:
-                pass
         return ffmpeg_bin
 
-    raise RuntimeError("ffmpeg executable not found; set STT_FFMPEG_BIN to an installed ffmpeg binary")
+    msg = "ffmpeg executable not found; set STT_FFMPEG_BIN to an installed ffmpeg binary"
+    raise RuntimeError(msg)

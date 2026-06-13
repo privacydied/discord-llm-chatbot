@@ -1,11 +1,9 @@
-"""
-Global command error handler for Discord bot.
+"""Global command error handler for Discord bot.
 
 Provides comprehensive error handling for all bot commands following
 Clean Architecture (CA) and Robust Error Handling (REH) patterns.
 """
 
-from typing import Union
 
 import discord
 from discord.ext import commands
@@ -13,15 +11,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from ..utils.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 console = Console()
 
 
 class CommandErrorHandler:
-    """
-    Centralized command error handler implementing robust error patterns.
+    """Centralized command error handler implementing robust error patterns.
 
     Follows user rules:
     - Robust Error Handling (REH): Comprehensive error categorization
@@ -93,14 +90,13 @@ class CommandErrorHandler:
         },
     }
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.logger = get_logger(f"{__name__}.{self.__class__.__name__}")
         self._command_usage_stats = {}  # Track command usage for analytics
 
     async def handle_command_error(self, ctx: commands.Context, error: Exception) -> None:
-        """
-        Main error handler dispatching to specific handlers.
+        """Main error handler dispatching to specific handlers.
 
         Args:
             ctx: Command context
@@ -108,6 +104,7 @@ class CommandErrorHandler:
 
         [REH] Comprehensive error categorization and handling
         [SFT] No sensitive information exposure to users
+
         """
         try:
             # Update error statistics
@@ -160,16 +157,15 @@ class CommandErrorHandler:
         """
 
         # Log with appropriate level based on error severity
-        if error_type in ["CommandNotFound"]:
+        if error_type == "CommandNotFound":
             self.logger.debug(error_tree.strip())
         elif error_type in ["MissingPermissions", "CommandOnCooldown"]:
             self.logger.info(error_tree.strip())
         else:
-            self.logger.error(error_tree.strip(), exc_info=True)
+            self.logger.error(error_tree.strip())
 
     async def _handle_command_not_found(self, ctx: commands.Context, error: commands.CommandNotFound) -> None:
-        """
-        Handle command not found with smart suggestions.
+        """Handle command not found with smart suggestions.
 
         [REH] Convert technical error to user-friendly message
         [AS] Provide alternative suggestions when possible
@@ -180,10 +176,7 @@ class CommandErrorHandler:
             prefix = prefix[0]
 
         content = ctx.message.content
-        if content.startswith(prefix):
-            attempted_command = content[len(prefix) :].split()[0].lower()
-        else:
-            attempted_command = "unknown"
+        attempted_command = content[len(prefix):].split()[0].lower() if content.startswith(prefix) else "unknown"
 
         # Generate smart suggestions using fuzzy matching
         suggestions = await self._generate_command_suggestions(attempted_command)
@@ -222,9 +215,8 @@ class CommandErrorHandler:
             all_commands.extend(command.aliases)
 
         # Find close matches
-        suggestions = get_close_matches(attempted_command, all_commands, n=3, cutoff=0.6)
+        return get_close_matches(attempted_command, all_commands, n=3, cutoff=0.6)
 
-        return suggestions
 
     async def _handle_missing_permissions(self, ctx: commands.Context, error: commands.MissingPermissions) -> None:
         """Handle missing user permissions."""
@@ -271,7 +263,7 @@ class CommandErrorHandler:
             f"cooldown:hit user_id={ctx.author.id} user={ctx.author} "
             f"command={ctx.command.name if ctx.command else 'unknown'} "
             f"retry_after={error.retry_after:.1f}s "
-            f"bucket={error.cooldown.bucket.type.name if hasattr(error.cooldown, 'bucket') and hasattr(error.cooldown.bucket, 'type') else 'unknown'}"
+            f"bucket={error.cooldown.bucket.type.name if hasattr(error.cooldown, 'bucket') and hasattr(error.cooldown.bucket, 'type') else 'unknown'}",
         )
 
         retry_secs = int(error.retry_after)
@@ -280,7 +272,7 @@ class CommandErrorHandler:
     async def _handle_bad_argument(
         self,
         ctx: commands.Context,
-        error: Union[commands.BadArgument, commands.BadUnionArgument],
+        error: commands.BadArgument | commands.BadUnionArgument,
     ) -> None:
         """Handle bad arguments with usage help."""
         prefix = await self.bot.get_prefix(ctx.message)
@@ -339,8 +331,7 @@ class CommandErrorHandler:
         await ctx.send(embed=embed, delete_after=20)
 
     async def _handle_command_invoke_error(self, ctx: commands.Context, error: commands.CommandInvokeError) -> None:
-        """
-        Handle command invocation errors (internal command failures).
+        """Handle command invocation errors (internal command failures).
 
         [REH] Log technical details but show user-friendly message
         [SFT] Never expose sensitive internal information
@@ -378,7 +369,7 @@ class CommandErrorHandler:
         await ctx.send(embed=embed, delete_after=30)
 
         # Log with full context for debugging
-        self.logger.error(f"Unknown error in command {ctx.command}: {error}", exc_info=True)
+        self.logger.error(f"Unknown error in command {ctx.command}: {error}")
 
     async def _send_fallback_error_message(self, ctx: commands.Context) -> None:
         """Send ultra-simple fallback message if embed creation fails."""
@@ -413,7 +404,7 @@ async def setup_command_error_handler(bot) -> CommandErrorHandler:
 
         # Register the global error handler
         @bot.event
-        async def on_command_error(ctx: commands.Context, error: Exception):
+        async def on_command_error(ctx: commands.Context, error: Exception) -> None:
             """Global command error event handler."""
             await error_handler.handle_command_error(ctx, error)
 
@@ -425,7 +416,7 @@ async def setup_command_error_handler(bot) -> CommandErrorHandler:
                 Text("🛡️ Command Error Handler Ready", style="bold green"),
                 title="Security Enhancement",
                 border_style="green",
-            )
+            ),
         )
 
         return error_handler

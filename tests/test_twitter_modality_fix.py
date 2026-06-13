@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
-"""
-Test script to verify Twitter/X modality detection fix.
+"""Test script to verify Twitter/X modality detection fix.
 Ensures text/image tweets are routed to screenshot flow, not video/STT flow.
 """
 
 import asyncio
+import re
 
 # Import the modules we need to test
 from bot.modality import (
-    _map_url_to_modality,
-    InputModality,
     InputItem,
+    InputModality,
+    _map_url_to_modality,
     map_item_to_modality,
 )
 from bot.video_ingest import SUPPORTED_PATTERNS
-import re
 
 
-async def test_twitter_url_routing():
+async def test_twitter_url_routing() -> bool:
     """Test that Twitter URLs are correctly routed based on content type."""
-
     # Test URLs from the original error log
     test_urls = [
         # The problematic URL from user's error - should NOT be VIDEO_URL
@@ -40,12 +38,9 @@ async def test_twitter_url_routing():
         "https://vm.tiktok.com/ZM8abc123/",
     ]
 
-    print("🧪 Testing Twitter/X URL modality detection fix...")
-    print("=" * 60)
 
     # Test each URL
     for url in test_urls:
-        print(f"\n📋 Testing URL: {url}")
 
         # Check if URL matches video patterns
         video_match = False
@@ -54,12 +49,10 @@ async def test_twitter_url_routing():
                 video_match = True
                 break
 
-        print(f"   Video pattern match: {video_match}")
 
         # Test modality detection
         try:
             modality = await _map_url_to_modality(url)
-            print(f"   Detected modality: {modality}")
 
             # Check expectations
             is_expected_video = (
@@ -71,65 +64,44 @@ async def test_twitter_url_routing():
             if is_regular_tweet:
                 # Regular tweets should NOT be VIDEO_URL
                 if modality == InputModality.VIDEO_URL:
-                    print("   ❌ FAIL: Regular tweet incorrectly detected as VIDEO_URL")
                     return False
-                else:
-                    print(f"   ✅ PASS: Regular tweet correctly routed to {modality}")
 
             elif is_expected_video:
                 # These should be VIDEO_URL
                 if modality == InputModality.VIDEO_URL:
-                    print("   ✅ PASS: Video URL correctly detected")
+                    pass
                 else:
-                    print(f"   ❌ FAIL: Video URL incorrectly detected as {modality}")
                     return False
 
         except Exception as e:
-            print(f"   ❌ ERROR: {e}")
             return False
 
-    print("\n" + "=" * 60)
-    print("✅ ALL TESTS PASSED! Twitter/X modality detection is working correctly.")
-    print("\n📝 Summary:")
-    print("   • Regular tweet URLs are no longer classified as VIDEO_URL")
-    print("   • They will be routed to GENERAL_URL → screenshot API → VL flow")
-    print("   • Twitter Spaces/Live broadcasts still work as VIDEO_URL")
-    print("   • YouTube and TikTok URLs still work as VIDEO_URL")
 
     return True
 
 
-async def test_inputitem_routing():
+async def test_inputitem_routing() -> bool:
     """Test InputItem routing to ensure end-to-end flow works."""
-
-    print("\n🔄 Testing InputItem routing...")
-
     # Create InputItem for the problematic URL
     problem_url = "https://x.com/avaricum777/status/1953657907964477640"
     item = InputItem(source_type="url", payload=problem_url, order_index=0)
 
     # Test modality mapping
     modality = await map_item_to_modality(item)
-    print(f"   InputItem modality for problem URL: {modality}")
 
-    if modality == InputModality.VIDEO_URL:
-        print("   ❌ FAIL: InputItem still routing to VIDEO_URL")
-        return False
-    else:
-        print("   ✅ PASS: InputItem correctly routing to non-video modality")
-        return True
+    return modality != InputModality.VIDEO_URL
 
 
 if __name__ == "__main__":
 
-    async def main():
+    async def main() -> None:
         success = await test_twitter_url_routing()
         if success:
             success = await test_inputitem_routing()
 
         if success:
-            print("\n🎉 All tests passed! The fix is working correctly.")
+            pass
         else:
-            print("\n❌ Some tests failed. Please check the implementation.")
+            pass
 
     asyncio.run(main())

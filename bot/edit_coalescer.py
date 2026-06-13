@@ -1,5 +1,4 @@
-"""
-Edit coalescing system for router speed overhaul. [REH][CA]
+"""Edit coalescing system for router speed overhaul. [REH][CA].
 
 Implements edit coalescing with ≥ EDIT_COALESCE_MIN_MS between edits.
 Silences text-only flows to reduce chat noise while preserving streaming for heavy work.
@@ -15,17 +14,22 @@ Key requirements:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
-from typing import Dict, Optional, Any, Callable, Awaitable
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
-import discord
 from bot.config import get_config
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    import discord
 
 
 class StreamingEligibility(Enum):
-    """Streaming eligibility reasons. [CA]"""
+    """Streaming eligibility reasons. [CA]."""
 
     ELIGIBLE = "eligible"
     TEXT_ONLY = "text_only"
@@ -35,30 +39,30 @@ class StreamingEligibility(Enum):
 
 @dataclass
 class EditCoalesceState:
-    """State tracking for edit coalescing. [CA]"""
+    """State tracking for edit coalescing. [CA]."""
 
     message_id: int
     channel_id: int
     last_edit_time: float
     edit_count: int = 0
-    pending_content: Optional[str] = None
-    pending_embed: Optional[discord.Embed] = None
-    coalesce_task: Optional[asyncio.Task] = None
+    pending_content: str | None = None
+    pending_embed: discord.Embed | None = None
+    coalesce_task: asyncio.Task | None = None
     is_streaming_eligible: bool = False
     streaming_reason: StreamingEligibility = StreamingEligibility.TEXT_ONLY
 
 
 class EditCoalescer:
-    """Manages edit coalescing for Discord messages. [REH][CA]"""
+    """Manages edit coalescing for Discord messages. [REH][CA]."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """Initialize edit coalescer. [CA]"""
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        """Initialize edit coalescer. [CA]."""
         self.config = config or get_config()
         self.min_interval_ms = float(self.config.get("EDIT_COALESCE_MIN_MS", 700))
         self.max_coalesce_delay_ms = float(self.config.get("EDIT_COALESCE_MAX_DELAY_MS", 2000))
 
         # Track active edit states by message ID
-        self.active_states: Dict[int, EditCoalesceState] = {}
+        self.active_states: dict[int, EditCoalesceState] = {}
         # Lock to prevent race conditions on active_states mutations
         self._lock = asyncio.Lock()
 
@@ -79,7 +83,7 @@ class EditCoalescer:
         has_attachments: bool,
         estimated_duration_ms: float,
     ) -> tuple[bool, StreamingEligibility]:
-        """Determine if streaming should be enabled. [CA]"""
+        """Determine if streaming should be enabled. [CA]."""
         # Text-only flows are never streaming eligible
         if not (is_heavy_work or is_video_processing or is_ocr_processing or has_attachments):
             return False, StreamingEligibility.TEXT_ONLY
@@ -103,8 +107,8 @@ class EditCoalescer:
         is_ocr_processing: bool = False,
         has_attachments: bool = False,
         estimated_duration_ms: float = 0,
-    ) -> Optional[EditCoalesceState]:
-        """Start a streaming session with edit coalescing. [CA]"""
+    ) -> EditCoalesceState | None:
+        """Start a streaming session with edit coalescing. [CA]."""
         # Check streaming eligibility
         streaming_eligible, reason = self.should_enable_streaming(
             is_heavy_work,
@@ -139,11 +143,11 @@ class EditCoalescer:
     async def request_edit(
         self,
         message_id: int,
-        content: Optional[str] = None,
-        embed: Optional[discord.Embed] = None,
-        edit_callback: Optional[Callable[[str, Optional[discord.Embed]], Awaitable[None]]] = None,
+        content: str | None = None,
+        embed: discord.Embed | None = None,
+        edit_callback: Callable[[str, discord.Embed | None], Awaitable[None]] | None = None,
     ) -> bool:
-        """Request an edit with coalescing. [REH]"""
+        """Request an edit with coalescing. [REH]."""
         self.stats["edits_requested"] += 1
 
         async with self._lock:
@@ -190,9 +194,9 @@ class EditCoalescer:
         self,
         message_id: int,
         delay_s: float,
-        edit_callback: Optional[Callable[[str, Optional[discord.Embed]], Awaitable[None]]],
-    ):
-        """Execute a coalesced edit after delay. [REH]"""
+        edit_callback: Callable[[str, discord.Embed | None], Awaitable[None]] | None,
+    ) -> None:
+        """Execute a coalesced edit after delay. [REH]."""
         try:
             await asyncio.sleep(delay_s)
 
@@ -219,10 +223,10 @@ class EditCoalescer:
             # Log error but don't crash
             import logging
 
-            logging.error(f"Edit coalescer error: {e}")
+            logging.exception(f"Edit coalescer error: {e}")
 
     async def finalize_session(self, message_id: int) -> None:
-        """Finalize a streaming session and cleanup. [RM]"""
+        """Finalize a streaming session and cleanup. [RM]."""
         async with self._lock:
             state = self.active_states.pop(message_id, None)
         if not state:
@@ -231,17 +235,15 @@ class EditCoalescer:
         # Cancel any pending coalesce task
         if state.coalesce_task and not state.coalesce_task.done():
             state.coalesce_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await state.coalesce_task
-            except asyncio.CancelledError:
-                pass
 
     async def force_flush_pending(
         self,
         message_id: int,
-        edit_callback: Optional[Callable[[str, Optional[discord.Embed]], Awaitable[None]]] = None,
+        edit_callback: Callable[[str, discord.Embed | None], Awaitable[None]] | None = None,
     ) -> bool:
-        """Force flush any pending edits immediately. [REH]"""
+        """Force flush any pending edits immediately. [REH]."""
         async with self._lock:
             state = self.active_states.get(message_id)
         if not state or not state.pending_content:
@@ -264,8 +266,8 @@ class EditCoalescer:
 
         return True
 
-    def get_session_stats(self, message_id: int) -> Optional[Dict[str, Any]]:
-        """Get statistics for a streaming session. [PA]"""
+    def get_session_stats(self, message_id: int) -> dict[str, Any] | None:
+        """Get statistics for a streaming session. [PA]."""
         state = self.active_states.get(message_id)
         if not state:
             return None
@@ -280,8 +282,8 @@ class EditCoalescer:
             "session_duration_s": time.time() - state.last_edit_time,
         }
 
-    def get_global_stats(self) -> Dict[str, Any]:
-        """Get global edit coalescing statistics. [PA]"""
+    def get_global_stats(self) -> dict[str, Any]:
+        """Get global edit coalescing statistics. [PA]."""
         return {
             **self.stats,
             "active_sessions": len(self.active_states),
@@ -292,11 +294,11 @@ class EditCoalescer:
 
 
 # Global edit coalescer instance
-_edit_coalescer: Optional[EditCoalescer] = None
+_edit_coalescer: EditCoalescer | None = None
 
 
 def get_edit_coalescer() -> EditCoalescer:
-    """Get global edit coalescer instance. [CA]"""
+    """Get global edit coalescer instance. [CA]."""
     global _edit_coalescer
     if _edit_coalescer is None:
         _edit_coalescer = EditCoalescer()
@@ -311,8 +313,8 @@ async def create_streaming_message(
     is_ocr_processing: bool = False,
     has_attachments: bool = False,
     estimated_duration_ms: float = 0,
-) -> tuple[discord.Message, Optional[EditCoalesceState]]:
-    """Create a message with streaming session if eligible. [CA]"""
+) -> tuple[discord.Message, EditCoalesceState | None]:
+    """Create a message with streaming session if eligible. [CA]."""
     # Send initial message
     message = await channel.send(initial_content)
 
@@ -330,11 +332,11 @@ async def create_streaming_message(
     return message, session
 
 
-async def update_streaming_message(message: discord.Message, content: str, embed: Optional[discord.Embed] = None) -> bool:
-    """Update a streaming message with edit coalescing. [REH]"""
+async def update_streaming_message(message: discord.Message, content: str, embed: discord.Embed | None = None) -> bool:
+    """Update a streaming message with edit coalescing. [REH]."""
     coalescer = get_edit_coalescer()
 
-    async def edit_callback(content: str, embed: Optional[discord.Embed]):
+    async def edit_callback(content: str, embed: discord.Embed | None) -> None:
         await message.edit(content=content, embed=embed)
 
     return await coalescer.request_edit(message.id, content, embed, edit_callback)
@@ -343,13 +345,13 @@ async def update_streaming_message(message: discord.Message, content: str, embed
 async def finalize_streaming_message(
     message: discord.Message,
     final_content: str,
-    final_embed: Optional[discord.Embed] = None,
+    final_embed: discord.Embed | None = None,
 ) -> None:
-    """Finalize a streaming message and cleanup session. [RM]"""
+    """Finalize a streaming message and cleanup session. [RM]."""
     coalescer = get_edit_coalescer()
 
     # Force flush any pending edits with final content
-    async def final_edit_callback(content: str, embed: Optional[discord.Embed]):
+    async def final_edit_callback(content: str, embed: discord.Embed | None) -> None:
         await message.edit(content=final_content, embed=final_embed)
 
     await coalescer.force_flush_pending(message.id, final_edit_callback)
@@ -358,13 +360,13 @@ async def finalize_streaming_message(
 
 # Export main functions
 __all__ = [
+    "EditCoalesceState",
     "EditCoalescer",
     "StreamingEligibility",
-    "EditCoalesceState",
-    "get_edit_coalescer",
     "create_streaming_message",
-    "update_streaming_message",
     "finalize_streaming_message",
+    "get_edit_coalescer",
+    "update_streaming_message",
 ]
 
 
@@ -373,13 +375,12 @@ if __name__ == "__main__":
     import asyncio
     from unittest.mock import AsyncMock
 
-    async def demo():
+    async def demo() -> None:
         coalescer = EditCoalescer({"EDIT_COALESCE_MIN_MS": 500})
 
         # Mock edit callback
         edit_callback = AsyncMock()
 
-        print("Testing edit coalescing...")
 
         # Simulate rapid edits
         await coalescer.request_edit(123, "Edit 1", edit_callback=edit_callback)
@@ -389,8 +390,7 @@ if __name__ == "__main__":
         # Wait for coalescing
         await asyncio.sleep(1.0)
 
-        stats = coalescer.get_global_stats()
-        print(f"Global stats: {stats}")
+        coalescer.get_global_stats()
 
         await coalescer.finalize_session(123)
 

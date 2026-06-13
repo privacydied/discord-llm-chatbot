@@ -7,7 +7,7 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 from .models import (
     ArchiveChannel,
@@ -21,6 +21,9 @@ from .models import (
 )
 from .search import normalize_query, sanitize_snippet
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 logger = logging.getLogger(__name__)
 _SCHEMA_VERSION = 1
 
@@ -30,7 +33,7 @@ async def _to_thread(func, *args):
 
 
 class ServerArchiveStore:
-    def __init__(self, sqlite_path: str | Path):
+    def __init__(self, sqlite_path: str | Path) -> None:
         self.sqlite_path = Path(sqlite_path)
         self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
@@ -85,7 +88,7 @@ class ServerArchiveStore:
                         merged_count INTEGER NOT NULL DEFAULT 0,
                         error TEXT
                     );
-                    """
+                    """,
                 )
                 conn.commit()
             finally:
@@ -214,7 +217,7 @@ class ServerArchiveStore:
                             merged_count INTEGER NOT NULL DEFAULT 0,
                             error TEXT
                         );
-                        """
+                        """,
                     )
                     try:
                         conn.execute(
@@ -231,7 +234,7 @@ class ServerArchiveStore:
                                 created_at UNINDEXED,
                                 tokenize='unicode61'
                             )
-                            """
+                            """,
                         )
                         self._fts_enabled = True
                     except sqlite3.OperationalError as exc:
@@ -251,7 +254,7 @@ class ServerArchiveStore:
                                 author_display TEXT NOT NULL DEFAULT '',
                                 created_at TEXT NOT NULL
                             )
-                            """
+                            """,
                         )
                     conn.execute("PRAGMA user_version=1")
                     conn.commit()
@@ -290,7 +293,7 @@ class ServerArchiveStore:
                     conn.execute(
                         f"SELECT COUNT(*) FROM archive_messages_fts{indexed_where}",  # nosec B608
                         indexed_params,
-                    ).fetchone()[0]
+                    ).fetchone()[0],
                 )
                 return {
                     "guilds": int(conn.execute(f"SELECT COUNT(*) FROM archive_guilds{where}", params).fetchone()[0]),  # nosec B608,
@@ -303,13 +306,13 @@ class ServerArchiveStore:
                         conn.execute(
                             f"SELECT COUNT(*) FROM archive_attachments a JOIN archive_messages m ON m.message_id = a.message_id{(' WHERE m.guild_id = ?' if guild_id else '')}",  # nosec B608,
                             params,
-                        ).fetchone()[0]
+                        ).fetchone()[0],
                     ),
                     "mentions": int(
                         conn.execute(
                             f"SELECT COUNT(*) FROM archive_mentions a JOIN archive_messages m ON m.message_id = a.message_id{(' WHERE m.guild_id = ?' if guild_id else '')}",  # nosec B608,
                             params,
-                        ).fetchone()[0]
+                        ).fetchone()[0],
                     ),
                     "sync_states": int(conn.execute(f"SELECT COUNT(*) FROM archive_sync_state{where}", params).fetchone()[0]),  # nosec B608,
                 }
@@ -992,7 +995,7 @@ class ServerArchiveStore:
                                 row["last_processed_created_at"],
                                 row["last_processed_created_at"],
                                 row["last_processed_message_id"],
-                            ]
+                            ],
                         )
                     total += int(conn.execute(sql, params).fetchone()[0])
 

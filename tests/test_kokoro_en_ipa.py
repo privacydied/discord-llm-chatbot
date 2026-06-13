@@ -1,4 +1,4 @@
-def test_en_forces_ipa(monkeypatch):
+def test_en_forces_ipa(monkeypatch) -> None:
     from bot.tts.engines.kokoro import KokoroEngine
 
     eng = KokoroEngine()

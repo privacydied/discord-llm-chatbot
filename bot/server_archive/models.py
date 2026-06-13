@@ -3,23 +3,26 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Mapping, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-def _iso(value: Any) -> Optional[str]:
+def _iso(value: Any) -> str | None:
     if value is None:
         return None
     if isinstance(value, str):
         return value
     if isinstance(value, datetime):
         if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc).isoformat()
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC).isoformat()
     return str(value)
 
 
@@ -162,7 +165,7 @@ class ArchiveSyncState:
         return asdict(self)
 
     @classmethod
-    def from_row(cls, row: Mapping[str, Any]) -> "ArchiveSyncState":
+    def from_row(cls, row: Mapping[str, Any]) -> ArchiveSyncState:
         data = dict(row)
         return cls(
             scope_key=str(data["scope_key"]),
@@ -194,7 +197,7 @@ class ArchiveSearchResult:
     score: float
 
     @classmethod
-    def from_row(cls, row: Mapping[str, Any]) -> "ArchiveSearchResult":
+    def from_row(cls, row: Mapping[str, Any]) -> ArchiveSearchResult:
         data = dict(row)
         return cls(
             message_id=str(data["message_id"]),

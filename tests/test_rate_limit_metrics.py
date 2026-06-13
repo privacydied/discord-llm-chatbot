@@ -1,24 +1,27 @@
-import pytest
 import asyncio
 import os
 import time
-from typing import Dict
+
+import pytest
 
 pytestmark = pytest.mark.skip(reason="Requires metrics infrastructure")
 
-from bot.retry_utils import RetryConfig, retry_async
+from typing import Never
+
+import httpx
+
 from bot.exceptions import APIError
-from bot.x_api_client import XApiClient
 from bot.metrics.prometheus_metrics import PrometheusMetrics
+from bot.retry_utils import RetryConfig, retry_async
 from bot.router import Router
 from bot.utils.logging import init_logging
-import httpx
+from bot.x_api_client import XApiClient
 
 
 class _FakeBot:
-    def __init__(self, metrics):
+    def __init__(self, metrics) -> None:
         self.metrics = metrics
-        self.config: Dict[str, object] = {}
+        self.config: dict[str, object] = {}
         self.tts_manager = None
         try:
             self.loop = asyncio.get_event_loop()
@@ -26,14 +29,14 @@ class _FakeBot:
             self.loop = None
 
 
-async def _always_fails_with_retry_after():
+async def _always_fails_with_retry_after() -> Never:
     # Raise APIError with a large Retry-After hint
     err = APIError("synthetic error for retry test")
-    setattr(err, "retry_after_seconds", 5.0)  # 5s hint (will be bounded by config.max_delay)
+    err.retry_after_seconds = 5.0  # 5s hint (will be bounded by config.max_delay)
     raise err
 
 
-async def test_retry_respects_retry_after_bound():
+async def test_retry_respects_retry_after_bound() -> None:
     cfg = RetryConfig(
         max_attempts=2,  # 1 failure + 1 retry
         base_delay=0.01,  # base backoff is tiny
@@ -52,10 +55,11 @@ async def test_retry_respects_retry_after_bound():
         # We expect at least ~max_delay because Retry-After=5 was bounded to 0.2 and max(delay, 0.2) applies
         assert elapsed >= 0.18, f"elapsed {elapsed:.3f}s did not respect bounded Retry-After"
     else:
-        raise AssertionError("retry_async unexpectedly succeeded")
+        msg = "retry_async unexpectedly succeeded"
+        raise AssertionError(msg)
 
 
-async def test_x_api_client_parses_retry_after_header():
+async def test_x_api_client_parses_retry_after_header() -> None:
     client = XApiClient(bearer_token=None, timeout_ms=500)
     try:
         # Build a synthetic 429 response with Retry-After header
@@ -73,12 +77,13 @@ async def test_x_api_client_parses_retry_after_header():
             assert ra is not None, "retry_after_seconds not attached on APIError"
             assert abs(float(ra) - 17.0) < 0.001, f"unexpected retry_after_seconds {ra}"
         else:
-            raise AssertionError("_raise_for_status did not raise on 429")
+            msg = "_raise_for_status did not raise on 429"
+            raise AssertionError(msg)
     finally:
         await client.aclose()
 
 
-def test_metrics_and_router_increment():
+def test_metrics_and_router_increment() -> None:
     # Disable HTTP server to avoid port binding during tests
     metrics = PrometheusMetrics(port=0, enable_http_server=False)
 
@@ -111,7 +116,7 @@ def test_metrics_and_router_increment():
     router._metric_inc("x.photo_to_vl.attempt", {"idx": "1"})
 
 
-async def _amain():
+async def _amain() -> None:
     # Configure logging per user preference (Rich + JSONL sinks)
     os.environ.setdefault("LOG_LEVEL", "DEBUG")
     os.environ.setdefault("LOG_JSONL_PATH", "./logs/test.jsonl")
@@ -120,7 +125,6 @@ async def _amain():
     await test_retry_respects_retry_after_bound()
     await test_x_api_client_parses_retry_after_header()
     test_metrics_and_router_increment()
-    print("OK: tests completed")
 
 
 if __name__ == "__main__":

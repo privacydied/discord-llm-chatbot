@@ -1,11 +1,9 @@
-"""
-Parses raw Discord messages to identify commands and extract clean content,
+"""Parses raw Discord messages to identify commands and extract clean content,
 enforcing strict context rules for guilds vs. DMs.
 """
 
 import logging
 import re
-from typing import Optional
 
 import discord
 from discord.ext import commands
@@ -39,9 +37,8 @@ COMMAND_MAP = {
 }
 
 
-def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[ParsedCommand]:
-    """
-    Parses a message to determine if it's an explicit command.
+def parse_command(message: discord.Message, bot: commands.Bot) -> ParsedCommand | None:
+    """Parses a message to determine if it's an explicit command.
 
     This function ONLY identifies commands that start with '!'. It does not handle
     routing logic for DMs or mentions; that is the responsibility of the Router.
@@ -52,6 +49,7 @@ def parse_command(message: discord.Message, bot: commands.Bot) -> Optional[Parse
 
     Returns:
         A ParsedCommand object if a known '!' command is found, otherwise None.
+
     """
     raw_content = (message.content or "").strip()
 

@@ -1,3 +1,5 @@
+from typing import Never
+
 from bot.router_components.prompt_access import get_system_prompt
 
 
@@ -6,12 +8,13 @@ class _BotNoPrompts:
 
 
 class _BrokenPrompts:
-    def get(self, *_args, **_kwargs):
-        raise RuntimeError("broken")
+    def get(self, *_args, **_kwargs) -> Never:
+        msg = "broken"
+        raise RuntimeError(msg)
 
 
 class _BotWithPrompts:
-    def __init__(self, prompts):
+    def __init__(self, prompts) -> None:
         self.system_prompts = prompts
 
 

@@ -1,20 +1,21 @@
 """TTS (Text-to-Speech) commands for the Discord bot.
 
-This module provides commands to control TTS settings and behavior."""
+This module provides commands to control TTS settings and behavior.
+"""
 
+import contextlib
 import inspect
 import io
 import logging
 from pathlib import Path
-from typing import Optional
 
 import discord
 from discord.ext import commands
 
 from bot.action import BotAction
-from bot.tts.state import tts_state
-from bot.tts.errors import SynthesisError
 from bot.server_features import is_server_feature_enabled
+from bot.tts.errors import SynthesisError
+from bot.tts.state import tts_state
 
 try:
     from bot.voice.publisher import VoiceMessagePublisher  # type: ignore
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 class TTSCommands(commands.Cog):
     """Commands for controlling TTS functionality."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.router = bot.router
         self.prefix = "!"
@@ -38,7 +39,7 @@ class TTSCommands(commands.Cog):
             command.cog = self
 
     @commands.group(name="tts", invoke_without_command=True)
-    async def tts_group(self, ctx: commands.Context, *, text: Optional[str] = None):
+    async def tts_group(self, ctx: commands.Context, *, text: str | None = None) -> None:
         """Base command for TTS functionality."""
         guild_id = getattr(getattr(ctx, "guild", None), "id", None)
         if guild_id is not None and not is_server_feature_enabled(guild_id, "tts"):
@@ -52,13 +53,13 @@ class TTSCommands(commands.Cog):
             await ctx.send("Please specify 'on', 'off', or text to speak.")
 
     @tts_group.command(name="on")
-    async def tts_on(self, ctx: commands.Context):
+    async def tts_on(self, ctx: commands.Context) -> None:
         """Enable TTS for your messages."""
         tts_state.set_user_tts(ctx.author.id, True)
         await ctx.send("✅ TTS responses enabled for you.")
 
     @tts_group.command(name="off")
-    async def tts_off(self, ctx: commands.Context):
+    async def tts_off(self, ctx: commands.Context) -> None:
         """Disable TTS for your messages."""
         tts_state.set_user_tts(ctx.author.id, False)
         await ctx.send("✅ TTS responses disabled for you.")
@@ -66,7 +67,7 @@ class TTSCommands(commands.Cog):
     @tts_group.command(name="all")
     @commands.guild_only()  # Block usage in DMs
     @commands.has_permissions(administrator=True)
-    async def tts_all(self, ctx: commands.Context, setting: str):
+    async def tts_all(self, ctx: commands.Context, setting: str) -> None:
         """Admin-only: Enable/disable TTS globally. Only works in servers, not DMs."""
         setting = setting.lower()
         if setting == "on":
@@ -80,7 +81,7 @@ class TTSCommands(commands.Cog):
 
     @commands.command(name="speak")
     @commands.cooldown(3, 60, type=commands.BucketType.user)
-    async def speak(self, ctx: commands.Context, *, text: Optional[str] = None, pcm16: bool = False):
+    async def speak(self, ctx: commands.Context, *, text: str | None = None, pcm16: bool = False) -> None:
         """Make the next response TTS or speak the given text."""
         # Don't set one_time_tts when providing text directly - use voice_only instead
         # This prevents duplicate responses by avoiding double TTS triggering
@@ -132,12 +133,12 @@ class TTSCommands(commands.Cog):
         self,
         ctx: commands.Context,
         *,
-        text: Optional[str] = None,
-        timeout_s: Optional[float] = None,
-        cold: Optional[bool] = None,
-        timeout_cold_s: Optional[float] = None,
-        timeout_warm_s: Optional[float] = None,
-    ):
+        text: str | None = None,
+        timeout_s: float | None = None,
+        cold: bool | None = None,
+        timeout_cold_s: float | None = None,
+        timeout_warm_s: float | None = None,
+    ) -> None:
         """Make the bot say exactly what you type without generating AI response."""
 
         async def maybe_call(func, *args, **kwargs):
@@ -252,23 +253,23 @@ class TTSCommands(commands.Cog):
 
             # 5) Synthesize audio using TTSManager.process with dynamic timeout meta
             meta: dict = {}
-            try:
-                if timeout_s is not None:
+            if timeout_s is not None:
+                try:
                     meta["tts_timeout_s"] = float(timeout_s)
-            except Exception:
-                pass
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Invalid timeout_s value: {timeout_s}: {e}")
             if cold is not None:
                 meta["tts_cold"] = bool(cold)
-            try:
-                if timeout_cold_s is not None:
+            if timeout_cold_s is not None:
+                try:
                     meta["tts_timeout_cold_s"] = float(timeout_cold_s)
-            except Exception:
-                pass
-            try:
-                if timeout_warm_s is not None:
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Invalid timeout_cold_s value: {timeout_cold_s}: {e}")
+            if timeout_warm_s is not None:
+                try:
                     meta["tts_timeout_warm_s"] = float(timeout_warm_s)
-            except Exception:
-                pass
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Invalid timeout_warm_s value: {timeout_warm_s}: {e}")
 
             audio_path = None
             audio_bytes = None
@@ -331,17 +332,16 @@ class TTSCommands(commands.Cog):
                             },
                         )
                         return
-                    else:
-                        logging.warning(
-                            "⚠️ Native voice message publish reported not ok; falling back",
-                            extra={
-                                "subsys": "tts_cmds",
-                                "event": "say.native_voice_not_ok",
-                                "guild_id": guild_id,
-                                "channel_id": channel_id,
-                                "user_id": user_id,
-                            },
-                        )
+                    logging.warning(
+                        "⚠️ Native voice message publish reported not ok; falling back",
+                        extra={
+                            "subsys": "tts_cmds",
+                            "event": "say.native_voice_not_ok",
+                            "guild_id": guild_id,
+                            "channel_id": channel_id,
+                            "user_id": user_id,
+                        },
+                    )
                 except Exception as e:
                     logging.warning(
                         f"Native voice message publish failed: {e}",
@@ -479,7 +479,7 @@ class TTSCommands(commands.Cog):
                 try:
                     await maybe_call(ctx.send, msg)
                 except Exception:
-                    logging.error(
+                    logging.exception(
                         "Failed to notify user about undeliverable audio",
                         extra={
                             "subsys": "tts_cmds",
@@ -493,7 +493,7 @@ class TTSCommands(commands.Cog):
         except SynthesisError as exc:
             reason = str(exc)
             if reason == "engine_missing_callable":
-                logging.error(
+                logging.exception(
                     "tts.process.failed command=say reason=engine_missing_callable",
                     extra={
                         "subsys": "tts_cmds",
@@ -505,7 +505,7 @@ class TTSCommands(commands.Cog):
                 )
                 message = "❌ The TTS engine does not support this request right now. Please try again later."
             elif "engine_input_error" in reason:
-                logging.error(
+                logging.exception(
                     "tts.process.failed command=say reason=engine_input_error",
                     extra={
                         "subsys": "tts_cmds",
@@ -516,12 +516,9 @@ class TTSCommands(commands.Cog):
                     },
                 )
                 detail = reason.split("engine_input_error", 1)[-1].lstrip(": ").strip()
-                if detail:
-                    message = f"❌ The TTS engine could not process the request: {detail}"
-                else:
-                    message = "❌ The TTS engine could not process the request because the input phonemes are unsupported."
+                message = f"❌ The TTS engine could not process the request: {detail}" if detail else "❌ The TTS engine could not process the request because the input phonemes are unsupported."
             else:
-                logging.error(
+                logging.exception(
                     "tts.process.failed command=say reason=runtime",
                     extra={
                         "subsys": "tts_cmds",
@@ -534,15 +531,15 @@ class TTSCommands(commands.Cog):
                 message = f"❌ An error occurred while generating TTS: {reason}"
             try:
                 await maybe_call(ctx.send, message)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to send TTS error message: {e}")
             return
         except Exception as e:
             logging.error(f"Error in say command: {e}", exc_info=True)
             try:
-                await maybe_call(ctx.send, f"❌ An error occurred while generating TTS: {str(e)}")
-            except Exception:
-                pass
+                await maybe_call(ctx.send, f"❌ An error occurred while generating TTS: {e!s}")
+            except Exception as send_e:
+                logger.debug(f"Failed to send TTS exception message: {send_e}")
             return
 
     # Note: The standalone tts-all command is removed to avoid duplication

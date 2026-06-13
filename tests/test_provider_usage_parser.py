@@ -1,25 +1,24 @@
-"""
-Tests for ProviderUsageParser [REH][PA][CMV]
-"""
+"""Tests for ProviderUsageParser [REH][PA][CMV]."""
 
-import pytest
 from unittest.mock import Mock, patch
 
-from bot.vision.provider_usage_parser import ProviderUsageParser
+import pytest
+
 from bot.vision.money import Money
+from bot.vision.provider_usage_parser import ProviderUsageParser
 from bot.vision.types import VisionProvider, VisionTask
 
 
 class TestProviderUsageParser:
-    """Test provider usage parsing and normalization"""
+    """Test provider usage parsing and normalization."""
 
     @pytest.fixture
     def parser(self):
-        """Create parser instance"""
+        """Create parser instance."""
         return ProviderUsageParser()
 
-    def test_parse_generic_openai_usage_direct_cost(self, parser):
-        """Test parsing OpenAI-like usage with direct cost via generic handler"""
+    def test_parse_generic_openai_usage_direct_cost(self, parser) -> None:
+        """Test parsing OpenAI-like usage with direct cost via generic handler."""
         usage_data = {"cost": 0.15}
 
         # Create a mock provider with value "openai"
@@ -30,8 +29,8 @@ class TestProviderUsageParser:
 
         assert result.to_float() == pytest.approx(0.15, rel=1e-4)
 
-    def test_parse_generic_openai_usage_token_fallback(self, parser):
-        """Test parsing OpenAI-like usage with token fallback via generic handler"""
+    def test_parse_generic_openai_usage_token_fallback(self, parser) -> None:
+        """Test parsing OpenAI-like usage with token fallback via generic handler."""
         usage_data = {"tokens": {"prompt_tokens": 1000, "completion_tokens": 500}}
 
         # Create a mock provider with value "openai"
@@ -43,8 +42,8 @@ class TestProviderUsageParser:
         # (1000/1000)*0.01 + (500/1000)*0.03 = 0.01 + 0.015 = 0.025
         assert result.to_float() == pytest.approx(0.025, rel=1e-4)
 
-    def test_parse_generic_anthropic_usage_direct_cost(self, parser):
-        """Test parsing Anthropic-like usage with direct cost via generic handler"""
+    def test_parse_generic_anthropic_usage_direct_cost(self, parser) -> None:
+        """Test parsing Anthropic-like usage with direct cost via generic handler."""
         usage_data = {"cost": 0.25}
 
         # Create a mock provider with value "anthropic"
@@ -59,8 +58,8 @@ class TestProviderUsageParser:
 
         assert result.to_float() == pytest.approx(0.25, rel=1e-4)
 
-    def test_parse_generic_anthropic_usage_token_fallback(self, parser):
-        """Test parsing Anthropic-like usage with token fallback"""
+    def test_parse_generic_anthropic_usage_token_fallback(self, parser) -> None:
+        """Test parsing Anthropic-like usage with token fallback."""
         usage_data = {"tokens": {"prompt_tokens": 1000, "completion_tokens": 500}}
 
         # Create a mock provider with value "anthropic"
@@ -76,8 +75,8 @@ class TestProviderUsageParser:
         # Generic handler: (1000/1000)*0.01 + (500/1000)*0.03 = 0.025
         assert result.to_float() == pytest.approx(0.025, rel=1e-4)
 
-    def test_parse_novita_usage_credits(self, parser):
-        """Test parsing Novita usage with credits"""
+    def test_parse_novita_usage_credits(self, parser) -> None:
+        """Test parsing Novita usage with credits."""
         usage_data = {"credits": 5.0}
 
         with patch.object(parser.pricing_table, "normalize_provider_usage") as mock_norm:
@@ -93,8 +92,8 @@ class TestProviderUsageParser:
             assert result.to_float() == pytest.approx(0.01, rel=1e-4)
             mock_norm.assert_called_once_with(provider=VisionProvider.NOVITA, usage_value=5.0, usage_unit="credits")
 
-    def test_parse_novita_usage_steps_fallback(self, parser):
-        """Test parsing Novita usage with steps fallback"""
+    def test_parse_novita_usage_steps_fallback(self, parser) -> None:
+        """Test parsing Novita usage with steps fallback."""
         usage_data = {"steps": 100}
 
         with patch.object(parser.pricing_table, "normalize_provider_usage") as mock_norm:
@@ -108,8 +107,8 @@ class TestProviderUsageParser:
 
             assert result.to_float() == pytest.approx(0.0002, rel=1e-4)
 
-    def test_parse_generic_chutes_usage_gpu_seconds(self, parser):
-        """Test parsing Chutes-like usage with GPU seconds via generic handler"""
+    def test_parse_generic_chutes_usage_gpu_seconds(self, parser) -> None:
+        """Test parsing Chutes-like usage with GPU seconds via generic handler."""
         usage_data = {"gpu_seconds": 120}
 
         # Create a mock provider with value "chutes"
@@ -126,8 +125,8 @@ class TestProviderUsageParser:
         # Generic handler: 120 * 0.0006 = 0.072
         assert result.to_float() == pytest.approx(0.072, rel=1e-4)
 
-    def test_parse_generic_chutes_usage_compute_time(self, parser):
-        """Test parsing Chutes-like usage with compute_time via generic handler"""
+    def test_parse_generic_chutes_usage_compute_time(self, parser) -> None:
+        """Test parsing Chutes-like usage with compute_time via generic handler."""
         usage_data = {"compute_time": 60}
 
         # Create a mock provider with value "chutes"
@@ -143,8 +142,8 @@ class TestProviderUsageParser:
         # Generic handler: 60 * 0.0006 = 0.036
         assert result.to_float() == pytest.approx(0.036, rel=1e-4)
 
-    def test_parse_generic_replicate_usage_direct_cost(self, parser):
-        """Test parsing Replicate-like usage with direct cost via generic handler"""
+    def test_parse_generic_replicate_usage_direct_cost(self, parser) -> None:
+        """Test parsing Replicate-like usage with direct cost via generic handler."""
         usage_data = {"cost": 0.50}
 
         # Create a mock provider with value "replicate"
@@ -159,8 +158,8 @@ class TestProviderUsageParser:
 
         assert result.to_float() == pytest.approx(0.50, rel=1e-4)
 
-    def test_parse_generic_replicate_usage_no_cost(self, parser):
-        """Test parsing Replicate-like usage with no cost info"""
+    def test_parse_generic_replicate_usage_no_cost(self, parser) -> None:
+        """Test parsing Replicate-like usage with no cost info."""
         usage_data = {"predictions": 5}
 
         # Create a mock provider with value "replicate"
@@ -176,8 +175,8 @@ class TestProviderUsageParser:
         # Generic handler doesn't handle predictions, returns zero
         assert result.to_float() == pytest.approx(0.0, rel=1e-4)
 
-    def test_parse_together_usage_direct_cost(self, parser):
-        """Test parsing Together usage with direct cost"""
+    def test_parse_together_usage_direct_cost(self, parser) -> None:
+        """Test parsing Together usage with direct cost."""
         usage_data = {"cost": 0.08}
 
         result = parser.parse_usage(
@@ -188,8 +187,8 @@ class TestProviderUsageParser:
 
         assert result.to_float() == pytest.approx(0.08, rel=1e-4)
 
-    def test_parse_together_usage_tokens_fallback(self, parser):
-        """Test parsing Together usage with tokens fallback"""
+    def test_parse_together_usage_tokens_fallback(self, parser) -> None:
+        """Test parsing Together usage with tokens fallback."""
         usage_data = {"tokens": 10000}
 
         result = parser.parse_usage(
@@ -201,8 +200,8 @@ class TestProviderUsageParser:
         # (10000/1000) * 0.0008 = 0.008
         assert result.to_float() == pytest.approx(0.008, rel=1e-4)
 
-    def test_parse_unknown_provider(self, parser):
-        """Test parsing unknown provider returns zero"""
+    def test_parse_unknown_provider(self, parser) -> None:
+        """Test parsing unknown provider returns zero."""
         # Create a mock provider with an unknown value
         mock_provider = Mock()
         mock_provider.value = "unknown_provider"
@@ -213,8 +212,8 @@ class TestProviderUsageParser:
 
         assert result.to_float() == pytest.approx(0.0, rel=1e-4)
 
-    def test_parse_empty_usage_data(self, parser):
-        """Test parsing empty usage data returns zero"""
+    def test_parse_empty_usage_data(self, parser) -> None:
+        """Test parsing empty usage data returns zero."""
         result = parser.parse_usage(
             provider=VisionProvider.TOGETHER,
             task=VisionTask.TEXT_TO_IMAGE,
@@ -223,8 +222,8 @@ class TestProviderUsageParser:
 
         assert result.to_float() == pytest.approx(0.0, rel=1e-4)
 
-    def test_parse_malformed_usage_data(self, parser):
-        """Test parsing malformed usage data handles gracefully"""
+    def test_parse_malformed_usage_data(self, parser) -> None:
+        """Test parsing malformed usage data handles gracefully."""
         usage_data = {"invalid_key": "invalid_value"}
 
         result = parser.parse_usage(
@@ -235,8 +234,8 @@ class TestProviderUsageParser:
 
         assert result.to_float() == pytest.approx(0.0, rel=1e-4)
 
-    def test_extract_usage_from_response(self, parser):
-        """Test extracting usage data from provider response"""
+    def test_extract_usage_from_response(self, parser) -> None:
+        """Test extracting usage data from provider response."""
         # Together-style response
         response = Mock()
         response.usage = {"cost": 0.15}
@@ -245,8 +244,8 @@ class TestProviderUsageParser:
 
         assert usage_data["cost"] == 0.15
 
-    def test_extract_usage_from_metadata(self, parser):
-        """Test extracting usage from response metadata"""
+    def test_extract_usage_from_metadata(self, parser) -> None:
+        """Test extracting usage from response metadata."""
         response = Mock()
         response.metadata = {"cost": 0.015, "credits": 5.0, "gpu_seconds": 10.2}
 
@@ -258,8 +257,8 @@ class TestProviderUsageParser:
             assert usage_data["credits"] == 5.0
             assert usage_data["gpu_seconds"] == 10.2
 
-    def test_extract_usage_provider_specific(self, parser):
-        """Test provider-specific usage extraction"""
+    def test_extract_usage_provider_specific(self, parser) -> None:
+        """Test provider-specific usage extraction."""
         # Novita response
         response = Mock()
         response.credits_consumed = 3.5
@@ -270,8 +269,8 @@ class TestProviderUsageParser:
 
             assert usage_data["credits"] == 3.5
 
-    def test_validate_usage_cost_valid(self, parser):
-        """Test validating usage cost within threshold"""
+    def test_validate_usage_cost_valid(self, parser) -> None:
+        """Test validating usage cost within threshold."""
         estimated = Money(1.00)
         actual = Money(1.05)
 
@@ -287,8 +286,8 @@ class TestProviderUsageParser:
         assert is_valid
         assert error_msg is None
 
-    def test_validate_usage_cost_warning(self, parser):
-        """Test validating usage cost triggers warning"""
+    def test_validate_usage_cost_warning(self, parser) -> None:
+        """Test validating usage cost triggers warning."""
         estimated = Money(1.00)
         actual = Money(1.30)
 
@@ -306,8 +305,8 @@ class TestProviderUsageParser:
             assert error_msg is None
             mock_warning.assert_called()
 
-    def test_validate_usage_cost_error(self, parser):
-        """Test validating usage cost triggers error"""
+    def test_validate_usage_cost_error(self, parser) -> None:
+        """Test validating usage cost triggers error."""
         estimated = Money(1.00)
         actual = Money(2.50)
 
@@ -323,8 +322,8 @@ class TestProviderUsageParser:
         assert not is_valid
         assert "2.5x higher" in error_msg
 
-    def test_validate_usage_cost_zero_actual(self, parser):
-        """Test validating with zero actual cost"""
+    def test_validate_usage_cost_zero_actual(self, parser) -> None:
+        """Test validating with zero actual cost."""
         estimated = Money(1.00)
         actual = Money.zero()
 
@@ -338,8 +337,8 @@ class TestProviderUsageParser:
         assert is_valid  # Zero actual is OK
         assert error_msg is None
 
-    def test_validate_usage_cost_zero_estimate(self, parser):
-        """Test validating with zero estimate"""
+    def test_validate_usage_cost_zero_estimate(self, parser) -> None:
+        """Test validating with zero estimate."""
         estimated = Money.zero()
         actual = Money(0.50)
 

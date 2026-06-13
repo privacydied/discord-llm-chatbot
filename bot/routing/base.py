@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from discord import Message
 
-    from ..modality import InputItem
+    from bot.modality import InputItem
 
 
 @dataclass
@@ -19,15 +19,15 @@ class RouteContext:
     dependencies needed by handlers without requiring the full Router.
     """
 
-    message: Optional[Message] = None
-    author_id: Optional[int] = None
-    source_type: Optional[str] = None
+    message: Message | None = None
+    author_id: int | None = None
+    source_type: str | None = None
     payload: Any = None
-    model_override: Optional[str] = None
+    model_override: str | None = None
     # Optional progress callback for streaming updates
     # signature: async (stage: str, step: int) -> None
-    progress_cb: Optional[Any] = None
-    item: Optional[InputItem] = None
+    progress_cb: Any | None = None
+    item: InputItem | None = None
 
 
 @dataclass
@@ -40,7 +40,7 @@ class RouteResult:
     text: str = ""
 
     @classmethod
-    def text_only(cls, text: str) -> "RouteResult":
+    def text_only(cls, text: str) -> RouteResult:
         """Convenience factory for a text-only result."""
         return cls(text=text)
 

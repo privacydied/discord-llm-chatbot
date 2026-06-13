@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test suite for vision Money type and pricing system [REH][PA]
+"""Test suite for vision Money type and pricing system [REH][PA].
 
 Tests:
 - Money arithmetic and precision
@@ -10,21 +9,22 @@ Tests:
 - Discrepancy detection and capping
 """
 
-import pytest
 import json
 from decimal import Decimal
 
+import pytest
+
+from bot.vision.budget_manager_v2 import VisionBudgetManager
 from bot.vision.money import Money
 from bot.vision.pricing_loader import PricingTable, get_pricing_table
-from bot.vision.budget_manager_v2 import VisionBudgetManager
-from bot.vision.types import VisionTask, VisionProvider, VisionRequest
+from bot.vision.types import VisionProvider, VisionRequest, VisionTask
 
 
 class TestMoney:
-    """Test Money type for precision and safety [REH]"""
+    """Test Money type for precision and safety [REH]."""
 
-    def test_money_creation(self):
-        """Test Money creation from various types"""
+    def test_money_creation(self) -> None:
+        """Test Money creation from various types."""
         # From float
         m1 = Money(10.50)
         assert m1.to_float() == 10.50
@@ -46,8 +46,8 @@ class TestMoney:
         m5 = Money(m1)
         assert m5 == m1
 
-    def test_money_precision(self):
-        """Test Money maintains precision"""
+    def test_money_precision(self) -> None:
+        """Test Money maintains precision."""
         # Test internal precision (4 decimal places)
         m1 = Money("0.0001")
         assert m1.to_json_value() == "0.0001"
@@ -61,8 +61,8 @@ class TestMoney:
         assert m3.to_display_string() == "$11.00"
         assert m3.to_display_string(precision=3) == "$10.999"
 
-    def test_money_arithmetic(self):
-        """Test Money arithmetic operations"""
+    def test_money_arithmetic(self) -> None:
+        """Test Money arithmetic operations."""
         m1 = Money("10.00")
         m2 = Money("5.50")
 
@@ -87,8 +87,8 @@ class TestMoney:
         m7 = (m1 + m2) * 1.1
         assert m7.to_float() == pytest.approx(17.05, rel=1e-4)
 
-    def test_money_comparison(self):
-        """Test Money comparison operations"""
+    def test_money_comparison(self) -> None:
+        """Test Money comparison operations."""
         m1 = Money("10.00")
         m2 = Money("10.00")
         m3 = Money("5.00")
@@ -102,8 +102,8 @@ class TestMoney:
         assert m1 >= m3
         assert m1 <= m4
 
-    def test_money_utilities(self):
-        """Test Money utility methods"""
+    def test_money_utilities(self) -> None:
+        """Test Money utility methods."""
         # Zero
         m1 = Money.zero()
         assert m1.is_zero()
@@ -135,11 +135,11 @@ class TestMoney:
 
 
 class TestPricingTable:
-    """Test pricing table and estimation [PA]"""
+    """Test pricing table and estimation [PA]."""
 
     @pytest.fixture
     def pricing_table(self, tmp_path):
-        """Create test pricing table"""
+        """Create test pricing table."""
         pricing_data = {
             "version": "test",
             "currency": "USD",
@@ -160,7 +160,7 @@ class TestPricingTable:
                     },
                     "credits_per_dollar": 100,
                     "safety_factor": 1.1,
-                }
+                },
             },
             "default_estimates": {"text_to_image": 0.02, "text_to_video": 0.30},
             "estimation_config": {
@@ -176,8 +176,8 @@ class TestPricingTable:
 
         return PricingTable(pricing_file)
 
-    def test_estimate_image_cost(self, pricing_table):
-        """Test image generation cost estimation"""
+    def test_estimate_image_cost(self, pricing_table) -> None:
+        """Test image generation cost estimation."""
         # Basic 1024x1024 image
         cost = pricing_table.estimate_cost(
             provider=VisionProvider.NOVITA,
@@ -212,8 +212,8 @@ class TestPricingTable:
         # 0.02 * 1.5 (size) * 1.5 (model) * 1.1 * 1.2 = 0.0594
         assert cost3.to_float() == pytest.approx(0.0594, rel=1e-3)
 
-    def test_estimate_video_cost(self, pricing_table):
-        """Test video generation cost estimation"""
+    def test_estimate_video_cost(self, pricing_table) -> None:
+        """Test video generation cost estimation."""
         cost = pricing_table.estimate_cost(
             provider=VisionProvider.NOVITA,
             task=VisionTask.TEXT_TO_VIDEO,
@@ -222,8 +222,8 @@ class TestPricingTable:
         # (0.10 + 0.05 * 4) * 1.1 * 1.2 = 0.396
         assert cost.to_float() == pytest.approx(0.396, rel=1e-3)
 
-    def test_normalize_provider_usage(self, pricing_table):
-        """Test provider usage normalization"""
+    def test_normalize_provider_usage(self, pricing_table) -> None:
+        """Test provider usage normalization."""
         # Credits-based
         cost1 = pricing_table.normalize_provider_usage(provider=VisionProvider.NOVITA, usage_data={"credits": 200})
         assert cost1.to_float() == 2.00  # 200 credits / 100 per dollar
@@ -238,11 +238,11 @@ class TestPricingTable:
 
 
 class TestBudgetManager:
-    """Test budget manager with Money type [REH][RM]"""
+    """Test budget manager with Money type [REH][RM]."""
 
     @pytest.fixture
     async def budget_manager(self, tmp_path):
-        """Create test budget manager"""
+        """Create test budget manager."""
         config = {
             "VISION_DATA_DIR": str(tmp_path),
             "VISION_DAILY_LIMIT": 5.0,
@@ -252,8 +252,8 @@ class TestBudgetManager:
         return VisionBudgetManager(config)
 
     @pytest.mark.asyncio
-    async def test_budget_check(self, budget_manager):
-        """Test budget checking with reservations"""
+    async def test_budget_check(self, budget_manager) -> None:
+        """Test budget checking with reservations."""
         request = VisionRequest(
             user_id="test_user",
             task=VisionTask.TEXT_TO_IMAGE,
@@ -281,8 +281,8 @@ class TestBudgetManager:
         assert "Daily budget limit reached" in result3.user_message
 
     @pytest.mark.asyncio
-    async def test_record_actual_cost(self, budget_manager):
-        """Test recording actual cost with discrepancy handling"""
+    async def test_record_actual_cost(self, budget_manager) -> None:
+        """Test recording actual cost with discrepancy handling."""
         user_id = "test_user"
 
         # Reserve budget
@@ -323,8 +323,8 @@ class TestBudgetManager:
         assert daily_spent.to_float() == pytest.approx(5.90, rel=1e-3)  # 0.90 + 5.00
 
     @pytest.mark.asyncio
-    async def test_atomic_writes(self, budget_manager, tmp_path):
-        """Test atomic file writes"""
+    async def test_atomic_writes(self, budget_manager, tmp_path) -> None:
+        """Test atomic file writes."""
         user_id = "test_user"
 
         # Create initial budget
@@ -338,13 +338,13 @@ class TestBudgetManager:
         assert transactions_file.exists()
 
         # Verify JSON is valid
-        with open(budgets_file, "r") as f:
+        with open(budgets_file) as f:
             data = json.load(f)
             assert user_id in data
             assert data[user_id]["reserved_amount"] == "1.0000"
 
         # Verify transaction log
-        with open(transactions_file, "r") as f:
+        with open(transactions_file) as f:
             lines = f.readlines()
             assert len(lines) >= 1
             # Parse the transaction log entry
@@ -356,8 +356,8 @@ class TestBudgetManager:
                         break
 
     @pytest.mark.asyncio
-    async def test_period_resets(self, budget_manager):
-        """Test budget period resets"""
+    async def test_period_resets(self, budget_manager) -> None:
+        """Test budget period resets."""
         user_id = "test_user"
 
         # Record some spend
@@ -379,11 +379,11 @@ class TestBudgetManager:
 
 
 class TestIntegration:
-    """Integration tests for the full system [REH]"""
+    """Integration tests for the full system [REH]."""
 
     @pytest.mark.asyncio
-    async def test_full_flow(self, tmp_path):
-        """Test complete flow from estimation to recording"""
+    async def test_full_flow(self, tmp_path) -> None:
+        """Test complete flow from estimation to recording."""
         # Setup
         config = {
             "VISION_DATA_DIR": str(tmp_path),

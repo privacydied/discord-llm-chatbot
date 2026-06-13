@@ -1,17 +1,21 @@
 """Tests verifying that extraction failure propagates correctly through
-the multimodal pipeline and does NOT become false-success."""
+the multimodal pipeline and does NOT become false-success.
+"""
+
+from typing import Never
 
 import pytest
+
 from bot.exceptions import DispatchEmptyError
-from bot.result_aggregator import ResultAggregator
 from bot.modality import InputModality
+from bot.result_aggregator import ResultAggregator
 from bot.web_extraction_service import ExtractionResult
 
 
 class DummyItem:
     """Minimal InputItem-like object for testing."""
 
-    def __init__(self, payload="<payload>"):
+    def __init__(self, payload="<payload>") -> None:
         self.source_type = "url"
         self.payload = payload
 
@@ -19,7 +23,7 @@ class DummyItem:
 # -- ResultAggregator failure-accounting tests --
 
 
-def test_failed_extraction_not_counted_as_successful():
+def test_failed_extraction_not_counted_as_successful() -> None:
     agg = ResultAggregator()
     agg.add_result(
         0,
@@ -33,7 +37,7 @@ def test_failed_extraction_not_counted_as_successful():
     assert stats["failed_items"] == 1
 
 
-def test_failed_extraction_not_in_aggregated_prompt():
+def test_failed_extraction_not_in_aggregated_prompt() -> None:
     agg = ResultAggregator()
     agg.add_result(
         0,
@@ -47,7 +51,7 @@ def test_failed_extraction_not_in_aggregated_prompt():
     assert "Could not extract content" not in prompt
 
 
-def test_failed_item_does_not_trigger_implicit_ack_prompt():
+def test_failed_item_does_not_trigger_implicit_ack_prompt() -> None:
     """A failed GENERAL_URL should not cause media-only ack injection."""
     agg = ResultAggregator()
     agg.add_result(
@@ -61,7 +65,7 @@ def test_failed_item_does_not_trigger_implicit_ack_prompt():
     assert "acknowledge the content" not in prompt.lower()
 
 
-def test_mixed_success_and_failure_only_successful_in_prompt():
+def test_mixed_success_and_failure_only_successful_in_prompt() -> None:
     agg = ResultAggregator()
     agg.add_result(
         0,
@@ -90,7 +94,7 @@ def test_mixed_success_and_failure_only_successful_in_prompt():
     assert "Hello world" in content_sections[0]
 
 
-def test_all_failed_items_produce_empty_prompt_no_text_sources():
+def test_all_failed_items_produce_empty_prompt_no_text_sources() -> None:
     agg = ResultAggregator()
     agg.add_result(
         0,
@@ -106,7 +110,7 @@ def test_all_failed_items_produce_empty_prompt_no_text_sources():
     assert "acknowledge" not in prompt.lower()
 
 
-def test_has_scraped_text_requires_success_flag():
+def test_has_scraped_text_requires_success_flag() -> None:
     """has_scraped_text must be False when the item has success=False."""
     agg = ResultAggregator()
     agg.add_result(
@@ -126,14 +130,16 @@ def test_has_scraped_text_requires_success_flag():
 # -- DispatchEmptyError propagation tests --
 
 
-def test_dispatch_empty_error_is_exception():
+def test_dispatch_empty_error_is_exception() -> Never:
     with pytest.raises(DispatchEmptyError):
-        raise DispatchEmptyError("test")
+        msg = "test"
+        raise DispatchEmptyError(msg)
 
 
-def test_dispatch_empty_error_message():
+def test_dispatch_empty_error_message() -> None:
     try:
-        raise DispatchEmptyError("Could not extract content from URL: https://example.com")
+        msg = "Could not extract content from URL: https://example.com"
+        raise DispatchEmptyError(msg)
     except DispatchEmptyError as e:
         assert "Could not extract content from URL" in str(e)
         assert "https://example.com" in str(e)
@@ -142,14 +148,14 @@ def test_dispatch_empty_error_message():
 # -- ExtractionResult contract tests --
 
 
-def test_extraction_result_failure_message():
+def test_extraction_result_failure_message() -> None:
     er = ExtractionResult(success=False, tier_used="B", error="version mismatch server=1.59 client=1.55")
     assert er.success is False
     msg = er.to_message()
     assert "failed" in msg.lower()
 
 
-def test_extraction_result_success_message():
+def test_extraction_result_success_message() -> None:
     er = ExtractionResult(success=True, tier_used="A", canonical_url="https://example.com", text="Hello")
     assert er.success is True
     msg = er.to_message()
@@ -160,10 +166,11 @@ def test_extraction_result_success_message():
 # -- Router text-flow gate tests --
 
 
-def test_all_failed_url_produces_empty_prompt_no_original_text():
+def test_all_failed_url_produces_empty_prompt_no_original_text() -> None:
     """When a single GENERAL_URL item fails and there is no original text,
     get_aggregated_prompt must return empty string so the router gate
-    (not aggregated_prompt.strip()) will NOT invoke _invoke_text_flow."""
+    (not aggregated_prompt.strip()) will NOT invoke _invoke_text_flow.
+    """
     agg = ResultAggregator()
     agg.add_result(
         0,
@@ -180,7 +187,7 @@ def test_all_failed_url_produces_empty_prompt_no_original_text():
     assert not prompt.strip(), "Prompt must not be routable"
 
 
-def test_all_failed_item_with_only_whitespace_original_text():
+def test_all_failed_item_with_only_whitespace_original_text() -> None:
     """When original_text is just whitespace, it should not count as routable content."""
     agg = ResultAggregator()
     agg.add_result(
@@ -194,9 +201,10 @@ def test_all_failed_item_with_only_whitespace_original_text():
     assert prompt == "", f"Expected empty prompt, got: {prompt!r}"
 
 
-def test_failed_item_with_meaningful_original_text_still_routes():
+def test_failed_item_with_meaningful_original_text_still_routes() -> None:
     """When there IS meaningful original text alongside failed items,
-    the prompt should be non-empty so text flow can still answer the user text."""
+    the prompt should be non-empty so text flow can still answer the user text.
+    """
     agg = ResultAggregator()
     agg.add_result(
         0,
@@ -212,9 +220,10 @@ def test_failed_item_with_meaningful_original_text_still_routes():
     assert "Could not extract" not in prompt
 
 
-def test_mixed_failure_prompts_only_successful_content():
+def test_mixed_failure_prompts_only_successful_content() -> None:
     """When some items succeeded and some failed, the prompt should only
-    contain successful content — never failed extraction residue."""
+    contain successful content — never failed extraction residue.
+    """
     agg = ResultAggregator()
     agg.add_result(
         0,

@@ -1,14 +1,12 @@
-"""
-RAG (Retrieval Augmented Generation) module for vector-based document retrieval.
-"""
+"""RAG (Retrieval Augmented Generation) module for vector-based document retrieval."""
 
-from .embedding_interface import EmbeddingInterface
-from .vector_schema import VectorDocument, HybridSearchConfig
 from .chroma_backend import ChromaRAGBackend
+from .embedding_interface import EmbeddingInterface
+from .vector_schema import HybridSearchConfig, VectorDocument
 
 __all__ = [
-    "EmbeddingInterface",
-    "VectorDocument",
-    "HybridSearchConfig",
     "ChromaRAGBackend",
+    "EmbeddingInterface",
+    "HybridSearchConfig",
+    "VectorDocument",
 ]

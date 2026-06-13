@@ -1,14 +1,13 @@
-"""
-OpenAI/OpenRouter Backend - Handles OpenAI API calls including OpenRouter.
-"""
+"""OpenAI/OpenRouter Backend - Handles OpenAI API calls including OpenRouter."""
 
-from typing import Any, AsyncGenerator, Dict, Union
-from types import SimpleNamespace
 import base64
 import inspect
 import os
 import ssl
 import time
+from collections.abc import AsyncGenerator
+from types import SimpleNamespace
+from typing import Any
 
 import aiohttp
 import certifi
@@ -28,7 +27,10 @@ except ModuleNotFoundError:
 else:
     openai = _openai
 
-from bot.config import load_config, get_vl_model_ladder
+import contextlib
+
+from bot.config import get_vl_model_ladder, load_config
+from bot.enhanced_retry import get_retry_manager
 from bot.exceptions import APIError
 from bot.memory import get_profile, get_server_profile
 from bot.retry_utils import (
@@ -36,7 +38,6 @@ from bot.retry_utils import (
     with_retry,
 )
 from bot.utils.logging import get_logger
-from bot.enhanced_retry import get_retry_manager
 
 logger = get_logger(__name__)
 
@@ -50,7 +51,8 @@ else:
 
 def _require_openai() -> Any:
     if _openai is None:
-        raise APIError("OpenAI backend is unavailable because the 'openai' package is not installed")
+        msg = "OpenAI backend is unavailable because the 'openai' package is not installed"
+        raise APIError(msg)
     return _openai
 
 
@@ -123,12 +125,12 @@ def _make_openai_async_client(
 
             loop = asyncio.get_running_loop()
             loop.create_task(http_client.aclose())
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to schedule http_client close: {e}")
         raise
 
 
-def _resolve_openai_compatible_endpoint(provider_name: str | None, config: Dict[str, Any]) -> tuple[str | None, str | None, str]:
+def _resolve_openai_compatible_endpoint(provider_name: str | None, config: dict[str, Any]) -> tuple[str | None, str | None, str]:
     """Resolve API key/base URL for OpenAI-compatible ladders."""
     provider = str(provider_name or "openrouter").strip().lower()
     if provider == "nvidia":
@@ -151,7 +153,7 @@ def _resolve_openai_compatible_endpoint(provider_name: str | None, config: Dict[
 
 
 def _ollama_coro_factory(
-    config: Dict[str, Any],
+    config: dict[str, Any],
     model: str,
     messages: list,
     temperature: float,
@@ -196,11 +198,12 @@ def _ollama_coro_factory(
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                **{k: v for k, v in kwargs.items() if k not in ("stream",)},
+                **{k: v for k, v in kwargs.items() if k != "stream"},
             )
             text = result.get("response", "")
             if not text:
-                raise APIError(f"Ollama returned empty response for model {model}")
+                msg_0 = f"Ollama returned empty response for model {model}"
+                raise APIError(msg_0)
             return text
         finally:
             await ollama_client.close()
@@ -240,16 +243,15 @@ async def _safe_aclose_openai_client(client: Any) -> None:
 async def generate_openai_response(
     prompt: str,
     context: str = "",
-    system_prompt: str = None,
-    user_id: str = None,
-    guild_id: str = None,
-    temperature: float = None,
-    max_tokens: int = None,
+    system_prompt: str | None = None,
+    user_id: str | None = None,
+    guild_id: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     stream: bool = False,
     **kwargs,
-) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
-    """
-    Generate a response using OpenAI API (including OpenRouter).
+) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+    """Generate a response using OpenAI API (including OpenRouter).
 
     Args:
         prompt: The user's input prompt
@@ -263,6 +265,7 @@ async def generate_openai_response(
 
     Returns:
         Dictionary with the generated text and metadata
+
     """
     try:
         config = load_config()
@@ -324,14 +327,17 @@ async def generate_openai_response(
         else:
             prompt_file_path = config.get("PROMPT_FILE")
             if not prompt_file_path:
-                raise APIError("PROMPT_FILE not configured in environment variables")
+                msg = "PROMPT_FILE not configured in environment variables"
+                raise APIError(msg)
             try:
-                with open(prompt_file_path, "r", encoding="utf-8") as pf:
+                with open(prompt_file_path, encoding="utf-8") as pf:
                     base_system_prompt = pf.read().strip()
             except FileNotFoundError:
-                raise APIError(f"Prompt file not found: {prompt_file_path}")
+                msg = f"Prompt file not found: {prompt_file_path}"
+                raise APIError(msg)
             except Exception as e:
-                raise APIError(f"Error reading prompt file {prompt_file_path}: {e}")
+                msg = f"Error reading prompt file {prompt_file_path}: {e}"
+                raise APIError(msg)
 
             # Combine base prompt, server context, and conversation history
             full_system_prompt = f"""{base_system_prompt}
@@ -345,7 +351,7 @@ Server Context: {server_context}"""
                 {
                     "role": "system",
                     "content": f"PREVIOUS_CONVERSATION_HISTORY:\n{context}",
-                }
+                },
             )
 
         # Finally, add the user's actual prompt
@@ -359,10 +365,11 @@ Server Context: {server_context}"""
         logger.debug(f"[OpenAI] Request params: temp={temperature}, max_tokens={max_tokens}, stream={stream}")
 
         # Helper to normalize a completion response into our result dict
-        def _normalize_nonstream_response(response_obj, used_model: str) -> Dict[str, Any]:
+        def _normalize_nonstream_response(response_obj, used_model: str) -> dict[str, Any]:
             try:
                 if not getattr(response_obj, "choices", None):
-                    raise APIError("No choices returned in OpenAI response")
+                    msg_0 = "No choices returned in OpenAI response"
+                    raise APIError(msg_0)
                 first = response_obj.choices[0]
                 content = getattr(getattr(first, "message", None), "content", "") or ""
                 try:
@@ -372,7 +379,8 @@ Server Context: {server_context}"""
                 except Exception:
                     usable_content = content
                 if not str(usable_content or "").strip():
-                    raise APIError(f"Empty text response from model {used_model}")
+                    msg_0 = f"Empty text response from model {used_model}"
+                    raise APIError(msg_0)
                 usage = getattr(response_obj, "usage", None)
                 usage_info_local = {
                     "prompt_tokens": getattr(usage, "prompt_tokens", 0),
@@ -386,7 +394,8 @@ Server Context: {server_context}"""
                     "backend": "openai",
                 }
             except Exception as norm_error:
-                raise APIError(f"Response normalization failed: {type(norm_error).__name__}: {norm_error}")
+                msg_0 = f"Response normalization failed: {type(norm_error).__name__}: {norm_error}"
+                raise APIError(msg_0)
 
         if stream:
             logger.debug("[OpenAI] 🔄 Sending request to API (streaming)...")
@@ -492,13 +501,13 @@ Server Context: {server_context}"""
                             retry_after = None
                         extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""
                         logger.warning(f"OpenAI HTTP error during fallback attempt: {status_code} {he}{extra}")
-                        err = APIError(f"HTTP {status_code}: {str(he)}{extra}")
+                        err = APIError(f"HTTP {status_code}: {he!s}{extra}")
                         # Propagate Retry-After to outer retry harness
                         try:
                             if retry_after is not None:
-                                setattr(err, "retry_after_seconds", retry_after)
-                        except Exception:
-                            pass
+                                err.retry_after_seconds = retry_after
+                        except Exception as e:
+                            logger.debug(f"Failed to set retry_after_seconds: {e}")
                         raise err
                     except Exception as e:
                         # Normalize timeouts and log a compact line per attempt [REH]
@@ -506,7 +515,8 @@ Server Context: {server_context}"""
                         etype = type(e).__name__
                         if "timeout" in str(e).lower() or "timeout" in etype.lower():
                             logger.warning(f"TextGen timeout (model {selected_model}): {elapsed_ms}ms")
-                            raise APIError(f"Request timeout after ~{elapsed_ms}ms for model {selected_model}")
+                            msg_0 = f"Request timeout after ~{elapsed_ms}ms for model {selected_model}"
+                            raise APIError(msg_0)
                         raise
                     finally:
                         await _safe_aclose_openai_client(attempt_client)
@@ -514,10 +524,8 @@ Server Context: {server_context}"""
                 return _run
 
             per_item_budget = float(config.get("TEXT_PER_ITEM_BUDGET", 120.0))
-            try:
+            with contextlib.suppress(Exception):
                 logger.info(f"[OpenAI] text.budget seconds={per_item_budget}")
-            except Exception:
-                pass
             try:
                 rr = await retry_mgr.run_with_fallback("text", _coro_factory, per_item_budget=per_item_budget)
             finally:
@@ -544,20 +552,21 @@ Server Context: {server_context}"""
                         api_err = APIError(msg)
                         try:
                             if "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str):
-                                setattr(api_err, "retryable", False)
+                                api_err.retryable = False
                             if ("401" in err_str or "403" in err_str) and (
                                 "authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str
                             ):
-                                setattr(api_err, "retryable", False)
-                        except Exception:
-                            pass
+                                api_err.retryable = False
+                        except Exception as e:
+                            logger.debug(f"Failed to classify error retryability: {e}")
                     except Exception:
                         # Fallback to original error if wrapping fails
                         raise base_err
                     # Normal path: propagate a clean APIError up to the caller so it can be
                     # handled without dumping a full traceback in logs. [REH]
                     raise api_err
-                raise APIError("All text providers exhausted")
+                msg_0 = "All text providers exhausted"
+                raise APIError(msg_0)
             return rr.result
 
         # Non-streaming single-provider path (OpenAI base or when ladder disabled)
@@ -576,20 +585,20 @@ Server Context: {server_context}"""
             except Exception as e:
                 if "timeout" in str(e).lower() or "TimeoutError" in str(type(e).__name__):
                     logger.warning(f"[OpenAI] ⏰ Request timeout after {config.get('TEXT_REQUEST_TIMEOUT', 30)}s: {e}")
-                    raise APIError(f"Request timeout: {str(e)}")
-                else:
-                    logger.error(f"[OpenAI] ❌ API request failed: {e}")
-                    raise
+                    msg_0 = f"Request timeout: {e!s}"
+                    raise APIError(msg_0)
+                logger.exception(f"[OpenAI] ❌ API request failed: {e}")
+                raise
             logger.debug("[OpenAI] ✅ Received response from API")
             # Handle non-streaming response
-            result = _normalize_nonstream_response(response, model)
-            return result
+            return _normalize_nonstream_response(response, model)
         finally:
             await _safe_aclose_openai_client(client)
 
     except OpenAIAuthenticationError as e:
-        logger.error(f"OpenAI authentication failed: {e}")
-        raise APIError(f"OpenAI authentication failed - check API key: {str(e)}")
+        logger.exception(f"OpenAI authentication failed: {e}")
+        msg_0 = f"OpenAI authentication failed - check API key: {e!s}"
+        raise APIError(msg_0)
     except OpenAIRateLimitError as e:
         logger.warning(f"OpenAI rate limit exceeded: {e}")
         retry_after = None
@@ -600,18 +609,20 @@ Server Context: {server_context}"""
                 ra = resp.headers.get("retry-after") or resp.headers.get("Retry-After")
                 if ra is not None:
                     retry_after = float(ra)
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"Failed to parse retry-after header: {exc}")
             retry_after = None
-        err = APIError(f"OpenAI rate limit exceeded: {str(e)}" + (f" (retry-after={retry_after}s)" if retry_after is not None else ""))
+        err = APIError(f"OpenAI rate limit exceeded: {e!s}" + (f" (retry-after={retry_after}s)" if retry_after is not None else ""))
         try:
             if retry_after is not None:
-                setattr(err, "retry_after_seconds", retry_after)
-        except Exception:
-            pass
+                err.retry_after_seconds = retry_after
+        except Exception as exc:
+            logger.debug(f"Failed to set retry_after_seconds: {exc}")
         raise err
     except OpenAIAPIError as e:
-        logger.error(f"OpenAI API error: {e}")
-        raise APIError(f"OpenAI API error: {str(e)}")
+        logger.exception(f"OpenAI API error: {e}")
+        msg_0 = f"OpenAI API error: {e!s}"
+        raise APIError(msg_0)
     except httpx.HTTPStatusError as e:
         # Surface HTTP errors (e.g., 429 Too Many Requests from OpenRouter) as retriable APIError
         status = e.response.status_code if e.response is not None else "unknown"
@@ -638,12 +649,12 @@ Server Context: {server_context}"""
             retry_after = None
         extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""
         logger.warning(f"OpenAI HTTP error: {status} {e}{extra}")
-        err = APIError(f"HTTP {status}: {str(e)}{extra}")
+        err = APIError(f"HTTP {status}: {e!s}{extra}")
         try:
             if retry_after is not None:
-                setattr(err, "retry_after_seconds", retry_after)
-        except Exception:
-            pass
+                err.retry_after_seconds = retry_after
+        except Exception as exc:
+            logger.debug(f"Failed to set retry_after_seconds: {exc}")
         raise err
     except APIError as e:
         # Already normalized, don't double-wrap or spam error-level logs
@@ -653,20 +664,20 @@ Server Context: {server_context}"""
     except Exception as e:
         # Get detailed error information
         error_type = type(e).__name__
-        error_msg = str(e) if str(e) else "No error message"
+        error_msg = str(e) or "No error message"
         error_details = f"{error_type}: {error_msg}"
 
-        logger.error(f"Unexpected error in generate_openai_response: {error_details}")
+        logger.exception(f"Unexpected error in generate_openai_response: {error_details}")
         logger.debug(
             "Traceback for unexpected error in generate_openai_response",
             exc_info=True,
         )
-        raise APIError(f"Failed to generate OpenAI response: {error_details}")
+        msg_0 = f"Failed to generate OpenAI response: {error_details}"
+        raise APIError(msg_0)
 
 
 async def get_base64_image(image_url: str) -> str:
-    """
-    Process image from URL or file path and convert to base64 data URI.
+    """Process image from URL or file path and convert to base64 data URI.
     CHANGE: Enhanced to handle both URLs and file paths.
     """
     logger.debug(f"📥 Processing image from: {image_url}")
@@ -675,7 +686,7 @@ async def get_base64_image(image_url: str) -> str:
     if image_url.startswith("file://") or os.path.exists(image_url):
         try:
             # Extract actual path from file:// URL if needed
-            file_path = image_url[7:] if image_url.startswith("file://") else image_url
+            file_path = image_url.removeprefix("file://")
 
             # Verify file exists
             if not os.path.exists(file_path):
@@ -712,10 +723,9 @@ async def get_base64_image(image_url: str) -> str:
                         content_type = response.headers.get("Content-Type", "image/png")
                         logger.debug(f"✅ Image downloaded: size={len(data)} bytes, type={content_type}")
                         return f"data:{content_type};base64,{base64_data}"
-                    else:
-                        error_msg = f"Failed to download image: status={response.status}"
-                        logger.error(error_msg)
-                        raise APIError(error_msg)
+                    error_msg = f"Failed to download image: status={response.status}"
+                    logger.error(error_msg)
+                    raise APIError(error_msg)
         except Exception as e:
             error_msg = f"Failed to download image from URL: {e}"
             logger.error(error_msg, exc_info=True)
@@ -736,12 +746,12 @@ async def get_base64_image(image_url: str) -> str:
 async def _generate_vl_response_with_retry(
     image_url: str,
     user_prompt: str = "",
-    user_id: str = None,
-    guild_id: str = None,
-    temperature: float = None,
-    max_tokens: int = None,
+    user_id: str | None = None,
+    guild_id: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     **kwargs,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Attempt VL inference using EnhancedRetryManager vision ladder with fallback."""
     config = load_config()
 
@@ -755,15 +765,18 @@ async def _generate_vl_response_with_retry(
 
     vl_prompt_file_path = config.get("VL_PROMPT_FILE")
     if not vl_prompt_file_path:
-        raise APIError("VL_PROMPT_FILE not configured in environment variables")
+        msg = "VL_PROMPT_FILE not configured in environment variables"
+        raise APIError(msg)
 
     try:
-        with open(vl_prompt_file_path, "r", encoding="utf-8") as vpf:
+        with open(vl_prompt_file_path, encoding="utf-8") as vpf:
             vl_system_prompt = vpf.read().strip()
     except FileNotFoundError as exc:
-        raise APIError(f"VL prompt file not found: {vl_prompt_file_path}") from exc
+        msg = f"VL prompt file not found: {vl_prompt_file_path}"
+        raise APIError(msg) from exc
     except Exception as exc:
-        raise APIError(f"Error reading VL prompt file {vl_prompt_file_path}: {exc}") from exc
+        msg = f"Error reading VL prompt file {vl_prompt_file_path}: {exc}"
+        raise APIError(msg) from exc
 
     if user_id:
         profile = get_profile(str(user_id))
@@ -774,7 +787,7 @@ async def _generate_vl_response_with_retry(
         temperature = temperature or config.get("TEMPERATURE", 0.7)
 
     system_prompt = vl_system_prompt
-    user_message_text = user_prompt if user_prompt else "Analyze this image."
+    user_message_text = user_prompt or "Analyze this image."
 
     if isinstance(image_url, str) and image_url.startswith("data:"):
         image_content = image_url
@@ -782,7 +795,8 @@ async def _generate_vl_response_with_retry(
         try:
             image_content = await get_base64_image(image_url)
         except Exception as exc:
-            raise APIError(f"Image processing failed: {exc}") from exc
+            msg = f"Image processing failed: {exc}"
+            raise APIError(msg) from exc
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -847,9 +861,11 @@ async def _generate_vl_response_with_retry(
                     response = await client.chat.completions.create(**api_params)
 
                     if response is None:
-                        raise APIError("VL API returned None response")
+                        msg_1 = "VL API returned None response"
+                        raise APIError(msg_1)
                     if not (hasattr(response, "choices") and response.choices and hasattr(response.choices[0], "message") and response.choices[0].message):
-                        raise APIError("Invalid VL API response structure")
+                        msg_1 = "Invalid VL API response structure"
+                        raise APIError(msg_1)
 
                     logger.debug("[VL] ✅ Received response from API")
 
@@ -861,7 +877,8 @@ async def _generate_vl_response_with_retry(
 
                     # Empty completion is a soft failure — retry with next model [REH]
                     if not response_text.strip():
-                        raise APIError(f"VL model {selected_model} returned empty completion")
+                        msg_1 = f"VL model {selected_model} returned empty completion"
+                        raise APIError(msg_1)
                     usage = getattr(response, "usage", None)
                     usage_info = {
                         "prompt_tokens": getattr(usage, "prompt_tokens", 0),
@@ -886,23 +903,25 @@ async def _generate_vl_response_with_retry(
                             ra = hdrs.get("retry-after") or hdrs.get("Retry-After")
                             if ra is not None:
                                 retry_after = float(ra)
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug(f"Failed to parse retry-after header: {exc}")
                         retry_after = None
                     extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""
                     logger.warning(f"VL HTTP error during fallback attempt: {status_code} {he}{extra}")
-                    err = APIError(f"HTTP {status_code}: {str(he)}{extra}")
+                    err = APIError(f"HTTP {status_code}: {he!s}{extra}")
                     try:
                         if retry_after is not None:
-                            setattr(err, "retry_after_seconds", retry_after)
-                    except Exception:
-                        pass
+                            err.retry_after_seconds = retry_after
+                    except Exception as exc:
+                        logger.debug(f"Failed to set retry_after_seconds: {exc}")
                     raise err
                 except Exception as e:
                     elapsed_ms = int((time.monotonic() - t0) * 1000)
                     etype = type(e).__name__
                     if "timeout" in str(e).lower() or "timeout" in etype.lower():
                         logger.warning(f"VL timeout (model {selected_model}): {elapsed_ms}ms")
-                        raise APIError(f"Request timeout after ~{elapsed_ms}ms for model {selected_model}")
+                        msg_1 = f"Request timeout after ~{elapsed_ms}ms for model {selected_model}"
+                        raise APIError(msg_1)
                     raise
                 finally:
                     await _safe_aclose_openai_client(client)
@@ -913,12 +932,11 @@ async def _generate_vl_response_with_retry(
         # so this must be long enough for large images and slow free OpenRouter VL models. [REH]
         try:
             per_item_budget = float(config.get("VISION_PER_ITEM_BUDGET", 45.0))
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"Failed to parse VISION_PER_ITEM_BUDGET: {exc}")
             per_item_budget = 45.0
-        try:
+        with contextlib.suppress(Exception):
             logger.info(f"[VL] vision.budget seconds={per_item_budget}")
-        except Exception:
-            pass
 
         rr = await retry_mgr.run_with_fallback("vision", _coro_factory, per_item_budget=per_item_budget)
 
@@ -948,11 +966,11 @@ async def _generate_vl_response_with_retry(
                     api_err.vl_provider_base = base_url
                     try:
                         if "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str):
-                            setattr(api_err, "retryable", False)
+                            api_err.retryable = False
                         if ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str):
-                            setattr(api_err, "retryable", False)
-                    except Exception:
-                        pass
+                            api_err.retryable = False
+                    except Exception as exc:
+                        logger.debug(f"Failed to classify error retryability: {exc}")
                 except Exception:
                     raise base_err
                 raise api_err
@@ -977,7 +995,8 @@ async def _generate_vl_response_with_retry(
     else:
         ladder = get_vl_model_ladder()
         if not ladder:
-            raise APIError("No VL models configured")
+            msg_0 = "No VL models configured"
+            raise APIError(msg_0)
         model_name = ladder[0]
 
     try:
@@ -1016,9 +1035,11 @@ async def _generate_vl_response_with_retry(
         try:
             response = await client.chat.completions.create(**api_params)
             if response is None:
-                raise APIError("VL API returned None response")
+                msg_0 = "VL API returned None response"
+                raise APIError(msg_0)
             if not (hasattr(response, "choices") and response.choices and hasattr(response.choices[0], "message") and response.choices[0].message):
-                raise APIError("Invalid VL API response structure")
+                msg_0 = "Invalid VL API response structure"
+                raise APIError(msg_0)
         except Exception as exc:
             elapsed_ms = int((time.monotonic() - start) * 1000)
             logger.warning(
@@ -1078,12 +1099,12 @@ async def _generate_vl_response_with_retry(
 async def generate_vl_response(
     image_url: str,
     user_prompt: str = "",
-    user_id: str = None,
-    guild_id: str = None,
-    temperature: float = None,
-    max_tokens: int = None,
+    user_id: str | None = None,
+    guild_id: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     **kwargs,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Generate a VL response with laddered fallback and user-friendly failures."""
     logger.info("🎨 Starting VL response generation with ladder fallback")
     logger.debug(f"🎨 User: {user_id}, Guild: {guild_id}")

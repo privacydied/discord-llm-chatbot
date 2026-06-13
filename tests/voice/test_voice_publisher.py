@@ -1,15 +1,15 @@
 import json
 import wave
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from bot.voice.publisher import VoiceMessagePublisher, IS_VOICE_MESSAGE_FLAG
+from bot.voice.publisher import IS_VOICE_MESSAGE_FLAG, VoiceMessagePublisher
 
 
 class _FakeResp:
-    def __init__(self, status=200, payload=None):
+    def __init__(self, status=200, payload=None) -> None:
         self.status = status
         self._payload = payload or {}
         self.history = None
@@ -29,7 +29,7 @@ class _FakeResp:
 
 
 class _FakeSession:
-    def __init__(self):
+    def __init__(self) -> None:
         self.captured = None
 
     def post(self, url, headers=None, json=None, timeout=None):
@@ -44,7 +44,7 @@ class _FakeSession:
 
 
 @pytest.mark.asyncio
-async def test__post_voice_message_uses_8192_flag(monkeypatch):
+async def test__post_voice_message_uses_8192_flag(monkeypatch) -> None:
     pub = VoiceMessagePublisher()
     session = _FakeSession()
 
@@ -63,7 +63,8 @@ async def test__post_voice_message_uses_8192_flag(monkeypatch):
     assert session.captured is not None
     payload = session.captured["json"]
     assert payload["flags"] == IS_VOICE_MESSAGE_FLAG
-    assert isinstance(payload["attachments"], list) and len(payload["attachments"]) == 1
+    assert isinstance(payload["attachments"], list)
+    assert len(payload["attachments"]) == 1
     att = payload["attachments"][0]
     assert att["filename"] == "voice-message.ogg"
     assert att["uploaded_filename"] == "upload_abc"
@@ -75,7 +76,7 @@ async def test__post_voice_message_uses_8192_flag(monkeypatch):
 
 
 class _DummyChannel:
-    def __init__(self, cid: int, fetch_msg: MagicMock | AsyncMock | None = None):
+    def __init__(self, cid: int, fetch_msg: MagicMock | AsyncMock | None = None) -> None:
         self.id = cid
         # Allow overriding fetch behavior
         self._fetch = fetch_msg or AsyncMock(return_value=MagicMock())
@@ -85,13 +86,13 @@ class _DummyChannel:
 
 
 class _DummyMessage:
-    def __init__(self, cid: int, mid: int):
+    def __init__(self, cid: int, mid: int) -> None:
         self.channel = _DummyChannel(cid)
         self.id = mid
 
 
 @pytest.mark.asyncio
-async def test_publish_success_flow(monkeypatch, tmp_path: Path):
+async def test_publish_success_flow(monkeypatch, tmp_path: Path) -> None:
     # Config
     monkeypatch.setattr(
         "bot.voice.publisher.load_config",
@@ -134,13 +135,14 @@ async def test_publish_success_flow(monkeypatch, tmp_path: Path):
     result = await pub.publish(message=msg, wav_path=wav_path)
 
     assert result.ok is True
-    assert result.ogg_path and result.ogg_path.suffix == ".ogg"
+    assert result.ogg_path
+    assert result.ogg_path.suffix == ".ogg"
     # message may be fetched or None depending on stub; our stub returns a MagicMock
     assert result.message is not None
 
 
 @pytest.mark.asyncio
-async def test_publish_blocks_on_50173(monkeypatch, tmp_path: Path):
+async def test_publish_blocks_on_50173(monkeypatch, tmp_path: Path) -> None:
     # Config
     monkeypatch.setattr(
         "bot.voice.publisher.load_config",

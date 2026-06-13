@@ -20,10 +20,10 @@ def test_run_stitch_stage_with_summary_callback() -> None:
     transcript = SimpleNamespace(cache_hit=True)
     summary_calls = []
 
-    def _build():
+    def _build() -> str:
         return "result text"
 
-    def _summary(spans_arg, pre_arg, transcript_arg, cache_hit=None):
+    def _summary(spans_arg, pre_arg, transcript_arg, cache_hit=None) -> None:
         summary_calls.append((spans_arg, pre_arg, transcript_arg, cache_hit))
 
     result = run_stitch_stage(

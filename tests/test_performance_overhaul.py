@@ -1,37 +1,38 @@
-"""
-Comprehensive Performance Overhaul Test Suite - Fault injection, soak tests, and regression verification.
+"""Comprehensive Performance Overhaul Test Suite - Fault injection, soak tests, and regression verification.
 Tests all optimizations delivered in the Text Flow Performance Overhaul.
 Implements REH (Robust Error Handling) and CDiP (Continuous documentation) rules.
 """
 
 import asyncio
-import pytest
-import time
 import random
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Dict
 import statistics
+import time
+from typing import Never
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from bot.core.discord_client_optimizer import SendOptions, get_discord_sender
+from bot.core.fast_path_router import (
+    MessageComplexity,
+    RouteDecision,
+    get_fast_path_router,
+)
+from bot.core.openrouter_client import CircuitState, OptimizedOpenRouterClient
+from bot.core.phase_constants import PhaseConstants as PC
 
 # Import our performance overhaul components
 from bot.core.phase_timing import get_timing_manager
-from bot.core.phase_constants import PhaseConstants as PC
-from bot.core.openrouter_client import OptimizedOpenRouterClient, CircuitState
-from bot.core.template_cache import get_template_cache, get_prompt_builder
-from bot.core.fast_path_router import (
-    get_fast_path_router,
-    MessageComplexity,
-    RouteDecision,
-)
 from bot.core.session_cache import get_session_cache
-from bot.core.discord_client_optimizer import get_discord_sender, SendOptions
-from bot.core.slo_monitor import get_slo_monitor, AlertLevel
+from bot.core.slo_monitor import AlertLevel, get_slo_monitor
+from bot.core.template_cache import get_prompt_builder, get_template_cache
 
 
 class TestPhaseTimingSystem:
     """Test phase timing and correlation ID system [PA]."""
 
     @pytest.mark.asyncio
-    async def test_pipeline_tracker_creation(self):
+    async def test_pipeline_tracker_creation(self) -> None:
         """Test pipeline tracker creation and correlation IDs."""
         timing_manager = get_timing_manager()
 
@@ -45,7 +46,7 @@ class TestPhaseTimingSystem:
         assert tracker.corr_id in timing_manager.active_trackers
 
     @pytest.mark.asyncio
-    async def test_phase_timing_context_manager(self):
+    async def test_phase_timing_context_manager(self) -> None:
         """Test phase timing with context manager."""
         timing_manager = get_timing_manager()
         tracker = timing_manager.create_pipeline_tracker("msg_123", "user_456")
@@ -64,7 +65,7 @@ class TestPhaseTimingSystem:
         assert "test_metadata" in completed_phase.metadata
 
     @pytest.mark.asyncio
-    async def test_phase_error_handling(self):
+    async def test_phase_error_handling(self) -> Never:
         """Test phase timing with exceptions [REH]."""
         timing_manager = get_timing_manager()
         tracker = timing_manager.create_pipeline_tracker("msg_error", "user_error")
@@ -72,7 +73,8 @@ class TestPhaseTimingSystem:
         with pytest.raises(ValueError):
             async with timing_manager.track_phase(tracker, PC.PHASE_LLM_CALL):
                 await asyncio.sleep(0.005)
-                raise ValueError("Test error")
+                msg = "Test error"
+                raise ValueError(msg)
 
         # Verify error was recorded
         assert PC.PHASE_LLM_CALL in tracker.phases
@@ -91,7 +93,7 @@ class TestOpenRouterClientOptimizations:
         return OptimizedOpenRouterClient("test_api_key")
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker_open_state(self, mock_client):
+    async def test_circuit_breaker_open_state(self, mock_client) -> None:
         """Test circuit breaker opens after failures."""
         model = "test_model"
         circuit_breaker = mock_client._get_circuit_breaker(model)
@@ -104,7 +106,7 @@ class TestOpenRouterClientOptimizations:
         assert not circuit_breaker.should_attempt_request()
 
     @pytest.mark.asyncio
-    async def test_circuit_breaker_recovery(self, mock_client):
+    async def test_circuit_breaker_recovery(self, mock_client) -> None:
         """Test circuit breaker recovery to half-open state."""
         model = "test_model"
         circuit_breaker = mock_client._get_circuit_breaker(model)
@@ -119,7 +121,7 @@ class TestOpenRouterClientOptimizations:
             assert circuit_breaker.state == CircuitState.HALF_OPEN
 
     @pytest.mark.asyncio
-    async def test_retry_logic_with_backoff(self, mock_client):
+    async def test_retry_logic_with_backoff(self, mock_client) -> None:
         """Test exponential backoff retry logic [REH]."""
         call_count = 0
 
@@ -127,7 +129,8 @@ class TestOpenRouterClientOptimizations:
             nonlocal call_count
             call_count += 1
             if call_count < 3:
-                raise Exception("Retryable error")
+                msg = "Retryable error"
+                raise Exception(msg)
             return {"success": True}
 
         start_time = time.time()
@@ -139,7 +142,7 @@ class TestOpenRouterClientOptimizations:
         assert elapsed > 1.0  # Should have waited for backoff
 
     @pytest.mark.asyncio
-    async def test_connection_pool_reuse_tracking(self, mock_client):
+    async def test_connection_pool_reuse_tracking(self, mock_client) -> None:
         """Test connection pool statistics tracking [PA]."""
         await mock_client._ensure_session()
         initial_created = mock_client.pool_stats["connections_created"]
@@ -156,7 +159,7 @@ class TestTemplateCaching:
     """Test template caching and prompt optimization [PA]."""
 
     @pytest.mark.asyncio
-    async def test_template_cache_hit_miss(self):
+    async def test_template_cache_hit_miss(self) -> None:
         """Test template cache hit/miss behavior."""
         cache = get_template_cache()
 
@@ -178,13 +181,14 @@ class TestTemplateCaching:
         # Test with non-existent file path (should handle gracefully)
         try:
             await cache.get_template(file_path="/fake/path/prompt.template")
-            assert False, "Expected exception for non-existent file"
+            msg = "Expected exception for non-existent file"
+            raise AssertionError(msg)
         except Exception as e:
             # Should handle file not found gracefully
             assert "No such file or directory" in str(e)
 
     @pytest.mark.asyncio
-    async def test_template_optimization_analysis(self):
+    async def test_template_optimization_analysis(self) -> None:
         """Test template structure analysis for optimization."""
         cache = get_template_cache()
 
@@ -204,7 +208,7 @@ class TestTemplateCaching:
         assert len(template.static_prefix) > 0  # Should have static prefix
 
     @pytest.mark.asyncio
-    async def test_prompt_builder_token_budgets(self):
+    async def test_prompt_builder_token_budgets(self) -> None:
         """Test prompt builder respects token budgets [CMV]."""
         builder = get_prompt_builder()
 
@@ -215,12 +219,12 @@ class TestTemplateCaching:
                 {
                     "author": f"User{i}",
                     "content": "This is a test message " * 20,  # Long content
-                }
+                },
             )
 
         # Create temporary template file for testing
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("System: You are a helpful assistant.\nUser: {user_prompt}\nHistory: {history}")
@@ -271,7 +275,7 @@ class TestFastPathRouter:
         return message
 
     @pytest.mark.asyncio
-    async def test_simple_dm_fast_path(self, mock_message):
+    async def test_simple_dm_fast_path(self, mock_message) -> None:
         """Test simple DM messages get fast-path routing."""
         router = get_fast_path_router()
 
@@ -285,7 +289,7 @@ class TestFastPathRouter:
         assert analysis.decision_time_ms < PC.ROUTER_DECISION_BUDGET_MS
 
     @pytest.mark.asyncio
-    async def test_multimodal_standard_routing(self, mock_message):
+    async def test_multimodal_standard_routing(self, mock_message) -> None:
         """Test multimodal messages use standard pipeline."""
         mock_message.attachments = [MagicMock()]  # Add attachment
         router = get_fast_path_router()
@@ -297,7 +301,7 @@ class TestFastPathRouter:
         assert analysis.skip_modality_detection is False
 
     @pytest.mark.asyncio
-    async def test_router_decision_budget_enforcement(self, mock_message):
+    async def test_router_decision_budget_enforcement(self, mock_message) -> None:
         """Test router enforces decision budget timeout [REH]."""
         router = get_fast_path_router()
         router.decision_budget_ms = 1  # Very short budget
@@ -316,7 +320,7 @@ class TestSessionCache:
     """Test session caching with TTL and eviction [PA][CMV]."""
 
     @pytest.mark.asyncio
-    async def test_user_profile_caching(self):
+    async def test_user_profile_caching(self) -> None:
         """Test user profile cache with TTL."""
         cache = get_session_cache()
 
@@ -339,14 +343,14 @@ class TestSessionCache:
         assert len(cached_profile.conversation_history) == 1
 
     @pytest.mark.asyncio
-    async def test_token_budget_history_trimming(self):
+    async def test_token_budget_history_trimming(self) -> None:
         """Test conversation history trimming with token budgets."""
         from bot.core.session_cache import UserProfile
 
         profile = UserProfile(user_id="test_user")
 
         # Add many long messages
-        for i in range(100):
+        for _i in range(100):
             long_message = "This is a very long test message " * 20
             profile.add_message("user", long_message)
 
@@ -357,7 +361,7 @@ class TestSessionCache:
         assert estimated_tokens <= PC.HISTORY_MAX_TOKENS_DM * 1.1  # Allow 10% overhead
 
     @pytest.mark.asyncio
-    async def test_lru_eviction(self):
+    async def test_lru_eviction(self) -> None:
         """Test LRU eviction when cache is full."""
         cache = get_session_cache()
         cache.max_entries = 15  # Small cache for testing (user_profiles gets max_entries//3 = 5)
@@ -383,8 +387,7 @@ class TestDiscordSendOptimization:
     @pytest.fixture
     def mock_bot(self):
         """Create mock bot for Discord sender."""
-        bot = MagicMock()
-        return bot
+        return MagicMock()
 
     @pytest.fixture
     def mock_channel(self):
@@ -401,7 +404,7 @@ class TestDiscordSendOptimization:
         return channel
 
     @pytest.mark.asyncio
-    async def test_simple_text_optimizations(self, mock_bot, mock_channel):
+    async def test_simple_text_optimizations(self, mock_bot, mock_channel) -> None:
         """Test optimizations for simple text messages [PA]."""
         sender = get_discord_sender(mock_bot)
 
@@ -416,7 +419,7 @@ class TestDiscordSendOptimization:
         assert sender.session_stats["messages_sent"] > 0
 
     @pytest.mark.asyncio
-    async def test_enrichment_skipping(self, mock_bot, mock_channel):
+    async def test_enrichment_skipping(self, mock_bot, mock_channel) -> None:
         """Test enrichment skipping for performance."""
         get_discord_sender(mock_bot)
         options = SendOptions.for_simple_text(30)
@@ -427,7 +430,7 @@ class TestDiscordSendOptimization:
         assert options.skip_typing is True
 
     @pytest.mark.asyncio
-    async def test_rate_limit_handling(self, mock_bot, mock_channel):
+    async def test_rate_limit_handling(self, mock_bot, mock_channel) -> None:
         """Test rate limit handling with jitter [REH]."""
         sender = get_discord_sender(mock_bot)
 
@@ -450,13 +453,13 @@ class TestSLOMonitoring:
     """Test SLO monitoring and alerting [PA][REH]."""
 
     @pytest.mark.asyncio
-    async def test_slo_breach_detection(self):
+    async def test_slo_breach_detection(self) -> None:
         """Test SLO breach detection and alerting."""
         monitor = get_slo_monitor()
         alerts_fired = []
 
         # Register alert callback
-        async def alert_callback(alert):
+        async def alert_callback(alert) -> None:
             alerts_fired.append(alert)
 
         monitor.register_alert_callback(AlertLevel.CRITICAL, alert_callback)  # Fixed: register for CRITICAL level
@@ -479,7 +482,7 @@ class TestSLOMonitoring:
         assert alert.value == breach_value
         assert alert.target == target_ms
 
-    def test_performance_statistics(self):
+    def test_performance_statistics(self) -> None:
         """Test performance statistics calculation."""
         monitor = get_slo_monitor()
 
@@ -507,7 +510,7 @@ class TestSLOMonitoring:
         assert phase_status["current_p95_ms"] is not None
         assert phase_status["target_ms"] == PC.get_slo_targets()[phase]
 
-    def test_rich_dashboard_creation(self):
+    def test_rich_dashboard_creation(self) -> None:
         """Test Rich dashboard creation for DEBUG mode [CA]."""
         monitor = get_slo_monitor()
 
@@ -531,7 +534,7 @@ class TestIntegrationAndSoak:
     """Integration and soak testing for performance overhaul [REH][CDiP]."""
 
     @pytest.mark.asyncio
-    async def test_end_to_end_pipeline_simulation(self):
+    async def test_end_to_end_pipeline_simulation(self) -> None:
         """Test complete pipeline simulation with all optimizations."""
         timing_manager = get_timing_manager()
         slo_monitor = get_slo_monitor()
@@ -565,7 +568,7 @@ class TestIntegrationAndSoak:
         assert all(phase.success for phase in tracker.phases.values())
 
     @pytest.mark.asyncio
-    async def test_concurrent_pipeline_soak(self):
+    async def test_concurrent_pipeline_soak(self) -> None:
         """Soak test with concurrent pipelines [RM]."""
         timing_manager = get_timing_manager()
 
@@ -591,7 +594,7 @@ class TestIntegrationAndSoak:
         assert all(p.total_duration_ms is not None for p in pipelines)
 
     @pytest.mark.asyncio
-    async def test_fault_injection_resilience(self):
+    async def test_fault_injection_resilience(self) -> None:
         """Test system resilience under fault injection [REH]."""
         timing_manager = get_timing_manager()
 
@@ -613,7 +616,8 @@ class TestIntegrationAndSoak:
                 # Simulate phase with potential failure
                 async with timing_manager.track_phase(tracker, PC.PHASE_LLM_CALL):
                     if random.random() < 0.3:  # 30% failure rate
-                        raise Exception(f"Simulated {scenario} failure")
+                        msg = f"Simulated {scenario} failure"
+                        raise Exception(msg)
                     await asyncio.sleep(0.05)  # 50ms work
 
                 timing_manager.complete_tracker(tracker)
@@ -631,7 +635,7 @@ class TestIntegrationAndSoak:
 class TestRegressionPrevention:
     """Test that optimizations don't regress existing functionality [CDiP]."""
 
-    def test_constants_not_changed(self):
+    def test_constants_not_changed(self) -> None:
         """Test that critical constants maintain expected values [CMV]."""
         # Verify performance constants are within expected ranges
         assert PC.OR_CONNECT_TIMEOUT_MS >= 1000  # At least 1 second
@@ -641,7 +645,7 @@ class TestRegressionPrevention:
         assert PC.PIPELINE_MAX_PARALLEL_TASKS >= 1
         assert PC.SLO_P95_PIPELINE_MS > 0
 
-    def test_logging_format_preservation(self):
+    def test_logging_format_preservation(self) -> None:
         """Test that logging format is preserved [CA]."""
         from bot.utils.logging import get_logger
 
@@ -654,10 +658,11 @@ class TestRegressionPrevention:
         logger.debug("ℹ Test debug message")
 
     @pytest.mark.asyncio
-    async def test_memory_usage_bounds(self):
+    async def test_memory_usage_bounds(self) -> None:
         """Test that caching doesn't cause memory leaks [RM]."""
-        import psutil
         import os
+
+        import psutil
 
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss
@@ -686,7 +691,7 @@ class PerformanceBenchmark:
     """Utility for measuring performance improvements [PA]."""
 
     @staticmethod
-    async def measure_phase_performance(phase_func, iterations: int = 100) -> Dict[str, float]:
+    async def measure_phase_performance(phase_func, iterations: int = 100) -> dict[str, float]:
         """Measure phase performance statistics."""
         measurements = []
 
@@ -711,7 +716,7 @@ class PerformanceBenchmark:
 pytest_plugins = ["pytest_asyncio"]
 
 
-def pytest_configure(config):
+def pytest_configure(config) -> None:
     """Configure test environment."""
     config.addinivalue_line("markers", "slow: marks tests as slow")
     config.addinivalue_line("markers", "integration: marks tests as integration tests")

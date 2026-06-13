@@ -1,13 +1,13 @@
 """Contextual brain inference with enhanced context manager integration."""
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+import re
+from typing import TYPE_CHECKING, Any, Optional
 
 import discord
-import re
 
 from bot.brain import brain_infer
-from bot.utils.logging import get_logger
 from bot.decision_helpers import resolve_scope
+from bot.utils.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover - import for type checking only
     from bot.core.bot import LLMBot
@@ -22,12 +22,11 @@ async def contextual_brain_infer(
     include_cross_user: bool = True,
     return_json_envelope: bool = False,
     *,
-    perception_notes: Optional[str] = None,
-    extra_context: Optional[str] = None,
-    system_prompt: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Enhanced brain inference with contextual conversation awareness.
+    perception_notes: str | None = None,
+    extra_context: str | None = None,
+    system_prompt: str | None = None,
+) -> dict[str, Any]:
+    """Enhanced brain inference with contextual conversation awareness.
 
     Args:
         message: Discord message being responded to
@@ -38,6 +37,7 @@ async def contextual_brain_infer(
 
     Returns:
         Dict containing response_text, used_history, and fallback status
+
     """
     logger.debug(f"🧠 Contextual brain inference starting [msg_id={message.id}, cross_user={include_cross_user}]")
 
@@ -94,8 +94,8 @@ async def contextual_brain_infer(
             try:
                 if mentioned_me and (case == "LONE") and content_has_signal:
                     skip_history = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to evaluate skip_history condition: {e}")
 
         if skip_history:
             # Optionally compute how many entries would have been dropped for visibility
@@ -103,7 +103,8 @@ async def contextual_brain_infer(
             try:
                 _entries = bot.enhanced_context_manager.get_context_for_user(message, include_cross_user=False)
                 dropped = len(_entries or [])
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to get context for drop count: {e}")
                 dropped = 0
             # Minimal, same-schema breadcrumbs
             try:
@@ -141,8 +142,8 @@ async def contextual_brain_infer(
                             "detail": {"reason": "scope_mismatch", "dropped": dropped},
                         },
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to log drop_stale breadcrumb: {e}")
             context_entries = []
         else:
             # Get conversation context normally
@@ -167,8 +168,8 @@ async def contextual_brain_infer(
             try:
                 logger.info(f"🧩 Injecting perception into text prompt | chars={len(perception_notes)}")
                 logger.info("Prompt preview includes: 'Perception (from the image...' section")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to log perception injection breadcrumb: {e}")
 
         blocks = []
         # Prepend mention/reply context before historical memory
@@ -228,7 +229,7 @@ async def contextual_brain_infer(
             logger.info("✅ Fallback to basic inference successful")
 
         except Exception as fallback_error:
-            logger.error(f"❌ Fallback inference also failed: {fallback_error}")
+            logger.exception(f"❌ Fallback inference also failed: {fallback_error}")
 
             # Provide user-friendly error message based on error type [REH]
             error_str = str(fallback_error).lower()
@@ -260,12 +261,11 @@ async def contextual_brain_infer_simple(
     prompt: str,
     bot: Optional["LLMBot"] = None,
     *,
-    perception_notes: Optional[str] = None,
-    extra_context: Optional[str] = None,
-    system_prompt: Optional[str] = None,
+    perception_notes: str | None = None,
+    extra_context: str | None = None,
+    system_prompt: str | None = None,
 ) -> str:
-    """
-    Simplified contextual brain inference that returns just the response text.
+    """Simplified contextual brain inference that returns just the response text.
     For backward compatibility with existing code.
 
     Args:
@@ -275,6 +275,7 @@ async def contextual_brain_infer_simple(
 
     Returns:
         Response text string
+
     """
     result = await contextual_brain_infer(
         message,
@@ -289,14 +290,14 @@ async def contextual_brain_infer_simple(
 
 
 def create_context_command_handler(bot: "LLMBot"):
-    """
-    Create command handlers for context management.
+    """Create command handlers for context management.
 
     Args:
         bot: Bot instance
 
     Returns:
         Dict of command handlers
+
     """
 
     async def handle_context_reset(message: discord.Message) -> str:

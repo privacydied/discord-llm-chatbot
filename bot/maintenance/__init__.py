@@ -2,4 +2,4 @@
 
 from .diagnostics import checkpoint_wal, get_storage_status
 
-__all__ = ["get_storage_status", "checkpoint_wal"]
+__all__ = ["checkpoint_wal", "get_storage_status"]

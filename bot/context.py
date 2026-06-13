@@ -1,15 +1,16 @@
-"""
-Conversation context management for tracking message history and state.
-"""
+"""Conversation context management for tracking message history and state."""
 
 import time
-from typing import Dict, List, Any, Optional
 from collections import defaultdict
+from typing import Any
+
 import discord
 from discord import Message
 
-# Import config
 from .config import load_config
+from .utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _load_int_config(key: str, default: int) -> int:
@@ -19,8 +20,8 @@ def _load_int_config(key: str, default: int) -> int:
         val = cfg.get(key)
         if val is not None:
             return int(val)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to load int config {key}: {e}")
     return default
 
 
@@ -28,7 +29,8 @@ def _get_config_value(key: str, default: Any) -> Any:
     """Read a config value fresh on each call (avoids stale module-level cache)."""
     try:
         return load_config().get(key, default)
-    except Exception:
+    except Exception as e:
+        logger.debug(f"Failed to load config {key}: {e}")
         return default
 
 
@@ -48,7 +50,7 @@ def context_key(message: Message) -> str:
     return f"guild_{message.guild.id}_channel_{message.channel.id}"
 
 
-def reset_context(message: Message, config=None):
+def reset_context(message: Message, config=None) -> None:
     """Reset the conversation context for a channel or DM."""
     key = context_key(message)
     conversation_store[key] = []
@@ -57,21 +59,20 @@ def reset_context(message: Message, config=None):
     last_message_time[key] = time.time()
 
 
-def get_context(message: Message) -> List[Dict[str, Any]]:
+def get_context(message: Message) -> list[dict[str, Any]]:
     """Get the conversation context for a message."""
     key = context_key(message)
     return conversation_store.get(key, []).copy()
 
 
-def update_last_active(message: Message):
+def update_last_active(message: Message) -> None:
     """Update the last active time for a conversation."""
     key = context_key(message)
     last_message_time[key] = time.time()
 
 
 def should_reset_context(message: Message) -> bool:
-    """
-    Determine if the conversation context should be reset.
+    """Determine if the conversation context should be reset.
 
     Context is reset if:
     1. It's been more than CONTEXT_RESET_AFTER seconds since the last message
@@ -81,10 +82,7 @@ def should_reset_context(message: Message) -> bool:
     last_time = last_message_time.get(key, 0)
 
     # If it's been too long since the last message, reset context
-    if time.time() - last_time > _get_config_value("CONTEXT_RESET_AFTER", 3600):
-        return True
-
-    return False
+    return time.time() - last_time > _get_config_value("CONTEXT_RESET_AFTER", 3600)
 
 
 def add_to_context(message: Message, role: str, content: str, **kwargs):
@@ -126,13 +124,13 @@ def add_to_context(message: Message, role: str, content: str, **kwargs):
     return message_data
 
 
-def get_conversation_history(message: Message, max_messages: int = 10) -> List[Dict[str, Any]]:
+def get_conversation_history(message: Message, max_messages: int = 10) -> list[dict[str, Any]]:
     """Get recent conversation history for a channel or DM."""
     key = context_key(message)
     return conversation_store.get(key, [])[-max_messages:]
 
 
-def get_conversation_context(user_id: str, guild_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_conversation_context(user_id: str, guild_id: str | None = None) -> list[dict[str, Any]]:
     """Get conversation context by user_id and guild_id."""
     # Generate context key based on user_id and guild_id
     if guild_id:
@@ -162,7 +160,7 @@ def get_conversation_context(user_id: str, guild_id: Optional[str] = None) -> Li
     return context.copy()
 
 
-def get_last_user_message(key: str) -> Optional[Dict[str, Any]]:
+def get_last_user_message(key: str) -> dict[str, Any] | None:
     """Get the last user message in a conversation."""
     messages = conversation_store.get(key, [])
     for msg in reversed(messages):

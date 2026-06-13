@@ -5,10 +5,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any
 
-from ..rag.chroma_backend import ChromaRAGBackend
-from ..rag.embedding_interface import EmbeddingInterface
+from bot.rag.chroma_backend import ChromaRAGBackend
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from bot.rag.embedding_interface import EmbeddingInterface
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +24,12 @@ class CuratedMemorySemanticStore:
         self,
         db_path: str | Path = "./chroma_db",
         collection_name: str = "curated_memories",
-        embedding_model: Optional[EmbeddingInterface] = None,
-    ):
+        embedding_model: EmbeddingInterface | None = None,
+    ) -> None:
         self.db_path = Path(db_path)
         self.collection_name = collection_name
         self.embedding_model = embedding_model
-        self._backend: Optional[ChromaRAGBackend] = None
+        self._backend: ChromaRAGBackend | None = None
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -48,21 +52,22 @@ class CuratedMemorySemanticStore:
     @property
     def embedding(self) -> EmbeddingInterface:
         if not self._backend:
-            raise RuntimeError("Curated memory semantic store has not been initialized")
+            msg = "Curated memory semantic store has not been initialized"
+            raise RuntimeError(msg)
         return self._backend.embedding_model
 
     async def upsert(
         self,
         memory_id: str,
         document: str,
-        metadata: Dict[str, Any],
+        metadata: dict[str, Any],
     ) -> str:
         await self.initialize()
         if not document.strip():
             return memory_id
 
         # Cap text length before embedding to reduce CPU/memory [Phase 6-9]
-        from ..config import load_config as _upsert_load_config
+        from bot.config import load_config as _upsert_load_config
 
         _cfg = _upsert_load_config()
         max_chars = int(_cfg.get("MEMORY_MAX_TEXT_CHARS", 500))
@@ -95,15 +100,15 @@ class CuratedMemorySemanticStore:
         query: str,
         *,
         top_k: int = 6,
-        where: Optional[Dict[str, Any]] = None,
-        where_document: Optional[Dict[str, Any]] = None,
+        where: dict[str, Any] | None = None,
+        where_document: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         await self.initialize()
         if not query.strip():
             return []
 
         # Low-resource top_k cap [Phase 6-9]
-        from ..config import load_config as _query_load_config
+        from bot.config import load_config as _query_load_config
 
         _qc = _query_load_config()
         chroma_max = int(_qc.get("CHROMADB_MAX_RESULTS", 5))
@@ -114,7 +119,7 @@ class CuratedMemorySemanticStore:
         # Keyword prefilter before embedding to reduce search surface [Phase 6-9]
         query_words = set(query.lower().split())
         kw_tokens = {w for w in query_words if len(w) > 2}
-        kw_where_doc: Optional[Dict[str, Any]] = where_document
+        kw_where_doc: dict[str, Any] | None = where_document
         if kw_tokens and kw_where_doc is None:
             # Require at least one keyword token to appear in stored document
             kw_where_doc = {"$contains": " ".join(kw_tokens)}
@@ -137,8 +142,8 @@ class CuratedMemorySemanticStore:
         metadatas = result.get("metadatas", [[]])[0] or []
         distances = result.get("distances", [[]])[0] or []
 
-        items: List[Dict[str, Any]] = []
-        for memory_id, document_text, metadata, distance in zip(ids, documents, metadatas, distances):
+        items: list[dict[str, Any]] = []
+        for memory_id, document_text, metadata, distance in zip(ids, documents, metadatas, distances, strict=False):
             metadata = metadata or {}
             similarity = 1.0 / (1.0 + float(distance))
             items.append(
@@ -147,12 +152,12 @@ class CuratedMemorySemanticStore:
                     "document": document_text,
                     "metadata": metadata,
                     "semantic_score": similarity,
-                }
+                },
             )
         return items
 
-    def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        sanitized: Dict[str, Any] = {}
+    def _sanitize_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        sanitized: dict[str, Any] = {}
         for key, value in metadata.items():
             if isinstance(value, (str, int, float, bool)) or value is None:
                 sanitized[key] = value

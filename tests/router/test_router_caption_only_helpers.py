@@ -1,28 +1,30 @@
+from typing import Never
+
 import pytest
 
 from bot.router import Router
 
 
 class DummyBot:
-    def __init__(self):
+    def __init__(self) -> None:
         self.config = {}
         self.tts_manager = None
         self.loop = None
 
 
 class CaptureLogger:
-    def __init__(self):
+    def __init__(self) -> None:
         self.info_lines = []
         self.calls = []
 
-    def info(self, message, *args, **kwargs):
+    def info(self, message, *args, **kwargs) -> None:
         if args:
             message = message % args
         text = str(message)
         self.info_lines.append(text)
         self.calls.append({"message": text, "extra": kwargs.get("extra")})
 
-    def debug(self, *args, **kwargs):
+    def debug(self, *args, **kwargs) -> None:
         return None
 
 
@@ -39,7 +41,7 @@ def test_format_x_caption_only_transcription_prefers_api_text(monkeypatch) -> No
     router = Router(DummyBot())
     captured = {}
 
-    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs) -> str:
         captured["base_text"] = base_text
         captured["url"] = url
         captured["stt_res"] = stt_res
@@ -66,7 +68,7 @@ def test_format_x_caption_only_transcription_falls_back_to_tweet_then_base(
     router = Router(DummyBot())
     captured = {}
 
-    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs) -> str:
         captured["base_text"] = base_text
         captured["stt_res"] = stt_res
         return "ok"
@@ -99,7 +101,7 @@ def test_format_x_caption_only_fallback_result_emits_event_and_delegates(
     router.logger = CaptureLogger()
     captured = {}
 
-    def _fmt(self, *, url="", base_text=None, tweet_text=None, api_data=None):
+    def _fmt(self, *, url="", base_text=None, tweet_text=None, api_data=None) -> str:
         captured["url"] = url
         captured["base_text"] = base_text
         captured["tweet_text"] = tweet_text
@@ -170,7 +172,7 @@ def test_format_x_video_stt_error_result_preserves_video_context(monkeypatch) ->
     router = Router(DummyBot())
     captured = {}
 
-    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs) -> str:
         captured["base_text"] = base_text
         captured["url"] = url
         captured["stt_res"] = stt_res
@@ -198,7 +200,7 @@ def test_format_x_video_stt_error_result_defaults_error(monkeypatch) -> None:
     router = Router(DummyBot())
     captured = {}
 
-    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs) -> str:
         captured["base_text"] = base_text
         captured["stt_res"] = stt_res
         return "ok"
@@ -266,10 +268,10 @@ def test_format_x_video_stt_probe_result_emits_and_formats_error_when_missing_tr
         lambda _self, _err: "classified",
     )
 
-    def _emit(self, reason, media_kind=None, msg_id=None):
+    def _emit(self, reason, media_kind=None, msg_id=None) -> None:
         captured["emit"] = (reason, media_kind, msg_id)
 
-    def _fmt_error(self, **kwargs):
+    def _fmt_error(self, **kwargs) -> str:
         captured["error_kwargs"] = kwargs
         return "error-formatted"
 
@@ -302,11 +304,11 @@ async def test_format_x_with_resolved_base_text_delegates(monkeypatch) -> None:
     router = Router(DummyBot())
     captured = {}
 
-    async def _resolve_base(self, url):
+    async def _resolve_base(self, url) -> str:
         captured["resolved_url"] = url
         return "resolved base"
 
-    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs) -> str:
         captured["base_text"] = base_text
         captured["format_url"] = url
         captured["stt_res"] = stt_res
@@ -334,11 +336,11 @@ async def test_format_x_with_resolved_base_text_if_available_formats_when_presen
     router = Router(DummyBot())
     captured = {}
 
-    async def _resolve_base(self, url):
+    async def _resolve_base(self, url) -> str:
         captured["resolved_url"] = url
         return "resolved base"
 
-    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs) -> str:
         captured["base_text"] = base_text
         captured["format_url"] = url
         captured["stt_res"] = stt_res
@@ -365,7 +367,7 @@ async def test_format_x_with_resolved_base_text_if_available_returns_none_when_m
 ) -> None:
     router = Router(DummyBot())
 
-    async def _resolve_base(self, _url):
+    async def _resolve_base(self, _url) -> str:
         return ""
 
     monkeypatch.setattr(Router, "_resolve_x_base_text_for_url", _resolve_base)
@@ -390,7 +392,7 @@ async def test_format_x_no_speech_fallback_resolves_base_and_emits_breadcrumbs(
     router.logger = CaptureLogger()
     captured = {}
 
-    async def _fmt_resolved(self, *, url, stt_res):
+    async def _fmt_resolved(self, *, url, stt_res) -> str:
         captured["url"] = url
         captured["stt_res"] = stt_res
         return "formatted"
@@ -416,10 +418,11 @@ async def test_format_x_no_speech_fallback_uses_explicit_base_without_resolve(
     router.logger = CaptureLogger()
     captured = {}
 
-    async def _fmt_resolved(self, *, url, stt_res):
-        raise AssertionError("resolved-base formatter should not be called")
+    async def _fmt_resolved(self, *, url, stt_res) -> Never:
+        msg = "resolved-base formatter should not be called"
+        raise AssertionError(msg)
 
-    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs) -> str:
         captured["base_text"] = base_text
         captured["url"] = url
         captured["stt_res"] = stt_res
@@ -471,7 +474,7 @@ async def test_route_twitter_syndication_to_vl_delegates_to_handler(
     router = Router(DummyBot())
     captured = {}
 
-    async def _handler(payload, url, pipeline, prompt, reply_style):
+    async def _handler(payload, url, pipeline, prompt, reply_style) -> str:
         captured["payload"] = payload
         captured["url"] = url
         captured["pipeline"] = pipeline
@@ -512,7 +515,7 @@ async def test_route_twitter_images_with_caption_builds_payload_and_routes(
         calls["build"] = (text, image_urls)
         return {"text": text, "photos": [{"url": u} for u in image_urls]}
 
-    async def _route_payload(self, syn_payload, url):
+    async def _route_payload(self, syn_payload, url) -> str:
         calls["route"] = (syn_payload, url)
         return "ok"
 
@@ -540,14 +543,14 @@ async def test_route_probed_twitter_images_with_caption_logs_resolves_and_routes
     router = Router(DummyBot())
     calls = {}
 
-    def _log_images(self, image_urls, msg_id=None):
+    def _log_images(self, image_urls, msg_id=None) -> None:
         calls["log"] = (image_urls, msg_id)
 
-    async def _resolve_text(self, status_id):
+    async def _resolve_text(self, status_id) -> str:
         calls["resolve"] = status_id
         return "caption"
 
-    async def _route_images(self, *, url, caption_text, image_urls):
+    async def _route_images(self, *, url, caption_text, image_urls) -> str:
         calls["route"] = (url, caption_text, image_urls)
         return "ok"
 
@@ -574,7 +577,7 @@ async def test_resolve_and_probe_twitter_images_delegates_to_resolver_and_probe(
     router = Router(DummyBot())
     calls = {}
 
-    def _resolve_status(self, url, tweet_id=None):
+    def _resolve_status(self, url, tweet_id=None) -> str:
         calls["resolve"] = (url, tweet_id)
         return "123"
 
@@ -747,7 +750,7 @@ def test_format_x_transcription_if_present_returns_formatted_output(
     router = Router(DummyBot())
     captured = {}
 
-    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs):
+    def _fmt(self, *, base_text=None, url="", stt_res=None, **kwargs) -> str:
         captured["base_text"] = base_text
         captured["url"] = url
         captured["stt_res"] = stt_res
@@ -873,8 +876,9 @@ async def test_resolve_syndication_caption_from_payload_returns_fallback_on_miss
     )
     assert out_non_dict == "fallback"
 
-    async def _maybe_hydrate_raises(self, _tweet_id, _payload, allow_tco_pointer=False):
-        raise RuntimeError("boom")
+    async def _maybe_hydrate_raises(self, _tweet_id, _payload, allow_tco_pointer=False) -> Never:
+        msg = "boom"
+        raise RuntimeError(msg)
 
     monkeypatch.setattr(Router, "_maybe_hydrate_syndication_payload", _maybe_hydrate_raises)
 

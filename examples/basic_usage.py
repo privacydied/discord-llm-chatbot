@@ -1,5 +1,4 @@
-"""
-Basic usage example for the Discord LLM ChatBot.
+"""Basic usage example for the Discord LLM ChatBot.
 
 This script demonstrates how to use the bot's core functionality
 programmatically without running the full Discord bot.
@@ -7,21 +6,21 @@ programmatically without running the full Discord bot.
 
 import asyncio
 import os
-from pathlib import Path
 
 # Add the project root to the Python path
 import sys
+from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Import bot modules
-from bot.ollama import ollama_client, generate_response
 from bot.memory import (
     get_profile,
-    save_profile,
     get_server_profile,
+    save_profile,
     save_server_profile,
 )
+from bot.ollama import generate_response, ollama_client
 from bot.pdf_utils import pdf_processor
 from bot.search import search_all
 from bot.web import get_url_preview, process_url
@@ -29,12 +28,9 @@ from bot.web import get_url_preview, process_url
 
 def print_header(title: str) -> None:
     """Print a formatted header."""
-    print("\n" + "=" * 80)
-    print(f" {title}".ljust(80, "="))
-    print("=" * 80)
 
 
-async def demo_chat():
+async def demo_chat() -> None:
     """Demonstrate chat functionality."""
     print_header("CHAT DEMO")
 
@@ -49,22 +45,20 @@ async def demo_chat():
     ]
 
     for message in messages:
-        print(f"\nYou: {message}")
 
         try:
             # Generate a response
-            response = await generate_response(prompt=message, user_id=user_id, max_tokens=200, temperature=0.7)
+            await generate_response(prompt=message, user_id=user_id, max_tokens=200, temperature=0.7)
 
-            print(f"\nBot: {response['text'].strip()}")
 
-        except Exception as e:
-            print(f"\nError: {str(e)}")
+        except Exception:
+            pass
 
         # Small delay between messages
         await asyncio.sleep(1)
 
 
-async def demo_memory():
+async def demo_memory() -> None:
     """Demonstrate memory functionality."""
     print_header("MEMORY DEMO")
 
@@ -74,7 +68,6 @@ async def demo_memory():
 
     # Get or create user profile
     user_profile = get_profile(user_id)
-    print(f"User profile created/loaded for user {user_id}")
 
     # Add some memories
     if "memories" not in user_profile:
@@ -85,11 +78,9 @@ async def demo_memory():
 
     # Save the profile
     save_profile(user_profile, force=True)
-    print(f"Added memory: {memory}")
 
     # Get server profile
     server_profile = get_server_profile(server_id)
-    print(f"Server profile created/loaded for server {server_id}")
 
     # Add a server memory
     if "memories" not in server_profile:
@@ -101,69 +92,56 @@ async def demo_memory():
             "content": server_memory,
             "added_by": user_id,
             "timestamp": str(asyncio.get_event_loop().time()),
-        }
+        },
     )
 
     # Save the server profile
     save_server_profile(server_profile, force=True)
-    print(f"Added server memory: {server_memory}")
 
 
-async def demo_search():
+async def demo_search() -> None:
     """Demonstrate search functionality."""
     print_header("SEARCH DEMO")
 
     query = "latest developments in AI"
-    print(f"Searching for: {query}")
 
     try:
         results = await search_all(query, max_web_results=3, max_memory_results=2)
 
-        print("\nWeb Results:")
-        for i, result in enumerate(results.get("web", [])[:3], 1):
-            print(f"{i}. {result.title}")
-            print(f"   {result.snippet[:150]}...")
-            print(f"   URL: {result.url}\n")
+        for _i, _result in enumerate(results.get("web", [])[:3], 1):
+            pass
 
         if results.get("memories"):
-            print("\nRelevant Memories:")
-            for i, memory in enumerate(results["memories"][:2], 1):
-                print(f"{i}. {memory.snippet[:200]}...\n")
+            for _i, _memory in enumerate(results["memories"][:2], 1):
+                pass
 
-    except Exception as e:
-        print(f"Search error: {str(e)}")
+    except Exception:
+        pass
 
 
-async def demo_web():
+async def demo_web() -> None:
     """Demonstrate web content extraction."""
     print_header("WEB CONTENT EXTRACTION DEMO")
 
     url = "https://ollama.com/"
-    print(f"Fetching URL: {url}")
 
     try:
         # Get URL preview
         preview = await get_url_preview(url)
-        if preview:
-            print(f"\nTitle: {preview.title}")
-            print(f"Description: {preview.description[:200]}...")
-            if hasattr(preview, "image") and preview.image:
-                print(f"Image: {preview.image.url}")
+        if preview and hasattr(preview, "image") and preview.image:
+            pass
 
         # Process URL for more detailed information
-        print("\nProcessing URL for detailed content...")
         result = await process_url(url, extract_content=True)
 
         if result and not result.get("error"):
-            print("\nExtracted Content (first 300 chars):")
-            content = result.get("content", {})
-            print(content.get("text", "")[:300] + "...")
+            result.get("content", {})
 
-    except Exception as e:
-        print(f"Web processing error: {str(e)}")
+    except Exception:
+        pass
 
 
-async def demo_pdf():
+async def demo_pdf() -> None:
     """Demonstrate PDF processing."""
     print_header("PDF PROCESSING DEMO")
 
@@ -175,7 +153,6 @@ async def demo_pdf():
 
     # Generate a simple PDF if it doesn't exist
     if not os.path.exists(pdf_path):
-        print("Creating sample PDF...")
         c = canvas.Canvas(pdf_path, pagesize=letter)
         c.setFont("Helvetica", 12)
         c.drawString(100, 750, "Sample PDF Document")
@@ -192,30 +169,26 @@ async def demo_pdf():
         c.save()
 
     # Process the PDF
-    print(f"Processing PDF: {pdf_path}")
 
     try:
         # Extract text from PDF
-        text = pdf_processor.extract_text(pdf_path)
-        print("\nExtracted Text:")
-        print(text[:500] + "..." if len(text) > 500 else text)
+        pdf_processor.extract_text(pdf_path)
 
         # Get PDF metadata
         metadata = pdf_processor.get_metadata(pdf_path)
-        print("\nPDF Metadata:")
-        for key, value in metadata.items():
+        for value in metadata.values():
             if value:  # Only show non-empty fields
-                print(f"{key}: {value}")
+                pass
 
-    except Exception as e:
-        print(f"PDF processing error: {str(e)}")
+    except Exception:
+        pass
     finally:
         # Clean up the sample PDF
         if os.path.exists(pdf_path):
             os.remove(pdf_path)
 
 
-async def main():
+async def main() -> None:
     """Run all demos."""
     try:
         # Initialize the Ollama client
@@ -228,8 +201,8 @@ async def main():
         await demo_web()
         await demo_pdf()
 
-    except Exception as e:
-        print(f"Error in demo: {str(e)}")
+    except Exception:
+        pass
     finally:
         # Clean up
         await ollama_client.close()

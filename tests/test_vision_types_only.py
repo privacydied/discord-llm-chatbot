@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Vision Types Test - Test core vision types without Discord dependencies
+"""Vision Types Test - Test core vision types without Discord dependencies.
 
 Tests only the vision types and enums to verify basic functionality
 without requiring full bot initialization or Discord libraries.
@@ -14,19 +13,19 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
-def test_vision_types_import():
-    """Test importing vision types"""
+def test_vision_types_import() -> None:
+    """Test importing vision types."""
     from bot.vision.types import (
-        VisionTask,
-        VisionProvider,
-        VisionJobState,
-        VisionError,
-        VisionErrorType,
-        VisionRequest,
-        VisionResponse,
-        VisionJob,
         IntentDecision,
         IntentResult,
+        VisionError,
+        VisionErrorType,
+        VisionJob,
+        VisionJobState,
+        VisionProvider,
+        VisionRequest,
+        VisionResponse,
+        VisionTask,
     )
 
     # Touch imported symbols to avoid unused-import warnings in this smoke test
@@ -44,9 +43,9 @@ def test_vision_types_import():
     )
 
 
-def test_vision_enums():
-    """Test vision enums"""
-    from bot.vision.types import VisionTask, VisionProvider, VisionJobState
+def test_vision_enums() -> None:
+    """Test vision enums."""
+    from bot.vision.types import VisionJobState, VisionProvider, VisionTask
 
     # Test VisionTask enum
     assert VisionTask.TEXT_TO_IMAGE.value == "text_to_image"
@@ -66,9 +65,9 @@ def test_vision_enums():
     assert VisionJobState.FAILED.value == "failed"
 
 
-def test_vision_request():
-    """Test VisionRequest creation"""
-    from bot.vision.types import VisionRequest, VisionTask, VisionProvider
+def test_vision_request() -> None:
+    """Test VisionRequest creation."""
+    from bot.vision.types import VisionProvider, VisionRequest, VisionTask
 
     request = VisionRequest(
         task=VisionTask.TEXT_TO_IMAGE,
@@ -85,10 +84,11 @@ def test_vision_request():
     assert request.height == 1024  # Default value
 
 
-def test_vision_response():
-    """Test VisionResponse creation"""
-    from bot.vision.types import VisionResponse, VisionProvider
+def test_vision_response() -> None:
+    """Test VisionResponse creation."""
     from pathlib import Path
+
+    from bot.vision.types import VisionProvider, VisionResponse
 
     response = VisionResponse(
         provider=VisionProvider.TOGETHER,
@@ -106,13 +106,13 @@ def test_vision_response():
     assert response.processing_time_seconds == 5.2
 
 
-def test_vision_job():
-    """Test VisionJob creation and state transitions"""
+def test_vision_job() -> None:
+    """Test VisionJob creation and state transitions."""
     from bot.vision.types import (
         VisionJob,
+        VisionJobState,
         VisionRequest,
         VisionTask,
-        VisionJobState,
     )
 
     # Create request
@@ -136,8 +136,8 @@ def test_vision_job():
     # Progress message is logged, not stored as a field
 
 
-def test_vision_error():
-    """Test VisionError handling"""
+def test_vision_error() -> None:
+    """Test VisionError handling."""
     from bot.vision.types import VisionError, VisionErrorType
 
     error = VisionError(

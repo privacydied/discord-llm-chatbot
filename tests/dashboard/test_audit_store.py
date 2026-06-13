@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from bot.dashboard.audit_store import AuditStore, _make_preview, _truncate_ip
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture
@@ -57,7 +60,7 @@ async def test_query_filter_by_result(audit_store: AuditStore) -> None:
 @pytest.mark.asyncio
 async def test_pagination(audit_store: AuditStore) -> None:
     """Test pagination works correctly."""
-    for i in range(5):
+    for _i in range(5):
         await audit_store.record(event_type="dashboard.command.invoke", result="success")
 
     result = await audit_store.query(page=1, page_size=2)

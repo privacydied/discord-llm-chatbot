@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Never
 
 import pytest
 
@@ -53,8 +54,9 @@ async def test_resolve_reference_message_fetch_failure_returns_none() -> None:
     router = object.__new__(Router)
 
     class _Channel:
-        async def fetch_message(self, _msg_id):
-            raise RuntimeError("boom")
+        async def fetch_message(self, _msg_id) -> Never:
+            msg = "boom"
+            raise RuntimeError(msg)
 
     message = SimpleNamespace(
         reference=SimpleNamespace(resolved=None, message_id=50),

@@ -1,13 +1,12 @@
-"""
-Graceful shutdown handling for the Discord bot.
-"""
+"""Graceful shutdown handling for the Discord bot."""
 
 import asyncio
 import logging
 import os
 import signal
 import sys
-from typing import Callable, Optional, Any
+from collections.abc import Callable
+from typing import Any
 
 from discord.ext import commands
 
@@ -31,7 +30,7 @@ _shutdown_timeout = 30  # seconds
 class GracefulShutdown:
     """Handles graceful shutdown of the bot."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.shutdown_tasks = []
         self.shutdown_in_progress = False
@@ -52,7 +51,7 @@ class GracefulShutdown:
             # Perform shutdown with timeout
             await asyncio.wait_for(self._perform_shutdown(), timeout=timeout)
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Shutdown timed out after {timeout}s, forcing exit")
             # Force close any remaining resources
             await self._force_cleanup()
@@ -74,7 +73,7 @@ class GracefulShutdown:
                 else:
                     task_func()
             except Exception as e:
-                logger.error(f"Error in shutdown task: {e}")
+                logger.exception(f"Error in shutdown task: {e}")
 
     async def _force_cleanup(self) -> None:
         """Force cleanup of resources when normal shutdown fails."""
@@ -90,13 +89,13 @@ class GracefulShutdown:
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
         except Exception as e:
-            logger.error(f"Error in force cleanup: {e}")
+            logger.exception(f"Error in force cleanup: {e}")
 
     def add_shutdown_task(self, task: Callable, description: str = "") -> None:
         """Add a task to be executed during shutdown."""
         self.shutdown_tasks.append({"task": task, "description": description or task.__name__})
 
-    async def execute_shutdown(self, signal_num: Optional[int] = None) -> None:
+    async def execute_shutdown(self, signal_num: int | None = None) -> None:
         """Execute graceful shutdown sequence."""
         if self.shutdown_in_progress:
             logger.warning("Shutdown already in progress")
@@ -126,9 +125,9 @@ class GracefulShutdown:
             shutdown_duration = asyncio.get_event_loop().time() - shutdown_start_time
             logger.info(f"✅ Graceful shutdown completed successfully in {shutdown_duration:.2f}s")
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             shutdown_duration = asyncio.get_event_loop().time() - shutdown_start_time
-            logger.error(f"❌ Shutdown timed out after {_shutdown_timeout} seconds (actual: {shutdown_duration:.2f}s)")
+            logger.exception(f"❌ Shutdown timed out after {_shutdown_timeout} seconds (actual: {shutdown_duration:.2f}s)")
         except Exception as e:
             shutdown_duration = asyncio.get_event_loop().time() - shutdown_start_time
             logger.error(
@@ -286,7 +285,7 @@ class GracefulShutdown:
                             ),
                             timeout=3.0,
                         )
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         logger.warning("Some RAG tasks did not complete within timeout")
 
                     # Clear the task tracking
@@ -312,7 +311,7 @@ class GracefulShutdown:
                             else:
                                 search_engine.close()
                             logger.debug("RAG search engine closed")
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             logger.warning("RAG search engine close timed out")
                         except Exception as e:
                             logger.debug(f"RAG search engine close warning: {e}")
@@ -380,7 +379,7 @@ class GracefulShutdown:
         except ImportError:
             logger.warning("psutil not available, cannot clean up subprocesses")
         except Exception as e:
-            logger.error(f"Error cleaning up subprocesses: {e}")
+            logger.exception(f"Error cleaning up subprocesses: {e}")
 
     async def _cleanup_external_clients(self) -> None:
         """Clean up external API clients."""
@@ -399,7 +398,7 @@ class GracefulShutdown:
 
 
 # Global shutdown manager
-_shutdown_manager: Optional[GracefulShutdown] = None
+_shutdown_manager: GracefulShutdown | None = None
 
 
 def graceful_shutdown(bot: commands.Bot) -> Callable:
@@ -430,12 +429,12 @@ def graceful_shutdown(bot: commands.Bot) -> Callable:
                 task = asyncio.create_task(_shutdown_manager.execute_shutdown(signum))
 
                 # Add a callback to exit when shutdown is complete
-                def on_shutdown_complete(future):
+                def on_shutdown_complete(future) -> None:
                     try:
                         future.result()  # Check for exceptions
                         logger.info("Graceful shutdown completed, exiting...")
                     except Exception as e:
-                        logger.error(f"Shutdown failed: {e}")
+                        logger.exception(f"Shutdown failed: {e}")
                     finally:
                         # Use os._exit to avoid any cleanup issues
                         os._exit(0)
@@ -447,11 +446,11 @@ def graceful_shutdown(bot: commands.Bot) -> Callable:
                     asyncio.run(_shutdown_manager.execute_shutdown(signum))
                     logger.info("Graceful shutdown completed, exiting...")
                 except Exception as e:
-                    logger.error(f"Shutdown failed: {e}")
+                    logger.exception(f"Shutdown failed: {e}")
                 finally:
                     os._exit(0)
         except Exception as e:
-            logger.error(f"Error in signal handler: {e}")
+            logger.exception(f"Error in signal handler: {e}")
             os._exit(1)
 
     return signal_handler

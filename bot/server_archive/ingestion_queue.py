@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Awaitable, Callable, Sequence
+from datetime import UTC, datetime
 
 from .models import ArchiveMessageBundle
 
@@ -23,7 +23,7 @@ class ArchiveQueueStats:
     dropped: int = 0
     failed: int = 0
     batches: int = 0
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class ArchiveIngestionQueue:
@@ -76,7 +76,7 @@ class ArchiveIngestionQueue:
         self._shutdown.set()
         try:
             await asyncio.wait_for(self._queue.join(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 "Timed out waiting for server archive queue to drain",
                 extra={
@@ -143,7 +143,7 @@ class ArchiveIngestionQueue:
                     )
                     for _ in batch:
                         self._queue.task_done()
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
                 except asyncio.CancelledError:
                     break

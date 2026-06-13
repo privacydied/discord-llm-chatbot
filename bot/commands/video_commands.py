@@ -1,17 +1,16 @@
-"""
-Discord commands for video URL ingestion and transcription.
+"""Discord commands for video URL ingestion and transcription.
 Supports YouTube and TikTok URL processing through STT pipeline.
 """
 
 import re
-from typing import Optional
+
 import discord
 from discord.ext import commands
-from discord.ext.commands import cooldown, BucketType
+from discord.ext.commands import BucketType, cooldown
 
-from ..utils.logging import get_logger
-from ..exceptions import InferenceError
-from ..hear import hear_infer_from_url
+from bot.exceptions import InferenceError
+from bot.hear import hear_infer_from_url
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -37,7 +36,7 @@ class VideoCommands(commands.Cog):
         self.bot = bot
         logger.info("🎥 VideoCommands cog initialized")
 
-    def _extract_url_from_message(self, content: str) -> Optional[str]:
+    def _extract_url_from_message(self, content: str) -> str | None:
         """Extract first supported URL from message content."""
         for pattern in ALL_PATTERNS:
             match = re.search(pattern, content)
@@ -49,16 +48,14 @@ class VideoCommands(commands.Cog):
         """Determine URL type (YouTube or TikTok)."""
         if any(re.match(pattern, url) for pattern in YOUTUBE_PATTERNS):
             return "YouTube"
-        elif any(re.match(pattern, url) for pattern in TIKTOK_PATTERNS):
+        if any(re.match(pattern, url) for pattern in TIKTOK_PATTERNS):
             return "TikTok"
-        else:
-            return "Unknown"
+        return "Unknown"
 
     @commands.command(name="watch", aliases=["transcribe", "listen"])
     @cooldown(1, 60, BucketType.user)
-    async def watch_video(self, ctx, url: str = None, *, options: str = ""):
-        """
-        Transcribe audio from YouTube or TikTok video.
+    async def watch_video(self, ctx, url: str | None = None, *, options: str = "") -> None:
+        """Transcribe audio from YouTube or TikTok video.
 
         Usage:
             !watch <url> [--speed 1.5] [--force]
@@ -158,7 +155,7 @@ class VideoCommands(commands.Cog):
 
         except InferenceError as e:
             # User-friendly error message
-            await processing_msg.edit(content=f"❌ **Transcription Failed**\n{str(e)}")
+            await processing_msg.edit(content=f"❌ **Transcription Failed**\n{e!s}")
             logger.warning(
                 f"Video transcription failed: {e}",
                 extra={
@@ -184,7 +181,7 @@ class VideoCommands(commands.Cog):
             )
 
     @commands.command(name="video-help", aliases=["watch-help"])
-    async def video_help(self, ctx):
+    async def video_help(self, ctx) -> None:
         """Show help for video transcription commands."""
         embed = discord.Embed(
             title="🎥 Video Transcription Commands",
@@ -226,18 +223,19 @@ class VideoCommands(commands.Cog):
 
     @commands.command(name="video-cache", aliases=["watch-cache"])
     @commands.has_permissions(administrator=True)
-    async def video_cache_info(self, ctx):
+    async def video_cache_info(self, ctx) -> None:
         """Show video cache information (Admin only)."""
         try:
-            from ..video_ingest import video_manager
             import json
+
+            from bot.video_ingest import video_manager
 
             # Read cache index
             if not video_manager.cache_index_path.exists():
                 await ctx.reply("📁 Video cache is empty.")
                 return
 
-            with open(video_manager.cache_index_path, "r") as f:
+            with open(video_manager.cache_index_path) as f:
                 index = json.load(f)
 
             if not index:
@@ -262,7 +260,7 @@ class VideoCommands(commands.Cog):
 
             if recent_entries:
                 recent_list = []
-                for cache_key, entry in recent_entries:
+                for _cache_key, entry in recent_entries:
                     title = entry.get("title", "Unknown")[:30]
                     source = entry.get("source_type", "unknown").title()
                     duration = entry.get("duration_seconds", 0)
@@ -273,7 +271,7 @@ class VideoCommands(commands.Cog):
             await ctx.reply(embed=embed)
 
         except Exception as e:
-            await ctx.reply(f"❌ Error reading cache information: {str(e)}")
+            await ctx.reply(f"❌ Error reading cache information: {e!s}")
             logger.error(f"Error reading video cache info: {e}", exc_info=True)
 
 

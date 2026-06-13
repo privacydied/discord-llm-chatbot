@@ -1,24 +1,21 @@
-"""
-TTS state management for per-user and global preferences.
-"""
+"""TTS state management for per-user and global preferences."""
 
 import logging
-from typing import Dict, Set
 
 
 class TTSState:
-    def __init__(self):
+    def __init__(self) -> None:
         # Global TTS toggle (admin-controlled)
         self.global_enabled: bool = False
 
         # Per-user TTS preferences {user_id: enabled}
-        self.user_preferences: Dict[int, bool] = {}
+        self.user_preferences: dict[int, bool] = {}
 
         # Per-user one-time TTS flags
-        self.one_time_tts: Set[int] = set()
+        self.one_time_tts: set[int] = set()
 
         # Admin user IDs (cached for performance)
-        self.admin_users: Set[int] = set()
+        self.admin_users: set[int] = set()
 
         # Statistics
         self.total_requests: int = 0

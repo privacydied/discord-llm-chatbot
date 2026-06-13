@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,9 +12,12 @@ from aiohttp.test_utils import TestClient, TestServer
 from bot.dashboard.audit_store import AuditStore
 from bot.dashboard.config import DashboardConfig
 from bot.dashboard.dm_store import DMStore
-from bot.dashboard.services import DashboardServices
-from bot.dashboard.server import DashboardServer
 from bot.dashboard.routes import setup_routes
+from bot.dashboard.server import DashboardServer
+from bot.dashboard.services import DashboardServices
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @pytest.fixture

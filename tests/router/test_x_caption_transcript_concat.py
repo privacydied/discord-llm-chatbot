@@ -2,14 +2,14 @@ from bot.router import Router
 
 
 class DummyBot:
-    def __init__(self):
+    def __init__(self) -> None:
         self.config = {"X_API_ENABLED": False}
         self.tts_manager = None
         self.loop = None
         self.system_prompts = {"vl_prompt": None}
 
 
-def test_x_tweet_caption_and_transcript_are_concatenated():
+def test_x_tweet_caption_and_transcript_are_concatenated() -> None:
     router = Router(DummyBot())
     result = router._format_x_tweet_with_transcription(
         base_text="ignored",
@@ -26,7 +26,7 @@ def test_x_tweet_caption_and_transcript_are_concatenated():
     assert "[Audio Transcript]" not in result
 
 
-def test_x_tweet_transcript_only_keeps_audio_section():
+def test_x_tweet_transcript_only_keeps_audio_section() -> None:
     router = Router(DummyBot())
     result = router._format_x_tweet_with_transcription(
         base_text=None,
@@ -39,7 +39,7 @@ def test_x_tweet_transcript_only_keeps_audio_section():
     assert "This is a sufficiently long audio transcript." in result
 
 
-def test_x_tweet_base_text_caption_and_transcript_are_concatenated():
+def test_x_tweet_base_text_caption_and_transcript_are_concatenated() -> None:
     router = Router(DummyBot())
     base_text = "[Tweet Caption]\nThis caption came from syndication.\n"
     result = router._format_x_tweet_with_transcription(

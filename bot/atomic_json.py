@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import tempfile
@@ -54,7 +55,7 @@ async def write_json_atomic(path: Path, data: Any) -> None:
 
         loop = asyncio.get_running_loop()
 
-        def _do_write():
+        def _do_write() -> None:
             # Use tempfile on same filesystem so os.replace() is atomic
             fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.tmp")
             try:
@@ -65,10 +66,8 @@ async def write_json_atomic(path: Path, data: Any) -> None:
                 os.replace(tmp_path, str(path))
             except Exception:
                 # Clean up temp file on failure
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(tmp_path)
-                except OSError:
-                    pass
                 raise
 
         await loop.run_in_executor(None, _do_write)
@@ -95,5 +94,5 @@ def read_json_safe(path: Path, default: Any = None) -> Any:
         logger.warning("Corrupt JSON at %s: %s", path, exc)
         return default
     except Exception as exc:
-        logger.error("Failed to read %s: %s", path, exc)
+        logger.exception("Failed to read %s: %s", path, exc)
         return default

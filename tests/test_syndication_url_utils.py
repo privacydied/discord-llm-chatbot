@@ -1,37 +1,37 @@
-"""
-Unit tests for syndication URL utilities.
+"""Unit tests for syndication URL utilities.
 Tests for upgrade_pbs_to_orig function ensuring idempotent, safe URL upgrades.
 """
 
 import pytest
+
 from bot.syndication.url_utils import upgrade_pbs_to_orig
 
 
 class TestUpgradePbsToOrig:
     """Test cases for upgrade_pbs_to_orig function."""
 
-    def test_upgrade_pbs_basic(self):
+    def test_upgrade_pbs_basic(self) -> None:
         """upgrade_pbs_to_orig_basic: basic upgrade with format preservation."""
         input_url = "https://pbs.twimg.com/media/ABC123?format=jpg&name=small"
         expected = "https://pbs.twimg.com/media/ABC123?format=jpg&name=orig"
         result = upgrade_pbs_to_orig(input_url)
         assert result == expected
 
-    def test_upgrade_pbs_preserve_format(self):
+    def test_upgrade_pbs_preserve_format(self) -> None:
         """upgrade_pbs_preserve_format: preserve existing format param."""
         input_url = "https://pbs.twimg.com/media/ABC123?name=large&format=png"
         expected = "https://pbs.twimg.com/media/ABC123?name=orig&format=png"
         result = upgrade_pbs_to_orig(input_url)
         assert result == expected
 
-    def test_upgrade_pbs_no_existing_format(self):
+    def test_upgrade_pbs_no_existing_format(self) -> None:
         """Don't add format if not present, only upgrade name param."""
         input_url = "https://pbs.twimg.com/media/ABC123?name=small"
         expected = "https://pbs.twimg.com/media/ABC123?name=orig"
         result = upgrade_pbs_to_orig(input_url)
         assert result == expected
 
-    def test_upgrade_pbs_idempotent(self):
+    def test_upgrade_pbs_idempotent(self) -> None:
         """upgrade_pbs_idempotent: calling twice yields same result."""
         input_url = "https://pbs.twimg.com/media/ABC123?format=png&name=orig"
         expected = "https://pbs.twimg.com/media/ABC123?format=png&name=orig"
@@ -41,7 +41,7 @@ class TestUpgradePbsToOrig:
         assert result2 == expected
         assert result1 == result2
 
-    def test_upgrade_non_pbs_noop(self):
+    def test_upgrade_non_pbs_noop(self) -> None:
         """upgrade_non_pbs_noop: non-pbs URLs unchanged."""
         test_urls = [
             "https://example.com/img.jpg",
@@ -54,21 +54,21 @@ class TestUpgradePbsToOrig:
             result = upgrade_pbs_to_orig(url)
             assert result == url, f"URL should be unchanged: {url}"
 
-    def test_upgrade_pbs_no_query_params(self):
+    def test_upgrade_pbs_no_query_params(self) -> None:
         """Handle pbs URLs with no existing query params."""
         input_url = "https://pbs.twimg.com/media/ABC123"
         expected = "https://pbs.twimg.com/media/ABC123?name=orig"
         result = upgrade_pbs_to_orig(input_url)
         assert result == expected
 
-    def test_upgrade_pbs_complex_params(self):
+    def test_upgrade_pbs_complex_params(self) -> None:
         """Handle pbs URLs with multiple params, preserving all except name."""
         input_url = "https://pbs.twimg.com/media/ABC123?format=webp&name=240x240&other=value"
         expected = "https://pbs.twimg.com/media/ABC123?format=webp&name=orig&other=value"
         result = upgrade_pbs_to_orig(input_url)
         assert result == expected
 
-    def test_upgrade_malformed_url_safety(self):
+    def test_upgrade_malformed_url_safety(self) -> None:
         """upgrade_pbs_* should never throw, even on malformed URLs."""
         malformed_urls = [
             "not-a-url",
@@ -99,7 +99,7 @@ class TestUpgradePbsToOrig:
             result = upgrade_pbs_to_orig(input_url)
             assert result == expected
 
-    def test_upgrade_pbs_edge_cases(self):
+    def test_upgrade_pbs_edge_cases(self) -> None:
         """Test edge cases like fragments, ports, etc."""
         test_cases = [
             # With fragment

@@ -1,5 +1,4 @@
-"""
-Vision Job Watcher - Single-flight watcher registry with proper terminal exit
+"""Vision Job Watcher - Single-flight watcher registry with proper terminal exit.
 
 Implements the fixes from the "stop debug spam" prompt:
 - Per-job watcher registry to prevent duplicate watch tasks
@@ -11,22 +10,22 @@ Implements the fixes from the "stop debug spam" prompt:
 
 import asyncio
 import random
-import time
 import threading
-from typing import Dict, Set
+import time
+
 from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class JobWatcherRegistry:
-    """Single-flight watcher registry to prevent duplicate polling loops"""
+    """Single-flight watcher registry to prevent duplicate polling loops."""
 
-    def __init__(self):
-        self._watchers: Dict[str, asyncio.Task] = {}
-        self._finalized_jobs: Set[str] = set()
-        self._last_states: Dict[str, str] = {}
-        self._poll_counts: Dict[str, int] = {}
+    def __init__(self) -> None:
+        self._watchers: dict[str, asyncio.Task] = {}
+        self._finalized_jobs: set[str] = set()
+        self._last_states: dict[str, str] = {}
+        self._poll_counts: dict[str, int] = {}
 
     async def watch_job(
         self,
@@ -36,8 +35,7 @@ class JobWatcherRegistry:
         original_msg=None,
         timeout_seconds: int = 600,
     ):
-        """
-        Watch a job with single-flight guarantee
+        """Watch a job with single-flight guarantee.
 
         Args:
             job_id: Unique job identifier
@@ -48,6 +46,7 @@ class JobWatcherRegistry:
 
         Returns:
             Job result when terminal state reached
+
         """
         # Reuse existing watcher if present and not done
         if job_id in self._watchers:
@@ -55,9 +54,8 @@ class JobWatcherRegistry:
             if not existing_task.done():
                 logger.debug(f"Reusing existing watcher for job {job_id[:8]}")
                 return await existing_task
-            else:
-                # Clean up completed watcher
-                del self._watchers[job_id]
+            # Clean up completed watcher
+            del self._watchers[job_id]
 
         # Create new watcher task
         watcher_task = asyncio.create_task(self._watch_job_impl(job_id, orchestrator, progress_msg, original_msg, timeout_seconds))
@@ -78,7 +76,7 @@ class JobWatcherRegistry:
         original_msg,
         timeout_seconds: int,
     ):
-        """Internal watcher implementation with proper terminal exit"""
+        """Internal watcher implementation with proper terminal exit."""
         start_time = time.time()
         poll_interval = 0.5  # Start with 500ms
         max_interval = 5.0  # Cap at 5 seconds
@@ -102,7 +100,7 @@ class JobWatcherRegistry:
                 try:
                     updated_job = await orchestrator.get_job_status(job_id)
                 except Exception as e:
-                    logger.error(f"Failed to get job status for {job_id[:8]}: {e}")
+                    logger.exception(f"Failed to get job status for {job_id[:8]}: {e}")
                     await asyncio.sleep(poll_interval)
                     continue
 
@@ -150,8 +148,8 @@ class JobWatcherRegistry:
             logger.error(f"Job watcher error - job_id: {job_id[:8]}: {e}", exc_info=True)
             return None
 
-    async def _finalize_job_once(self, job_id: str, job, progress_msg, original_msg):
-        """Finalize job exactly once with idempotent guard"""
+    async def _finalize_job_once(self, job_id: str, job, progress_msg, original_msg) -> None:
+        """Finalize job exactly once with idempotent guard."""
         if job_id in self._finalized_jobs:
             logger.debug(f"Job already finalized - job_id: {job_id[:8]}")
             return
@@ -174,7 +172,6 @@ class JobWatcherRegistry:
                 else:
                     logger.info(f"Finalizing failed job - job_id: {job_id[:8]}, state: {job.state.value}")
                     # Handle failure
-                    pass
 
             logger.debug(f"Job finalization complete - job_id: {job_id[:8]}")
 
@@ -184,8 +181,8 @@ class JobWatcherRegistry:
                 exc_info=True,
             )
 
-    async def _update_progress_message(self, progress_msg, job, original_msg, elapsed_time):
-        """Update Discord progress message"""
+    async def _update_progress_message(self, progress_msg, job, original_msg, elapsed_time) -> None:
+        """Update Discord progress message."""
         try:
             # Import here to avoid circular imports
             import discord
@@ -209,7 +206,7 @@ class JobWatcherRegistry:
             logger.debug(f"Progress message update failed: {e}")
 
     def cancel_all_watchers(self):
-        """Cancel all active watchers (for shutdown)"""
+        """Cancel all active watchers (for shutdown)."""
         logger.info(f"Cancelling {len(self._watchers)} active job watchers")
 
         for job_id, task in self._watchers.items():
@@ -221,14 +218,14 @@ class JobWatcherRegistry:
         tasks = [task for task in self._watchers.values() if not task.done()]
         if tasks:
             return asyncio.gather(*tasks, return_exceptions=True)
+        return None
 
     def get_active_watcher_count(self) -> int:
-        """Get count of active watchers for monitoring"""
-        active_count = sum(1 for task in self._watchers.values() if not task.done())
-        return active_count
+        """Get count of active watchers for monitoring."""
+        return sum(1 for task in self._watchers.values() if not task.done())
 
     async def cleanup_completed_watchers(self) -> None:
-        """Clean up completed watchers to prevent memory leaks [RM]"""
+        """Clean up completed watchers to prevent memory leaks [RM]."""
         completed_job_ids = []
         for job_id, task in self._watchers.items():
             if task.done():
@@ -246,7 +243,7 @@ class JobWatcherRegistry:
         logger.debug(f"Cleaned up {len(completed_job_ids)} completed watchers")
 
     def force_cleanup_all(self) -> None:
-        """Force cleanup all watchers (emergency cleanup)"""
+        """Force cleanup all watchers (emergency cleanup)."""
         self._watchers.clear()
         self._finalized_jobs.clear()
         self._last_states.clear()
@@ -260,7 +257,7 @@ _registry_lock = threading.Lock()
 
 
 def get_watcher_registry() -> JobWatcherRegistry:
-    """Get or create global watcher registry instance with thread-safe access [REH]"""
+    """Get or create global watcher registry instance with thread-safe access [REH]."""
     global _global_registry
     if _global_registry is None:
         # Double-checked locking pattern for thread safety

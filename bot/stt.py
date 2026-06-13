@@ -1,5 +1,4 @@
-"""
-Speech-to-text runtime primitives built around faster-whisper.
+"""Speech-to-text runtime primitives built around faster-whisper.
 
 Provides lazy model loading with CPU-friendly defaults and utilities that higher-level
 pipelines (hear.py) use to orchestrate preprocessing, adaptive model selection, and
@@ -13,12 +12,13 @@ import os
 import threading
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Optional, Tuple
+from typing import TYPE_CHECKING
 
 from .utils.logging import get_logger
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from faster_whisper import WhisperModel
 
 logger = get_logger(__name__)
@@ -50,7 +50,7 @@ with _THREAD_LOCK:
 def _preload_cpu_threads() -> None:
     """Apply torch.set_num_threads once torch is available."""
     try:
-        import torch  # noqa: F811
+        import torch
 
         torch.set_num_threads(_CPU_THREADS)
     except Exception:
@@ -92,9 +92,7 @@ def _normalize_compute_type(ct: str) -> str:
 
 @lru_cache
 def _resolve_spec(declaration: str, default_compute: str) -> ModelSpec:
-    """
-    Resolve a declaration like 'base-int8' into a ModelSpec.
-    """
+    """Resolve a declaration like 'base-int8' into a ModelSpec."""
     decl = (declaration or "").strip()
     compute_type = _normalize_compute_type(default_compute)
     if "-" in decl:
@@ -111,7 +109,7 @@ def _resolve_spec(declaration: str, default_compute: str) -> ModelSpec:
 def _device_for_runtime() -> str:
     # Even though optimised for CPU, keep CUDA detection for environments that may supply GPUs.
     try:
-        import torch  # noqa: F811
+        import torch
 
         if torch.cuda.is_available():
             return "cuda"
@@ -120,7 +118,7 @@ def _device_for_runtime() -> str:
     return "cpu"
 
 
-def _model_ladder() -> Tuple[str, ...]:
+def _model_ladder() -> tuple[str, ...]:
     # Prioritise smaller CPU-friendly variants for downgrade logic.
     return (
         "large-v3",
@@ -134,7 +132,7 @@ def _model_ladder() -> Tuple[str, ...]:
     )
 
 
-def _downgrade(size: str) -> Optional[str]:
+def _downgrade(size: str) -> str | None:
     ladder = _model_ladder()
     try:
         idx = ladder.index(size)
@@ -150,12 +148,12 @@ class STTManager:
 
     def __init__(self) -> None:
         self.engine = _ENGINE
-        self._model_cache: Dict[ModelSpec, WhisperModel] = {}
-        self._model_locks: Dict[ModelSpec, threading.Lock] = {}
+        self._model_cache: dict[ModelSpec, WhisperModel] = {}
+        self._model_locks: dict[ModelSpec, threading.Lock] = {}
         self._ready_event = threading.Event()
         self._default_spec = _resolve_spec(_DEFAULT_MODEL_DECL, _COMPUTE_TYPE_DECL)
         self._available = False
-        self._init_thread: Optional[threading.Thread] = None
+        self._init_thread: threading.Thread | None = None
         self._warm_default_async()
 
     # ------------------------------------------------------------------ Utils
@@ -190,7 +188,7 @@ class STTManager:
                     _device_for_runtime(),
                 )
             except Exception as exc:  # pragma: no cover - defensive logging
-                logger.error("Failed to initialize STT: %s", exc)
+                logger.exception("Failed to initialize STT: %s", exc)
                 self._available = False
             finally:
                 self._ready_event.set()
@@ -199,7 +197,7 @@ class STTManager:
         self._init_thread.start()
 
     def _load_model(self, spec: ModelSpec) -> WhisperModel:
-        from faster_whisper import WhisperModel  # noqa: F811
+        from faster_whisper import WhisperModel
 
         lock = self._get_lock_for(spec)
         with lock:
@@ -245,23 +243,19 @@ class STTManager:
     def cpu_threads(self) -> int:
         return _CPU_THREADS
 
-    async def ensure_ready(self, timeout: Optional[float] = None) -> bool:
-        """
-        Await readiness of the default model. Returns True if ready.
-        """
+    async def ensure_ready(self, timeout: float | None = None) -> bool:
+        """Await readiness of the default model. Returns True if ready."""
         timeout = timeout if timeout is not None else _INIT_TIMEOUT
         loop = asyncio.get_running_loop()
         ready = await loop.run_in_executor(None, self._ready_event.wait, timeout)
         return bool(ready and self.available)
 
     async def ensure_model(self, spec: ModelSpec) -> WhisperModel:
-        """
-        Ensure model for the given spec exists, loading lazily via executor.
-        """
+        """Ensure model for the given spec exists, loading lazily via executor."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._load_model, spec)
 
-    def downgrade_spec(self, spec: ModelSpec) -> Optional[ModelSpec]:
+    def downgrade_spec(self, spec: ModelSpec) -> ModelSpec | None:
         nxt = _downgrade(spec.size)
         if not nxt:
             return None
@@ -270,16 +264,17 @@ class STTManager:
     # Backwards-compatible helpers -------------------------------------------------
 
     async def transcribe_async(self, audio_path: Path) -> str:
-        """
-        Legacy compatibility: transcribe from a file path using default CPU-friendly params.
+        """Legacy compatibility: transcribe from a file path using default CPU-friendly params.
         Newer code should orchestrate preprocessing + chunking explicitly (see hear.py).
         """
         if self.engine != "faster-whisper":
-            raise RuntimeError(f"Unsupported STT engine: {self.engine}")
+            msg = f"Unsupported STT engine: {self.engine}"
+            raise RuntimeError(msg)
 
         ready = await self.ensure_ready()
         if not ready:
-            raise RuntimeError("STT engine not ready after init timeout")
+            msg = "STT engine not ready after init timeout"
+            raise RuntimeError(msg)
 
         model = await self.ensure_model(self.default_spec)
         loop = asyncio.get_running_loop()
@@ -303,7 +298,7 @@ class STTManager:
 
 # Global singleton — created lazily to avoid spinning up a thread + importing
 # torch/faster_whisper at module import time. [IV][REH]
-_stt_manager: Optional[STTManager] = None
+_stt_manager: STTManager | None = None
 
 
 def get_stt_manager() -> STTManager:

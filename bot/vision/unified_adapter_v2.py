@@ -1,5 +1,4 @@
-"""
-Unified Vision Adapter with Money type and pricing table [CA][REH]
+"""Unified Vision Adapter with Money type and pricing table [CA][REH].
 
 Provides a unified interface to multiple vision providers with:
 - Type-safe Money calculations
@@ -7,29 +6,28 @@ Provides a unified interface to multiple vision providers with:
 - Provider usage normalization
 """
 
-from typing import Dict, Any, Optional, List
 import asyncio
+from typing import Any
 
-from bot.vision.types import (
-    VisionRequest,
-    VisionResponse,
-    VisionTask,
-    VisionProvider,
-    VisionError,
-    VisionErrorType,
-    NormalizedRequest,
-)
+from bot.utils.logging import get_logger
 from bot.vision.money import Money
 from bot.vision.pricing_loader import get_pricing_table
 from bot.vision.providers.base import ProviderPlugin
-from bot.utils.logging import get_logger
+from bot.vision.types import (
+    NormalizedRequest,
+    VisionError,
+    VisionErrorType,
+    VisionProvider,
+    VisionRequest,
+    VisionResponse,
+    VisionTask,
+)
 
 logger = get_logger(__name__)
 
 
 class UnifiedVisionAdapter:
-    """
-    Unified adapter for vision providers with Money-based pricing [CA]
+    """Unified adapter for vision providers with Money-based pricing [CA].
 
     Features:
     - Deterministic cost estimation from pricing table
@@ -37,20 +35,20 @@ class UnifiedVisionAdapter:
     - Type-safe Money calculations
     """
 
-    def __init__(self, config: Dict[str, Any]):
-        """Initialize adapter with config and pricing table"""
+    def __init__(self, config: dict[str, Any]) -> None:
+        """Initialize adapter with config and pricing table."""
         self.config = config
         self.provider_config = config
         self.pricing_table = get_pricing_table()
 
         # Provider plugins will be loaded lazily
-        self._providers: Dict[str, ProviderPlugin] = {}
+        self._providers: dict[str, ProviderPlugin] = {}
         self._provider_lock = asyncio.Lock()
 
         logger.info("UnifiedVisionAdapter initialized with pricing table")
 
-    async def _get_provider(self, name: str) -> Optional[ProviderPlugin]:
-        """Get or load provider plugin [REH]"""
+    async def _get_provider(self, name: str) -> ProviderPlugin | None:
+        """Get or load provider plugin [REH]."""
         async with self._provider_lock:
             if name not in self._providers:
                 # Load provider dynamically
@@ -75,13 +73,13 @@ class UnifiedVisionAdapter:
 
                     logger.info(f"Loaded provider: {name}")
                 except Exception as e:
-                    logger.error(f"Failed to load provider {name}: {e}")
+                    logger.exception(f"Failed to load provider {name}: {e}")
                     return None
 
             return self._providers.get(name)
 
     def normalize_request(self, request: VisionRequest) -> NormalizedRequest:
-        """Normalize request parameters [CMV]"""
+        """Normalize request parameters [CMV]."""
         # Create normalized request with defaults
         normalized = NormalizedRequest(
             task=request.task,
@@ -113,8 +111,7 @@ class UnifiedVisionAdapter:
         return normalized
 
     def estimate_cost(self, provider: VisionProvider, request: VisionRequest) -> Money:
-        """
-        Estimate cost using pricing table [PA][CMV]
+        """Estimate cost using pricing table [PA][CMV].
 
         Returns Money object with deterministic estimate.
         """
@@ -131,8 +128,7 @@ class UnifiedVisionAdapter:
         )
 
     def normalize_provider_cost(self, provider: VisionProvider, response: VisionResponse) -> Money:
-        """
-        Normalize provider's actual cost to USD [REH]
+        """Normalize provider's actual cost to USD [REH].
 
         Handles different provider formats and ensures Money type.
         """
@@ -188,8 +184,7 @@ class UnifiedVisionAdapter:
         return normalized_cost
 
     async def submit(self, request: VisionRequest) -> VisionResponse:
-        """
-        Submit request with cost estimation and normalization [REH]
+        """Submit request with cost estimation and normalization [REH].
 
         Ensures all costs use Money type. Enforces capability and pricing gates.
         """
@@ -295,12 +290,11 @@ class UnifiedVisionAdapter:
                     )
 
                     return response
-                else:
-                    last_error = response.error
-                    logger.warning(f"Provider {provider_name} failed", error=str(response.error))
+                last_error = response.error
+                logger.warning(f"Provider {provider_name} failed", error=str(response.error))
 
             except Exception as e:
-                logger.error(f"Error with provider {provider_name}: {e}")
+                logger.exception(f"Error with provider {provider_name}: {e}")
                 last_error = VisionError(
                     error_type=VisionErrorType.PROVIDER_ERROR,
                     message=str(e),
@@ -325,7 +319,7 @@ class UnifiedVisionAdapter:
                 ),
                 actual_cost=0.0,
             )
-        elif selection_reason == "no_pricing":
+        if selection_reason == "no_pricing":
             return VisionResponse(
                 success=False,
                 job_id=request.idempotency_key,
@@ -349,21 +343,20 @@ class UnifiedVisionAdapter:
                 error=last_error,
                 actual_cost=0.0,
             )
-        else:
-            return VisionResponse(
-                success=False,
-                job_id=request.idempotency_key,
-                provider=VisionProvider.UNKNOWN,
-                model_used="unknown",
-                error=VisionError(
-                    error_type=VisionErrorType.PROVIDER_ERROR,
-                    message="No providers available",
-                ),
-                actual_cost=0.0,
-            )
+        return VisionResponse(
+            success=False,
+            job_id=request.idempotency_key,
+            provider=VisionProvider.UNKNOWN,
+            model_used="unknown",
+            error=VisionError(
+                error_type=VisionErrorType.PROVIDER_ERROR,
+                message="No providers available",
+            ),
+            actual_cost=0.0,
+        )
 
-    def _get_provider_order(self, request: VisionRequest) -> List[str]:
-        """Get provider order based on request and config [PA]"""
+    def _get_provider_order(self, request: VisionRequest) -> list[str]:
+        """Get provider order based on request and config [PA]."""
         # Check for forced provider
         if getattr(request, "preferred_provider", None):
             return [request.preferred_provider.value.lower()]
@@ -389,8 +382,8 @@ class UnifiedVisionAdapter:
 
         return resolved_order
 
-    def _get_provider_order_with_health_check(self, request: VisionRequest) -> List[str]:
-        """Get provider order with credential and health filtering [REH][IV]"""
+    def _get_provider_order_with_health_check(self, request: VisionRequest) -> list[str]:
+        """Get provider order with credential and health filtering [REH][IV]."""
         # Get base provider order
         base_order = self._get_provider_order(request)
         filtered_order = []
@@ -425,30 +418,29 @@ class UnifiedVisionAdapter:
         return filtered_order
 
     def _has_valid_credentials(self, provider_name: str) -> bool:
-        """Check if provider has valid API credentials [IV]"""
+        """Check if provider has valid API credentials [IV]."""
         try:
             if provider_name == "novita":
                 api_key = self.config.get("VISION_API_KEY", "")
                 return bool(api_key and api_key.strip())
 
-            elif provider_name == "together":
+            if provider_name == "together":
                 api_key = self.config.get("VISION_API_KEY_TOGETHER", "")
                 return bool(api_key and api_key.strip())
 
-            elif provider_name == "chutes":
+            if provider_name == "chutes":
                 api_key = self.config.get("VISION_API_KEY_CHUTES", "")
                 return bool(api_key and api_key.strip())
 
-            else:
-                # Unknown provider - assume no credentials needed for now
-                return True
+            # Unknown provider - assume no credentials needed for now
+            return True
 
         except Exception as e:
             self.logger.warning(f"Error checking credentials for {provider_name}: {e}")
             return False
 
     def _is_provider_healthy(self, provider_name: str) -> bool:
-        """Check if provider is in a healthy state [PA]"""
+        """Check if provider is in a healthy state [PA]."""
         try:
             # For now, implement basic health checks
             # In production, this could check rate limits, service status, etc.
@@ -458,26 +450,25 @@ class UnifiedVisionAdapter:
                 api_key = self.config.get("VISION_API_KEY", "")
                 return bool(api_key and len(api_key) > 10)  # Basic length check
 
-            elif provider_name == "together":
+            if provider_name == "together":
                 # Check if API key exists
                 api_key = self.config.get("VISION_API_KEY_TOGETHER", "")
                 return bool(api_key and len(api_key) > 10)
 
-            elif provider_name == "chutes":
+            if provider_name == "chutes":
                 # Check if API key exists
                 api_key = self.config.get("VISION_API_KEY_CHUTES", "")
                 return bool(api_key and len(api_key) > 10)
 
-            else:
-                # Unknown provider - assume healthy
-                return True
+            # Unknown provider - assume healthy
+            return True
 
         except Exception as e:
             self.logger.warning(f"Error checking health for {provider_name}: {e}")
             return False
 
-    def resolve_model_selection(self, request: NormalizedRequest) -> Optional[Any]:
-        """Resolve model selection from config [PA]"""
+    def resolve_model_selection(self, request: NormalizedRequest) -> Any | None:
+        """Resolve model selection from config [PA]."""
         # This would check VISION_MODEL env var or config
         # Simplified for now
         return None

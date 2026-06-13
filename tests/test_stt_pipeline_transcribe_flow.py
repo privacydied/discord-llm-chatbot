@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Never
 
 import pytest
 
@@ -26,7 +27,7 @@ async def test_preprocess_and_transcribe_success() -> None:
         def __init__(self) -> None:
             self.info_calls = []
 
-        def info(self, msg, *args):
+        def info(self, msg, *args) -> None:
             self.info_calls.append((msg, args))
 
     async def _preprocess(**kwargs):
@@ -75,17 +76,21 @@ async def test_preprocess_and_transcribe_success() -> None:
 async def test_preprocess_and_transcribe_propagates_preprocess_error() -> None:
     class _Job:
         def register_pre(self, _pre) -> None:
-            raise AssertionError("register_pre should not be called")
+            msg = "register_pre should not be called"
+            raise AssertionError(msg)
 
     class _Guard:
         def check(self, _stage: str) -> None:
-            raise AssertionError("guard should not be called")
+            msg = "guard should not be called"
+            raise AssertionError(msg)
 
-    async def _preprocess(**_kwargs):
-        raise RuntimeError("pre failed")
+    async def _preprocess(**_kwargs) -> Never:
+        msg = "pre failed"
+        raise RuntimeError(msg)
 
-    async def _run_whisper(*_args, **_kwargs):
-        raise AssertionError("whisper should not run")
+    async def _run_whisper(*_args, **_kwargs) -> Never:
+        msg = "whisper should not run"
+        raise AssertionError(msg)
 
     with pytest.raises(RuntimeError, match="pre failed"):
         await preprocess_and_transcribe(

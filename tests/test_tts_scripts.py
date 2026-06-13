@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""
-Test the TTS functionality directly to verify our fixes.
-"""
+"""Test the TTS functionality directly to verify our fixes."""
 
 import asyncio
+import importlib
 import logging
 import os
 import sys
-import importlib
-from dotenv import load_dotenv
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Add parent directory to path so we can import bot modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -17,13 +16,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 
-TTSManager = getattr(importlib.import_module("bot.tts"), "TTSManager")
+TTSManager = importlib.import_module("bot.tts").TTSManager
 
 
-async def main():
+async def main() -> bool | None:
     """Test TTS functionality."""
-    print("🔍 Testing Kokoro-ONNX TTS functionality...")
-
     # Load environment variables
     load_dotenv()
 
@@ -36,43 +33,33 @@ async def main():
         "TTS_CACHE_DIR": os.getenv("TTS_CACHE_DIR", "cache/tts"),
     }
 
-    print(f"Config: {config}")
 
     # Initialize TTS manager
     tts_manager = TTSManager(config)
 
     # Check if TTS is available
     if not tts_manager.available:
-        print(f"❌ TTS is not available: {tts_manager.backend}")
         return False
 
-    print(f"✅ TTS is available: {tts_manager.backend}")
-    print(f"Using voice: {tts_manager.voice}")
 
     # Generate TTS for a test sentence
     text = "Hello! This is a test of the Kokoro-ONNX text-to-speech system."
-    print(f"Generating TTS for: '{text}'")
 
     try:
         # Generate TTS
         output_path = await tts_manager.generate_tts(text, tts_manager.voice)
 
-        print(f"✅ TTS generated successfully: {output_path}")
-        print(f"File size: {output_path.stat().st_size} bytes")
 
         # Optional: Play the audio if on Linux with aplay
         try:
             import subprocess
 
-            print("Playing audio...")
             subprocess.run(["aplay", str(output_path)], check=True)
-            print("Audio playback complete")
         except Exception as e:
-            print(f"Note: Audio playback failed: {e}")
+            pass
 
         return True
     except Exception as e:
-        print(f"❌ TTS generation failed: {e}")
         import traceback
 
         traceback.print_exc()

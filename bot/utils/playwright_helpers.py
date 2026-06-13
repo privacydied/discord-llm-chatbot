@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from typing import Optional
 
 from playwright.async_api import Browser, BrowserType
 from playwright.async_api import Error as PlaywrightError
@@ -94,7 +93,7 @@ async def check_playwright_health() -> bool:
         _pw_consecutive_failures = 0
         _pw_health_last_check = now
         return True
-    except (PlaywrightError, asyncio.TimeoutError, Exception) as exc:
+    except (TimeoutError, PlaywrightError, Exception) as exc:
         _pw_consecutive_failures += 1
         _pw_health_available = False
         _pw_health_last_check = now
@@ -106,7 +105,7 @@ async def check_playwright_health() -> bool:
         return False
 
 
-def _pw_server_url() -> Optional[str]:
+def _pw_server_url() -> str | None:
     """Return the WebSocket endpoint for the remote Playwright server,
     or None if no server is configured.
 
@@ -126,7 +125,7 @@ def _pw_server_url() -> Optional[str]:
     return raw
 
 
-async def connect_browser(browser_type: BrowserType) -> Optional[Browser]:
+async def connect_browser(browser_type: BrowserType) -> Browser | None:
     """Connect to the remote Playwright server if configured.
 
     Returns a Browser on success, None if PW_SERVER_URL is not set or
@@ -158,7 +157,7 @@ _PW_BLOCKED_RESOURCE_TYPES = frozenset(
         "websocket",
         "manifest",
         "other",
-    ]
+    ],
 )
 
 
@@ -179,7 +178,7 @@ async def create_text_only_context(
 
     ctx = await browser.new_context()
 
-    async def _block_route(route):
+    async def _block_route(route) -> None:
         if route.request.resource_type in _PW_BLOCKED_RESOURCE_TYPES:
             await route.abort()
         else:

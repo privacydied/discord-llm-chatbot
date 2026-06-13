@@ -28,8 +28,8 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import functools
-from typing import Optional, Set
 
 import discord
 from discord.ext import commands
@@ -46,7 +46,7 @@ logger = get_logger(__name__)
 # ------------------------------------------------------------------ #
 
 
-def _get_configured_admin_ids(config: Optional[dict] = None) -> Set[int]:
+def _get_configured_admin_ids(config: dict | None = None) -> set[int]:
     """Collect all configured admin/owner user IDs from config."""
     if config is None:
         config = load_config()
@@ -60,10 +60,8 @@ def _get_configured_admin_ids(config: Optional[dict] = None) -> Set[int]:
     for oid in owner_ids:
         oid_str = str(oid).strip()
         if oid_str:
-            try:
+            with contextlib.suppress(ValueError):
                 ids.add(int(oid_str))
-            except ValueError:
-                pass
 
     # ALERT_ADMIN_USER_IDS
     alert_admin = config.get("ALERT_ADMIN_USER_IDS") or config.get("alert_admin_user_ids", "")
@@ -71,15 +69,13 @@ def _get_configured_admin_ids(config: Optional[dict] = None) -> Set[int]:
         for aid in alert_admin.split(","):
             aid_str = aid.strip()
             if aid_str:
-                try:
+                with contextlib.suppress(ValueError):
                     ids.add(int(aid_str))
-                except ValueError:
-                    pass
 
     return ids
 
 
-async def _resolve_bot_owner_ids(bot) -> Set[int]:
+async def _resolve_bot_owner_ids(bot) -> set[int]:
     """Resolve bot owner IDs from discord client attributes."""
     ids: set[int] = set()
 
@@ -96,8 +92,8 @@ async def _resolve_bot_owner_ids(bot) -> Set[int]:
         config = load_config()
         for oid in _get_configured_admin_ids(config):
             ids.add(oid)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to load configured admin IDs from config: {e}")
 
     return ids
 
@@ -123,6 +119,7 @@ async def is_admin_user(
         bot: discord.Bot instance
         require_guild: If True, guild administrator permission is required
             (configured IDs and owners alone are insufficient).
+
     """
     user_id = user.id
 
@@ -136,8 +133,8 @@ async def is_admin_user(
         config_ids = _get_configured_admin_ids()
         if user_id in config_ids:
             return True
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to check configured admin IDs: {e}")
 
     # Guild administrator check (Members only)
     if isinstance(user, discord.Member) and user.guild_permissions.administrator:
@@ -230,10 +227,8 @@ async def check_admin_async(
 
     if reply_channel is not None:
         if ephemeral and isinstance(reply_channel, discord.Interaction):
-            try:
+            with contextlib.suppress(discord.InteractionResponded):
                 await reply_channel.response.send_message("Permission denied.", ephemeral=True)
-            except discord.InteractionResponded:
-                pass
         else:
             await reply_channel.send("Permission denied.")
 

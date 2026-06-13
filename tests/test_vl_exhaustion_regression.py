@@ -1,5 +1,4 @@
-"""
-Regression tests for VL ladder exhaustion being incorrectly treated as success.
+"""Regression tests for VL ladder exhaustion being incorrectly treated as success.
 
 Covers:
 1. X sparse media extraction returns one image, but VL ladder exhausts.
@@ -30,14 +29,14 @@ def bot_action():
 
 @pytest.fixture
 def patched_see_infer(monkeypatch):
-    """
-    Patch see_infer to return different shaped results on demand.
+    """Patch see_infer to return different shaped results on demand.
     Tests set the return value *after* importing via this fixture.
     """
     from bot import see
 
     async def fake_see(*args, **kwargs):
-        raise NotImplementedError("set return_value on see_infer first")
+        msg = "set return_value on see_infer first"
+        raise NotImplementedError(msg)
 
     original = see.see_infer
     monkeypatch.setattr(see, "see_infer", fake_see)
@@ -50,7 +49,7 @@ def patched_see_infer(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-async def test_vl_ladder_exhausted_botaction_is_error(bot_action):
+async def test_vl_ladder_exhausted_botaction_is_error(bot_action) -> None:
     """When the VL ladder exhausts, see_infer returns BotAction with error=True."""
     result = bot_action(
         content="The vision service is temporarily unavailable. Please try again in a few minutes.",
@@ -66,7 +65,7 @@ async def test_vl_ladder_exhausted_botaction_is_error(bot_action):
 # ---------------------------------------------------------------------------
 
 
-async def test_vl_empty_completion_botaction_is_error(bot_action):
+async def test_vl_empty_completion_botaction_is_error(bot_action) -> None:
     """Empty completion from VL also returns error=True BotAction."""
     result = bot_action(
         content="The vision model returned an empty response. Please try again with a clearer image or different prompt.",
@@ -80,9 +79,10 @@ async def test_vl_empty_completion_botaction_is_error(bot_action):
 # ---------------------------------------------------------------------------
 
 
-async def test_vl_ladder_exhausted_dict_has_metadata():
+async def test_vl_ladder_exhausted_dict_has_metadata() -> None:
     """When the retry ladder exhausts in openai_backend, the returned dict
-    carries ladder_exhausted=True and an error text."""
+    carries ladder_exhausted=True and an error text.
+    """
     # Simulate what openai_backend.generate_vl_response returns when
     # the except APIError block catches a VL exhaustion (lines 1328-1340).
     result = {
@@ -99,7 +99,8 @@ async def test_vl_ladder_exhausted_dict_has_metadata():
     }
     assert result.get("ladder_exhausted") is True
     assert result.get("model") is None
-    assert isinstance(result.get("text"), str) and len(result["text"]) > 0
+    assert isinstance(result.get("text"), str)
+    assert len(result["text"]) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -107,11 +108,11 @@ async def test_vl_ladder_exhausted_dict_has_metadata():
 # ---------------------------------------------------------------------------
 
 
-async def test_ai_backend_does_not_log_success_for_exhausted_vl():
+async def test_ai_backend_does_not_log_success_for_exhausted_vl() -> None:
     """Check the condition used in ai_backend to decide whether to log success."""
 
     # These are the conditions that should suppress the "completed successfully" log.
-    def _should_log_success(result):
+    def _should_log_success(result) -> bool:
         return not (isinstance(result, dict) and (result.get("ladder_exhausted") or result.get("status") == "error" or (result.get("text") or "").strip() == ""))
 
     # Ladder exhausted -> must NOT log success
@@ -140,9 +141,10 @@ async def test_ai_backend_does_not_log_success_for_exhausted_vl():
 # ---------------------------------------------------------------------------
 
 
-async def test_perception_notes_rejects_error_botaction(bot_action):
+async def test_perception_notes_rejects_error_botaction(bot_action) -> None:
     """When see_infer returns an error BotAction, _run_perception_notes must
-    return (None, reason) and NOT inject the error text as perception notes."""
+    return (None, reason) and NOT inject the error text as perception notes.
+    """
     error_action = bot_action(
         content="Vision service is temporarily unavailable.",
         error=True,
@@ -157,7 +159,7 @@ async def test_perception_notes_rejects_error_botaction(bot_action):
 # ---------------------------------------------------------------------------
 
 
-async def test_perception_notes_accepts_ok_botaction(bot_action):
+async def test_perception_notes_accepts_ok_botaction(bot_action) -> None:
     """A successful VL BotAction should NOT be rejected by the error guard."""
     ok_action = bot_action(
         content="The image shows a sunset over the ocean with orange and pink hues.",
@@ -172,9 +174,10 @@ async def test_perception_notes_accepts_ok_botaction(bot_action):
 # ---------------------------------------------------------------------------
 
 
-async def test_direct_backend_call_ladder_exhausted_detection():
+async def test_direct_backend_call_ladder_exhausted_detection() -> None:
     """Handlers that call the backend directly (not via see_infer) must also
-    detect ladder_exhausted in dict results."""
+    detect ladder_exhausted in dict results.
+    """
     error_dict = {
         "text": "Unavailable",
         "ladder_exhausted": True,
@@ -189,11 +192,12 @@ async def test_direct_backend_call_ladder_exhausted_detection():
 # ---------------------------------------------------------------------------
 
 
-async def test_result_aggregator_failed_items_not_counted():
+async def test_result_aggregator_failed_items_not_counted() -> None:
     """The ResultAggregator's success filter must properly separate failed
-    items when a VL item returned a failed result."""
+    items when a VL item returned a failed result.
+    """
+    from bot.modality import InputItem, InputModality
     from bot.result_aggregator import ResultAggregator
-    from bot.modality import InputModality, InputItem
 
     agg = ResultAggregator()
 
@@ -223,10 +227,10 @@ async def test_result_aggregator_failed_items_not_counted():
 # ---------------------------------------------------------------------------
 
 
-async def test_result_aggregator_mixed_success_failure():
+async def test_result_aggregator_mixed_success_failure() -> None:
     """When one item succeeds and one fails, only the successful one is in the prompt."""
+    from bot.modality import InputItem, InputModality
     from bot.result_aggregator import ResultAggregator
-    from bot.modality import InputModality, InputItem
 
     agg = ResultAggregator()
 
@@ -264,7 +268,7 @@ async def test_result_aggregator_mixed_success_failure():
 # ---------------------------------------------------------------------------
 
 
-async def test_error_text_does_not_trigger_visual_facts():
+async def test_error_text_does_not_trigger_visual_facts() -> None:
     """Error/failure text from failed VL should not trigger visual_facts_detected."""
     from bot.router_components import has_visual_facts_section
 

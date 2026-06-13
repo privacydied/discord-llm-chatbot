@@ -1,23 +1,24 @@
-"""
-Hybrid multimodal pipeline controller
-"""
+"""Hybrid multimodal pipeline controller."""
 
+import contextlib
 import logging
-import tempfile
 import os
-import discord
+import tempfile
 from pathlib import Path
-from .exceptions import InferenceError
+
+import discord
+
 from .brain import brain_infer
-from .speak import speak_infer
-from .see import see_infer
+from .exceptions import InferenceError
 from .hear import hear_infer
+from .see import see_infer
+from .speak import speak_infer
 
 logger = logging.getLogger(__name__)
 
 
 async def hybrid_pipeline(ctx, content: str, mode: str = "both"):
-    """Orchestrate multimodal processing pipeline"""
+    """Orchestrate multimodal processing pipeline."""
     try:
         logger.info(f"🚀 Starting hybrid pipeline in {mode} mode")
 
@@ -25,7 +26,7 @@ async def hybrid_pipeline(ctx, content: str, mode: str = "both"):
         if mode == "stt":
             if not ctx.message.attachments:
                 await ctx.send("❌ Please provide an audio file for STT processing")
-                return
+                return None
 
             audio_path = await download_attachment(ctx.message.attachments[0])
             try:
@@ -41,7 +42,7 @@ async def hybrid_pipeline(ctx, content: str, mode: str = "both"):
         if mode == "vl":
             if not ctx.message.attachments:
                 await ctx.send("❌ Please provide an image for vision processing")
-                return
+                return None
 
             image_path = await download_attachment(ctx.message.attachments[0])
             try:
@@ -49,7 +50,7 @@ async def hybrid_pipeline(ctx, content: str, mode: str = "both"):
                 await ctx.send(result)
             finally:
                 _safe_unlink(image_path)
-            return
+            return None
 
         # Text processing core
         text_out = await brain_infer(content)
@@ -70,11 +71,9 @@ async def hybrid_pipeline(ctx, content: str, mode: str = "both"):
 
         return replies
     except Exception as e:
-        logger.error(f"🚨 Pipeline error: {str(e)}")
-        try:
+        logger.exception(f"🚨 Pipeline error: {e!s}")
+        with contextlib.suppress(Exception):
             await ctx.send("⚠️ An error occurred while processing your request")
-        except Exception:
-            pass
 
 
 def _safe_unlink(path: Path) -> None:
@@ -82,8 +81,8 @@ def _safe_unlink(path: Path) -> None:
     try:
         if path and path.exists():
             os.unlink(path)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to unlink temp file {path}: {e}")
 
 
 async def download_attachment(attachment) -> Path:

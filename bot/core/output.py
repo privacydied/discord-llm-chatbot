@@ -6,26 +6,29 @@ so that sanitization is explicit rather than relying on monkey-patches.
 
 from __future__ import annotations
 
-from typing import Optional, Sequence
-
-import discord
+from typing import TYPE_CHECKING
 
 from bot.public_output import (
-    sanitize_public_text,
-    sanitize_embed_for_public,
     sanitize_embed_collection_for_public,
+    sanitize_embed_for_public,
+    sanitize_public_text,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    import discord
 
 
 async def safe_send(
     destination: discord.abc.Messageable,
-    content: Optional[str] = None,
+    content: str | None = None,
     *,
-    embed: Optional[discord.Embed] = None,
-    embeds: Optional[Sequence[discord.Embed]] = None,
-    file: Optional[discord.File] = None,
-    files: Optional[Sequence[discord.File]] = None,
-    view: Optional[discord.ui.View] = None,
+    embed: discord.Embed | None = None,
+    embeds: Sequence[discord.Embed] | None = None,
+    file: discord.File | None = None,
+    files: Sequence[discord.File] | None = None,
+    view: discord.ui.View | None = None,
     **kwargs,
 ) -> discord.Message:
     """Sanitize then send a message to any Messageable channel."""
@@ -56,13 +59,13 @@ async def safe_send(
 
 async def safe_reply(
     message: discord.Message,
-    content: Optional[str] = None,
+    content: str | None = None,
     *,
-    embed: Optional[discord.Embed] = None,
-    embeds: Optional[Sequence[discord.Embed]] = None,
-    file: Optional[discord.File] = None,
-    files: Optional[Sequence[discord.File]] = None,
-    view: Optional[discord.ui.View] = None,
+    embed: discord.Embed | None = None,
+    embeds: Sequence[discord.Embed] | None = None,
+    file: discord.File | None = None,
+    files: Sequence[discord.File] | None = None,
+    view: discord.ui.View | None = None,
     mention_author: bool = False,
     **kwargs,
 ) -> discord.Message:
@@ -86,11 +89,11 @@ async def safe_reply(
 
 async def safe_edit(
     message: discord.Message,
-    content: Optional[str] = None,
+    content: str | None = None,
     *,
-    embed: Optional[discord.Embed] = None,
-    embeds: Optional[Sequence[discord.Embed]] = None,
-    view: Optional[discord.ui.View] = None,
+    embed: discord.Embed | None = None,
+    embeds: Sequence[discord.Embed] | None = None,
+    view: discord.ui.View | None = None,
     **kwargs,
 ) -> discord.Message:
     """Sanitize then edit a Discord message."""
@@ -121,9 +124,9 @@ def _maybe_sanitize_text(text: str) -> str:
 
 
 def _sanitize_embeds(
-    embed: Optional[discord.Embed],
-    embeds: Optional[Sequence[discord.Embed]],
-) -> tuple[Optional[discord.Embed], Optional[list[discord.Embed]]]:
+    embed: discord.Embed | None,
+    embeds: Sequence[discord.Embed] | None,
+) -> tuple[discord.Embed | None, list[discord.Embed] | None]:
     """Sanitize embed(s) and normalize to exactly one representation."""
     sanitized_embed = sanitize_embed_for_public(embed) if embed is not None else None
     sanitized_embeds = sanitize_embed_collection_for_public(list(embeds or []))
@@ -135,5 +138,5 @@ def _sanitize_embeds(
         return sanitized_embed, None
     if sanitized_embed and sanitized_embeds:
         # Prefer plural representation when both are present.
-        return None, [sanitized_embed] + sanitized_embeds
+        return None, [sanitized_embed, *sanitized_embeds]
     return None, None

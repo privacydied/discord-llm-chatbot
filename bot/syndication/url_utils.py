@@ -1,13 +1,10 @@
-"""
-URL utilities for syndication content processing.
-"""
+"""URL utilities for syndication content processing."""
 
-from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
 def upgrade_pbs_to_orig(url: str) -> str:
-    """
-    Given a pbs.twimg.com URL (media/card/tweet_video_thumb), ensure it points to the highest
+    """Given a pbs.twimg.com URL (media/card/tweet_video_thumb), ensure it points to the highest
     available resolution by setting query param name=orig while preserving any existing 'format'.
     If the host isn't pbs.twimg.com, return url unchanged.
 
@@ -16,6 +13,7 @@ def upgrade_pbs_to_orig(url: str) -> str:
 
     Returns:
         URL with name=orig parameter if it's a pbs.twimg.com URL, otherwise unchanged
+
     """
     try:
         p = urlparse(url)
@@ -49,8 +47,7 @@ def upgrade_pbs_to_orig(url: str) -> str:
 
 
 def pbs_base_key(url: str) -> str:
-    """
-    Return a canonical key for deduplicating pbs.twimg.com media assets regardless of
+    """Return a canonical key for deduplicating pbs.twimg.com media assets regardless of
     query params or legacy :size suffix. Non-pbs URLs return the URL without query.
     """
     try:

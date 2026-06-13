@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Tuple
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 async def abort_job_stream_if_present(
@@ -45,7 +48,7 @@ def create_stt_job(
     spans_cls: Callable[[], Any],
     ram_guard_cls: Callable[[int | None], Any],
     job_cls: Callable[..., Any],
-) -> Tuple[Any, Any, Any]:
+) -> tuple[Any, Any, Any]:
     """Create STT spans/guard/job trio for an entrypoint."""
     spans = spans_cls()
     ram_guard = ram_guard_cls(stt_max_ram_mb)

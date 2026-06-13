@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -67,7 +67,7 @@ class DistillerWindow:
 
 
 class MemoryArchiveDistiller:
-    def __init__(self, bot: Any | None = None):
+    def __init__(self, bot: Any | None = None) -> None:
         self.bot = bot
         self._start_lock = asyncio.Lock()
         self._started = False
@@ -103,7 +103,7 @@ class MemoryArchiveDistiller:
         self._dry_run_override = bool(enabled)
         self.dry_run = self._dry_run_override
 
-    async def start(self, bot: Any | None = None) -> "MemoryArchiveDistiller":
+    async def start(self, bot: Any | None = None) -> MemoryArchiveDistiller:
         if bot is not None:
             self.bot = bot
         self.refresh_config()
@@ -184,15 +184,12 @@ class MemoryArchiveDistiller:
                 )
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval_seconds)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def run_once(self, *, batch_size: int | None = None) -> dict[str, Any]:
         self.refresh_config()
-        if batch_size is not None:
-            batch_size = max(1, int(batch_size))
-        else:
-            batch_size = self.batch_size
+        batch_size = max(1, int(batch_size)) if batch_size is not None else self.batch_size
 
         started_at = self._utc_now()
         run_id = str(uuid4())
@@ -452,8 +449,8 @@ class MemoryArchiveDistiller:
                 text = text[:-1] + "+00:00"
             dt = datetime.fromisoformat(text)
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
+            return dt.astimezone(UTC)
         except ValueError:
             return None
 
@@ -461,13 +458,11 @@ class MemoryArchiveDistiller:
     def _as_bool(value: Any) -> bool:
         if isinstance(value, bool):
             return value
-        if value in (1, "1", "true", "True", "yes", "on"):
-            return True
-        return False
+        return value in (1, "1", "true", "True", "yes", "on")
 
     @staticmethod
     def _utc_now() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
 
 _service: MemoryArchiveDistiller | None = None

@@ -1,10 +1,11 @@
 """Tests for tokenizer selection logic."""
 
-import pytest
-import unittest
-from unittest.mock import patch, MagicMock
 import sys
+import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Skip all tests in this module — they require system-level tokenizer binaries
 pytestmark = pytest.mark.skip(reason="Requires system-level tokenizer binaries (espeak-ng, phonemizer)")
@@ -13,18 +14,18 @@ pytestmark = pytest.mark.skip(reason="Requires system-level tokenizer binaries (
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from bot.tts.validation import (
-    detect_available_tokenizers,
-    select_tokenizer_for_language,
-    is_tokenizer_warning_needed,
-    get_tokenizer_warning_message,
     AVAILABLE_TOKENIZERS,
+    detect_available_tokenizers,
+    get_tokenizer_warning_message,
+    is_tokenizer_warning_needed,
+    select_tokenizer_for_language,
 )
 
 
 class TestTokenizerSelection(unittest.TestCase):
     """Test tokenizer selection logic."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test environment."""
         # Reset global state before each test
         global AVAILABLE_TOKENIZERS, TOKENIZER_WARNING_SHOWN
@@ -34,7 +35,7 @@ class TestTokenizerSelection(unittest.TestCase):
     @patch("shutil.which")
     @patch("subprocess.run")
     @patch("importlib.import_module")
-    def test_detect_available_tokenizers(self, mock_import, mock_run, mock_which):
+    def test_detect_available_tokenizers(self, mock_import, mock_run, mock_which) -> None:
         """Test detection of available tokenizers."""
         # Mock shutil.which to return paths for espeak
         mock_which.side_effect = lambda cmd: "/usr/bin/espeak" if cmd == "espeak" else None
@@ -48,7 +49,8 @@ class TestTokenizerSelection(unittest.TestCase):
         def mock_import_side_effect(name):
             if name == "phonemizer":
                 return MagicMock()
-            raise ImportError(f"No module named '{name}'")
+            msg = f"No module named '{name}'"
+            raise ImportError(msg)
 
         mock_import.side_effect = mock_import_side_effect
 
@@ -58,7 +60,8 @@ class TestTokenizerSelection(unittest.TestCase):
             def import_mock(name, *args):
                 if name == "phonemizer":
                     return MagicMock()
-                raise ImportError(f"No module named '{name}'")
+                msg = f"No module named '{name}'"
+                raise ImportError(msg)
 
             mock_builtin_import.side_effect = import_mock
 
@@ -66,16 +69,16 @@ class TestTokenizerSelection(unittest.TestCase):
             result = detect_available_tokenizers()
 
             # Check results
-            self.assertTrue(result["espeak"])
-            self.assertTrue(result["grapheme"])  # Always available
-            self.assertFalse(result["misaki"])
-            self.assertFalse(result["g2p_en"])
+            assert result["espeak"]
+            assert result["grapheme"]  # Always available
+            assert not result["misaki"]
+            assert not result["g2p_en"]
 
             # Check global state
-            self.assertIn("espeak", AVAILABLE_TOKENIZERS)
-            self.assertIn("grapheme", AVAILABLE_TOKENIZERS)
+            assert "espeak" in AVAILABLE_TOKENIZERS
+            assert "grapheme" in AVAILABLE_TOKENIZERS
 
-    def test_tokeniser_auto_pick_en(self):
+    def test_tokeniser_auto_pick_en(self) -> None:
         """Test auto-selection of tokenizer for English."""
         # Mock available tokenizers
         global AVAILABLE_TOKENIZERS
@@ -85,11 +88,11 @@ class TestTokenizerSelection(unittest.TestCase):
         selected = select_tokenizer_for_language("en")
 
         # Should select espeak for English
-        self.assertEqual(selected, "espeak")
+        assert selected == "espeak"
 
         # Try with en-US
         selected = select_tokenizer_for_language("en-US")
-        self.assertEqual(selected, "espeak")
+        assert selected == "espeak"
 
         # Try with empty available tokenizers
         AVAILABLE_TOKENIZERS.clear()
@@ -97,12 +100,12 @@ class TestTokenizerSelection(unittest.TestCase):
 
         # Should fall back to grapheme
         selected = select_tokenizer_for_language("en")
-        self.assertEqual(selected, "grapheme")
+        assert selected == "grapheme"
 
         # Check warning flag is set
-        self.assertTrue(is_tokenizer_warning_needed())
+        assert is_tokenizer_warning_needed()
 
-    def test_tokeniser_warning(self):
+    def test_tokeniser_warning(self) -> None:
         """Test tokenizer warning flag and message."""
         # Mock available tokenizers with only grapheme
         global AVAILABLE_TOKENIZERS
@@ -110,17 +113,17 @@ class TestTokenizerSelection(unittest.TestCase):
 
         # Select tokenizer for English (should set warning flag)
         selected = select_tokenizer_for_language("en")
-        self.assertEqual(selected, "grapheme")
+        assert selected == "grapheme"
 
         # Check warning flag is set
-        self.assertTrue(is_tokenizer_warning_needed())
+        assert is_tokenizer_warning_needed()
 
         # Get warning message
         message = get_tokenizer_warning_message("en")
-        self.assertIn("missing a phonetic tokeniser for English", message)
+        assert "missing a phonetic tokeniser for English" in message
 
         # Warning flag should be cleared after getting message
-        self.assertFalse(is_tokenizer_warning_needed())
+        assert not is_tokenizer_warning_needed()
 
         # Reset flag for next test
         global TOKENIZER_WARNING_SHOWN
@@ -128,16 +131,16 @@ class TestTokenizerSelection(unittest.TestCase):
 
         # Test with Spanish
         selected = select_tokenizer_for_language("es")
-        self.assertEqual(selected, "grapheme")
+        assert selected == "grapheme"
 
         # Check warning flag is set
-        self.assertTrue(is_tokenizer_warning_needed())
+        assert is_tokenizer_warning_needed()
 
         # Get warning message for Spanish
         message = get_tokenizer_warning_message("es")
-        self.assertIn("missing a phonetic tokeniser for this language", message)
+        assert "missing a phonetic tokeniser for this language" in message
 
-    def test_tokenizer_preference_order(self):
+    def test_tokenizer_preference_order(self) -> None:
         """Test that tokenizers are selected in the correct preference order."""
         # Mock available tokenizers with multiple options
         global AVAILABLE_TOKENIZERS
@@ -145,28 +148,28 @@ class TestTokenizerSelection(unittest.TestCase):
 
         # Should select espeak (first in preference list)
         selected = select_tokenizer_for_language("en")
-        self.assertEqual(selected, "espeak")
+        assert selected == "espeak"
 
         # Remove espeak
         AVAILABLE_TOKENIZERS.remove("espeak")
 
         # Should select phonemizer (second in preference list)
         selected = select_tokenizer_for_language("en")
-        self.assertEqual(selected, "phonemizer")
+        assert selected == "phonemizer"
 
         # Remove phonemizer
         AVAILABLE_TOKENIZERS.remove("phonemizer")
 
         # Should select g2p_en (third in preference list)
         selected = select_tokenizer_for_language("en")
-        self.assertEqual(selected, "g2p_en")
+        assert selected == "g2p_en"
 
         # Remove g2p_en
         AVAILABLE_TOKENIZERS.remove("g2p_en")
 
         # Should fall back to grapheme
         selected = select_tokenizer_for_language("en")
-        self.assertEqual(selected, "grapheme")
+        assert selected == "grapheme"
 
 
 if __name__ == "__main__":

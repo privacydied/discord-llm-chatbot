@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test script for TTSManager with KokoroDirect integration.
-"""
+"""Test script for TTSManager with KokoroDirect integration."""
 
 import asyncio
 import logging
@@ -10,6 +8,7 @@ from pathlib import Path
 
 import discord
 from discord.ext import commands
+
 from bot.tts import TTSManager
 
 # Configure logging
@@ -17,7 +16,7 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(leve
 logger = logging.getLogger("tts_test")
 
 
-async def test_tts():
+async def test_tts() -> None:
     """Test the TTSManager with KokoroDirect integration."""
     logger.info("Creating bot instance for TTSManager test")
     # Create intents for the bot

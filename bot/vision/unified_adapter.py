@@ -1,39 +1,41 @@
-"""
-Unified Vision Provider Adapter
+"""Unified Vision Provider Adapter.
 
 Single adapter with pluggable provider system for vision generation.
 Normalizes requests/responses and handles provider selection, fallback, and error mapping.
 """
 
 import asyncio
-import aiohttp
+import base64
+import contextlib
 import json
 import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple, NamedTuple
-import base64
 from enum import Enum
+from pathlib import Path
+from typing import Any, NamedTuple
+
+import aiohttp
 
 from bot.utils.logging import get_logger
-from .types import (
-    VisionRequest,
-    VisionResponse,
-    VisionProvider,
-    VisionTask,
-    VisionError,
-    VisionErrorType,
-)
+
 from .money import Money
 from .pricing_loader import get_pricing_table
+from .types import (
+    VisionError,
+    VisionErrorType,
+    VisionProvider,
+    VisionRequest,
+    VisionResponse,
+    VisionTask,
+)
 
 logger = get_logger(__name__)
 
 
 class ModelSelection(NamedTuple):
-    """Model selection result from VISION_MODEL resolution [CMV]"""
+    """Model selection result from VISION_MODEL resolution [CMV]."""
 
     provider: str
     endpoint: str
@@ -55,99 +57,95 @@ class UnifiedStatus(Enum):
 
 @dataclass
 class NormalizedRequest:
-    """Normalized request format for all providers"""
+    """Normalized request format for all providers."""
 
     task: VisionTask
     prompt: str
-    negative_prompt: Optional[str] = None
+    negative_prompt: str | None = None
     width: int = 1024
     height: int = 1024
     steps: int = 20
     guidance_scale: float = 7.5
-    seed: Optional[int] = None
-    input_image_data: Optional[bytes] = None
-    input_image_url: Optional[str] = None
-    video_seconds: Optional[int] = None
-    fps: Optional[int] = None
+    seed: int | None = None
+    input_image_data: bytes | None = None
+    input_image_url: str | None = None
+    video_seconds: int | None = None
+    fps: int | None = None
     batch_size: int = 1
     safety_mode: str = "strict"
-    preferred_model: Optional[str] = None
+    preferred_model: str | None = None
 
 
 @dataclass
 class UnifiedJobStatus:
-    """Unified job status across all providers"""
+    """Unified job status across all providers."""
 
     status: UnifiedStatus
     progress_percentage: int = 0
     phase: str = ""
-    estimated_cost: Optional[float] = None
-    actual_cost: Optional[float] = None
-    warnings: List[str] = field(default_factory=list)
-    provider_raw: Optional[Dict] = None
+    estimated_cost: float | None = None
+    actual_cost: float | None = None
+    warnings: list[str] = field(default_factory=list)
+    provider_raw: dict | None = None
 
 
 @dataclass
 class UnifiedResult:
-    """Unified result format"""
+    """Unified result format."""
 
-    assets: List[str] = field(default_factory=list)  # URLs or file paths
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    assets: list[str] = field(default_factory=list)  # URLs or file paths
+    metadata: dict[str, Any] = field(default_factory=dict)
     final_cost: float = 0.0
     provider_used: str = ""
-    warnings: List[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 class ProviderPlugin(ABC):
-    """Abstract base class for provider plugins"""
+    """Abstract base class for provider plugins."""
 
-    def __init__(self, name: str, config: Dict[str, Any], api_key: str):
+    def __init__(self, name: str, config: dict[str, Any], api_key: str) -> None:
         self.name = name
         self.config = config
         self.api_key = api_key
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
 
     @abstractmethod
-    def capabilities(self) -> Dict[str, Any]:
-        """Return provider capabilities and limits"""
-        pass
+    def capabilities(self) -> dict[str, Any]:
+        """Return provider capabilities and limits."""
 
     @abstractmethod
     async def submit(self, request: NormalizedRequest) -> str:
-        """Submit job and return job_id"""
-        pass
+        """Submit job and return job_id."""
 
     @abstractmethod
     async def poll(self, job_id: str) -> UnifiedJobStatus:
-        """Poll job status"""
-        pass
+        """Poll job status."""
 
     @abstractmethod
     async def fetch_result(self, job_id: str) -> UnifiedResult:
-        """Fetch final result"""
-        pass
+        """Fetch final result."""
 
     async def cancel(self, job_id: str) -> bool:
-        """Cancel job (optional)"""
+        """Cancel job (optional)."""
         return False
 
-    async def startup(self):
-        """Initialize provider connection"""
+    async def startup(self) -> None:
+        """Initialize provider connection."""
         if not self.session:
             timeout = aiohttp.ClientTimeout(total=300)
             self.session = aiohttp.ClientSession(timeout=timeout)
 
-    async def shutdown(self):
-        """Cleanup provider connection"""
+    async def shutdown(self) -> None:
+        """Cleanup provider connection."""
         if self.session:
             await self.session.close()
             self.session = None
 
 
 class TogetherPlugin(ProviderPlugin):
-    """Together.ai provider plugin"""
+    """Together.ai provider plugin."""
 
-    def __init__(self, name: str, config: Dict[str, Any], api_key: str):
+    def __init__(self, name: str, config: dict[str, Any], api_key: str) -> None:
         super().__init__(name, config, api_key)
         self.base_url = config.get("base_url", "https://api.together.xyz")
         self.model_map = {
@@ -156,7 +154,7 @@ class TogetherPlugin(ProviderPlugin):
             VisionTask.VIDEO_GENERATION: "stabilityai/stable-video-diffusion-img2vid-xt-1-1",
         }
 
-    def capabilities(self) -> Dict[str, Any]:
+    def capabilities(self) -> dict[str, Any]:
         return {
             "modes": [
                 VisionTask.TEXT_TO_IMAGE,
@@ -172,7 +170,7 @@ class TogetherPlugin(ProviderPlugin):
         }
 
     async def submit(self, request: NormalizedRequest) -> str:
-        """Submit to Together.ai API with unified error handling [REH]"""
+        """Submit to Together.ai API with unified error handling [REH]."""
         model = self.model_map.get(request.task)
         if not model:
             raise VisionError(
@@ -219,7 +217,7 @@ class TogetherPlugin(ProviderPlugin):
                             error_type=VisionErrorType.CONTENT_FILTERED,
                             user_message="Your request was blocked by content safety filters. Please modify your prompt.",
                         )
-                    elif "invalid" in error_text.lower() or "malformed" in error_text.lower():
+                    if "invalid" in error_text.lower() or "malformed" in error_text.lower():
                         raise VisionError(
                             message=f"Invalid request: {error_text}",
                             error_type=VisionErrorType.VALIDATION_ERROR,
@@ -275,13 +273,13 @@ class TogetherPlugin(ProviderPlugin):
             raise
         except Exception as e:
             raise VisionError(
-                message=f"Together.ai connection error: {str(e)}",
+                message=f"Together.ai connection error: {e!s}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to vision service. Please try again.",
             )
 
     async def poll(self, job_id: str) -> UnifiedJobStatus:
-        """Poll job status (Together.ai is typically immediate)"""
+        """Poll job status (Together.ai is typically immediate)."""
         results = getattr(self, "_results", {})
 
         if job_id not in results:
@@ -300,15 +298,14 @@ class TogetherPlugin(ProviderPlugin):
                 phase="Generation complete",
                 actual_cost=job_data["cost"],
             )
-        else:
-            return UnifiedJobStatus(
-                status=UnifiedStatus.FAILED,
-                progress_percentage=0,
-                phase="Generation failed",
-            )
+        return UnifiedJobStatus(
+            status=UnifiedStatus.FAILED,
+            progress_percentage=0,
+            phase="Generation failed",
+        )
 
     async def fetch_result(self, job_id: str) -> UnifiedResult:
-        """Fetch final result from Together.ai"""
+        """Fetch final result from Together.ai."""
         results = getattr(self, "_results", {})
         job_data = results.get(job_id, {})
 
@@ -325,7 +322,7 @@ class TogetherPlugin(ProviderPlugin):
         )
 
     def _calculate_cost(self, request: NormalizedRequest) -> float:
-        """Calculate estimated cost for Together.ai"""
+        """Calculate estimated cost for Together.ai."""
         # Together.ai pricing (example rates)
         base_cost = 0.02  # per image
         pixel_cost = (request.width * request.height) / (1024 * 1024) * 0.005
@@ -333,9 +330,9 @@ class TogetherPlugin(ProviderPlugin):
 
 
 class NovitaPlugin(ProviderPlugin):
-    """Novita.ai provider plugin with Qwen-Image and SDXL support"""
+    """Novita.ai provider plugin with Qwen-Image and SDXL support."""
 
-    def __init__(self, name: str, config: Dict[str, Any], api_key: str):
+    def __init__(self, name: str, config: dict[str, Any], api_key: str) -> None:
         super().__init__(name, config, api_key)
         self.base_url = config.get("base_url", "https://api.novita.ai")
         self.model_map = {
@@ -360,7 +357,7 @@ class NovitaPlugin(ProviderPlugin):
             },
         }
 
-    def capabilities(self) -> Dict[str, Any]:
+    def capabilities(self) -> dict[str, Any]:
         return {
             "modes": [
                 VisionTask.TEXT_TO_IMAGE,
@@ -375,8 +372,8 @@ class NovitaPlugin(ProviderPlugin):
             "video_max_seconds": 6,
         }
 
-    def normalize_size_for_endpoint(self, endpoint: str, width: int, height: int) -> Tuple[Dict[str, Any], List[str]]:
-        """Normalize size parameters for specific endpoint [IV]"""
+    def normalize_size_for_endpoint(self, endpoint: str, width: int, height: int) -> tuple[dict[str, Any], list[str]]:
+        """Normalize size parameters for specific endpoint [IV]."""
         endpoint_config = self.endpoints[endpoint]
         max_w, max_h = endpoint_config["max_size"]
         warnings = []
@@ -401,11 +398,10 @@ class NovitaPlugin(ProviderPlugin):
         # Format according to endpoint requirements
         if endpoint_config["size_format"] == "WxH":
             return {"size": f"{width}*{height}"}, warnings
-        else:
-            return {"width": width, "height": height}, warnings
+        return {"width": width, "height": height}, warnings
 
-    def build_payload_for_endpoint(self, endpoint: str, request: NormalizedRequest) -> Tuple[Dict[str, Any], List[str]]:
-        """Build request payload for specific Novita endpoint [CA]"""
+    def build_payload_for_endpoint(self, endpoint: str, request: NormalizedRequest) -> tuple[dict[str, Any], list[str]]:
+        """Build request payload for specific Novita endpoint [CA]."""
         self.endpoints[endpoint]
         warnings = []
 
@@ -435,7 +431,7 @@ class NovitaPlugin(ProviderPlugin):
                     "steps": max(1, min(100, request.steps)),
                     "guidance_scale": max(1.0, min(30.0, request.guidance_scale)),
                     "batch_size": 1,
-                }
+                },
             )
 
             if request.negative_prompt:
@@ -457,14 +453,14 @@ class NovitaPlugin(ProviderPlugin):
 
         return payload, warnings
 
-    def _normalize_payload_for_novita(self, endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_payload_for_novita(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Sanitize/normalize payload before sending to Novita [IV][REH].
         - Drops None/empty strings
         - Clamps steps 1..100, guidance 1..20
         - Coerces seed to int
         - Rounds sizes to multiples of 8 (>=256) and within endpoint max
         - Converts list negative_prompt to comma-joined string
-        - Removes keys outside the endpoint allowlist
+        - Removes keys outside the endpoint allowlist.
         """
         allowed_qwen = {"prompt", "size"}
         allowed_txt2img = {
@@ -557,7 +553,7 @@ class NovitaPlugin(ProviderPlugin):
         return norm
 
     async def submit(self, request: NormalizedRequest, endpoint: str = "qwen-image-txt2img") -> str:
-        """Submit to Novita.ai API with endpoint selection and unified error handling [REH]"""
+        """Submit to Novita.ai API with endpoint selection and unified error handling [REH]."""
         if endpoint not in self.endpoints:
             raise VisionError(
                 message=f"Endpoint {endpoint} not supported by Novita.ai",
@@ -572,7 +568,7 @@ class NovitaPlugin(ProviderPlugin):
         }
 
         # Build and sanitize payload
-        payload, warnings = self.build_payload_for_endpoint(endpoint, request)
+        payload, _warnings = self.build_payload_for_endpoint(endpoint, request)
         payload = self._normalize_payload_for_novita(endpoint, payload)
 
         try:
@@ -591,13 +587,13 @@ class NovitaPlugin(ProviderPlugin):
                             error_type=VisionErrorType.CONTENT_FILTERED,
                             user_message="Your request was blocked by content safety filters. Please modify your prompt.",
                         )
-                    elif "invalid" in error_text.lower() or "parameter" in error_text.lower():
+                    if "invalid" in error_text.lower() or "parameter" in error_text.lower():
                         raise VisionError(
                             message=f"Invalid request: {error_text}",
                             error_type=VisionErrorType.VALIDATION_ERROR,
                             user_message="There was an issue with your request parameters. Please check and try again.",
                         )
-                    elif "prompt: value length must be between 1 and 2000" in error_text.lower():
+                    if "prompt: value length must be between 1 and 2000" in error_text.lower():
                         raise VisionError(
                             message=f"Invalid request: {error_text}",
                             error_type=VisionErrorType.VALIDATION_ERROR,
@@ -654,13 +650,13 @@ class NovitaPlugin(ProviderPlugin):
             raise
         except Exception as e:
             raise VisionError(
-                message=f"Novita.ai connection error: {str(e)}",
+                message=f"Novita.ai connection error: {e!s}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to vision service. Please try again.",
             )
 
     async def poll(self, job_id: str) -> UnifiedJobStatus:
-        """Poll Novita.ai job status via async task-result endpoint [PA][REH]"""
+        """Poll Novita.ai job status via async task-result endpoint [PA][REH]."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -737,7 +733,7 @@ class NovitaPlugin(ProviderPlugin):
             )
 
     async def fetch_result(self, job_id: str) -> UnifiedResult:
-        """Fetch final result from Novita.ai async task-result API [REH]"""
+        """Fetch final result from Novita.ai async task-result API [REH]."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -765,7 +761,7 @@ class NovitaPlugin(ProviderPlugin):
                     user_message="The image is still being generated.",
                 )
             # Extract asset URLs
-            assets: List[str] = []
+            assets: list[str] = []
             images = data.get("images", []) or data.get("data", [])
             for item in images:
                 url = item.get("image_url") or item.get("url") or item.get("download_url")
@@ -802,7 +798,7 @@ class NovitaPlugin(ProviderPlugin):
             )
 
     def _calculate_cost(self, request: NormalizedRequest, endpoint: str = "qwen-image-txt2img") -> float:
-        """Calculate estimated cost for Novita.ai using endpoint-specific pricing [PA][CMV]"""
+        """Calculate estimated cost for Novita.ai using endpoint-specific pricing [PA][CMV]."""
         # Defaults if config missing
         base_cost = 0.018
         per_px = 0.000004
@@ -819,14 +815,14 @@ class NovitaPlugin(ProviderPlugin):
 
 
 class OpenRouterPlugin(ProviderPlugin):
-    def __init__(self, name: str, config: Dict[str, Any], api_key: str):
+    def __init__(self, name: str, config: dict[str, Any], api_key: str) -> None:
         super().__init__(name, config, api_key)
         self.base_url = config.get("base_url", "https://openrouter.ai/api/v1")
         self.model_map = {
             VisionTask.TEXT_TO_IMAGE: "black-forest-labs/flux.2-pro",
         }
 
-    def capabilities(self) -> Dict[str, Any]:
+    def capabilities(self) -> dict[str, Any]:
         return {
             "modes": [VisionTask.TEXT_TO_IMAGE],
             "max_size": (2048, 2048),
@@ -875,7 +871,7 @@ class OpenRouterPlugin(ProviderPlugin):
                 user_message=f"Sorry, {request.task.value} is not supported by this provider.",
             )
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": [{"role": "user", "content": request.prompt}],
             "modalities": ["image", "text"],
@@ -929,7 +925,7 @@ class OpenRouterPlugin(ProviderPlugin):
                 # Debug: log response structure without raw data [REH]
                 logger.debug(f"{self.name} response keys: {list(result.keys())}, choices count: {len(result.get('choices') or [])}")
 
-                urls: List[str] = []
+                urls: list[str] = []
 
                 # Method 0: Check response-level 'data' array (DALL-E style) [CA]
                 response_data = result.get("data") or []
@@ -1059,7 +1055,7 @@ class OpenRouterPlugin(ProviderPlugin):
             raise
         except Exception as e:
             raise VisionError(
-                message=f"{self.name} connection error: {str(e)}",
+                message=f"{self.name} connection error: {e!s}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to vision service. Please try again.",
             )
@@ -1094,7 +1090,7 @@ class OpenRouterPlugin(ProviderPlugin):
 class NvidiaPlugin(OpenRouterPlugin):
     """NVIDIA image provider using the GenAI endpoint, not chat/completions."""
 
-    def __init__(self, name: str, config: Dict[str, Any], api_key: str):
+    def __init__(self, name: str, config: dict[str, Any], api_key: str) -> None:
         super().__init__(name, config, api_key)
         # NVIDIA chat/text models live on integrate.api.nvidia.com/v1, but image
         # generation NIMs are exposed on ai.api.nvidia.com/v1/genai/{model}.
@@ -1115,7 +1111,7 @@ class NvidiaPlugin(OpenRouterPlugin):
                 user_message=f"Sorry, {request.task.value} is not supported by this provider.",
             )
 
-        payload: Dict[str, Any] = {"prompt": (request.prompt or "").strip()}
+        payload: dict[str, Any] = {"prompt": (request.prompt or "").strip()}
         if not payload["prompt"]:
             raise VisionError(
                 message="Prompt is empty after normalization",
@@ -1179,7 +1175,7 @@ class NvidiaPlugin(OpenRouterPlugin):
                     )
 
                 result = await response.json()
-                assets: List[str] = []
+                assets: list[str] = []
                 for artifact in result.get("artifacts") or []:
                     if not isinstance(artifact, dict):
                         continue
@@ -1211,15 +1207,14 @@ class NvidiaPlugin(OpenRouterPlugin):
             raise
         except Exception as e:
             raise VisionError(
-                message=f"{self.name} connection error: {str(e)}",
+                message=f"{self.name} connection error: {e!s}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to vision service. Please try again.",
             )
 
 
 class UnifiedVisionAdapter:
-    """
-    Unified Vision adapter with pluggable provider system [CA][REH][SFT]
+    """Unified Vision adapter with pluggable provider system [CA][REH][SFT].
 
     Features:
     - Automatic provider selection and fallback
@@ -1229,10 +1224,10 @@ class UnifiedVisionAdapter:
     - JSON-based configuration
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         self.logger = get_logger(__name__)
-        self.providers: Dict[str, ProviderPlugin] = {}
+        self.providers: dict[str, ProviderPlugin] = {}
         self.provider_config = {}
         self._provider_lock = asyncio.Lock()  # Provider initialization lock
 
@@ -1252,21 +1247,21 @@ class UnifiedVisionAdapter:
         self._model_aliases = self._build_model_aliases()
 
     @staticmethod
-    def _parse_allowed_providers(config: Dict[str, Any]) -> List[str]:
+    def _parse_allowed_providers(config: dict[str, Any]) -> list[str]:
         raw = config.get("VISION_ALLOWED_PROVIDERS") or []
         if isinstance(raw, str):
             raw = raw.split(",")
         return [str(p).strip().lower() for p in raw if str(p).strip()]
 
     @staticmethod
-    def _parse_default_provider(config: Dict[str, Any]) -> str:
+    def _parse_default_provider(config: dict[str, Any]) -> str:
         return str(config.get("VISION_DEFAULT_PROVIDER") or "").strip().lower()
 
     @staticmethod
-    def _parse_vision_model_override(config: Dict[str, Any]) -> str:
+    def _parse_vision_model_override(config: dict[str, Any]) -> str:
         return str(config.get("VISION_MODEL") or "").strip()
 
-    def update_config(self, config: Dict[str, Any]) -> None:
+    def update_config(self, config: dict[str, Any]) -> None:
         """Hot-reload mutable vision adapter config without recreating sessions."""
         self.config = config
         self.allowed_providers = self._parse_allowed_providers(config)
@@ -1297,8 +1292,8 @@ class UnifiedVisionAdapter:
             self.vision_model_override,
         )
 
-    def _load_provider_config(self):
-        """Load provider configuration from JSON or defaults [IV]"""
+    def _load_provider_config(self) -> None:
+        """Load provider configuration from JSON or defaults [IV]."""
         config_path = self.config.get("VISION_PROVIDER_CONFIG_PATH")
 
         if config_path and Path(config_path).exists():
@@ -1312,8 +1307,8 @@ class UnifiedVisionAdapter:
         else:
             self.provider_config = self._default_provider_config()
 
-    def _default_provider_config(self) -> Dict[str, Any]:
-        """Default provider configuration [CMV]"""
+    def _default_provider_config(self) -> dict[str, Any]:
+        """Default provider configuration [CMV]."""
         return {
             "vision": {
                 "default_policy": {
@@ -1405,11 +1400,11 @@ class UnifiedVisionAdapter:
                         "limits": {"max_size": "2048x2048", "max_steps": 0},
                     },
                 ],
-            }
+            },
         }
 
-    def _initialize_providers(self):
-        """Initialize provider plugins [CA]"""
+    def _initialize_providers(self) -> None:
+        """Initialize provider plugins [CA]."""
         api_key = self.config.get("VISION_API_KEY", "")
 
         for provider_config in self.provider_config["vision"]["providers"]:
@@ -1456,14 +1451,14 @@ class UnifiedVisionAdapter:
                 self.logger.info(f"Initialized provider: {name}")
 
             except Exception as e:
-                self.logger.error(f"Failed to initialize provider {name}: {e}")
+                self.logger.exception(f"Failed to initialize provider {name}: {e}")
 
     def _has_valid_credentials(self, provider_name: str) -> bool:
         """Best-effort credential presence check per provider [SFT].
         Each provider checks for its specific key first, then falls back to VISION_API_KEY.
         """
         try:
-            name = provider_name.split(":")[0].lower()
+            name = provider_name.split(":", maxsplit=1)[0].lower()
             if name == "novita":
                 key = self.config.get("NOVITA_API_KEY") or self.config.get("VISION_API_KEY") or ""
             elif name == "together":
@@ -1482,14 +1477,14 @@ class UnifiedVisionAdapter:
         """Lightweight health gate. Currently mirrors credential presence/shape [PA]."""
         return self._has_valid_credentials(provider_name)
 
-    def _estimate_cost_money(self, provider_name: str, request: NormalizedRequest) -> Optional[Money]:
+    def _estimate_cost_money(self, provider_name: str, request: NormalizedRequest) -> Money | None:
         """Best-effort Money estimate using pricing table [PA][CMV].
         Returns None if pricing table does not cover this provider/task.
         """
         try:
             table = get_pricing_table()
             # Normalize provider string and strip endpoint suffix if present [IV]
-            normalized_provider = provider_name.split(":")[0].lower()
+            normalized_provider = provider_name.split(":", maxsplit=1)[0].lower()
             provider_enum = VisionProvider(normalized_provider)
             # Derive model if available on normalized request
             model = getattr(request, "preferred_model", None)
@@ -1507,8 +1502,8 @@ class UnifiedVisionAdapter:
         except Exception:
             return None
 
-    def _build_model_aliases(self) -> Dict[str, ModelSelection]:
-        """Build model alias mapping for VISION_MODEL resolution [CMV]"""
+    def _build_model_aliases(self) -> dict[str, ModelSelection]:
+        """Build model alias mapping for VISION_MODEL resolution [CMV]."""
         aliases = {}
 
         # Novita Qwen-Image aliases
@@ -1613,8 +1608,8 @@ class UnifiedVisionAdapter:
 
         return aliases
 
-    def resolve_model_selection(self, request: NormalizedRequest) -> Optional[ModelSelection]:
-        """Resolve VISION_MODEL override to specific provider/endpoint [CA]"""
+    def resolve_model_selection(self, request: NormalizedRequest) -> ModelSelection | None:
+        """Resolve VISION_MODEL override to specific provider/endpoint [CA]."""
         if not self.vision_model_override:
             return None
 
@@ -1639,14 +1634,14 @@ class UnifiedVisionAdapter:
                         model_hint="qwen-image",
                         supports_advanced=False,
                     )
-                elif provider_name == "together":
+                if provider_name == "together":
                     return ModelSelection(
                         provider="together",
                         endpoint="images/generations",
                         model_hint="black-forest-labs/FLUX.1-schnell-Free",
                         supports_advanced=True,
                     )
-                elif provider_name == "openrouter":
+                if provider_name == "openrouter":
                     # OpenRouter: use the model part as-is if provided [CA]
                     model_hint = model_part or "black-forest-labs/flux-pro"
                     self.logger.info(f"Resolved VISION_MODEL '{self.vision_model_override}' → openrouter with model={model_hint}")
@@ -1656,7 +1651,7 @@ class UnifiedVisionAdapter:
                         model_hint=model_hint,
                         supports_advanced=False,
                     )
-                elif provider_name == "nvidia":
+                if provider_name == "nvidia":
                     model_hint = model_part or "black-forest-labs/flux.1-dev"
                     self.logger.info(f"Resolved VISION_MODEL '{self.vision_model_override}' → nvidia with model={model_hint}")
                     return ModelSelection(
@@ -1669,26 +1664,26 @@ class UnifiedVisionAdapter:
         self.logger.warning(f"Unrecognized VISION_MODEL '{self.vision_model_override}', falling back to policy")
         return None
 
-    async def startup(self):
-        """Initialize all provider connections [REH]"""
+    async def startup(self) -> None:
+        """Initialize all provider connections [REH]."""
         for name, provider in self.providers.items():
             try:
                 await provider.startup()
                 self.logger.info(f"Started provider: {name}")
             except Exception as e:
-                self.logger.error(f"Failed to start provider {name}: {e}")
+                self.logger.exception(f"Failed to start provider {name}: {e}")
 
-    async def shutdown(self):
-        """Cleanup all provider connections [RM]"""
+    async def shutdown(self) -> None:
+        """Cleanup all provider connections [RM]."""
         for name, provider in self.providers.items():
             try:
                 await provider.shutdown()
                 self.logger.info(f"Shutdown provider: {name}")
             except Exception as e:
-                self.logger.error(f"Failed to shutdown provider {name}: {e}")
+                self.logger.exception(f"Failed to shutdown provider {name}: {e}")
 
     def normalize_request(self, request: VisionRequest) -> NormalizedRequest:
-        """Normalize request parameters across providers [IV]"""
+        """Normalize request parameters across providers [IV]."""
         return NormalizedRequest(
             task=request.task,
             prompt=request.prompt or "",
@@ -1705,8 +1700,8 @@ class UnifiedVisionAdapter:
             preferred_model=request.preferred_model,
         )
 
-    def select_provider(self, request: NormalizedRequest) -> Optional[ProviderPlugin]:
-        """Select best provider for request based on capabilities and policy [CA]"""
+    def select_provider(self, request: NormalizedRequest) -> ProviderPlugin | None:
+        """Select best provider for request based on capabilities and policy [CA]."""
         policy = self.provider_config["vision"]["default_policy"]
         provider_order = policy.get("provider_order", ["together", "novita"])
 
@@ -1751,7 +1746,7 @@ class UnifiedVisionAdapter:
         return None
 
     def _estimate_cost(self, provider: ProviderPlugin, request: NormalizedRequest) -> float:
-        """Estimate cost for provider and request [PA]"""
+        """Estimate cost for provider and request [PA]."""
         config = next(
             (p for p in self.provider_config["vision"]["providers"] if p["name"] == provider.name),
             {},
@@ -1764,13 +1759,12 @@ class UnifiedVisionAdapter:
             video_cost = pricing.get("video_per_s", 0.05)
             duration = request.video_seconds or 4
             return base_cost + (video_cost * duration)
-        else:
-            pixel_cost = pricing.get("image_per_px", 0.000005)
-            pixels = request.width * request.height
-            return base_cost + (pixels * pixel_cost)
+        pixel_cost = pricing.get("image_per_px", 0.000005)
+        pixels = request.width * request.height
+        return base_cost + (pixels * pixel_cost)
 
-    def _parse_provider_model_ladder(self, raw: str) -> List[Tuple[str, str]]:
-        entries: List[Tuple[str, str]] = []
+    def _parse_provider_model_ladder(self, raw: str) -> list[tuple[str, str]]:
+        entries: list[tuple[str, str]] = []
         for part in str(raw or "").split(","):
             item = part.strip()
             if not item:
@@ -1786,7 +1780,7 @@ class UnifiedVisionAdapter:
         return entries
 
     async def _submit_text_to_image_ladder(self, normalized_request: NormalizedRequest, raw_ladder: str) -> VisionResponse:
-        last_error: Optional[VisionError] = None
+        last_error: VisionError | None = None
         for provider_name, model_name in self._parse_provider_model_ladder(raw_ladder):
             if self.allowed_providers and provider_name not in self.allowed_providers:
                 continue
@@ -1831,7 +1825,7 @@ class UnifiedVisionAdapter:
         )
 
     async def submit(self, request: VisionRequest) -> VisionResponse:
-        """Submit vision request with VISION_MODEL override and automatic provider selection [REH]"""
+        """Submit vision request with VISION_MODEL override and automatic provider selection [REH]."""
         policy = self.provider_config.get("vision", {}).get("default_policy", {})
         normalized_request = self.normalize_request(request)
 
@@ -1892,25 +1886,22 @@ class UnifiedVisionAdapter:
         if preferred_provider is not None:
             try:
                 preferred_name = preferred_provider.value.lower()
-                provider_order = [preferred_name] + list(provider_order)
+                provider_order = [preferred_name, *list(provider_order)]
             except Exception:
                 pass
 
         if self.default_provider == "openrouter":
-            try:
+            with contextlib.suppress(Exception):
                 provider_order = ["openrouter"] + [p for p in provider_order if p != "openrouter"]
-            except Exception:
-                pass
 
         # Filter by configured/healthy providers, preserving order [SFT]
-        filtered_order: List[str] = []
+        filtered_order: list[str] = []
         for name in provider_order:
             base = name.split(":")[0]
             if self.allowed_providers and base.lower() not in self.allowed_providers:
                 continue
-            if self._has_valid_credentials(base) and self._is_provider_healthy(base) and base in self.providers:
-                if base not in filtered_order:
-                    filtered_order.append(base)
+            if self._has_valid_credentials(base) and self._is_provider_healthy(base) and base in self.providers and base not in filtered_order:
+                filtered_order.append(base)
         if not filtered_order:
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
@@ -1956,14 +1947,11 @@ class UnifiedVisionAdapter:
                     (e for e in policy.get("provider_order", []) if e.startswith("novita")),
                     "novita:qwen-image",
                 )
-                if "qwen-image" in original_entry:
-                    endpoint = "qwen-image-txt2img"
-                else:
-                    endpoint = "txt2img"
+                endpoint = "qwen-image-txt2img" if "qwen-image" in original_entry else "txt2img"
 
             # Attempt submission with retries
             did_prompt_retry = False  # Single-shot retry for Novita prompt length
-            for attempt in range(policy.get("max_retries_per_provider", 2)):
+            for _attempt in range(policy.get("max_retries_per_provider", 2)):
                 try:
                     # Submit with endpoint if supported (Novita), otherwise default
                     if hasattr(provider, "submit") and endpoint and provider_name == "novita":
@@ -2009,7 +1997,7 @@ class UnifiedVisionAdapter:
 
                 except Exception as e:
                     last_error = VisionError(
-                        message=f"Unexpected error from {provider_name}: {str(e)}",
+                        message=f"Unexpected error from {provider_name}: {e!s}",
                         error_type=VisionErrorType.PROVIDER_ERROR,
                         user_message="An unexpected error occurred during image generation.",
                     )
@@ -2024,7 +2012,7 @@ class UnifiedVisionAdapter:
         )
 
     async def poll(self, full_job_id: str) -> UnifiedJobStatus:
-        """Poll job status across providers"""
+        """Poll job status across providers."""
         try:
             provider_name, job_id = full_job_id.split(":", 1)
             provider = self.providers.get(provider_name)
@@ -2045,7 +2033,7 @@ class UnifiedVisionAdapter:
                 phase="Invalid job ID format",
             )
         except Exception as e:
-            self.logger.error(f"Failed to poll job {full_job_id}: {e}")
+            self.logger.exception(f"Failed to poll job {full_job_id}: {e}")
             return UnifiedJobStatus(
                 status=UnifiedStatus.FAILED,
                 progress_percentage=0,
@@ -2053,27 +2041,30 @@ class UnifiedVisionAdapter:
             )
 
     async def fetch_result(self, full_job_id: str) -> UnifiedResult:
-        """Fetch final result from provider"""
+        """Fetch final result from provider."""
         try:
             provider_name, job_id = full_job_id.split(":", 1)
             provider = self.providers.get(provider_name)
 
             if not provider:
+                msg = f"Provider {provider_name} not available"
                 raise VisionError(
-                    f"Provider {provider_name} not available",
+                    msg,
                     VisionErrorType.PROVIDER_ERROR,
                 )
 
             return await provider.fetch_result(job_id)
 
         except ValueError:
-            raise VisionError("Invalid job ID format", VisionErrorType.VALIDATION_ERROR)
+            msg = "Invalid job ID format"
+            raise VisionError(msg, VisionErrorType.VALIDATION_ERROR)
         except Exception as e:
-            self.logger.error(f"Failed to fetch result for {full_job_id}: {e}")
-            raise VisionError(f"Result fetch failed: {e}", VisionErrorType.PROVIDER_ERROR)
+            self.logger.exception(f"Failed to fetch result for {full_job_id}: {e}")
+            msg = f"Result fetch failed: {e}"
+            raise VisionError(msg, VisionErrorType.PROVIDER_ERROR)
 
     async def cancel(self, full_job_id: str) -> bool:
-        """Cancel job if provider supports it"""
+        """Cancel job if provider supports it."""
         try:
             provider_name, job_id = full_job_id.split(":", 1)
             provider = self.providers.get(provider_name)
@@ -2084,19 +2075,19 @@ class UnifiedVisionAdapter:
             return False
 
         except Exception as e:
-            self.logger.error(f"Failed to cancel job {full_job_id}: {e}")
+            self.logger.exception(f"Failed to cancel job {full_job_id}: {e}")
             return False
 
-    def get_supported_tasks(self) -> List[VisionTask]:
-        """Get list of all supported tasks across providers [CA]"""
+    def get_supported_tasks(self) -> list[VisionTask]:
+        """Get list of all supported tasks across providers [CA]."""
         tasks = set()
         for provider in self.providers.values():
             capabilities = provider.capabilities()
             tasks.update(capabilities.get("modes", []))
         return list(tasks)
 
-    def get_providers_for_task(self, task: VisionTask) -> List[VisionProvider]:
-        """Get available providers that support specific task [CA]"""
+    def get_providers_for_task(self, task: VisionTask) -> list[VisionProvider]:
+        """Get available providers that support specific task [CA]."""
         providers = []
         for provider_name, provider in self.providers.items():
             capabilities = provider.capabilities()
@@ -2108,8 +2099,8 @@ class UnifiedVisionAdapter:
                     self.logger.warning(f"Unknown provider enum for {provider_name}")
         return providers
 
-    def get_models_for_task(self, task: VisionTask, provider: Optional[VisionProvider] = None) -> List[str]:
-        """Get available models for task, optionally filtered by provider [CA]"""
+    def get_models_for_task(self, task: VisionTask, provider: VisionProvider | None = None) -> list[str]:
+        """Get available models for task, optionally filtered by provider [CA]."""
         models = []
 
         for provider_name, provider_plugin in self.providers.items():
@@ -2127,15 +2118,15 @@ class UnifiedVisionAdapter:
 
         return models
 
-    def get_provider_capabilities(self, provider_name: str) -> Dict[str, Any]:
-        """Get detailed capabilities for specific provider [PA]"""
+    def get_provider_capabilities(self, provider_name: str) -> dict[str, Any]:
+        """Get detailed capabilities for specific provider [PA]."""
         provider = self.providers.get(provider_name)
         if provider:
             return provider.capabilities()
         return {}
 
-    def estimate_cost_for_request(self, request: VisionRequest) -> Dict[str, float]:
-        """Get cost estimates from all providers for comparison [CMV]"""
+    def estimate_cost_for_request(self, request: VisionRequest) -> dict[str, float]:
+        """Get cost estimates from all providers for comparison [CMV]."""
         normalized = self.normalize_request(request)
         estimates = {}
 
@@ -2151,6 +2142,6 @@ class UnifiedVisionAdapter:
 
 
 # Factory function for backward compatibility
-def create_vision_adapter(config: Dict[str, Any]) -> UnifiedVisionAdapter:
-    """Create unified vision adapter with configuration [CA]"""
+def create_vision_adapter(config: dict[str, Any]) -> UnifiedVisionAdapter:
+    """Create unified vision adapter with configuration [CA]."""
     return UnifiedVisionAdapter(config)

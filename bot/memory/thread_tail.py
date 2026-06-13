@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+import contextlib
+from datetime import UTC, datetime
+from typing import Any
 
 import discord
 
 from bot.utils.logging import get_logger
+
 from .mention_context import MentionContextBlock, PackagedItem  # reuse packaging schema
 
 logger = get_logger(__name__)
@@ -26,13 +28,13 @@ def _is_thread_channel(ch: discord.abc.GuildChannel | discord.Thread | Any) -> b
         return False
 
 
-def _sanitize_mentions(text: str, guild: Optional[discord.Guild]) -> str:
+def _sanitize_mentions(text: str, guild: discord.Guild | None) -> str:
     """Lightweight mention sanitizer to keep alignment with existing behavior."""
     if not text:
         return ""
     import re
 
-    def repl(m):
+    def repl(m) -> str:
         uid = int(m.group(1))
         name = None
         try:
@@ -47,23 +49,22 @@ def _sanitize_mentions(text: str, guild: Optional[discord.Guild]) -> str:
     try:
         s = re.sub(r"<@!?(\d+)>", repl, text)
         s = s.strip()
-        s = re.sub(r"\n{3,}", "\n\n", s)
-        return s
+        return re.sub(r"\n{3,}", "\n\n", s)
     except Exception:
         return text.strip()
 
 
-def _format_joined_text(items: List[PackagedItem]) -> str:
+def _format_joined_text(items: list[PackagedItem]) -> str:
     n = len(items)
-    parts: List[str] = []
+    parts: list[str] = []
     for i, it in enumerate(items, start=1):
         ts = it.created_at_iso
         try:
             if ts:
-                dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                ts = dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        except Exception:
-            pass
+                dt = datetime.fromisoformat(ts)
+                ts = dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        except Exception as e:
+            logger.debug(f"Failed to parse timestamp {ts}: {e}")
         header = f"[{i}/{n}] {it.author_name} – {ts}" if ts else f"[{i}/{n}] {it.author_name}"
         parts.append(header)
         parts.append(it.text_plain)
@@ -71,9 +72,8 @@ def _format_joined_text(items: List[PackagedItem]) -> str:
     return "\n".join(parts).strip()
 
 
-async def resolve_thread_reply_target(bot: discord.Client, message: discord.Message, cfg: Dict[str, Any]) -> Tuple[Optional[discord.Message], str]:
-    """
-    Resolve the reply target for thread messages at send-time.
+async def resolve_thread_reply_target(bot: discord.Client, message: discord.Message, cfg: dict[str, Any]) -> tuple[discord.Message | None, str]:
+    """Resolve the reply target for thread messages at send-time.
     Returns (reply_target_message_or_None, reason)
     Rules:
     - Prefer absolute newest message in the thread.
@@ -89,7 +89,7 @@ async def resolve_thread_reply_target(bot: discord.Client, message: discord.Mess
         # Fetch the last few messages to apply tie-breakers
         # newest_first by default; fetch up to 3 to be safe
         # IMPORTANT: exclude the triggering message itself
-        msgs: List[discord.Message] = []
+        msgs: list[discord.Message] = []
         try:
             async for m in ch.history(limit=3, before=message):
                 msgs.append(m)
@@ -115,24 +115,22 @@ async def resolve_thread_reply_target(bot: discord.Client, message: discord.Mess
         # If newest is human or previous not suitable, reply to newest
         if not bool(getattr(newest.author, "bot", False)):
             return newest, "newest_human"
-        else:
-            # Newest is bot (not necessarily ours) and no immediate human before
-            # If no human messages exist in the window, send without reply reference
-            only_bots = all(bool(getattr(m.author, "bot", False)) for m in msgs)
-            if only_bots:
-                return None, "no_humans"
-            # Otherwise find the latest human in window
-            for m in msgs:
-                if not bool(getattr(m.author, "bot", False)):
-                    return m, "latest_human_window"
+        # Newest is bot (not necessarily ours) and no immediate human before
+        # If no human messages exist in the window, send without reply reference
+        only_bots = all(bool(getattr(m.author, "bot", False)) for m in msgs)
+        if only_bots:
             return None, "no_humans"
+        # Otherwise find the latest human in window
+        for m in msgs:
+            if not bool(getattr(m.author, "bot", False)):
+                return m, "latest_human_window"
+        return None, "no_humans"
     except Exception:
         return message, "fallback_current"
 
 
-async def resolve_implicit_anchor(bot: discord.Client, message: discord.Message, cfg: Dict[str, Any]) -> Tuple[Optional[discord.Message], str]:
-    """
-    For LONE_CASE (non-thread), when the message @mentions the bot and carries no substantive content,
+async def resolve_implicit_anchor(bot: discord.Client, message: discord.Message, cfg: dict[str, Any]) -> tuple[discord.Message | None, str]:
+    """For LONE_CASE (non-thread), when the message @mentions the bot and carries no substantive content,
     choose an implicit anchor: the most recent human message above within a small look-back window.
     Returns (anchor_or_None, reason).
     """
@@ -150,31 +148,32 @@ async def resolve_implicit_anchor(bot: discord.Client, message: discord.Message,
         # Optional recency guard using MEM_MAX_AGE_MIN
         try:
             max_age_min = int(cfg.get("MEM_MAX_AGE_MIN", 240))
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to parse MEM_MAX_AGE_MIN: {e}")
             max_age_min = 240
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         async for m in ch.history(limit=lookback, before=message):
             try:
                 if (now - (m.created_at or now)).total_seconds() > max_age_min * 60:
                     continue
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to check message age: {e}")
             if not bool(getattr(m.author, "bot", False)):
                 return m, "nearest_human"
         return None, "no_recent_human"
-    except Exception:
+    except Exception as e:
+        logger.debug(f"resolve_thread_reply_target failed: {e}")
         return None, "exception"
 
 
 async def collect_implicit_anchor_context(
     bot: discord.Client,
     message: discord.Message,
-    anchor: Optional[discord.Message],
-    cfg: Dict[str, Any],
-) -> Optional[Tuple[str, MentionContextBlock]]:
-    """
-    Build a bounded tail context before the implicit anchor in non-thread channels.
+    anchor: discord.Message | None,
+    cfg: dict[str, Any],
+) -> tuple[str, MentionContextBlock] | None:
+    """Build a bounded tail context before the implicit anchor in non-thread channels.
     Returns (joined_text, MentionContextBlock) with source='discord-implicit-anchor'.
     """
     try:
@@ -188,7 +187,7 @@ async def collect_implicit_anchor_context(
             k = 5
         k = max(0, min(k, 40))
 
-        tail: List[discord.Message] = []
+        tail: list[discord.Message] = []
         try:
             async for m in ch.history(limit=k * 3, before=anchor):
                 is_bot = bool(getattr(m.author, "bot", False))
@@ -204,7 +203,7 @@ async def collect_implicit_anchor_context(
         tail = list(reversed(tail))
 
         guild = getattr(message, "guild", None)
-        items: List[PackagedItem] = []
+        items: list[PackagedItem] = []
         for i, m in enumerate(tail, start=1):
             author_name = getattr(
                 m.author,
@@ -218,19 +217,19 @@ async def collect_implicit_anchor_context(
                     id=str(getattr(m, "id", "")),
                     author_name=author_name,
                     author_id=str(getattr(m.author, "id", "")),
-                    created_at_iso=(getattr(m, "created_at", None) or datetime.now(timezone.utc)).isoformat(),
+                    created_at_iso=(getattr(m, "created_at", None) or datetime.now(UTC)).isoformat(),
                     text_plain=txt,
                     has_attachments=bool(getattr(m, "attachments", None)),
                     attachment_summaries_if_available=None,
                     jump_url=getattr(m, "jump_url", ""),
-                )
+                ),
             )
 
         joined_text = _format_joined_text(items) if items else ""
         anc = {
             "id": str(getattr(anchor, "id", "")),
             "author": getattr(anchor.author, "display_name", getattr(anchor.author, "name", "")),
-            "created_at_iso": (getattr(anchor, "created_at", None) or datetime.now(timezone.utc)).isoformat(),
+            "created_at_iso": (getattr(anchor, "created_at", None) or datetime.now(UTC)).isoformat(),
             "jump_url": getattr(anchor, "jump_url", ""),
         }
         block = MentionContextBlock(
@@ -243,7 +242,7 @@ async def collect_implicit_anchor_context(
             truncated=False,
         )
 
-        try:
+        with contextlib.suppress(Exception):
             logger.info(
                 "anchor_ok",
                 extra={
@@ -259,12 +258,10 @@ async def collect_implicit_anchor_context(
                     },
                 },
             )
-        except Exception:
-            pass
 
         return joined_text, block
     except Exception as e:
-        try:
+        with contextlib.suppress(Exception):
             logger.info(
                 "anchor_none",
                 extra={
@@ -276,19 +273,16 @@ async def collect_implicit_anchor_context(
                     "detail": {"reason": str(e)[:120]},
                 },
             )
-        except Exception:
-            pass
         return None
 
 
 async def collect_thread_tail_context(
     bot: discord.Client,
     message: discord.Message,
-    reply_target: Optional[discord.Message],
-    cfg: Dict[str, Any],
-) -> Optional[Tuple[str, MentionContextBlock]]:
-    """
-    Collect up to K previous messages in the same thread before the reply_target (or current message if None),
+    reply_target: discord.Message | None,
+    cfg: dict[str, Any],
+) -> tuple[str, MentionContextBlock] | None:
+    """Collect up to K previous messages in the same thread before the reply_target (or current message if None),
     ordered oldest → newest. Include humans + our bot; exclude other bots/system messages.
     Package as MentionContextBlock with source='discord-thread-tail' and return (joined_text, block).
     On any error, return None gracefully.
@@ -308,7 +302,7 @@ async def collect_thread_tail_context(
         anchor = reply_target or message
 
         # Fetch messages strictly before anchor
-        tail: List[discord.Message] = []
+        tail: list[discord.Message] = []
         try:
             # newest_first; we'll reverse later
             async for m in ch.history(limit=k * 3, before=anchor):
@@ -329,7 +323,7 @@ async def collect_thread_tail_context(
 
         # Build items
         guild = getattr(message, "guild", None)
-        items: List[PackagedItem] = []
+        items: list[PackagedItem] = []
         for i, m in enumerate(tail, start=1):
             author_name = getattr(
                 m.author,
@@ -342,7 +336,7 @@ async def collect_thread_tail_context(
                 id=str(getattr(m, "id", "")),
                 author_name=author_name,
                 author_id=str(getattr(m.author, "id", "")),
-                created_at_iso=(getattr(m, "created_at", None) or datetime.now(timezone.utc)).isoformat(),
+                created_at_iso=(getattr(m, "created_at", None) or datetime.now(UTC)).isoformat(),
                 text_plain=txt,
                 has_attachments=bool(getattr(m, "attachments", None)),
                 attachment_summaries_if_available=None,
@@ -356,7 +350,7 @@ async def collect_thread_tail_context(
         anc = {
             "id": str(getattr(anchor, "id", "")),
             "author": getattr(anchor.author, "display_name", getattr(anchor.author, "name", "")),
-            "created_at_iso": (getattr(anchor, "created_at", None) or datetime.now(timezone.utc)).isoformat(),
+            "created_at_iso": (getattr(anchor, "created_at", None) or datetime.now(UTC)).isoformat(),
             "jump_url": getattr(anchor, "jump_url", ""),
         }
         block = MentionContextBlock(
@@ -370,7 +364,7 @@ async def collect_thread_tail_context(
         )
 
         # Logging (quiet)
-        try:
+        with contextlib.suppress(Exception):
             logger.info(
                 "tail_ok",
                 extra={
@@ -386,12 +380,10 @@ async def collect_thread_tail_context(
                     },
                 },
             )
-        except Exception:
-            pass
 
         return joined_text, block
     except Exception as e:
-        try:
+        with contextlib.suppress(Exception):
             logger.info(
                 "tail_fallback",
                 extra={
@@ -403,6 +395,4 @@ async def collect_thread_tail_context(
                     "detail": {"reason": str(e)[:120]},
                 },
             )
-        except Exception:
-            pass
         return None

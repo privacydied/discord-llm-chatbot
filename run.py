@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Main entry point for the Discord LLM Chatbot
-"""
+"""Main entry point for the Discord LLM Chatbot."""
 
 from bot.main import run_bot
 

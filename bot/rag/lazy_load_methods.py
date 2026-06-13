@@ -1,5 +1,4 @@
-"""
-Lazy loading methods for HybridRAGSearch class.
+"""Lazy loading methods for HybridRAGSearch class.
 
 This module contains the lazy loading implementation that will be integrated
 into the HybridRAGSearch class.
@@ -8,7 +7,8 @@ into the HybridRAGSearch class.
 import asyncio
 import time
 
-from ..utils.logging import get_logger
+from bot.utils.logging import get_logger
+
 from .bootstrap import create_rag_system
 from .hybrid_search import IndexState
 
@@ -16,14 +16,14 @@ logger = get_logger(__name__)
 
 
 async def _load_vector_index(self) -> bool:
-    """
-    Load the vector index with thread-safe, idempotent behavior.
+    """Load the vector index with thread-safe, idempotent behavior.
 
     This method implements the NOT_LOADED → LOADING → LOADED state machine
     with proper locking to ensure only one load operation occurs.
 
     Returns:
         True if loaded successfully, False if failed
+
     """
     # Quick check without lock for already loaded state
     if self._index_state == IndexState.LOADED:
@@ -94,38 +94,38 @@ async def _load_vector_index(self) -> bool:
         with self._index_load_lock:
             self._index_state = IndexState.FAILED
 
-        logger.error(f"[RAG] ✖ Lazy vector index load failed: {e}")
+        logger.exception(f"[RAG] ✖ Lazy vector index load failed: {e}")
         return False
 
 
 def is_index_loaded(self) -> bool:
-    """
-    Check if the vector index is loaded and ready for search.
+    """Check if the vector index is loaded and ready for search.
 
     Returns:
         True if index is loaded, False otherwise
+
     """
     return self._index_state == IndexState.LOADED
 
 
 def get_index_state(self) -> str:
-    """
-    Get the current index loading state.
+    """Get the current index loading state.
 
     Returns:
         String representation of current state
+
     """
     return self._index_state.value
 
 
 async def _ensure_vector_index_loaded(self) -> bool:
-    """
-    Ensure the vector index is loaded before performing vector search.
+    """Ensure the vector index is loaded before performing vector search.
 
     This is the main entry point for lazy loading triggered by search operations.
 
     Returns:
         True if index is available, False if unavailable
+
     """
     if self._index_state == IndexState.LOADED:
         return True

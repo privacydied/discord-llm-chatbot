@@ -1,20 +1,22 @@
-"""
-Optimized OpenRouter Client with Connection Pooling, Circuit Breaker, and Intelligent Retries.
+"""Optimized OpenRouter Client with Connection Pooling, Circuit Breaker, and Intelligent Retries.
 Implements PA (Performance Awareness) and REH (Robust Error Handling) rules.
 """
 
 import asyncio
 import json
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Any, Optional, AsyncGenerator
-from aiohttp import ClientTimeout, ClientSession, TCPConnector
+from typing import Any
+
+from aiohttp import ClientSession, ClientTimeout, TCPConnector
+
+from bot.utils.logging import get_logger
 
 from .phase_constants import PhaseConstants as PC
-from .phase_timing import get_timing_manager, PipelineTracker
-from ..utils.logging import get_logger
+from .phase_timing import PipelineTracker, get_timing_manager
 
 logger = get_logger(__name__)
 
@@ -38,7 +40,7 @@ class CircuitBreakerStats:
     total_requests: int = 0
     total_failures: int = 0
 
-    def record_success(self):
+    def record_success(self) -> None:
         """Record successful request."""
         self.failure_count = 0
         self.last_success_time = time.time()
@@ -47,7 +49,7 @@ class CircuitBreakerStats:
             self.state = CircuitState.CLOSED
             logger.info("✅ Circuit breaker CLOSED - service recovered")
 
-    def record_failure(self):
+    def record_failure(self) -> None:
         """Record failed request and update state."""
         self.failure_count += 1
         self.last_failure_time = time.time()
@@ -65,18 +67,18 @@ class CircuitBreakerStats:
 
         if self.state == CircuitState.CLOSED:
             return True
-        elif self.state == CircuitState.OPEN:
+        if self.state == CircuitState.OPEN:
             # Check if cooldown period has passed
             if current_time - self.last_failure_time >= (PC.OR_BREAKER_OPEN_MS / 1000):
                 self.state = CircuitState.HALF_OPEN
                 logger.info("🔄 Circuit breaker HALF_OPEN - testing recovery")
                 return True
             return False
-        elif self.state == CircuitState.HALF_OPEN:
+        if self.state == CircuitState.HALF_OPEN:
             # Allow limited testing
             import random
 
-            return random.random() < PC.OR_BREAKER_HALFOPEN_PROB
+            return random.random() < PC.OR_BREAKER_HALFOPEN_PROB  # nosec B311
 
         return False
 
@@ -89,19 +91,19 @@ class ModelConfig:
     max_tokens: int = PC.OR_MAX_TOKENS_SIMPLE
     temperature: float = 0.7
     timeout_ms: int = PC.OR_TOTAL_DEADLINE_MS
-    fallback_model: Optional[str] = None
+    fallback_model: str | None = None
 
 
 class OptimizedOpenRouterClient:
     """High-performance OpenRouter client with circuit breaker and connection pooling."""
 
-    def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api/v1"):
+    def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api/v1") -> None:
         self.api_key = api_key
         self.base_url = base_url
-        self.session: Optional[ClientSession] = None
+        self.session: ClientSession | None = None
 
         # Circuit breaker per model [REH]
-        self.circuit_breakers: Dict[str, CircuitBreakerStats] = {}
+        self.circuit_breakers: dict[str, CircuitBreakerStats] = {}
 
         # Connection pool metrics
         self.pool_stats = {
@@ -125,7 +127,7 @@ class OptimizedOpenRouterClient:
 
         logger.info("🔧 OptimizedOpenRouterClient initialized")
 
-    async def _ensure_session(self):
+    async def _ensure_session(self) -> None:
         """Ensure HTTP session is created with optimized settings [PA]."""
         if self.session is None or self.session.closed:
             # Create optimized TCP connector [PA]
@@ -173,7 +175,7 @@ class OptimizedOpenRouterClient:
         """Get configuration for model with fallback."""
         return self.model_configs.get(model, ModelConfig(model))
 
-    async def _retry_with_backoff(self, model: str, request_func, max_retries: int = None):
+    async def _retry_with_backoff(self, model: str, request_func, max_retries: int | None = None):
         """Execute request with exponential backoff retry logic [REH]."""
         if max_retries is None:
             max_retries = PC.OR_MAX_RETRIES
@@ -182,14 +184,13 @@ class OptimizedOpenRouterClient:
 
         for attempt in range(max_retries + 1):
             try:
-                result = await request_func()
-                return result
+                return await request_func()
             except Exception as e:
                 last_exception = e
 
                 # Check if error is retryable [REH]
                 if not self._is_retryable_error(e):
-                    logger.debug(f"❌ Non-retryable error for {model}: {str(e)}")
+                    logger.debug(f"❌ Non-retryable error for {model}: {e!s}")
                     raise
 
                 if attempt < max_retries:
@@ -201,7 +202,7 @@ class OptimizedOpenRouterClient:
                     logger.debug(f"🔄 Retry {attempt + 1}/{max_retries} for {model} in {wait_time:.2f}s")
                     await asyncio.sleep(wait_time)
                 else:
-                    logger.error(f"❌ All {max_retries} retries exhausted for {model}")
+                    logger.exception(f"❌ All {max_retries} retries exhausted for {model}")
 
         raise last_exception
 
@@ -241,7 +242,7 @@ class OptimizedOpenRouterClient:
         # Default: retry on unknown errors
         return True
 
-    async def _make_request_with_fallback(self, model: str, messages: list, **kwargs) -> Dict[str, Any]:
+    async def _make_request_with_fallback(self, model: str, messages: list, **kwargs) -> dict[str, Any]:
         """Make request with automatic model fallback [REH]."""
         model_config = self._get_model_config(model)
 
@@ -249,7 +250,7 @@ class OptimizedOpenRouterClient:
         try:
             return await self._make_single_request(model, messages, **kwargs)
         except Exception as e:
-            logger.warning(f"⚠️ Primary model {model} failed: {str(e)}")
+            logger.warning(f"⚠️ Primary model {model} failed: {e!s}")
 
             # Try fallback model if available
             if model_config.fallback_model:
@@ -261,18 +262,19 @@ class OptimizedOpenRouterClient:
                     result["original_model"] = model
                     return result
                 except Exception as fallback_error:
-                    logger.error(f"❌ Fallback model also failed: {str(fallback_error)}")
+                    logger.exception(f"❌ Fallback model also failed: {fallback_error!s}")
                     raise
             else:
                 raise
 
-    async def _make_single_request(self, model: str, messages: list, **kwargs) -> Dict[str, Any]:
+    async def _make_single_request(self, model: str, messages: list, **kwargs) -> dict[str, Any]:
         """Make single request to OpenRouter API."""
         circuit_breaker = self._get_circuit_breaker(model)
 
         # Check circuit breaker state [REH]
         if not circuit_breaker.should_attempt_request():
-            raise Exception(f"Circuit breaker OPEN for model {model}")
+            msg = f"Circuit breaker OPEN for model {model}"
+            raise Exception(msg)
 
         await self._ensure_session()
         model_config = self._get_model_config(model)
@@ -311,11 +313,11 @@ class OptimizedOpenRouterClient:
                         logger.warning(f"⚠️ Slow OpenRouter response: {response_time_ms}ms (model: {model})")
 
                     return data
-                else:
-                    error_text = await response.text()
-                    circuit_breaker.record_failure()
-                    self.pool_stats["requests_failed"] += 1
-                    raise Exception(f"HTTP {response.status}: {error_text}")
+                error_text = await response.text()
+                circuit_breaker.record_failure()
+                self.pool_stats["requests_failed"] += 1
+                msg = f"HTTP {response.status}: {error_text}"
+                raise Exception(msg)
 
         except Exception:
             circuit_breaker.record_failure()
@@ -327,9 +329,9 @@ class OptimizedOpenRouterClient:
         self,
         model: str,
         messages: list,
-        tracker: Optional[PipelineTracker] = None,
+        tracker: PipelineTracker | None = None,
         **kwargs,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """Create chat completion with timing and error handling."""
         timing_manager = get_timing_manager()
 
@@ -348,7 +350,7 @@ class OptimizedOpenRouterClient:
                             "model_used": result.get("model_used", model),
                             "pool_reused": result.get("pool_reused", False),
                             "fallback_used": result.get("fallback_used", False),
-                        }
+                        },
                     )
 
                     yield result
@@ -363,13 +365,13 @@ class OptimizedOpenRouterClient:
             )
             yield result
 
-    async def close(self):
+    async def close(self) -> None:
         """Clean up resources [RM]."""
         if self.session and not self.session.closed:
             await self.session.close()
             logger.debug("🔒 HTTP session closed")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get client performance statistics."""
         circuit_stats = {}
         for model, cb in self.circuit_breakers.items():

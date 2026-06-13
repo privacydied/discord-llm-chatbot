@@ -9,16 +9,16 @@ Label-value policy [Phase 19 - Metrics reductions]:
   MetricsHandler which only iterates in-memory state.
 """
 
-from typing import Dict, Optional
+import logging
 import re
 import time
 from contextlib import contextmanager
-import logging
 
 try:
-    from prometheus_client import Counter, Histogram, Gauge, start_http_server, REGISTRY
+    from prometheus_client import REGISTRY, Counter, Gauge, Histogram, start_http_server
 except ImportError as e:
-    raise ImportError("prometheus_client is required for PrometheusMetrics. Install it with: pip install prometheus-client") from e
+    msg = "prometheus_client is required for PrometheusMetrics. Install it with: pip install prometheus-client"
+    raise ImportError(msg) from e
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +28,7 @@ _MAX_LABEL_VALUE_LEN = 128
 
 # Patterns that indicate high-cardinality label values (should never be metric labels)
 _HIGH_CARDINALITY_PATTERNS = re.compile(
-    r"|".join(
-        [
-            r"https?://",  # URLs
-            r"\d{7,}",  # Long digit sequences (Discord snowflake IDs)
-            r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",  # IPv4 addresses
-        ]
-    )
+    r"https?://|\d{7,}|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}",
 )
 
 
@@ -59,7 +53,7 @@ def sanitize_label_value(value: str) -> str:
     return value
 
 
-def sanitize_labels(labels: Optional[Dict[str, str]]) -> Optional[Dict[str, str]]:
+def sanitize_labels(labels: dict[str, str] | None) -> dict[str, str] | None:
     """Sanitize all label values in a dict.
 
     Returns None if labels is None/empty to avoid creating unnecessary dicts.
@@ -68,30 +62,31 @@ def sanitize_labels(labels: Optional[Dict[str, str]]) -> Optional[Dict[str, str]
     if not labels:
         return None
 
-    sanitized: Dict[str, str] = {}
+    sanitized: dict[str, str] = {}
     for key, value in labels.items():
         if isinstance(value, str):
             sanitized[key] = sanitize_label_value(value)
         else:
             sanitized[key] = str(value)
-    return sanitized if sanitized else None
+    return sanitized or None
 
 
 class PrometheusMetrics:
     """Prometheus-based metrics provider for comprehensive bot monitoring."""
 
-    def __init__(self, port: int = 8000, enable_http_server: bool = True):
+    def __init__(self, port: int = 8000, enable_http_server: bool = True) -> None:
         """Initialize Prometheus metrics with optional HTTP server for scraping.
 
         Args:
             port: Port for Prometheus metrics HTTP server (0 for auto-select)
             enable_http_server: Whether to start HTTP server for metrics scraping
+
         """
         self.port = port
         self.enable_http_server = enable_http_server
-        self._counters: Dict[str, Counter] = {}
-        self._histograms: Dict[str, Histogram] = {}
-        self._gauges: Dict[str, Gauge] = {}
+        self._counters: dict[str, Counter] = {}
+        self._histograms: dict[str, Histogram] = {}
+        self._gauges: dict[str, Gauge] = {}
         self._http_server_started = False
 
         logger.info(f"📊 Initializing Prometheus metrics (HTTP server: {enable_http_server}, port: {port})")
@@ -108,13 +103,14 @@ class PrometheusMetrics:
         else:
             logger.info("📊 Prometheus metrics initialized without HTTP server")
 
-    def define_counter(self, name: str, description: str, labels: Optional[list] = None) -> None:
+    def define_counter(self, name: str, description: str, labels: list | None = None) -> None:
         """Define a counter metric.
 
         Args:
             name: Metric name
             description: Metric description
             labels: List of label names
+
         """
         norm_name = self._normalize_metric_name(name)
         norm_labels = self._normalize_label_names(labels or [])
@@ -130,8 +126,8 @@ class PrometheusMetrics:
         self,
         name: str,
         description: str,
-        labels: Optional[list] = None,
-        buckets: Optional[tuple] = None,
+        labels: list | None = None,
+        buckets: tuple | None = None,
     ) -> None:
         """Define a histogram metric.
 
@@ -140,6 +136,7 @@ class PrometheusMetrics:
             description: Metric description
             labels: List of label names
             buckets: Histogram buckets
+
         """
         norm_name = self._normalize_metric_name(name)
         norm_labels = self._normalize_label_names(labels or [])
@@ -159,13 +156,14 @@ class PrometheusMetrics:
             self._histograms[norm_name] = Histogram(**kwargs)
             logger.debug(f"📊 Defined histogram: {norm_name}")
 
-    def define_gauge(self, name: str, description: str, labels: Optional[list] = None) -> None:
+    def define_gauge(self, name: str, description: str, labels: list | None = None) -> None:
         """Define a gauge metric.
 
         Args:
             name: Metric name
             description: Metric description
             labels: List of label names
+
         """
         norm_name = self._normalize_metric_name(name)
         norm_labels = self._normalize_label_names(labels or [])
@@ -177,13 +175,14 @@ class PrometheusMetrics:
             self._gauges[norm_name] = Gauge(name=norm_name, documentation=description, labelnames=norm_labels)
             logger.debug(f"📏 Defined gauge: {norm_name}")
 
-    def inc(self, name: str, value: int = 1, labels: Optional[Dict[str, str]] = None) -> None:
+    def inc(self, name: str, value: int = 1, labels: dict[str, str] | None = None) -> None:
         """Increment a counter.
 
         Args:
             name: Counter name
             value: Increment value
             labels: Label values (sanitized to prevent high-cardinality)
+
         """
         norm_name = self._normalize_metric_name(name)
         # Sanitize labels to prevent cardinality explosion
@@ -196,23 +195,25 @@ class PrometheusMetrics:
         else:
             logger.warning(f"⚠️  Counter '{name}' not defined")
 
-    def increment(self, name: str, labels: Optional[Dict[str, str]] = None, value: int = 1) -> None:
+    def increment(self, name: str, labels: dict[str, str] | None = None, value: int = 1) -> None:
         """Increment a counter (alternative interface).
 
         Args:
             name: Counter name
             labels: Label values (sanitized to prevent high-cardinality)
             value: Increment value
+
         """
         self.inc(name, value, sanitize_labels(labels))
 
-    def observe(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+    def observe(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         """Observe a histogram value.
 
         Args:
             name: Histogram name
             value: Value to observe
             labels: Label values (sanitized to prevent high-cardinality)
+
         """
         norm_name = self._normalize_metric_name(name)
         # Sanitize labels to prevent cardinality explosion
@@ -225,13 +226,14 @@ class PrometheusMetrics:
         else:
             logger.warning(f"⚠️  Histogram '{name}' not defined")
 
-    def gauge(self, name: str, value: float, labels: Optional[Dict[str, str]] = None) -> None:
+    def gauge(self, name: str, value: float, labels: dict[str, str] | None = None) -> None:
         """Set a gauge value.
 
         Args:
             name: Gauge name
             value: Gauge value
             labels: Label values (sanitized to prevent high-cardinality)
+
         """
         norm_name = self._normalize_metric_name(name)
         # Sanitize labels to prevent cardinality explosion
@@ -245,12 +247,13 @@ class PrometheusMetrics:
             logger.warning(f"⚠️  Gauge '{name}' not defined")
 
     @contextmanager
-    def timer(self, name: str, labels: Optional[Dict[str, str]] = None):
+    def timer(self, name: str, labels: dict[str, str] | None = None):
         """Context manager for timing operations.
 
         Args:
             name: Histogram name for timing
             labels: Label values (sanitized to prevent high-cardinality)
+
         """
         if name not in self._histograms:
             logger.warning(f"⚠️  Timer histogram '{name}' not defined")

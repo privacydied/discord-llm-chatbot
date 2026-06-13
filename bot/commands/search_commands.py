@@ -1,19 +1,16 @@
-"""
-Search commands for online web search using pluggable providers.
-[CA][REH][IV][PA]
+"""Search commands for online web search using pluggable providers.
+[CA][REH][IV][PA].
 """
 
 from __future__ import annotations
 
-from typing import Optional, List
-
 import discord
 from discord.ext import commands
 
-from ..utils.logging import get_logger
-from ..config import load_config
-from ..search.factory import get_search_provider
-from ..search.types import SearchQueryParams, SafeSearch, SearchResult
+from bot.config import load_config
+from bot.search.factory import get_search_provider
+from bot.search.types import SafeSearch, SearchQueryParams, SearchResult
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -23,7 +20,7 @@ DISCORD_EMBED_FIELD_VALUE_LIMIT = 1024
 DISCORD_EMBED_TOTAL_LIMIT = 6000
 
 
-def _truncate(text: Optional[str], limit: int) -> str:
+def _truncate(text: str | None, limit: int) -> str:
     if not text:
         return ""
     if len(text) <= limit:
@@ -32,7 +29,7 @@ def _truncate(text: Optional[str], limit: int) -> str:
 
 
 def _format_result_field(result: SearchResult) -> str:
-    parts: List[str] = []
+    parts: list[str] = []
     # URL first for easy click
     parts.append(result.url)
     if result.snippet:
@@ -51,7 +48,7 @@ class SearchCommands(commands.Cog):
 
     @commands.command(name="search", help="Search the web. Usage: !search <query>")
     @commands.cooldown(5, 60, type=commands.BucketType.user)
-    async def search(self, ctx: commands.Context, *, query: Optional[str] = None):  # type: ignore[override]
+    async def search(self, ctx: commands.Context, *, query: str | None = None) -> None:  # type: ignore[override]
         """Execute a web search using the configured provider and return top results."""
         try:
             if not query or not query.strip():
@@ -126,7 +123,7 @@ class SearchCommands(commands.Cog):
             await ctx.send(embed=embed)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     """Set up Search commands cog."""
     try:
         logger.info("[Search Setup] Initializing SearchCommands cog...")

@@ -1,5 +1,4 @@
-"""
-Memory-related commands for the Discord bot.
+"""Memory-related commands for the Discord bot.
 
 This module provides commands to manage user and server memories.
 """
@@ -11,20 +10,9 @@ import discord
 from discord.ext import commands
 
 # Import bot modules
-from ..config import load_config
-from ..memory import (
-    add_explicit_memory,
-    delete_memory,
-    get_memory_distiller,
-    get_profile,
-    get_server_profile,
-    list_user_memories,
-    save_profile,
-    save_server_profile,
-    search_user_memories,
-    wipe_user_memories,
-)
+from bot.config import load_config
 from bot.logger import log_command
+from bot.memory import add_explicit_memory, delete_memory, get_memory_distiller, get_profile, get_server_profile, list_user_memories, save_profile, save_server_profile, search_user_memories, wipe_user_memories
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +33,7 @@ class MemoryCommands(commands.Cog):
         *,
         content: str,
         context_type: str = "user_preference",
-    ):
+    ) -> None:
         content = (content or "").strip()
         if not content:
             await ctx.send("❌ Memory content cannot be empty.")
@@ -70,7 +58,7 @@ class MemoryCommands(commands.Cog):
 
         await ctx.send(f"✅ Memory saved. ID: `{record.memory_id[:8]}`")
 
-    async def _show_curated_memories(self, ctx, limit: int = 5):
+    async def _show_curated_memories(self, ctx, limit: int = 5) -> None:
         limit = min(max(1, int(limit)), 20)
         records = await list_user_memories(str(ctx.author.id), limit=limit)
         if not records:
@@ -89,7 +77,7 @@ class MemoryCommands(commands.Cog):
             )
         await ctx.send(embed=embed)
 
-    async def _delete_curated_memory(self, ctx, query: str):
+    async def _delete_curated_memory(self, ctx, query: str) -> None:
         query = (query or "").strip()
         if not query:
             await ctx.send("❌ Usage: `!memory-del <id or search>`")
@@ -110,7 +98,7 @@ class MemoryCommands(commands.Cog):
         else:
             await ctx.send("❌ Failed to delete memory. Please try again.")
 
-    async def _wipe_curated_memories(self, ctx):
+    async def _wipe_curated_memories(self, ctx) -> None:
         try:
             count = await wipe_user_memories(str(ctx.author.id))
             await ctx.send(f"✅ Wiped {count} durable memories.")
@@ -118,7 +106,7 @@ class MemoryCommands(commands.Cog):
             logger.error("Failed to wipe curated memories: %s", exc, exc_info=True)
             await ctx.send("❌ Failed to wipe memories. Please try again.")
 
-    async def _search_curated_memories(self, ctx, query: str, limit: int = 5):
+    async def _search_curated_memories(self, ctx, query: str, limit: int = 5) -> None:
         query = (query or "").strip()
         if not query:
             await ctx.send("❌ Usage: `!memory-search <query>`")
@@ -139,30 +127,30 @@ class MemoryCommands(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name="memory-add")
-    async def memory_add_direct(self, ctx, *, content: str):
+    async def memory_add_direct(self, ctx, *, content: str) -> None:
         await self._add_curated_memory(ctx, content=content, context_type="user_preference")
 
     @commands.command(name="memory-show")
-    async def memory_show_direct(self, ctx, limit: int = 5):
+    async def memory_show_direct(self, ctx, limit: int = 5) -> None:
         await self._show_curated_memories(ctx, limit=limit)
 
     @commands.command(name="memory-del")
-    async def memory_del_direct(self, ctx, *, query: str):
+    async def memory_del_direct(self, ctx, *, query: str) -> None:
         await self._delete_curated_memory(ctx, query=query)
 
     @commands.command(name="memory-wipe")
     @commands.cooldown(1, 120, commands.BucketType.user)
-    async def memory_wipe_direct(self, ctx):
+    async def memory_wipe_direct(self, ctx) -> None:
         await self._wipe_curated_memories(ctx)
 
     @commands.command(name="memory-search")
-    async def memory_search_direct(self, ctx, *, query: str):
+    async def memory_search_direct(self, ctx, *, query: str) -> None:
         await self._search_curated_memories(ctx, query=query)
 
     @commands.command(name="memory-distill-status", aliases=["memory-distil-status"])
     @commands.guild_only()
     @commands.has_permissions(administrator=True)
-    async def memory_distill_status(self, ctx):
+    async def memory_distill_status(self, ctx) -> None:
         distiller = await get_memory_distiller(self.bot)
         status = await distiller.get_status(guild_id=str(ctx.guild.id))
         running_task = self._distill_once_tasks.get(str(ctx.guild.id))
@@ -202,7 +190,7 @@ class MemoryCommands(commands.Cog):
     @commands.command(name="memory-distill-once", aliases=["memory-distil-once"])
     @commands.guild_only()
     @commands.has_permissions(administrator=True)
-    async def memory_distill_once(self, ctx):
+    async def memory_distill_once(self, ctx) -> None:
         guild_id = str(ctx.guild.id)
         existing = self._distill_once_tasks.get(guild_id)
         if existing and not existing.done():
@@ -272,7 +260,7 @@ class MemoryCommands(commands.Cog):
     @commands.command(name="memory-distill-dryrun")
     @commands.guild_only()
     @commands.has_permissions(administrator=True)
-    async def memory_distill_dryrun(self, ctx, mode: str):
+    async def memory_distill_dryrun(self, ctx, mode: str) -> None:
         mode = (mode or "").strip().lower()
         if mode not in {"on", "off"}:
             await ctx.send("❌ Usage: `!memory-distill-dryrun <on|off>`")
@@ -282,7 +270,7 @@ class MemoryCommands(commands.Cog):
         await ctx.send(f"✅ Memory distiller dry-run set to `{distiller.dry_run}`.")
 
     @commands.group(name="memory", invoke_without_command=True)
-    async def memory_group(self, ctx):
+    async def memory_group(self, ctx) -> None:
         """Memory management commands.
 
         Usage:
@@ -295,11 +283,12 @@ class MemoryCommands(commands.Cog):
 
     @memory_group.command(name="add")
     @commands.cooldown(1, 10, commands.BucketType.user)  # [BUGFIX] Rate limit added
-    async def add_memory_cmd(self, ctx, *, content: str):
+    async def add_memory_cmd(self, ctx, *, content: str) -> None:
         """Add a memory to your profile.
 
         Example:
         !memory add I prefer to be called by my nickname, not my full name
+
         """
         try:
             # Input validation [REH][SFT]
@@ -350,12 +339,12 @@ class MemoryCommands(commands.Cog):
                 logging.error(f"Failed to save memory for user {ctx.author.id}")
 
         except Exception as e:
-            logging.error(f"Error in add_memory_cmd: {str(e)}", exc_info=True)
+            logging.error(f"Error in add_memory_cmd: {e!s}", exc_info=True)
             await ctx.send("❌ An error occurred while adding the memory.")
             log_command(ctx, "memory_add_error", {"error": str(e)}, success=False)
 
     @memory_group.command(name="list")
-    async def list_memories_cmd(self, ctx, limit: int = 5):
+    async def list_memories_cmd(self, ctx, limit: int = 5) -> None:
         """List your recent memories.
 
         Args:
@@ -363,6 +352,7 @@ class MemoryCommands(commands.Cog):
 
         Example:
         !memory list 3 - Show your 3 most recent memories
+
         """
         try:
             # Enforce a reasonable limit
@@ -400,13 +390,13 @@ class MemoryCommands(commands.Cog):
             log_command(ctx, "Listed memories")
 
         except Exception as e:
-            logging.error(f"Error in list_memories_cmd: {str(e)}", exc_info=True)
+            logging.error(f"Error in list_memories_cmd: {e!s}", exc_info=True)
             await ctx.send("❌ An error occurred while retrieving memories.")
             log_command(ctx, "memory_list_error", {"error": str(e)}, success=False)
 
     @memory_group.command(name="clear")
     @commands.cooldown(1, 120, commands.BucketType.user)
-    async def clear_memories_cmd(self, ctx):
+    async def clear_memories_cmd(self, ctx) -> None:
         """Clear all your memories after confirmation."""
         try:
             # Ask for confirmation
@@ -417,7 +407,7 @@ class MemoryCommands(commands.Cog):
 
             try:
                 await ctx.bot.wait_for("message", check=check, timeout=30.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await confirm_msg.edit(content="Memory clear cancelled due to timeout.")
                 return
 
@@ -427,7 +417,7 @@ class MemoryCommands(commands.Cog):
                 await ctx.send("No profile found to clear.")
                 return
 
-            if "memories" in profile and profile["memories"]:
+            if profile.get("memories"):
                 memory_count = len(profile["memories"])
                 profile["memories"] = []
 
@@ -440,7 +430,7 @@ class MemoryCommands(commands.Cog):
                 await ctx.send("No memories found to clear.")
 
         except Exception as e:
-            logging.error(f"Error in clear_memories_cmd: {str(e)}", exc_info=True)
+            logging.error(f"Error in clear_memories_cmd: {e!s}", exc_info=True)
             await ctx.send("❌ An error occurred while clearing memories.")
         finally:
             # Reset cooldown if command failed
@@ -453,7 +443,7 @@ class MemoryCommands(commands.Cog):
     )
     @commands.guild_only()
     @commands.has_permissions(administrator=True)
-    async def server_memory_group(self, ctx):
+    async def server_memory_group(self, ctx) -> None:
         """Manage server memories (Admin only).
 
         Subcommands:
@@ -466,7 +456,7 @@ class MemoryCommands(commands.Cog):
 
     @server_memory_group.command(name="add")
     @commands.has_permissions(administrator=True)
-    async def server_memory_add(self, ctx, *, content: str):
+    async def server_memory_add(self, ctx, *, content: str) -> None:
         """Add a memory to the server's profile."""
         try:
             # Input validation [REH][SFT] — mirror add_memory_cmd safety
@@ -518,12 +508,12 @@ class MemoryCommands(commands.Cog):
                 await ctx.send("❌ Failed to save server memory. Please try again.")
 
         except Exception as e:
-            logging.error(f"Error adding server memory: {str(e)}", exc_info=True)
+            logging.error(f"Error adding server memory: {e!s}", exc_info=True)
             await ctx.send("❌ An error occurred while adding the server memory.")
 
     @server_memory_group.command(name="list")
     @commands.has_permissions(administrator=True)
-    async def server_memory_list(self, ctx):
+    async def server_memory_list(self, ctx) -> None:
         """List all server memories."""
         try:
             profile = get_server_profile(str(ctx.guild.id))
@@ -558,13 +548,13 @@ class MemoryCommands(commands.Cog):
             log_command(ctx, "Listed server memories")
 
         except Exception as e:
-            logging.error(f"Error listing server memories: {str(e)}", exc_info=True)
+            logging.error(f"Error listing server memories: {e!s}", exc_info=True)
             await ctx.send("❌ An error occurred while retrieving server memories.")
 
     @server_memory_group.command(name="clear")
     @commands.has_permissions(administrator=True)
     @commands.cooldown(1, 60, commands.BucketType.guild)
-    async def server_memory_clear(self, ctx):
+    async def server_memory_clear(self, ctx) -> None:
         """Clear all server memories after confirmation."""
         try:
             # Ask for confirmation
@@ -575,7 +565,7 @@ class MemoryCommands(commands.Cog):
 
             try:
                 await ctx.bot.wait_for("message", check=check, timeout=30.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 await confirm_msg.edit(content="Server memory clear cancelled due to timeout.")
                 return
 
@@ -595,7 +585,7 @@ class MemoryCommands(commands.Cog):
                 await ctx.send("❌ Failed to clear server memories. Please try again.")
 
         except Exception as e:
-            logging.error(f"Error clearing server memories: {str(e)}", exc_info=True)
+            logging.error(f"Error clearing server memories: {e!s}", exc_info=True)
             await ctx.send("❌ An error occurred while clearing server memories.")
         finally:
             # Reset cooldown if command failed

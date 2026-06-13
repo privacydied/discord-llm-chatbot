@@ -1,14 +1,14 @@
-"""
-Abstract interface for embedding models with pluggable implementations.
-"""
+"""Abstract interface for embedding models with pluggable implementations."""
 
 import asyncio
 import os
-from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import List, Union, Optional, Dict, Any
+from pathlib import Path
+from typing import Any
+
 import numpy as np
-from ..utils.logging import get_logger
+
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -17,36 +17,34 @@ _rag_misconfig_warned = False
 _rag_legacy_mode = False
 
 # Global async lock and cache for SentenceTransformer models to prevent race conditions
-_model_locks: Dict[str, asyncio.Lock] = {}
-_model_cache: Dict[str, Any] = {}
-_initialization_status: Dict[str, bool] = {}
+_model_locks: dict[str, asyncio.Lock] = {}
+_model_cache: dict[str, Any] = {}
+_initialization_status: dict[str, bool] = {}
 
 
 class EmbeddingInterface(ABC):
     """Abstract base class for embedding model implementations."""
 
-    def __init__(self, model_name: str, normalize: bool = True):
+    def __init__(self, model_name: str, normalize: bool = True) -> None:
         self.model_name = model_name
         self.normalize = normalize
-        self.embedding_dim: Optional[int] = None
+        self.embedding_dim: int | None = None
 
     @abstractmethod
-    async def encode(self, texts: Union[str, List[str]]) -> np.ndarray:
-        """
-        Encode text(s) into embedding vector(s).
+    async def encode(self, texts: str | list[str]) -> np.ndarray:
+        """Encode text(s) into embedding vector(s).
 
         Args:
             texts: Single text string or list of text strings
 
         Returns:
             numpy array of shape (n_texts, embedding_dim)
+
         """
-        pass
 
     @abstractmethod
     async def get_embedding_dimension(self) -> int:
         """Get the dimensionality of embeddings produced by this model."""
-        pass
 
     def _normalize_embeddings(self, embeddings: np.ndarray) -> np.ndarray:
         """Apply L2 normalization to embeddings."""
@@ -71,12 +69,12 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
         self,
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
         normalize: bool = True,
-    ):
+    ) -> None:
         super().__init__(model_name, normalize)
         self.model = None
         self._initialized = False
 
-    async def _initialize(self):
+    async def _initialize(self) -> None:
         """Robust async initialization with caching and graceful fallback."""
         if self._initialized and self.model is not None:
             return
@@ -108,19 +106,19 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
                 _initialization_status[self.model_name] = True
 
             except ImportError as e:
-                logger.error(f"❌ sentence-transformers not installed: {e}")
+                logger.exception(f"❌ sentence-transformers not installed: {e}")
                 await self._handle_fallback("ImportError: sentence-transformers not available")
                 raise
             except Exception as e:
-                logger.error(f"❌ Failed to initialize {self.model_name}: {e}")
+                logger.exception(f"❌ Failed to initialize {self.model_name}: {e}")
                 await self._handle_fallback(str(e))
                 raise
 
-    async def _load_sentence_transformer(self):
+    async def _load_sentence_transformer(self) -> None:
         """Load SentenceTransformer without blocking the event loop."""
         await asyncio.to_thread(self._load_sentence_transformer_sync)
 
-    def _load_sentence_transformer_sync(self):
+    def _load_sentence_transformer_sync(self) -> None:
         """Synchronous loader that can safely import and initialize the model off-thread."""
         from sentence_transformers import SentenceTransformer
 
@@ -143,7 +141,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
 
         logger.info(f"✅ Initialized {self.model_name} [dim={self.embedding_dim}]")
 
-    def _get_local_model_path(self) -> Optional[Path]:
+    def _get_local_model_path(self) -> Path | None:
         """Get the exact local cache path containing the model files."""
         try:
             # Standard HuggingFace cache locations (expanded for comprehensive coverage)
@@ -156,7 +154,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
                 Path.home() / ".cache" / "sentence_transformers",
                 # Additional common locations
                 Path("/tmp") / "sentence_transformers_cache",  # nosec B108
-                Path(".") / ".cache" / "sentence_transformers",
+                Path(".cache") / "sentence_transformers",
             ]
 
             model_id = self.model_name.replace("/", "--")
@@ -227,12 +225,12 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             # Look in the path and reasonable subdirectories
             max_depth = 3  # Prevent excessive recursion
 
-            def find_model_directory(dir_path: Path, current_depth: int = 0) -> Optional[Path]:
+            def find_model_directory(dir_path: Path, current_depth: int = 0) -> Path | None:
                 if current_depth > max_depth:
                     return None
 
                 try:
-                    files_in_dir = set(f.name for f in dir_path.iterdir() if f.is_file())
+                    files_in_dir = {f.name for f in dir_path.iterdir() if f.is_file()}
 
                     # Check if core configuration files are present
                     core_files_present = all(f in files_in_dir for f in core_files)
@@ -267,7 +265,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             logger.debug(f"Error checking local cache at {path}: {e}")
             return False
 
-    async def _handle_fallback(self, error_reason: str):
+    async def _handle_fallback(self, error_reason: str) -> None:
         """Handle graceful fallback when model loading fails."""
         logger.warning(f"⚠️ {self.model_name} failed ({error_reason}), attempting fallback...")
 
@@ -298,9 +296,10 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
 
         # If all fallbacks fail, restore original model name and re-raise
         logger.error(f"❌ All fallback attempts failed for {self.model_name}")
-        raise RuntimeError(f"Failed to initialize any SentenceTransformer model (original: {error_reason})")
+        msg = f"Failed to initialize any SentenceTransformer model (original: {error_reason})"
+        raise RuntimeError(msg)
 
-    async def encode(self, texts: Union[str, List[str]]) -> np.ndarray:
+    async def encode(self, texts: str | list[str]) -> np.ndarray:
         """Encode texts using sentence-transformers."""
         await self._initialize()
 
@@ -322,7 +321,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             return embeddings
 
         except Exception as e:
-            logger.error(f"[RAG] Embedding encoding failed: {e}")
+            logger.exception(f"[RAG] Embedding encoding failed: {e}")
             raise
 
     async def get_embedding_dimension(self) -> int:
@@ -337,9 +336,9 @@ class OpenAIEmbedding(EmbeddingInterface):
     def __init__(
         self,
         model_name: str = "text-embedding-3-small",
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         normalize: bool = True,
-    ):
+    ) -> None:
         super().__init__(model_name, normalize)
         self.api_key = api_key
         self.client = None
@@ -352,7 +351,7 @@ class OpenAIEmbedding(EmbeddingInterface):
             "text-embedding-ada-002": 1536,
         }
 
-    async def _initialize(self):
+    async def _initialize(self) -> None:
         """Initialize OpenAI client."""
         if self._initialized:
             return
@@ -367,13 +366,13 @@ class OpenAIEmbedding(EmbeddingInterface):
             logger.info(f"✔ Initialized OpenAI {self.model_name} [dim={self.embedding_dim}]")
 
         except ImportError:
-            logger.error("openai not installed. Install with: pip install openai")
+            logger.exception("openai not installed. Install with: pip install openai")
             raise
         except Exception as e:
-            logger.error(f"Failed to initialize OpenAI embedding client: {e}")
+            logger.exception(f"Failed to initialize OpenAI embedding client: {e}")
             raise
 
-    async def encode(self, texts: Union[str, List[str]]) -> np.ndarray:
+    async def encode(self, texts: str | list[str]) -> np.ndarray:
         """Encode texts using OpenAI API."""
         await self._initialize()
 
@@ -392,7 +391,7 @@ class OpenAIEmbedding(EmbeddingInterface):
             return embeddings
 
         except Exception as e:
-            logger.error(f"[RAG] OpenAI embedding failed: {e}")
+            logger.exception(f"[RAG] OpenAI embedding failed: {e}")
             raise
 
     async def get_embedding_dimension(self) -> int:
@@ -401,9 +400,8 @@ class OpenAIEmbedding(EmbeddingInterface):
         return self.embedding_dim
 
 
-def create_embedding_model(model_type: str = "sentence-transformers", **kwargs) -> Optional[EmbeddingInterface]:
-    """
-    Factory function to create embedding models with graceful fallback.
+def create_embedding_model(model_type: str = "sentence-transformers", **kwargs) -> EmbeddingInterface | None:
+    """Factory function to create embedding models with graceful fallback.
 
     Args:
         model_type: Type of model ("sentence-transformers" or "openai")
@@ -414,21 +412,21 @@ def create_embedding_model(model_type: str = "sentence-transformers", **kwargs) 
 
     Raises:
         ValueError: If model_type is invalid and not in graceful fallback mode
+
     """
     global _rag_misconfig_warned, _rag_legacy_mode
 
     if model_type == "sentence-transformers":
         return SentenceTransformerEmbedding(**kwargs)
-    elif model_type == "openai":
+    if model_type == "openai":
         return OpenAIEmbedding(**kwargs)
-    else:
-        # Unknown model type → warn once and enter legacy mode
-        if not _rag_misconfig_warned:
-            logger.warning(f"[RAG] Unknown embedding model type: {model_type} → fallback to legacy mode")
-            _rag_misconfig_warned = True
-        _rag_legacy_mode = True
+    # Unknown model type → warn once and enter legacy mode
+    if not _rag_misconfig_warned:
+        logger.warning(f"[RAG] Unknown embedding model type: {model_type} → fallback to legacy mode")
+        _rag_misconfig_warned = True
+    _rag_legacy_mode = True
 
-        return None
+    return None
 
 
 def is_rag_legacy_mode() -> bool:

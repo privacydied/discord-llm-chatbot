@@ -1,33 +1,25 @@
-"""
-Base Vision Provider Interface
+"""Base Vision Provider Interface.
 
 Abstract base class defining the contract for vision generation providers.
 Ensures consistent behavior across Together.ai, Novita.ai, and future providers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
 from pathlib import Path
+from typing import Any
 
 from bot.utils.logging import get_logger
-from ..types import (
-    VisionRequest,
-    VisionResponse,
-    VisionProvider,
-    VisionError,
-    VisionErrorType,
-)
+from bot.vision.types import VisionError, VisionErrorType, VisionProvider, VisionRequest, VisionResponse
 
 
 class BaseVisionProvider(ABC):
-    """
-    Abstract base class for vision generation providers
+    """Abstract base class for vision generation providers.
 
     Standardizes provider interfaces and ensures consistent error handling,
     logging, and response formatting across all adapters [CA].
     """
 
-    def __init__(self, config: Dict[str, Any], policy: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any], policy: dict[str, Any]) -> None:
         self.config = config
         self.policy = policy
         self.logger = get_logger(__name__)
@@ -40,23 +32,19 @@ class BaseVisionProvider(ABC):
 
     @abstractmethod
     def get_provider_name(self) -> VisionProvider:
-        """Return the provider enum value"""
-        pass
+        """Return the provider enum value."""
 
     @abstractmethod
     def _validate_config(self) -> None:
-        """Validate provider-specific configuration [IV]"""
-        pass
+        """Validate provider-specific configuration [IV]."""
 
     @abstractmethod
     def _initialize(self) -> None:
-        """Initialize provider-specific resources"""
-        pass
+        """Initialize provider-specific resources."""
 
     @abstractmethod
     async def generate(self, request: VisionRequest, model: str) -> VisionResponse:
-        """
-        Generate vision content using provider's API
+        """Generate vision content using provider's API.
 
         Args:
             request: Normalized vision generation request
@@ -67,42 +55,40 @@ class BaseVisionProvider(ABC):
 
         Raises:
             VisionError: On validation failure or provider error
+
         """
-        pass
 
     @abstractmethod
-    async def get_job_status(self, provider_job_id: str) -> Dict[str, Any]:
-        """
-        Poll provider for job status (for async providers)
+    async def get_job_status(self, provider_job_id: str) -> dict[str, Any]:
+        """Poll provider for job status (for async providers).
 
         Args:
             provider_job_id: Provider's job identifier
 
         Returns:
             Dictionary with status, progress, and results
+
         """
-        pass
 
     @abstractmethod
     async def cancel_job(self, provider_job_id: str) -> bool:
-        """
-        Cancel running job if supported by provider
+        """Cancel running job if supported by provider.
 
         Args:
             provider_job_id: Provider's job identifier
 
         Returns:
             True if cancellation was successful or job already complete
-        """
-        pass
 
-    def _get_provider_config(self) -> Dict[str, Any]:
-        """Get provider-specific configuration from policy"""
+        """
+
+    def _get_provider_config(self) -> dict[str, Any]:
+        """Get provider-specific configuration from policy."""
         provider_name = self.get_provider_name().value
         return self.policy["providers"].get(provider_name, {})
 
-    def _get_model_config(self, task_type: str, model: str) -> Optional[Dict[str, Any]]:
-        """Get model-specific configuration from policy [CMV]"""
+    def _get_model_config(self, task_type: str, model: str) -> dict[str, Any] | None:
+        """Get model-specific configuration from policy [CMV]."""
         provider_config = self._get_provider_config()
         capabilities = provider_config.get("capabilities", {})
         task_config = capabilities.get(task_type, {})
@@ -114,7 +100,7 @@ class BaseVisionProvider(ABC):
         return None
 
     def _log_request_start(self, request: VisionRequest, model: str) -> None:
-        """Log request initiation with structured data [REH]"""
+        """Log request initiation with structured data [REH]."""
         self.logger.info(
             "Starting generation request",
             extra={
@@ -139,7 +125,7 @@ class BaseVisionProvider(ABC):
         response: VisionResponse,
         processing_time: float,
     ) -> None:
-        """Log successful request completion [REH]"""
+        """Log successful request completion [REH]."""
         self.logger.info(
             "Generation request completed successfully",
             extra={
@@ -162,7 +148,7 @@ class BaseVisionProvider(ABC):
         error: VisionError,
         processing_time: float,
     ) -> None:
-        """Log request failure with error details [REH]"""
+        """Log request failure with error details [REH]."""
         self.logger.error(
             "Generation request failed",
             extra={
@@ -180,7 +166,7 @@ class BaseVisionProvider(ABC):
         )
 
     def _validate_file_size(self, file_path: Path, max_size_mb: int) -> None:
-        """Validate uploaded file size against limits [IV]"""
+        """Validate uploaded file size against limits [IV]."""
         if not file_path.exists():
             raise VisionError(
                 error_type=VisionErrorType.VALIDATION_ERROR,
@@ -197,7 +183,7 @@ class BaseVisionProvider(ABC):
             )
 
     def _validate_image_format(self, file_path: Path) -> None:
-        """Validate image file format [IV]"""
+        """Validate image file format [IV]."""
         allowed_formats = self.policy["artifact_management"]["supported_formats"]["image"]
         file_extension = file_path.suffix.lower().lstrip(".")
 
@@ -209,7 +195,7 @@ class BaseVisionProvider(ABC):
             )
 
     def _create_error_response(self, job_id: str, error: VisionError, processing_time: float = 0.0) -> VisionResponse:
-        """Create standardized error response [CA]"""
+        """Create standardized error response [CA]."""
         return VisionResponse(
             success=False,
             job_id=job_id,
@@ -219,8 +205,8 @@ class BaseVisionProvider(ABC):
             error=error,
         )
 
-    def _extract_dimensions_from_path(self, file_path: Path) -> Optional[tuple[int, int]]:
-        """Extract image/video dimensions using PIL/ffprobe if available"""
+    def _extract_dimensions_from_path(self, file_path: Path) -> tuple[int, int] | None:
+        """Extract image/video dimensions using PIL/ffprobe if available."""
         try:
             if file_path.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
                 from PIL import Image
@@ -235,7 +221,7 @@ class BaseVisionProvider(ABC):
         return None
 
     def _calculate_file_size(self, file_paths: list[Path]) -> int:
-        """Calculate total file size in bytes [CMV]"""
+        """Calculate total file size in bytes [CMV]."""
         total_size = 0
         for path in file_paths:
             if path.exists():

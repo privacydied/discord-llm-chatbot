@@ -1,5 +1,4 @@
-"""
-Vision Generation Slash Commands
+"""Vision Generation Slash Commands.
 
 Implements Discord slash commands for image and video generation:
 - /image: Text-to-image generation
@@ -11,24 +10,26 @@ Follows existing bot patterns and integrates with Vision orchestration system.
 """
 
 import asyncio
-import discord
-from discord.ext import commands
-from discord import app_commands
-from typing import Optional, Literal, Set
-from pathlib import Path
 import tempfile
-import aiohttp
+from datetime import UTC
+from pathlib import Path
+from typing import Literal
 
-from bot.utils.logging import get_logger
+import aiohttp
+import discord
+from discord import app_commands
+from discord.ext import commands
+
 from bot.config import load_config
-from bot.vision.types import VisionRequest, VisionTask, VisionProvider, VisionError
+from bot.utils.logging import get_logger
 from bot.vision.orchestrator import VisionOrchestrator
+from bot.vision.types import VisionError, VisionProvider, VisionRequest, VisionTask
 
 logger = get_logger(__name__)
 
 
 class VisionCommands(commands.Cog):
-    """Vision generation slash commands cog"""
+    """Vision generation slash commands cog."""
 
     def __init__(self, bot) -> None:
         self.bot = bot
@@ -39,13 +40,13 @@ class VisionCommands(commands.Cog):
         self._orchestrator = None
 
         # Track temp files created by _download_attachment for cleanup
-        self._temp_files: Set[Path] = set()
+        self._temp_files: set[Path] = set()
 
         self.logger.info("Vision commands cog initialized")
 
     @property
     def orchestrator(self) -> VisionOrchestrator:
-        """Lazy-load vision orchestrator"""
+        """Lazy-load vision orchestrator."""
         if self._orchestrator is None:
             self._orchestrator = VisionOrchestrator(self.config)
         return self._orchestrator
@@ -76,17 +77,16 @@ class VisionCommands(commands.Cog):
         self,
         interaction: discord.Interaction,
         prompt: str,
-        size: Optional[Literal["square", "portrait", "landscape", "4k"]] = "square",
-        steps: Optional[app_commands.Range[int, 10, 50]] = 30,
-        guidance: Optional[app_commands.Range[float, 1.0, 20.0]] = 7.0,
-        negative: Optional[str] = None,
-        seed: Optional[int] = None,
-        count: Optional[app_commands.Range[int, 1, 4]] = 1,
-        provider: Optional[Literal["together", "novita", "openrouter", "auto"]] = "auto",
-        model: Optional[str] = None,
-    ):
-        """Handle /image slash command"""
-
+        size: Literal["square", "portrait", "landscape", "4k"] | None = "square",
+        steps: app_commands.Range[int, 10, 50] | None = 30,
+        guidance: app_commands.Range[float, 1.0, 20.0] | None = 7.0,
+        negative: str | None = None,
+        seed: int | None = None,
+        count: app_commands.Range[int, 1, 4] | None = 1,
+        provider: Literal["together", "novita", "openrouter", "auto"] | None = "auto",
+        model: str | None = None,
+    ) -> None:
+        """Handle /image slash command."""
         # Check if Vision is enabled
         if not self.config.get("VISION_ENABLED", False):
             await interaction.response.send_message("🚫 Vision generation is currently disabled.", ephemeral=True)
@@ -163,7 +163,7 @@ class VisionCommands(commands.Cog):
             _task.add_done_callback(lambda t: self.logger.debug("job monitor complete", extra={"detail": {"job_id": job.job_id}}) if t.done() and not t.cancelled() and t.exception() else None)
 
         except VisionError as e:
-            self.logger.error(
+            self.logger.exception(
                 "Vision generation failed",
                 extra={
                     "event": "vision.image.error",
@@ -212,16 +212,15 @@ class VisionCommands(commands.Cog):
         interaction: discord.Interaction,
         image: discord.Attachment,
         prompt: str,
-        strength: Optional[app_commands.Range[float, 0.1, 1.0]] = 0.8,
-        steps: Optional[app_commands.Range[int, 10, 50]] = 30,
-        guidance: Optional[app_commands.Range[float, 1.0, 20.0]] = 7.0,
-        negative: Optional[str] = None,
-        seed: Optional[int] = None,
-        provider: Optional[Literal["together", "novita", "auto"]] = "auto",
-        model: Optional[str] = None,
-    ):
-        """Handle /imgedit slash command"""
-
+        strength: app_commands.Range[float, 0.1, 1.0] | None = 0.8,
+        steps: app_commands.Range[int, 10, 50] | None = 30,
+        guidance: app_commands.Range[float, 1.0, 20.0] | None = 7.0,
+        negative: str | None = None,
+        seed: int | None = None,
+        provider: Literal["together", "novita", "auto"] | None = "auto",
+        model: str | None = None,
+    ) -> None:
+        """Handle /imgedit slash command."""
         if not self.config.get("VISION_ENABLED", False):
             await interaction.response.send_message("🚫 Vision generation is currently disabled.", ephemeral=True)
             return
@@ -306,7 +305,7 @@ class VisionCommands(commands.Cog):
                     )
                     if t.done() and not t.cancelled() and t.exception()
                     else None
-                )
+                ),
             )
 
         except Exception as e:
@@ -338,16 +337,15 @@ class VisionCommands(commands.Cog):
         self,
         interaction: discord.Interaction,
         prompt: str,
-        duration: Optional[app_commands.Range[int, 1, 10]] = 3,
-        fps: Optional[app_commands.Range[int, 12, 30]] = 24,
-        resolution: Optional[Literal["720p", "1080p"]] = "720p",
-        style: Optional[str] = "natural",
-        seed: Optional[int] = None,
-        provider: Optional[Literal["together", "novita", "auto"]] = "auto",
-        model: Optional[str] = None,
-    ):
-        """Handle /video slash command"""
-
+        duration: app_commands.Range[int, 1, 10] | None = 3,
+        fps: app_commands.Range[int, 12, 30] | None = 24,
+        resolution: Literal["720p", "1080p"] | None = "720p",
+        style: str | None = "natural",
+        seed: int | None = None,
+        provider: Literal["together", "novita", "auto"] | None = "auto",
+        model: str | None = None,
+    ) -> None:
+        """Handle /video slash command."""
         if not self.config.get("VISION_ENABLED", False):
             await interaction.response.send_message("🚫 Vision generation is currently disabled.", ephemeral=True)
             return
@@ -418,7 +416,7 @@ class VisionCommands(commands.Cog):
                     )
                     if t.done() and not t.cancelled() and t.exception()
                     else None
-                )
+                ),
             )
 
         except Exception as e:
@@ -447,16 +445,15 @@ class VisionCommands(commands.Cog):
         self,
         interaction: discord.Interaction,
         image: discord.Attachment,
-        prompt: Optional[str] = None,
-        duration: Optional[app_commands.Range[int, 1, 8]] = 3,
-        fps: Optional[app_commands.Range[int, 12, 30]] = 24,
-        mode: Optional[Literal["image2video", "start_end"]] = "image2video",
-        seed: Optional[int] = None,
-        provider: Optional[Literal["together", "novita", "auto"]] = "auto",
-        model: Optional[str] = None,
-    ):
-        """Handle /vidref slash command"""
-
+        prompt: str | None = None,
+        duration: app_commands.Range[int, 1, 8] | None = 3,
+        fps: app_commands.Range[int, 12, 30] | None = 24,
+        mode: Literal["image2video", "start_end"] | None = "image2video",
+        seed: int | None = None,
+        provider: Literal["together", "novita", "auto"] | None = "auto",
+        model: str | None = None,
+    ) -> None:
+        """Handle /vidref slash command."""
         if not self.config.get("VISION_ENABLED", False):
             await interaction.response.send_message("🚫 Vision generation is currently disabled.", ephemeral=True)
             return
@@ -536,7 +533,7 @@ class VisionCommands(commands.Cog):
                     )
                     if t.done() and not t.cancelled() and t.exception()
                     else None
-                )
+                ),
             )
 
         except Exception as e:
@@ -554,7 +551,7 @@ class VisionCommands(commands.Cog):
             )
 
     async def _download_attachment(self, attachment: discord.Attachment) -> Path:
-        """Download Discord attachment to temporary file [RM]"""
+        """Download Discord attachment to temporary file [RM]."""
         # Sanitize suffix from the original filename, fall back to .bin
         suffix = Path(attachment.filename).suffix or ".bin"
         # Only allow known safe suffixes to prevent writing executable content
@@ -589,19 +586,19 @@ class VisionCommands(commands.Cog):
         self._temp_files.add(temp_path)
 
         # Download attachment data
-        async with aiohttp.ClientSession() as session:
-            async with session.get(attachment.url) as resp:
-                if resp.status == 200:
-                    data = await resp.read()
-                    with open(temp_path, "wb") as f:
-                        f.write(data)
-                else:
-                    raise Exception(f"Failed to download attachment: HTTP {resp.status}")
+        async with aiohttp.ClientSession() as session, session.get(attachment.url) as resp:
+            if resp.status == 200:
+                data = await resp.read()
+                with open(temp_path, "wb") as f:
+                    f.write(data)
+            else:
+                msg = f"Failed to download attachment: HTTP {resp.status}"
+                raise Exception(msg)
 
         return temp_path
 
-    async def _monitor_job_progress(self, interaction: discord.Interaction, job, long_running: bool = False):
-        """Monitor job progress and update Discord message [PA]"""
+    async def _monitor_job_progress(self, interaction: discord.Interaction, job, long_running: bool = False) -> None:
+        """Monitor job progress and update Discord message [PA]."""
         update_interval = self.config.get("VISION_PROGRESS_UPDATE_INTERVAL_S", 10)
         max_updates = 60 if long_running else 30  # More updates for video
 
@@ -636,8 +633,8 @@ class VisionCommands(commands.Cog):
                 },
             )
 
-    async def _send_progress_update(self, interaction: discord.Interaction, job):
-        """Send progress update embed [UX]"""
+    async def _send_progress_update(self, interaction: discord.Interaction, job) -> None:
+        """Send progress update embed [UX]."""
         try:
             embed = discord.Embed(
                 title=f"{'🎨' if job.request.task == VisionTask.TEXT_TO_IMAGE else '🎬'} Generation in Progress",
@@ -662,8 +659,8 @@ class VisionCommands(commands.Cog):
         except Exception as e:
             self.logger.debug(f"Could not update progress: {e}")
 
-    async def _send_completion_message(self, interaction: discord.Interaction, job):
-        """Send completion message with generated artifacts [UX]"""
+    async def _send_completion_message(self, interaction: discord.Interaction, job) -> None:
+        """Send completion message with generated artifacts [UX]."""
         try:
             response = job.response
             task_icons = {
@@ -747,8 +744,8 @@ class VisionCommands(commands.Cog):
                 },
             )
 
-    async def _send_error_message(self, interaction: discord.Interaction, job):
-        """Send error message for failed jobs [REH]"""
+    async def _send_error_message(self, interaction: discord.Interaction, job) -> None:
+        """Send error message for failed jobs [REH]."""
         try:
             error = job.error or job.response.error if job.response else None
 
@@ -777,23 +774,22 @@ class VisionCommands(commands.Cog):
             )
 
     def _format_elapsed_time(self, job) -> str:
-        """Format elapsed time since job started [CMV]"""
+        """Format elapsed time since job started [CMV]."""
         if not job.started_at:
             return "Not started"
 
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        elapsed = datetime.now(timezone.utc) - job.started_at
+        elapsed = datetime.now(UTC) - job.started_at
         total_seconds = int(elapsed.total_seconds())
 
         if total_seconds < 60:
             return f"{total_seconds}s"
-        else:
-            minutes = total_seconds // 60
-            seconds = total_seconds % 60
-            return f"{minutes}m {seconds}s"
+        minutes = total_seconds // 60
+        seconds = total_seconds % 60
+        return f"{minutes}m {seconds}s"
 
 
 async def setup(bot) -> None:
-    """Setup function for Discord cog loading"""
+    """Setup function for Discord cog loading."""
     await bot.add_cog(VisionCommands(bot))

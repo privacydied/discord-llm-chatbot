@@ -1,11 +1,12 @@
 # /bot/tts/engines/stub.py
 import asyncio
 import io
-import wave
 import math
 import struct
-from .base import BaseEngine
+import wave
+
 from ...utils.logging import get_logger
+from .base import BaseEngine
 
 logger = get_logger(__name__)
 
@@ -36,14 +37,12 @@ def _generate_stub_wav_bytes(duration: float = 0.25, freq: int = 440) -> bytes:
 class StubEngine(BaseEngine):
     """A TTS engine that generates a stub audio signal as a fallback."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__()
         logger.info("TTS StubEngine initialized.")
 
     async def synthesize(self, text: str) -> bytes:
-        """
-        Generates a stub WAV audio file in-memory, ignoring the input text.
-        """
+        """Generates a stub WAV audio file in-memory, ignoring the input text."""
         logger.warning(f"Synthesizing STUB audio for text: '{text[:40]}...'")
         try:
             # This is a CPU-bound operation, but it's very fast.

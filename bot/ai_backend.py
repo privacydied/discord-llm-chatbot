@@ -1,13 +1,12 @@
-"""
-AI Backend Router - Routes requests to appropriate AI service based on configuration.
-"""
+"""AI Backend Router - Routes requests to appropriate AI service based on configuration."""
 
-from typing import Dict, Any, Union, AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from .config import load_config
-from .utils.logging import get_logger
-from .retry_utils import is_retryable_error, VISION_RETRY_CONFIG
 from .exceptions import APIError, InferenceError
+from .retry_utils import VISION_RETRY_CONFIG, is_retryable_error
+from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -15,16 +14,15 @@ logger = get_logger(__name__)
 async def generate_response(
     prompt: str,
     context: str = "",
-    system_prompt: Optional[str] = None,
-    user_id: str = None,
-    guild_id: str = None,
-    temperature: float = None,
-    max_tokens: int = None,
+    system_prompt: str | None = None,
+    user_id: str | None = None,
+    guild_id: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     stream: bool = False,
     **kwargs,
-) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
-    """
-    Generate a response using the configured AI backend.
+) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
+    """Generate a response using the configured AI backend.
 
     Routes to either OpenAI/OpenRouter, NVIDIA NIM, or Ollama based on TEXT_BACKEND configuration.
     """
@@ -58,7 +56,7 @@ async def generate_response(
             )
             logger.info("✅ OpenAI backend completed successfully")
             return result
-        elif backend == "nvidia":
+        if backend == "nvidia":
             # Use NVIDIA NIM backend
             logger.debug("🤖 Routing to NVIDIA NIM backend")
             from .nvidia_backend import generate_nvidia_response
@@ -76,7 +74,7 @@ async def generate_response(
             )
             logger.info("✅ NVIDIA NIM backend completed successfully")
             return result
-        elif backend == "ollama":
+        if backend == "ollama":
             # Use Ollama backend
             logger.debug("🤖 Routing to Ollama backend")
             from .ollama import generate_response as ollama_generate_response
@@ -94,9 +92,9 @@ async def generate_response(
             )
             logger.info("✅ Ollama backend completed successfully")
             return result
-        else:
-            logger.error(f"❌ Unknown backend: {backend}")
-            raise ValueError(f"Unknown backend: {backend}")
+        logger.error(f"❌ Unknown backend: {backend}")
+        msg = f"Unknown backend: {backend}"
+        raise ValueError(msg)
 
     except Exception as e:
         # Suppress traceback for expected "all providers unavailable" errors [REH]
@@ -112,20 +110,20 @@ async def generate_response(
             logger.warning(f"⚠️ Text generation failed (all providers unavailable): {e}")
         else:
             logger.error(f"❌ Error in generate_response: {e}", exc_info=True)
-        raise APIError(f"Failed to generate response: {str(e)}") from e
+        msg = f"Failed to generate response: {e!s}"
+        raise APIError(msg) from e
 
 
 async def generate_vl_response(
     image_url: str,
     user_prompt: str = "",
-    user_id: str = None,
-    guild_id: str = None,
-    temperature: float = None,
-    max_tokens: int = None,
+    user_id: str | None = None,
+    guild_id: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     **kwargs,
-) -> Dict[str, Any]:
-    """
-    Generate a vision-language response using the VL model.
+) -> dict[str, Any]:
+    """Generate a vision-language response using the VL model.
     CHANGE: Enhanced VL routing with comprehensive debug logging for hybrid multimodal inference.
 
     Currently only supports OpenAI/OpenRouter VL models.
@@ -164,26 +162,25 @@ async def generate_vl_response(
             if _vl_ok:
                 logger.info("✅ OpenAI VL backend completed successfully")
             return result
-        else:
-            # For now, Ollama VL is not implemented, fallback to OpenAI
-            logger.warning(f"⚠️ VL not supported for backend {backend}, falling back to OpenAI")
-            from .openai_backend import (
-                generate_vl_response as openai_generate_vl_response,
-            )
+        # For now, Ollama VL is not implemented, fallback to OpenAI
+        logger.warning(f"⚠️ VL not supported for backend {backend}, falling back to OpenAI")
+        from .openai_backend import (
+            generate_vl_response as openai_generate_vl_response,
+        )
 
-            result = await openai_generate_vl_response(
-                image_url=image_url,
-                user_prompt=user_prompt,
-                user_id=user_id,
-                guild_id=guild_id,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                **kwargs,
-            )
-            _vl_ok = not (isinstance(result, dict) and (result.get("ladder_exhausted") or result.get("status") == "error" or (result.get("text") or "").strip() == ""))
-            if _vl_ok:
-                logger.info("✅ OpenAI VL fallback completed successfully")
-            return result
+        result = await openai_generate_vl_response(
+            image_url=image_url,
+            user_prompt=user_prompt,
+            user_id=user_id,
+            guild_id=guild_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs,
+        )
+        _vl_ok = not (isinstance(result, dict) and (result.get("ladder_exhausted") or result.get("status") == "error" or (result.get("text") or "").strip() == ""))
+        if _vl_ok:
+            logger.info("✅ OpenAI VL fallback completed successfully")
+        return result
 
     except Exception as e:
         # Suppress traceback for expected "all providers unavailable" errors [REH]
@@ -203,8 +200,9 @@ async def generate_vl_response(
         # Provide more user-friendly error messages for common issues
         if is_retryable_error(e, VISION_RETRY_CONFIG):
             logger.warning("⚠️ Detected transient provider error in AI backend")
-            raise APIError("The vision service is temporarily unavailable. This appears to be a provider issue that should resolve shortly. Please try again in a few minutes.") from e
+            msg = "The vision service is temporarily unavailable. This appears to be a provider issue that should resolve shortly. Please try again in a few minutes."
+            raise APIError(msg) from e
         # For other errors, raise an inference-specific error
-        err = InferenceError(f"Vision processing failed: {str(e)}")
+        err = InferenceError(f"Vision processing failed: {e!s}")
         err.vl_exhausted = True
         raise err from e

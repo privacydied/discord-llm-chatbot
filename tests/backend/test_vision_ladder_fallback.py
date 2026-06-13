@@ -1,10 +1,11 @@
-"""
-Tests for vision ladder fallback via EnhancedRetryManager.
+"""Tests for vision ladder fallback via EnhancedRetryManager.
 Verifies that VISION_FALLBACK_MODELS ladder is used for VL calls.
 """
 
-import pytest
+from typing import Never
+
 import httpx
+import pytest
 
 from bot.enhanced_retry import EnhancedRetryManager, ProviderConfig
 
@@ -16,7 +17,7 @@ def make_httpx_429(retry_after: float = 1.0) -> httpx.HTTPStatusError:
 
 
 @pytest.mark.asyncio
-async def test_enhanced_retry_manager_vision_ladder_fallback():
+async def test_enhanced_retry_manager_vision_ladder_fallback() -> None:
     """Test that vision ladder falls back from first to second provider."""
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
@@ -30,7 +31,8 @@ async def test_enhanced_retry_manager_vision_ladder_fallback():
     def factory(pc: ProviderConfig):
         async def run():
             if pc.model == "vision-fail-a":
-                raise Exception("429 Too Many Requests")
+                msg = "429 Too Many Requests"
+                raise Exception(msg)
             return {
                 "text": "Vision OK",
                 "model": pc.model,
@@ -51,7 +53,7 @@ async def test_enhanced_retry_manager_vision_ladder_fallback():
 
 
 @pytest.mark.asyncio
-async def test_enhanced_retry_manager_vision_ladder_all_fail():
+async def test_enhanced_retry_manager_vision_ladder_all_fail() -> None:
     """Test that vision ladder exhaustion is properly reported."""
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
@@ -63,8 +65,9 @@ async def test_enhanced_retry_manager_vision_ladder_all_fail():
     ]
 
     def factory(pc: ProviderConfig):
-        async def run():
-            raise Exception("503 Service Unavailable")
+        async def run() -> Never:
+            msg = "503 Service Unavailable"
+            raise Exception(msg)
 
         return run
 
@@ -77,7 +80,7 @@ async def test_enhanced_retry_manager_vision_ladder_all_fail():
 
 
 @pytest.mark.asyncio
-async def test_enhanced_retry_manager_vision_single_provider_success():
+async def test_enhanced_retry_manager_vision_single_provider_success() -> None:
     """Test that vision ladder works with a single provider that succeeds."""
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
@@ -106,7 +109,7 @@ async def test_enhanced_retry_manager_vision_single_provider_success():
 
 
 @pytest.mark.asyncio
-async def test_vision_ladder_respects_per_provider_timeouts():
+async def test_vision_ladder_respects_per_provider_timeouts() -> None:
     """Test that per-provider timeouts from ladder config are respected."""
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
@@ -124,7 +127,8 @@ async def test_vision_ladder_respects_per_provider_timeouts():
 
         async def run():
             if pc.model == "fast-model":
-                raise Exception("429 Too Many Requests")
+                msg = "429 Too Many Requests"
+                raise Exception(msg)
             return {"text": "OK", "model": pc.model}
 
         return run
@@ -138,7 +142,7 @@ async def test_vision_ladder_respects_per_provider_timeouts():
 
 
 @pytest.mark.asyncio
-async def test_vision_ladder_circuit_breaker_skips_failed_provider():
+async def test_vision_ladder_circuit_breaker_skips_failed_provider() -> None:
     """Test that circuit breaker skips providers that have recently failed."""
     mgr = EnhancedRetryManager()
     mgr.circuit_breakers.clear()
@@ -154,7 +158,8 @@ async def test_vision_ladder_circuit_breaker_skips_failed_provider():
         async def run():
             if pc.model == "flaky-model":
                 call_count["flaky"] += 1
-                raise Exception("500 Internal Server Error")
+                msg = "500 Internal Server Error"
+                raise Exception(msg)
             call_count["stable"] += 1
             return {"text": "OK", "model": pc.model}
 
@@ -181,7 +186,7 @@ async def test_vision_ladder_circuit_breaker_skips_failed_provider():
 
 def test_env_vision_ladder_is_authoritative_and_not_clobbered(
     monkeypatch: pytest.MonkeyPatch,
-):
+) -> None:
     mgr = EnhancedRetryManager()
 
     # Provide 3 env models; regression used to reset ladder to default_vision[:2]

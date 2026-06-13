@@ -9,22 +9,25 @@ to achieve 3-5 second startup performance improvement target.
 from __future__ import annotations
 
 import asyncio
-import time
 import logging
+import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any
 
 from bot.metrics import (
-    metrics,
-    METRIC_STARTUP_TOTAL_DURATION,
-    METRIC_STARTUP_COMPONENT_DURATION,
-    METRIC_STARTUP_PARALLEL_GROUPS,
-    METRIC_COMPONENT_INIT_SUCCESS,
     METRIC_COMPONENT_INIT_FAILURE,
+    METRIC_COMPONENT_INIT_SUCCESS,
     METRIC_COMPONENT_LAST_INIT_TIMESTAMP,
     METRIC_DEGRADED_MODE,
+    METRIC_STARTUP_COMPONENT_DURATION,
+    METRIC_STARTUP_PARALLEL_GROUPS,
+    METRIC_STARTUP_TOTAL_DURATION,
+    metrics,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class ComponentStatus(Enum):
@@ -53,9 +56,9 @@ class ComponentResult:
     name: str
     status: ComponentStatus
     duration_ms: float
-    error_class: Optional[ErrorClass] = None
-    error_message: Optional[str] = None
-    fallback_used: Optional[str] = None
+    error_class: ErrorClass | None = None
+    error_message: str | None = None
+    fallback_used: str | None = None
     attempt_count: int = 1
 
 
@@ -64,20 +67,22 @@ class ComponentSpec:
     """Specification for a component initialization."""
 
     name: str
-    initializer: Union[Callable[[], Any], Callable[[], asyncio.Task]]
-    dependencies: Set[str] = field(default_factory=set)
+    initializer: Callable[[], Any] | Callable[[], asyncio.Task]
+    dependencies: set[str] = field(default_factory=set)
     timeout_seconds: float = 30.0
-    fallback: Optional[Callable[[], Any]] = None
+    fallback: Callable[[], Any] | None = None
     is_fatal: bool = False
-    expected_exceptions: Tuple[type, ...] = field(default_factory=tuple)
+    expected_exceptions: tuple[type, ...] = field(default_factory=tuple)
     retry_count: int = 0  # Number of retries on failure
 
     def __post_init__(self):
         """Validate component specification."""
         if self.timeout_seconds <= 0:
-            raise ValueError(f"Component '{self.name}' timeout must be positive")
+            msg = f"Component '{self.name}' timeout must be positive"
+            raise ValueError(msg)
         if self.retry_count < 0:
-            raise ValueError(f"Component '{self.name}' retry_count must be non-negative")
+            msg = f"Component '{self.name}' retry_count must be non-negative"
+            raise ValueError(msg)
 
 
 class StartupOrchestrator:
@@ -93,29 +98,32 @@ class StartupOrchestrator:
     [RAT: CA, PA, REH] - Clean Architecture, Performance Awareness, Robust Error Handling
     """
 
-    def __init__(self, max_concurrent: int = 4):
+    def __init__(self, max_concurrent: int = 4) -> None:
         """Initialize orchestrator.
 
         Args:
             max_concurrent: Maximum concurrent initializations to prevent thrash
+
         """
         self.logger = logging.getLogger(__name__)
-        self.components: Dict[str, ComponentSpec] = {}
-        self.results: Dict[str, ComponentResult] = {}
+        self.components: dict[str, ComponentSpec] = {}
+        self.results: dict[str, ComponentResult] = {}
         self.max_concurrent = max_concurrent
         self.degraded_mode = False
-        self.degraded_components: Set[str] = set()
+        self.degraded_components: set[str] = set()
 
     def add_component(self, spec: ComponentSpec) -> None:
         """Add a component specification to the orchestration plan.
 
         Args:
             spec: Component specification with dependencies and configuration
+
         """
         # Validate dependencies exist
         for dep in spec.dependencies:
             if dep not in self.components:
-                raise ValueError(f"Component '{spec.name}' depends on undefined component '{dep}'")
+                msg = f"Component '{spec.name}' depends on undefined component '{dep}'"
+                raise ValueError(msg)
 
         self.components[spec.name] = spec
         self.logger.debug(
@@ -123,11 +131,12 @@ class StartupOrchestrator:
             extra={"subsys": "startup"},
         )
 
-    def _build_dependency_groups(self) -> List[List[str]]:
+    def _build_dependency_groups(self) -> list[list[str]]:
         """Build ordered groups of components that can run in parallel.
 
         Returns:
             List of component groups, where each group can run concurrently
+
         """
         # Topological sort with grouping
         remaining = set(self.components.keys())
@@ -140,7 +149,8 @@ class StartupOrchestrator:
 
             if not ready:
                 # Circular dependency detected
-                raise ValueError(f"Circular dependencies detected in: {remaining}")
+                msg = f"Circular dependencies detected in: {remaining}"
+                raise ValueError(msg)
 
             groups.append(list(ready))
             completed.update(ready)
@@ -156,6 +166,7 @@ class StartupOrchestrator:
 
         Returns:
             ComponentResult with timing and status information
+
         """
         start_time = time.time()
         last_error = None
@@ -195,7 +206,7 @@ class StartupOrchestrator:
                     attempt_count=attempt + 1,
                 )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = f"Timeout after {spec.timeout_seconds}s"
                 error_class = ErrorClass.EXTERNAL_TIMEOUT
                 self.logger.warning(
@@ -281,10 +292,9 @@ class StartupOrchestrator:
         """Run component initializer, handling both sync and async functions."""
         if asyncio.iscoroutinefunction(initializer):
             return await initializer()
-        else:
-            # Run blocking initializers in thread pool
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(None, initializer)
+        # Run blocking initializers in thread pool
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, initializer)
 
     def _classify_error(self, error: Exception) -> ErrorClass:
         """Classify error for handling strategy determination."""
@@ -293,18 +303,18 @@ class StartupOrchestrator:
 
         if any(keyword in error_msg for keyword in ["config", "configuration", "setting"]):
             return ErrorClass.CONFIG_ERROR
-        elif any(keyword in error_msg for keyword in ["timeout", "connection", "network"]):
+        if any(keyword in error_msg for keyword in ["timeout", "connection", "network"]):
             return ErrorClass.EXTERNAL_TIMEOUT
-        elif any(keyword in error_msg for keyword in ["not found", "unavailable", "missing"]):
+        if any(keyword in error_msg for keyword in ["not found", "unavailable", "missing"]):
             return ErrorClass.DEPENDENCY_UNAVAILABLE
-        else:
-            return ErrorClass.PROGRAMMING_ERROR
+        return ErrorClass.PROGRAMMING_ERROR
 
-    async def execute(self) -> Dict[str, ComponentResult]:
+    async def execute(self) -> dict[str, ComponentResult]:
         """Execute the startup orchestration with parallel groups.
 
         Returns:
             Dictionary of component results with timing and status information
+
         """
         if not self.components:
             self.logger.warning("No components registered for startup", extra={"subsys": "startup"})
@@ -370,7 +380,8 @@ class StartupOrchestrator:
 
                 if fatal_failures:
                     fatal_names = [f.name for f in fatal_failures]
-                    raise RuntimeError(f"Fatal component failures: {fatal_names}")
+                    msg = f"Fatal component failures: {fatal_names}"
+                    raise RuntimeError(msg)
 
             total_duration = time.time() - startup_start
             metrics.observe(METRIC_STARTUP_TOTAL_DURATION, total_duration)
@@ -396,11 +407,12 @@ class StartupOrchestrator:
             )
             raise
 
-    def get_startup_summary(self) -> Dict[str, Any]:
+    def get_startup_summary(self) -> dict[str, Any]:
         """Get structured startup summary for logging and health reporting.
 
         Returns:
             Dictionary with startup timing and status information
+
         """
         if not self.results:
             return {"status": "not_started", "components": []}
@@ -416,7 +428,7 @@ class StartupOrchestrator:
                     "error_class": result.error_class.value if result.error_class else None,
                     "error_message": result.error_message,
                     "attempt_count": result.attempt_count,
-                }
+                },
             )
 
         success_count = sum(1 for r in self.results.values() if r.status == ComponentStatus.SUCCESS)

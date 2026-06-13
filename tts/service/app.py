@@ -1,10 +1,11 @@
-from flask import Flask, request, send_file
-from kokoro_onnx import KokoroONNXTTS
 import hashlib
 import os
 from pathlib import Path
-from pydub import AudioSegment
+
 import onnxruntime as ort
+from flask import Flask, request, send_file
+from kokoro_onnx import KokoroONNXTTS
+from pydub import AudioSegment
 
 app = Flask(__name__)
 
@@ -118,7 +119,7 @@ def synthesize():
 
         return send_file(ogg_path, mimetype="audio/ogg")
     except Exception as e:
-        return {"error": f"TTS generation failed: {str(e)}"}, 500
+        return {"error": f"TTS generation failed: {e!s}"}, 500
 
 
 if __name__ == "__main__":

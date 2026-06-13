@@ -1,5 +1,4 @@
-"""
-Document ingestion wrapper for Discord attachments.
+"""Document ingestion wrapper for Discord attachments.
 
 Handles PDF (with OCR fallback), DOCX, RTF, and Markdown files.
 Integrates with existing RAG document parsers and PDF processor.
@@ -9,7 +8,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Any
+from typing import TYPE_CHECKING, Any
 
 from .utils.logging import get_logger
 
@@ -21,9 +20,8 @@ logger = get_logger(__name__)
 
 async def ingest_document_attachment(
     attachment: discord.Attachment,
-) -> Dict[str, Any]:
-    """
-    Ingest a document attachment and extract its text content.
+) -> dict[str, Any]:
+    """Ingest a document attachment and extract its text content.
 
     Supports: PDF (with OCR fallback), DOCX, DOC, RTF, MD, ODT
 
@@ -32,6 +30,7 @@ async def ingest_document_attachment(
 
     Returns:
         Dict with keys: text, metadata, error (if any)
+
     """
     filename = getattr(attachment, "filename", "unknown")
     ext = Path(filename).suffix.lower()
@@ -57,7 +56,7 @@ async def ingest_document_attachment(
             result = await _ingest_pdf(tmp_path, filename)
         elif ext in {".docx", ".doc", ".odt"}:
             result = await _ingest_docx(tmp_path, filename)
-        elif ext in {".rtf"}:
+        elif ext == ".rtf":
             result = await _ingest_rtf(tmp_path, filename)
         elif ext in {".md", ".markdown"}:
             result = await _ingest_markdown(tmp_path, filename)
@@ -104,7 +103,7 @@ async def ingest_document_attachment(
         return {
             "text": "",
             "metadata": {},
-            "error": f"Failed to process document: {str(e)}",
+            "error": f"Failed to process document: {e!s}",
         }
 
     finally:
@@ -116,9 +115,8 @@ async def ingest_document_attachment(
             logger.debug(f"Failed to cleanup temp file {tmp_path}: {e}")
 
 
-async def _ingest_pdf(tmp_path: Path, filename: str) -> Dict[str, Any]:
-    """
-    Ingest PDF with OCR fallback.
+async def _ingest_pdf(tmp_path: Path, filename: str) -> dict[str, Any]:
+    """Ingest PDF with OCR fallback.
 
     Uses existing PDFProcessor which already has OCR fallback logic.
     """
@@ -150,13 +148,12 @@ async def _ingest_pdf(tmp_path: Path, filename: str) -> Dict[str, Any]:
                 "metadata": result,
                 "error": None,
             }
-        else:
-            # Legacy API returns string
-            return {
-                "text": str(result),
-                "metadata": {},
-                "error": None if result else "No text extracted",
-            }
+        # Legacy API returns string
+        return {
+            "text": str(result),
+            "metadata": {},
+            "error": None if result else "No text extracted",
+        }
 
     except Exception as e:
         logger.error(f"PDF ingestion failed: {e}", exc_info=True)
@@ -167,7 +164,7 @@ async def _ingest_pdf(tmp_path: Path, filename: str) -> Dict[str, Any]:
         }
 
 
-async def _ingest_docx(tmp_path: Path, filename: str) -> Dict[str, Any]:
+async def _ingest_docx(tmp_path: Path, filename: str) -> dict[str, Any]:
     """Ingest DOCX/DOC/ODT files using RAG document parser."""
     try:
         from .rag.document_parsers import DocumentParserFactory
@@ -196,7 +193,7 @@ async def _ingest_docx(tmp_path: Path, filename: str) -> Dict[str, Any]:
         }
 
 
-async def _ingest_rtf(tmp_path: Path, filename: str) -> Dict[str, Any]:
+async def _ingest_rtf(tmp_path: Path, filename: str) -> dict[str, Any]:
     """Ingest RTF files."""
     try:
         # Try to use RAG parser if available
@@ -222,7 +219,7 @@ async def _ingest_rtf(tmp_path: Path, filename: str) -> Dict[str, Any]:
         return await _ingest_as_text(tmp_path, filename)
 
 
-async def _ingest_markdown(tmp_path: Path, filename: str) -> Dict[str, Any]:
+async def _ingest_markdown(tmp_path: Path, filename: str) -> dict[str, Any]:
     """Ingest Markdown files using RAG document parser."""
     try:
         from .rag.document_parsers import DocumentParserFactory
@@ -241,7 +238,7 @@ async def _ingest_markdown(tmp_path: Path, filename: str) -> Dict[str, Any]:
         return await _ingest_as_text(tmp_path, filename)
 
 
-async def _ingest_as_text(tmp_path: Path, filename: str) -> Dict[str, Any]:
+async def _ingest_as_text(tmp_path: Path, filename: str) -> dict[str, Any]:
     """Fallback: Read file as plain text."""
     try:
         # Try UTF-8 first
@@ -272,9 +269,8 @@ async def _ingest_as_text(tmp_path: Path, filename: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-async def ingest_document_from_url(url: str) -> Dict[str, Any]:
-    """
-    Ingest a document from a URL and extract its text content.
+async def ingest_document_from_url(url: str) -> dict[str, Any]:
+    """Ingest a document from a URL and extract its text content.
 
     Downloads the document to a temp file and processes it using the same
     pipeline as Discord attachments.
@@ -286,8 +282,9 @@ async def ingest_document_from_url(url: str) -> Dict[str, Any]:
 
     Returns:
         Dict with keys: text, metadata, error (if any)
+
     """
-    from .url_classifier import download_url_to_temp, _extract_filename_from_url
+    from .url_classifier import _extract_filename_from_url, download_url_to_temp
 
     filename = _extract_filename_from_url(url) or "document"
     ext = Path(filename).suffix.lower()
@@ -329,7 +326,7 @@ async def ingest_document_from_url(url: str) -> Dict[str, Any]:
             result = await _ingest_pdf(tmp_path, filename)
         elif ext in {".docx", ".doc", ".odt"}:
             result = await _ingest_docx(tmp_path, filename)
-        elif ext in {".rtf"}:
+        elif ext == ".rtf":
             result = await _ingest_rtf(tmp_path, filename)
         elif ext in {".md", ".markdown"}:
             result = await _ingest_markdown(tmp_path, filename)
@@ -387,7 +384,7 @@ async def ingest_document_from_url(url: str) -> Dict[str, Any]:
         return {
             "text": "",
             "metadata": {"source_url": url},
-            "error": f"Failed to process document: {str(e)}",
+            "error": f"Failed to process document: {e!s}",
         }
 
     finally:

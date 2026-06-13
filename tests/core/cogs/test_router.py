@@ -1,19 +1,21 @@
 import types
+
 import pytest
 from discord.ext import commands
+
 from bot.core.bot import LLMBot
 from bot.router import ResponseMessage
 
 
 class TestRouterCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
-    async def ping(self, ctx):
+    async def ping(self, ctx) -> None:
         await ctx.send("pong")
 
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message) -> None:
         # Simulate router behavior for test verification
         if message.author.bot:
             return
@@ -27,7 +29,8 @@ class TestRouterCog(commands.Cog):
 
         # Guild message without mention
         if not _is_dm(message) and not _is_mention(message):
-            assert False, "Guild message without mention should be filtered by pre-command gate"
+            msg = "Guild message without mention should be filtered by pre-command gate"
+            raise AssertionError(msg)
 
         # Guild message with mention but no !prefix
         if _is_mention(message) and not message.content.startswith("!"):
@@ -58,7 +61,7 @@ class TestRouterCog(commands.Cog):
             guild = types.SimpleNamespace(id=3003)
 
         # Provide attributes accessed by tests and router helpers
-        msg = types.SimpleNamespace(
+        return types.SimpleNamespace(
             id=777,
             content=text,
             author=author,
@@ -68,14 +71,13 @@ class TestRouterCog(commands.Cog):
             attachments=[],
             mentions=[self.bot.user] if mention else [],
         )
-        return msg
 
 
 class FakeCtx:
-    def __init__(self):
+    def __init__(self) -> None:
         self.responses = []
 
-    async def send(self, s: str):
+    async def send(self, s: str) -> None:
         self.responses.append(s)
 
 
@@ -99,7 +101,7 @@ def bot():
 
 
 @pytest.mark.asyncio
-async def test_guild_mention_command(bot):
+async def test_guild_mention_command(bot) -> None:
     cog = TestRouterCog(bot)
     bot.add_cog(cog)
     ctx = await bot.get_context(cog._create_mock_message("!ping"))
@@ -108,7 +110,7 @@ async def test_guild_mention_command(bot):
 
 
 @pytest.mark.asyncio
-async def test_guild_mention_plain_text(bot):
+async def test_guild_mention_plain_text(bot) -> None:
     cog = TestRouterCog(bot)
     message = cog._create_mock_message("How are you?", mention=True)
     response = await bot.router.dispatch_message(message)
@@ -116,7 +118,7 @@ async def test_guild_mention_plain_text(bot):
 
 
 @pytest.mark.asyncio
-async def test_dm_command(bot):
+async def test_dm_command(bot) -> None:
     cog = TestRouterCog(bot)
     bot.add_cog(cog)
     ctx = await bot.get_context(cog._create_mock_message("!ping", is_dm=True))
@@ -125,7 +127,7 @@ async def test_dm_command(bot):
 
 
 @pytest.mark.asyncio
-async def test_dm_plain_text(bot):
+async def test_dm_plain_text(bot) -> None:
     cog = TestRouterCog(bot)
     message = cog._create_mock_message("Hello", is_dm=True)
     response = await bot.router.dispatch_message(message)
@@ -133,7 +135,7 @@ async def test_dm_plain_text(bot):
 
 
 @pytest.mark.asyncio
-async def test_invalid_command_filter(bot):
+async def test_invalid_command_filter(bot) -> None:
     cog = TestRouterCog(bot)
     # This should be filtered by the pre-command gate
     message = cog._create_mock_message("describe something")

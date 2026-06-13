@@ -34,12 +34,12 @@ def memory_cog(mock_bot):
     return ExtendedMemoryCommands(mock_bot)
 
 
-def test_memory_status_command_is_registered():
+def test_memory_status_command_is_registered() -> None:
     assert isinstance(ExtendedMemoryCommands.__dict__["memory_status"], commands.Command)
 
 
 @pytest.mark.asyncio
-async def test_memory_status_command_sends_embed(memory_cog, mock_ctx, monkeypatch):
+async def test_memory_status_command_sends_embed(memory_cog, mock_ctx, monkeypatch) -> None:
     fake_service = MagicMock()
     fake_service.enabled = True
     fake_service.queue = MagicMock()

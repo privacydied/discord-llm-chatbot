@@ -53,7 +53,7 @@ class TestInferredDenylist:
             "i am mixed race and from london, uk",
         ],
     )
-    def test_casual_drug_or_anecdote_blocked(self, curator, text):
+    def test_casual_drug_or_anecdote_blocked(self, curator, text) -> None:
         """Casual drug statements, third-party anecdotes, and sensitive content MUST NOT be saved."""
         result = curator.curate_inferred_candidate(user_id="123", text=text)
         assert result is None, f"Expected None (blocked) for: {text!r}"
@@ -62,7 +62,7 @@ class TestInferredDenylist:
         result = curator.curate_inferred_candidate(user_id="123", text=bad_memory)
         assert result is None
 
-    def test_xanny_not_recurring_instruction(self, curator):
+    def test_xanny_not_recurring_instruction(self, curator) -> None:
         """The exact bad memory from the bug report must not be classified as recurring_instruction."""
         bad = "also my friends got the xanny munchies (i never did) but 4mg of ativan might do that"
         assert curator._is_recurring_instruction(bad.lower()) is False, "Should not match as recurring_instruction"
@@ -72,7 +72,7 @@ class TestInferredAllowed:
     """Content that SHOULD be saved as an inferred memory."""
 
     @pytest.mark.parametrize(
-        "text,expected_type",
+        ("text", "expected_type"),
         [
             # Strong recurring instructions
             ("from now on, answer in one paragraph", "recurring_instruction"),
@@ -87,7 +87,7 @@ class TestInferredAllowed:
             ("going forward, use UK English", "recurring_instruction"),
         ],
     )
-    def test_explicit_instruction_saved(self, curator, text, expected_type):
+    def test_explicit_instruction_saved(self, curator, text, expected_type) -> None:
         result = curator.curate_inferred_candidate(user_id="123", text=text)
         assert result is not None, f"Expected accepted for: {text!r}"
         assert result.context_type == expected_type, f"Expected {expected_type}, got {result.context_type}"
@@ -96,7 +96,7 @@ class TestInferredAllowed:
 class TestExplicitMemoryAlwaysWorks:
     """Explicit !memory-add must still work, even for sensitive content."""
 
-    def test_explicit_saves_drug_content(self, curator):
+    def test_explicit_saves_drug_content(self, curator) -> None:
         result = curator.build_explicit_candidate(
             user_id="123",
             text="I tried cocaine last year, interesting experience",
@@ -106,7 +106,7 @@ class TestExplicitMemoryAlwaysWorks:
         assert result.source == "explicit_memory_command"
         assert result.confidence >= 0.9
 
-    def test_explicit_saves_sensitive_content(self, curator):
+    def test_explicit_saves_sensitive_content(self, curator) -> None:
         result = curator.build_explicit_candidate(
             user_id="123",
             text="i am bisexual",
@@ -118,7 +118,7 @@ class TestExplicitMemoryAlwaysWorks:
         # Note: _looks_sensitive checks secrets, not identity. Should pass.
         assert result is not None
 
-    def test_explicit_remember_still_works(self, curator):
+    def test_explicit_remember_still_works(self, curator) -> None:
         result = curator.build_explicit_candidate(
             user_id="123",
             text="remember that i prefer short replies",
@@ -141,7 +141,7 @@ class TestRecurringInstructionSpecificity:
             "my sister always complains",
         ],
     )
-    def test_casual_never_always_not_recurring(self, curator, text):
+    def test_casual_never_always_not_recurring(self, curator, text) -> None:
         assert curator._is_recurring_instruction(text.lower()) is False
 
     @pytest.mark.parametrize(
@@ -156,5 +156,5 @@ class TestRecurringInstructionSpecificity:
             "you should never call me dude",
         ],
     )
-    def test_bot_directed_is_recurring(self, curator, text):
+    def test_bot_directed_is_recurring(self, curator, text) -> None:
         assert curator._is_recurring_instruction(text.lower()) is True

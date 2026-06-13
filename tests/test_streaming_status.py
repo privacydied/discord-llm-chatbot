@@ -1,13 +1,12 @@
 import asyncio
-from typing import Optional, List
 from unittest.mock import MagicMock
 
+import discord
 import pytest
 
 # Use the real BotAction dataclass
 from bot.action import BotAction
 from bot.core.bot import LLMBot
-import discord
 
 
 class FakeTyping:
@@ -19,8 +18,8 @@ class FakeTyping:
 
 
 class FakeChannel:
-    def __init__(self):
-        self.sent_messages: List[FakeMessage] = []
+    def __init__(self) -> None:
+        self.sent_messages: list[FakeMessage] = []
 
     def typing(self):
         return FakeTyping()
@@ -32,12 +31,12 @@ class FakeChannel:
 
 
 class FakeAuthor:
-    def __init__(self, id: int):
+    def __init__(self, id: int) -> None:
         self.id = id
 
 
 class FakeGuild:
-    def __init__(self, id: int):
+    def __init__(self, id: int) -> None:
         self.id = id
 
 
@@ -48,10 +47,10 @@ class FakeMessage:
         self,
         channel: FakeChannel,
         content: str = "",
-        embeds: Optional[list] = None,
-        author: Optional[FakeAuthor] = None,
-        guild: Optional[FakeGuild] = None,
-    ):
+        embeds: list | None = None,
+        author: FakeAuthor | None = None,
+        guild: FakeGuild | None = None,
+    ) -> None:
         FakeMessage._id_counter += 1
         self.id = FakeMessage._id_counter
         self.channel = channel
@@ -60,7 +59,7 @@ class FakeMessage:
         self.author = author or FakeAuthor(id=111)
         self.guild = guild or FakeGuild(id=222)
         self._deleted = False
-        self._edits: List[tuple] = []
+        self._edits: list[tuple] = []
 
     async def reply(
         self,
@@ -90,7 +89,7 @@ class FakeMessage:
             self.embeds = embeds
         return self
 
-    async def delete(self):
+    async def delete(self) -> bool:
         self._deleted = True
         return True
 
@@ -112,7 +111,7 @@ def _make_discord_http_exception(status: int = 429, message: str = "rate limited
 
 
 @pytest.mark.asyncio
-async def test_streaming_lifecycle_and_final_edit(monkeypatch):
+async def test_streaming_lifecycle_and_final_edit(monkeypatch) -> None:
     # Configure a minimal bot instance (no network). Intents and prefix are arbitrary here.
     intents = discord.Intents.none()
     bot = LLMBot(
@@ -134,7 +133,9 @@ async def test_streaming_lifecycle_and_final_edit(monkeypatch):
 
     # Start streaming status
     stream_ctx = await bot._start_streaming_status(incoming)
-    assert stream_ctx and "message" in stream_ctx and "task" in stream_ctx
+    assert stream_ctx
+    assert "message" in stream_ctx
+    assert "task" in stream_ctx
     placeholder = stream_ctx["message"]
     updater_task = stream_ctx["task"]
     assert not updater_task.done()
@@ -161,7 +162,7 @@ async def test_streaming_lifecycle_and_final_edit(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_replace_placeholder_when_files_present():
+async def test_replace_placeholder_when_files_present() -> None:
     intents = discord.Intents.none()
     bot = LLMBot(
         command_prefix="!",
@@ -185,9 +186,9 @@ async def test_replace_placeholder_when_files_present():
     action = BotAction(content="With file", embeds=[], audio_path="/nonexistent.ogg")
 
     # Monkeypatch os.path.exists and builtins.open to simulate existing audio file
-    import os as _os
     import builtins as _builtins
     import io as _io
+    import os as _os
 
     orig_exists = _os.path.exists
     orig_open = _builtins.open
@@ -206,7 +207,7 @@ async def test_replace_placeholder_when_files_present():
 
 
 @pytest.mark.asyncio
-async def test_execute_action_skips_failed_typing_and_still_replies(monkeypatch):
+async def test_execute_action_skips_failed_typing_and_still_replies(monkeypatch) -> None:
     intents = discord.Intents.none()
     bot = LLMBot(
         command_prefix="!",
@@ -241,7 +242,7 @@ async def test_execute_action_skips_failed_typing_and_still_replies(monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_execute_action_uses_typing_indicator(monkeypatch):
+async def test_execute_action_uses_typing_indicator(monkeypatch) -> None:
     intents = discord.Intents.none()
     bot = LLMBot(
         command_prefix="!",
@@ -279,7 +280,7 @@ async def test_execute_action_uses_typing_indicator(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_execute_action_suppresses_typing_after_429(monkeypatch):
+async def test_execute_action_suppresses_typing_after_429(monkeypatch) -> None:
     intents = discord.Intents.none()
     bot = LLMBot(
         command_prefix="!",
@@ -316,7 +317,7 @@ async def test_execute_action_suppresses_typing_after_429(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_execute_action_retries_transient_reply_failure(monkeypatch):
+async def test_execute_action_retries_transient_reply_failure(monkeypatch) -> None:
     intents = discord.Intents.none()
     bot = LLMBot(
         command_prefix="!",

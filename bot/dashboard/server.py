@@ -3,20 +3,21 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Optional
+import contextlib
+from typing import TYPE_CHECKING
 
 from aiohttp import web
 
 from bot.utils.logging import get_logger
 
 from .auth import SessionStore
-from .backfill import BackfillJobStore, BackfillService
-from .config import DashboardConfig
-from .message_store import MessageStore
 
 if TYPE_CHECKING:
     from .audit_store import AuditStore
+    from .backfill import BackfillJobStore, BackfillService
+    from .config import DashboardConfig
     from .dm_store import DMStore
+    from .message_store import MessageStore
     from .services import DashboardServices
 
 logger = get_logger(__name__)
@@ -28,9 +29,9 @@ class DashboardServer:
     def __init__(
         self,
         config: DashboardConfig,
-        services: "DashboardServices",
-        audit_store: "AuditStore",
-        dm_store: "DMStore",
+        services: DashboardServices,
+        audit_store: AuditStore,
+        dm_store: DMStore,
         message_store: MessageStore,
         backfill_store: BackfillJobStore,
         backfill_service: BackfillService,
@@ -42,10 +43,10 @@ class DashboardServer:
         self._message_store = message_store
         self._backfill_store = backfill_store
         self._backfill_service = backfill_service
-        self._app: Optional[web.Application] = None
-        self._runner: Optional[web.AppRunner] = None
-        self._site: Optional[web.TCPSite] = None
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._app: web.Application | None = None
+        self._runner: web.AppRunner | None = None
+        self._site: web.TCPSite | None = None
+        self._cleanup_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         """Start the dashboard aiohttp server."""
@@ -91,10 +92,8 @@ class DashboardServer:
         """Stop the dashboard server gracefully."""
         if self._cleanup_task:
             self._cleanup_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._cleanup_task
-            except asyncio.CancelledError:
-                pass
             self._cleanup_task = None
 
         # Clean up any running backfill jobs
@@ -155,7 +154,7 @@ class DashboardServer:
         return self._runner is not None
 
     @property
-    def app(self) -> Optional[web.Application]:
+    def app(self) -> web.Application | None:
         return self._app
 
     async def hot_reload_config(self, new_config: DashboardConfig) -> None:

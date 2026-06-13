@@ -1,13 +1,11 @@
-"""
-PDF processing utilities for the Discord bot, using PyMuPDF (fitz).
-"""
+"""PDF processing utilities for the Discord bot, using PyMuPDF (fitz)."""
 
+import asyncio
 import io
 import logging
-import asyncio
 import shutil
 from pathlib import Path
-from typing import Dict, Union, BinaryIO
+from typing import BinaryIO
 
 # PyMuPDF
 try:
@@ -43,11 +41,11 @@ except ImportError:
 class PDFProcessor:
     """Class to handle PDF processing operations using PyMuPDF."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.supported = PYMUPDF_AVAILABLE
         self.loop = None
 
-    def is_pdf(self, file_path: Union[str, Path, BinaryIO]) -> bool:
+    def is_pdf(self, file_path: str | Path | BinaryIO) -> bool:
         """Check if a file is a PDF by its magic number."""
         try:
             if hasattr(file_path, "read"):
@@ -55,30 +53,28 @@ class PDFProcessor:
                 header = file_path.read(4)
                 file_path.seek(pos)
                 return header == b"%PDF"
-            else:
-                with open(file_path, "rb") as f:
-                    return f.read(4) == b"%PDF"
+            with open(file_path, "rb") as f:
+                return f.read(4) == b"%PDF"
         except Exception as e:
-            logging.error(f"Error checking if file is PDF: {e}")
+            logging.exception(f"Error checking if file is PDF: {e}")
             return False
 
-    def _open_pdf(self, file_path: Union[str, Path, BinaryIO]) -> "fitz.Document":
+    def _open_pdf(self, file_path: str | Path | BinaryIO) -> "fitz.Document":
         """Helper to open a PDF from a path or file-like object."""
         if hasattr(file_path, "read"):
             # It's a file-like object
             file_path.seek(0)
             stream = file_path.read()
             return fitz.open(stream=stream, filetype="pdf")
-        else:
-            # It's a path
-            return fitz.open(file_path)
+        # It's a path
+        return fitz.open(file_path)
 
     def extract_text(self, doc: "fitz.Document") -> str:
         """Extract all text from a PyMuPDF document."""
         try:
             return "".join(page.get_text() for page in doc)
         except Exception as e:
-            logging.error(f"Error extracting text with PyMuPDF: {e}")
+            logging.exception(f"Error extracting text with PyMuPDF: {e}")
             return ""
 
     def extract_text_from_image_pdf(self, doc: "fitz.Document", dpi: int = 300) -> str:
@@ -98,10 +94,10 @@ class PDFProcessor:
                 text_parts.append(page_text)
             return "\n\n".join(text_parts)
         except Exception as e:
-            logging.error(f"Error during OCR extraction: {e}")
+            logging.exception(f"Error during OCR extraction: {e}")
             return ""
 
-    def get_metadata(self, doc: "fitz.Document") -> Dict[str, any]:
+    def get_metadata(self, doc: "fitz.Document") -> dict[str, any]:
         """Extract metadata from a PyMuPDF document."""
         if not self.supported:
             return {}
@@ -110,7 +106,7 @@ class PDFProcessor:
             metadata["page_count"] = doc.page_count
             return metadata
         except Exception as e:
-            logging.error(f"Error extracting PDF metadata with PyMuPDF: {e}")
+            logging.exception(f"Error extracting PDF metadata with PyMuPDF: {e}")
             return {}
 
     def is_scanned_pdf(self, doc: "fitz.Document") -> bool:
@@ -119,7 +115,7 @@ class PDFProcessor:
         # If the text is very short, it's likely scanned.
         return len(text.strip()) < 100
 
-    def extract_all(self, file_path: Union[str, Path, BinaryIO], extract_images: bool = False) -> Dict[str, any]:
+    def extract_all(self, file_path: str | Path | BinaryIO, extract_images: bool = False) -> dict[str, any]:
         """Extract all available information from a PDF using PyMuPDF."""
         result = {
             "text": "",
@@ -166,9 +162,8 @@ class PDFProcessor:
             result["error"] = str(e)
             return result
 
-    async def process(self, file_path: Union[str, Path, BinaryIO], extract_images: bool = False) -> Dict[str, any]:
-        """
-        Asynchronously process a PDF file by running the synchronous extract_all
+    async def process(self, file_path: str | Path | BinaryIO, extract_images: bool = False) -> dict[str, any]:
+        """Asynchronously process a PDF file by running the synchronous extract_all
         method in an executor to avoid blocking the event loop.
         """
         loop = self.loop or asyncio.get_running_loop()

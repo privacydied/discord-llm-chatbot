@@ -1,14 +1,13 @@
-"""
-Centralized vision-language inference module (see)
-"""
+"""Centralized vision-language inference module (see)."""
 
 import logging
 import os
 from pathlib import Path
+
 from .action import BotAction
 from .ai_backend import generate_vl_response
 from .config import load_config
-from .retry_utils import is_retryable_error, VISION_RETRY_CONFIG
+from .retry_utils import VISION_RETRY_CONFIG, is_retryable_error
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +64,8 @@ def _downsample_image(image_path: str, max_dimension: int) -> str:
         return image_path
 
 
-async def see_infer(image_path: str, prompt: str = None, model_override: str | None = None) -> BotAction:
-    """Generate response from image path and prompt"""
+async def see_infer(image_path: str, prompt: str | None = None, model_override: str | None = None) -> BotAction:
+    """Generate response from image path and prompt."""
     logger.debug(f"Processing image at path: {image_path}")
 
     caps = _load_vl_caps()
@@ -118,11 +117,11 @@ async def see_infer(image_path: str, prompt: str = None, model_override: str | N
         else:
             logger.debug(f"Loading VL prompt from file: {vl_prompt_file}")
             try:
-                with open(vl_prompt_file, "r", encoding="utf-8") as f:
+                with open(vl_prompt_file, encoding="utf-8") as f:
                     prompt = f.read().strip()
                 logger.debug(f"Loaded VL prompt: {len(prompt)} chars")
             except Exception as exc:
-                logger.error(f"Failed to load VL prompt file: {exc}")
+                logger.exception(f"Failed to load VL prompt file: {exc}")
                 prompt = "What's in this image? Describe it in detail."
 
     try:
@@ -130,7 +129,7 @@ async def see_infer(image_path: str, prompt: str = None, model_override: str | N
         response = await generate_vl_response(
             image_url=image_path_str,
             user_prompt=prompt,
-            model_override=model_override if model_override else None,
+            model_override=model_override or None,
         )
 
         telemetry = {}
@@ -185,7 +184,7 @@ async def see_infer(image_path: str, prompt: str = None, model_override: str | N
         return BotAction(content=("❌ Vision processing failed. This could be due to a temporary service issue. Please try again, and if the problem persists, the image may not be processable."))
 
     except Exception as exc:
-        logger.error(f"👁️ Vision inference failed: {str(exc)}", exc_info=True)
+        logger.error(f"👁️ Vision inference failed: {exc!s}", exc_info=True)
 
         error_str = str(exc).lower()
         reason = "generic_failure"

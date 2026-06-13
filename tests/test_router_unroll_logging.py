@@ -1,18 +1,18 @@
 import asyncio
+import logging
 from types import SimpleNamespace
 
-import logging
 import pytest
 
 # Skip — requires live HTTP access to classify URLs
 pytestmark = pytest.mark.skip(reason="Requires live HTTP access for URL classification")
 
-from bot.router import Router
 from bot.modality import InputItem
+from bot.router import Router
 
 
 class DummyBot:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict) -> None:
         self.config = config
         self.tts_manager = None
         # Provide a minimal loop attribute if accessed
@@ -25,7 +25,7 @@ class DummyBot:
 
 
 @pytest.mark.asyncio
-async def test_unroll_logging_ok(monkeypatch, caplog):
+async def test_unroll_logging_ok(monkeypatch, caplog) -> None:
     caplog.set_level(logging.DEBUG)
 
     import bot.router as router_mod
@@ -62,7 +62,7 @@ async def test_unroll_logging_ok(monkeypatch, caplog):
 
 
 @pytest.mark.asyncio
-async def test_unroll_logging_fallback(monkeypatch, caplog):
+async def test_unroll_logging_fallback(monkeypatch, caplog) -> None:
     caplog.set_level(logging.DEBUG)
 
     monkeypatch.setattr(Router, "_is_twitter_status_url", staticmethod(lambda u: True))

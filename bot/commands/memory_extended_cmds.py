@@ -1,7 +1,6 @@
-"""
-Additional memory control commands for the Discord bot.
+"""Additional memory control commands for the Discord bot.
 Extends memory_cmds.py with !memory-status, !memory-review, !memory-forget,
-!memory-disable, !memory-enable, !memory-export
+!memory-disable, !memory-enable, !memory-export.
 """
 
 import io
@@ -10,8 +9,8 @@ import logging
 import discord
 from discord.ext import commands
 
-from ..config import load_config
-from ..memory import get_memory_service
+from bot.config import load_config
+from bot.memory import get_memory_service
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ class ExtendedMemoryCommands(commands.Cog):
         self.config = load_config()
 
     @commands.command(name="memory-status", aliases=["mem-status"])
-    async def memory_status(self, ctx):
+    async def memory_status(self, ctx) -> None:
         """Show memory service status and queue depth.
 
         Owner/admin only for detailed diagnostics.
@@ -74,11 +73,12 @@ class ExtendedMemoryCommands(commands.Cog):
             await ctx.send("❌ Failed to retrieve memory status.")
 
     @commands.command(name="memory-review", aliases=["mem-review"])
-    async def memory_review(self, ctx, limit: int = 10):
+    async def memory_review(self, ctx, limit: int = 10) -> None:
         """Review your recent curated memories with context.
 
         Args:
             limit: Number of memories to review (default: 10, max: 50)
+
         """
         try:
             limit = min(max(1, int(limit)), 50)
@@ -121,7 +121,7 @@ class ExtendedMemoryCommands(commands.Cog):
 
     @commands.command(name="memory-forget", aliases=["mem-forget"])
     @commands.cooldown(1, 120, commands.BucketType.user)
-    async def memory_forget(self, ctx, *, memory_id: str):
+    async def memory_forget(self, ctx, *, memory_id: str) -> None:
         """Forget a specific memory by ID.
 
         Accepts full UUID or unambiguous prefix. Never uses fuzzy/semantic
@@ -186,19 +186,18 @@ class ExtendedMemoryCommands(commands.Cog):
             # Step 5: Verify — check it's actually gone.
             if deleted:
                 await ctx.send(f"✅ Deleted `{canonical_id[:8]}`.")
+            # Verify via the confirmation message.
+            elif confirm_msg_ref:
+                await ctx.send(f"❌ Delete operation for `{canonical_id[:8]}` returned failure — memory may already be deleted or inaccessible.")
             else:
-                # Verify via the confirmation message.
-                if confirm_msg_ref:
-                    await ctx.send(f"❌ Delete operation for `{canonical_id[:8]}` returned failure — memory may already be deleted or inaccessible.")
-                else:
-                    await ctx.send("❌ Failed to delete memory.")
+                await ctx.send("❌ Failed to delete memory.")
 
         except Exception as e:
             logger.error(f"Error in memory-forget: {e}", exc_info=True)
             await ctx.send("❌ Failed to forget memory.")
 
     @commands.command(name="memory-disable", aliases=["mem-disable"])
-    async def memory_disable(self, ctx):
+    async def memory_disable(self, ctx) -> None:
         """Disable memory ingestion for your profile (owner/admin only in guilds).
 
         In DMs, any user can disable their own memory.
@@ -218,7 +217,7 @@ class ExtendedMemoryCommands(commands.Cog):
             await ctx.send("❌ Failed to disable memory.")
 
     @commands.command(name="memory-enable", aliases=["mem-enable"])
-    async def memory_enable(self, ctx):
+    async def memory_enable(self, ctx) -> None:
         """ "Re-enable memory ingestion for your profile.
 
         Same permission rules as memory-disable.
@@ -251,11 +250,12 @@ class ExtendedMemoryCommands(commands.Cog):
             await ctx.send("❌ Failed to enable memory.")
 
     @commands.command(name="memory-export", aliases=["mem-export"])
-    async def memory_export(self, ctx, format: str = "text"):
+    async def memory_export(self, ctx, format: str = "text") -> None:
         """Export your memories in a specified format.
 
         Args:
             format: Export format ('text', 'json') - default: text
+
         """
         try:
             format = (format or "text").strip().lower()
@@ -312,11 +312,12 @@ class ExtendedMemoryCommands(commands.Cog):
             await ctx.send("❌ Failed to export memories.")
 
     @commands.command(name="memories-show", aliases=["memories", "mem-show"])
-    async def memories_show(self, ctx, limit: int = 5):
+    async def memories_show(self, ctx, limit: int = 5) -> None:
         """Show your most recent stored memories.
 
         Args:
             limit: Number of memories to show (default: 5, max: 50)
+
         """
         try:
             limit = min(max(1, int(limit)), 50)

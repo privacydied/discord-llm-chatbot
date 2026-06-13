@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 try:  # pragma: no cover - discord.py is available in the bot runtime
     import discord
@@ -16,15 +16,17 @@ from .models import (
     ArchiveAttachment,
     ArchiveChannel,
     ArchiveGuild,
+    ArchiveMention,
     ArchiveMessage,
     ArchiveMessageBundle,
-    ArchiveMention,
     ArchiveSyncState,
     ArchiveThread,
     ArchiveUser,
     utc_now_iso,
 )
-from .store import ServerArchiveStore
+
+if TYPE_CHECKING:
+    from .store import ServerArchiveStore
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +110,7 @@ def build_bundle_from_message(message: Any, *, max_message_chars: int = 8000, in
                 size=getattr(attachment, "size", None),
                 url=str(getattr(attachment, "url", "") or ""),
                 proxy_url=getattr(attachment, "proxy_url", None),
-            )
+            ),
         )
 
     mentions = []
@@ -119,7 +121,7 @@ def build_bundle_from_message(message: Any, *, max_message_chars: int = 8000, in
                 ArchiveMention(
                     message_id=_id(getattr(message, "id", None)) or "",
                     mentioned_user_id=mentioned_user_id,
-                )
+                ),
             )
 
     metadata = {
@@ -211,7 +213,7 @@ async def _sync_history_scope(
             last_message_id=state.last_message_id if state else None,
             last_synced_at=utc_now_iso(),
             status="running",
-        )
+        ),
     )
 
     processed = 0
@@ -239,7 +241,7 @@ async def _sync_history_scope(
                         last_message_id=last_message_id,
                         last_synced_at=utc_now_iso(),
                         status="running",
-                    )
+                    ),
                 )
                 batch.clear()
         if batch:
@@ -254,7 +256,7 @@ async def _sync_history_scope(
                 last_message_id=last_message_id,
                 last_synced_at=utc_now_iso(),
                 status="complete",
-            )
+            ),
         )
         return processed
     except _SYNC_ERRORS as exc:
@@ -281,7 +283,7 @@ async def _sync_history_scope(
                 last_synced_at=utc_now_iso(),
                 status="permission_error",
                 error=type(exc).__name__,
-            )
+            ),
         )
         return processed
     except Exception as exc:
@@ -308,7 +310,7 @@ async def _sync_history_scope(
                 last_synced_at=utc_now_iso(),
                 status="error",
                 error=type(exc).__name__,
-            )
+            ),
         )
         return processed
 
@@ -397,7 +399,7 @@ async def sync_guild_archive(store: ServerArchiveStore, guild: Any, *, force: bo
             guild_id=guild_id,
             last_synced_at=utc_now_iso(),
             status="running",
-        )
+        ),
     )
 
     processed = 0
@@ -441,6 +443,6 @@ async def sync_guild_archive(store: ServerArchiveStore, guild: Any, *, force: bo
             last_synced_at=utc_now_iso(),
             status="complete_with_errors" if had_errors else "complete",
             error="permission_or_fetch_errors" if had_errors else None,
-        )
+        ),
     )
     return processed

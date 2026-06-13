@@ -1,18 +1,20 @@
-"""
-Phase Timing Utilities - Track pipeline phases with correlation IDs and metrics.
+"""Phase Timing Utilities - Track pipeline phases with correlation IDs and metrics.
 Implements logging workflow with Rich Pretty Console + JSONL dual sinks.
 """
 
 import time
 import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, AsyncGenerator, List
+from typing import Any
+
 from rich.panel import Panel
 from rich.tree import Tree
 
+from bot.utils.logging import get_logger
+
 from .phase_constants import PhaseConstants as PC
-from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -23,13 +25,13 @@ class PhaseMetrics:
 
     phase: str
     start_ts: float
-    end_ts: Optional[float] = None
-    duration_ms: Optional[int] = None
+    end_ts: float | None = None
+    duration_ms: int | None = None
     success: bool = True
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def complete(self, success: bool = True, error: Optional[str] = None, **metadata):
+    def complete(self, success: bool = True, error: str | None = None, **metadata) -> None:
         """Mark phase as completed with timing data."""
         self.end_ts = time.time()
         self.duration_ms = int((self.end_ts - self.start_ts) * 1000)
@@ -45,11 +47,11 @@ class PipelineTracker:
     corr_id: str
     msg_id: str
     user_id: str
-    guild_id: Optional[str]
+    guild_id: str | None
     is_dm: bool
     start_ts: float = field(default_factory=time.time)
-    phases: Dict[str, PhaseMetrics] = field(default_factory=dict)
-    total_duration_ms: Optional[int] = None
+    phases: dict[str, PhaseMetrics] = field(default_factory=dict)
+    total_duration_ms: int | None = None
 
     def start_phase(self, phase: str, **metadata) -> PhaseMetrics:
         """Start tracking a new phase."""
@@ -63,7 +65,7 @@ class PipelineTracker:
         self._log_phase_event("start", phase, phase_metric, **metadata)
         return phase_metric
 
-    def complete_phase(self, phase: str, success: bool = True, error: Optional[str] = None, **metadata):
+    def complete_phase(self, phase: str, success: bool = True, error: str | None = None, **metadata) -> None:
         """Complete a phase and log results."""
         if phase not in self.phases:
             logger.error(f"❌ Phase {phase} not found for corr_id {self.corr_id}")
@@ -76,14 +78,14 @@ class PipelineTracker:
         self._log_phase_event("complete", phase, phase_metric, **metadata)
         self._check_slo_breach(phase, phase_metric)
 
-    def complete_pipeline(self):
+    def complete_pipeline(self) -> None:
         """Mark entire pipeline as complete and generate summary."""
         self.total_duration_ms = int((time.time() - self.start_ts) * 1000)
 
         # Generate final pipeline summary [PA]
         self._log_pipeline_summary()
 
-    def _log_phase_event(self, event: str, phase: str, phase_metric: PhaseMetrics, **metadata):
+    def _log_phase_event(self, event: str, phase: str, phase_metric: PhaseMetrics, **metadata) -> None:
         """Log phase event with Rich formatting and JSONL structure."""
         # Determine icon based on event and success [CA]
         if event == "start":
@@ -126,7 +128,7 @@ class PipelineTracker:
         else:
             logger.info(msg, extra={"detail": extra_detail})
 
-    def _check_slo_breach(self, phase: str, phase_metric: PhaseMetrics):
+    def _check_slo_breach(self, phase: str, phase_metric: PhaseMetrics) -> None:
         """Check if phase breached SLO targets and alert."""
         slo_targets = PC.get_slo_targets()
         target_ms = slo_targets.get(phase)
@@ -144,11 +146,11 @@ class PipelineTracker:
                         "target_ms": target_ms,
                         "breach_pct": breach_pct,
                         "msg_id": self.msg_id,
-                    }
+                    },
                 },
             )
 
-    def _log_pipeline_summary(self):
+    def _log_pipeline_summary(self) -> None:
         """Generate comprehensive pipeline summary with Rich Tree/Panel."""
         total_target = PC.get_slo_targets()["pipeline_total"]
         breach_status = "BREACH" if self.total_duration_ms > total_target else "OK"
@@ -181,7 +183,7 @@ class PipelineTracker:
                     "user_id": self.user_id,
                     "guild_id": self.guild_id,
                     "is_dm": self.is_dm,
-                }
+                },
             },
         )
 
@@ -189,7 +191,7 @@ class PipelineTracker:
         if logger.level <= 10:  # DEBUG level
             self._create_debug_panel()
 
-    def _create_debug_panel(self):
+    def _create_debug_panel(self) -> None:
         """Create Rich Panel with Tree for DEBUG visibility."""
         tree = Tree(f"Pipeline Summary (corr_id: {self.corr_id[:8]})")
 
@@ -209,12 +211,12 @@ class PipelineTracker:
 class PhaseTimingManager:
     """Global manager for pipeline tracking."""
 
-    def __init__(self):
-        self.active_trackers: Dict[str, PipelineTracker] = {}
-        self.completed_trackers: List[PipelineTracker] = []
+    def __init__(self) -> None:
+        self.active_trackers: dict[str, PipelineTracker] = {}
+        self.completed_trackers: list[PipelineTracker] = []
         self.max_history = 100  # Keep last 100 for analysis
 
-    def create_pipeline_tracker(self, msg_id: str, user_id: str, guild_id: Optional[str] = None) -> PipelineTracker:
+    def create_pipeline_tracker(self, msg_id: str, user_id: str, guild_id: str | None = None) -> PipelineTracker:
         """Create new pipeline tracker with correlation ID."""
         corr_id = str(uuid.uuid4())[:8]  # Short correlation ID
         is_dm = guild_id is None
@@ -235,13 +237,13 @@ class PhaseTimingManager:
                     "corr_id": corr_id,
                     "msg_id": msg_id,
                     "event": "pipeline_start",
-                }
+                },
             },
         )
 
         return tracker
 
-    def complete_tracker(self, tracker: PipelineTracker):
+    def complete_tracker(self, tracker: PipelineTracker) -> None:
         """Move tracker from active to completed."""
         tracker.complete_pipeline()
 

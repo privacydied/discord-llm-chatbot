@@ -1,21 +1,22 @@
 """TTS validation utilities for detecting issues with TTS output."""
 
+import importlib
 import logging
 import os
-import subprocess
 import shutil
-import importlib
 import site
-import numpy as np
+import subprocess
 from enum import Enum
-from typing import Dict, Set, Optional, List, Tuple, Any
+from typing import Any
 
-from .errors import TTSGibberishError, MissingTokeniserError
+import numpy as np
+
+from .errors import MissingTokeniserError, TTSGibberishError
 
 logger = logging.getLogger(__name__)
 
 # Global tokenizer availability cache
-AVAILABLE_TOKENIZERS: Set[str] = set()
+AVAILABLE_TOKENIZERS: set[str] = set()
 
 # Language-to-tokenizer mapping as specified
 TOKENISER_MAP = {
@@ -45,7 +46,7 @@ class TokenizerType(Enum):
 _ALIAS_WARNING_SHOWN = False
 
 
-def _get_env_tokenizer() -> Optional[str]:
+def _get_env_tokenizer() -> str | None:
     """Read tokenizer env with alias support for TTS_TOKENIZER.
 
     Prefer British spelling TTS_TOKENISER. If absent, accept TTS_TOKENIZER
@@ -67,7 +68,7 @@ def _get_env_tokenizer() -> Optional[str]:
     return None
 
 
-def get_site_packages_dirs() -> List[str]:
+def get_site_packages_dirs() -> list[str]:
     """Get a list of site-packages directories in the current Python environment."""
     try:
         # Get all site-packages directories
@@ -82,14 +83,14 @@ def get_site_packages_dirs() -> List[str]:
 
         return site_packages
     except Exception as e:
-        logger.error(
+        logger.exception(
             f"Failed to get site-packages directories: {e}",
             extra={"subsys": "tts", "event": "site_packages.error"},
         )
         return []
 
 
-def dump_environment_diagnostics() -> Dict[str, Any]:
+def dump_environment_diagnostics() -> dict[str, Any]:
     """Dump detailed environment diagnostics for tokenizer discovery."""
     diagnostics = {}
 
@@ -172,9 +173,8 @@ def dump_environment_diagnostics() -> Dict[str, Any]:
     return diagnostics
 
 
-def detect_available_tokenizers() -> Dict[str, bool]:
-    """
-    Detect which tokenizers are available in the current environment.
+def detect_available_tokenizers() -> dict[str, bool]:
+    """Detect which tokenizers are available in the current environment.
     Populates the global AVAILABLE_TOKENIZERS set.
 
     Returns:
@@ -182,6 +182,7 @@ def detect_available_tokenizers() -> Dict[str, bool]:
 
     Raises:
         MissingTokeniserError: If no suitable tokenizer is found for English
+
     """
     global AVAILABLE_TOKENIZERS
 
@@ -204,8 +205,7 @@ def detect_available_tokenizers() -> Dict[str, bool]:
         try:
             result = subprocess.run(
                 ["espeak", "--version"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 check=False,
             )
@@ -219,8 +219,7 @@ def detect_available_tokenizers() -> Dict[str, bool]:
         try:
             result = subprocess.run(
                 ["espeak-ng", "--version"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
                 check=False,
             )
@@ -229,19 +228,16 @@ def detect_available_tokenizers() -> Dict[str, bool]:
             pass
 
     # Check for phonemizer Python package
-    if diagnostics["phonemizer_module"]:
-        if importlib.util.find_spec("phonemizer") is not None:
-            available[TokenizerType.PHONEMIZER.value] = True
+    if diagnostics["phonemizer_module"] and importlib.util.find_spec("phonemizer") is not None:
+        available[TokenizerType.PHONEMIZER.value] = True
 
     # Check for g2p_en Python package (specific for English)
-    if diagnostics["g2p_en_module"]:
-        if importlib.util.find_spec("g2p_en") is not None:
-            available[TokenizerType.G2P_EN.value] = True
+    if diagnostics["g2p_en_module"] and importlib.util.find_spec("g2p_en") is not None:
+        available[TokenizerType.G2P_EN.value] = True
 
     # Check for misaki (Japanese/Chinese tokenizer)
-    if diagnostics["misaki_module"]:
-        if importlib.util.find_spec("misaki") is not None:
-            available[TokenizerType.MISAKI.value] = True
+    if diagnostics["misaki_module"] and importlib.util.find_spec("misaki") is not None:
+        available[TokenizerType.MISAKI.value] = True
 
     # Update global set of available tokenizers
     AVAILABLE_TOKENIZERS = {k for k, v in available.items() if v}
@@ -249,11 +245,11 @@ def detect_available_tokenizers() -> Dict[str, bool]:
     # Log available tokenizers
     if AVAILABLE_TOKENIZERS - {TokenizerType.GRAPHEME.value}:  # Exclude grapheme from consideration
         logger.info(
-            f"Tokenisers found: {sorted(list(AVAILABLE_TOKENIZERS))}",
+            f"Tokenisers found: {sorted(AVAILABLE_TOKENIZERS)}",
             extra={
                 "subsys": "tts",
                 "event": "tokenizer.available",
-                "tokenizers": sorted(list(AVAILABLE_TOKENIZERS)),
+                "tokenizers": sorted(AVAILABLE_TOKENIZERS),
             },
         )
     else:
@@ -266,21 +262,20 @@ def detect_available_tokenizers() -> Dict[str, bool]:
     env_tokenizer = _get_env_tokenizer()
     if env_tokenizer and env_tokenizer not in AVAILABLE_TOKENIZERS:
         logger.error(
-            f"TTS_TOKENISER environment variable '{env_tokenizer}' is not available. Available tokenizers: {sorted(list(AVAILABLE_TOKENIZERS))}",
+            f"TTS_TOKENISER environment variable '{env_tokenizer}' is not available. Available tokenizers: {sorted(AVAILABLE_TOKENIZERS)}",
             extra={
                 "subsys": "tts",
                 "event": "tokenizer.env_override.invalid",
                 "requested": env_tokenizer,
-                "available": sorted(list(AVAILABLE_TOKENIZERS)),
+                "available": sorted(AVAILABLE_TOKENIZERS),
             },
         )
 
     return available
 
 
-def select_tokenizer_for_language(language: str, available_tokenizers: Optional[Dict[str, bool]] = None) -> str:
-    """
-    Select the best tokenizer for the given language based on TOKENISER_MAP.
+def select_tokenizer_for_language(language: str, available_tokenizers: dict[str, bool] | None = None) -> str:
+    """Select the best tokenizer for the given language based on TOKENISER_MAP.
 
     Args:
         language: Language code (e.g., 'en', 'ja')
@@ -291,6 +286,7 @@ def select_tokenizer_for_language(language: str, available_tokenizers: Optional[
 
     Raises:
         MissingTokeniserError: If no suitable tokenizer is found for the language
+
     """
     global AVAILABLE_TOKENIZERS
 
@@ -318,15 +314,14 @@ def select_tokenizer_for_language(language: str, available_tokenizers: Optional[
                 },
             )
             return env_tokenizer
-        else:
-            logger.error(
-                f"TTS_TOKENISER environment variable '{env_tokenizer}' is not available",
-                extra={
-                    "subsys": "tts",
-                    "event": "tokenizer.env_override.invalid",
-                    "requested": env_tokenizer,
-                },
-            )
+        logger.error(
+            f"TTS_TOKENISER environment variable '{env_tokenizer}' is not available",
+            extra={
+                "subsys": "tts",
+                "event": "tokenizer.env_override.invalid",
+                "requested": env_tokenizer,
+            },
+        )
             # Continue with auto-selection
 
     # Get preferred tokenizers for this language
@@ -373,11 +368,11 @@ def select_tokenizer_for_language(language: str, available_tokenizers: Optional[
 
 
 def is_tokenizer_warning_needed() -> bool:
-    """
-    Check if a tokenizer warning needs to be shown to the user.
+    """Check if a tokenizer warning needs to be shown to the user.
 
     Returns:
         True if warning should be shown, False otherwise
+
     """
     global AVAILABLE_TOKENIZERS
 
@@ -396,7 +391,7 @@ def is_tokenizer_warning_needed() -> bool:
         return not has_english_tokenizer
 
     # For Japanese/Chinese, we need misaki
-    if language.startswith("ja") or language.startswith("zh"):
+    if language.startswith(("ja", "zh")):
         has_asian_tokenizer = "misaki" in AVAILABLE_TOKENIZERS
         if not has_asian_tokenizer:
             logger.warning(
@@ -409,31 +404,30 @@ def is_tokenizer_warning_needed() -> bool:
 
 
 def get_tokenizer_warning_message(language: str = "en") -> str:
-    """
-    Get a user-friendly warning message about missing tokenizers.
+    """Get a user-friendly warning message about missing tokenizers.
 
     Args:
         language: Language code for the warning message
 
     Returns:
         A message suitable for displaying to users
+
     """
     global TOKENIZER_WARNING_SHOWN
 
     # Mark warning as shown
     TOKENIZER_WARNING_SHOWN = True
 
-    language_prefix = language.split("-")[0].lower()
+    language_prefix = language.split("-", maxsplit=1)[0].lower()
 
     if language_prefix == "en":
         return "⚠ No English phonetic tokeniser installed; speech quality degraded. Install espeak‑ng or phonemizer for clearer output."
-    elif language_prefix == "ja" or language_prefix == "zh":
+    if language_prefix in {"ja", "zh"}:
         return "⚠ No Asian language tokenizer found. Speech quality may be reduced. Install misaki for better results."
-    else:
-        return "⚠ No phonetic tokenizer found for your language. Speech quality may be reduced. Install phonemizer or espeak-ng for better results."
+    return "⚠ No phonetic tokenizer found for your language. Speech quality may be reduced. Install phonemizer or espeak-ng for better results."
 
 
-def validate_voice_vector(voice_vector: np.ndarray, voice_id: str = None) -> bool:
+def validate_voice_vector(voice_vector: np.ndarray, voice_id: str | None = None) -> bool:
     """Validate that a voice vector has the expected properties.
 
     Args:
@@ -442,6 +436,7 @@ def validate_voice_vector(voice_vector: np.ndarray, voice_id: str = None) -> boo
 
     Returns:
         True if the voice vector is valid, False otherwise
+
     """
     # Check if voice vector is None
     if voice_vector is None:
@@ -529,7 +524,8 @@ def validate_voice_vector(voice_vector: np.ndarray, voice_id: str = None) -> boo
                 "voice_id": voice_id,
             },
         )
-        raise ValueError(f"Voice vector is None for voice '{voice_id}'")
+        msg = f"Voice vector is None for voice '{voice_id}'"
+        raise ValueError(msg)
 
     # Check shape
     if voice_vector.shape != (256,):
@@ -542,7 +538,8 @@ def validate_voice_vector(voice_vector: np.ndarray, voice_id: str = None) -> boo
                 "shape": voice_vector.shape,
             },
         )
-        raise ValueError(f"Voice vector has incorrect shape: {voice_vector.shape}, expected (256,)")
+        msg = f"Voice vector has incorrect shape: {voice_vector.shape}, expected (256,)"
+        raise ValueError(msg)
 
     # Check for non-zero norm
     norm = np.linalg.norm(voice_vector)
@@ -556,7 +553,8 @@ def validate_voice_vector(voice_vector: np.ndarray, voice_id: str = None) -> boo
                 "norm": norm,
             },
         )
-        raise ValueError(f"Voice vector has near-zero norm: {norm:.6f}")
+        msg = f"Voice vector has near-zero norm: {norm:.6f}"
+        raise ValueError(msg)
 
     logger.debug(
         f"Voice vector validated: shape={voice_vector.shape}, norm={norm:.6f} for voice '{voice_id}'",
@@ -580,6 +578,7 @@ def check_sample_rate_consistency(expected_rate: int, actual_rate: int) -> bool:
 
     Returns:
         True if the sample rates are consistent, False otherwise
+
     """
     # Check if rates match exactly
     if expected_rate == actual_rate:
@@ -613,6 +612,7 @@ def detect_gibberish_audio(audio_data: np.ndarray, sample_rate: int) -> bool:
 
     Returns:
         True if the audio is likely gibberish, False otherwise
+
     """
     # Check if audio is mostly silence or very low amplitude
     mean_abs = np.mean(np.abs(audio_data))
@@ -625,10 +625,7 @@ def detect_gibberish_audio(audio_data: np.ndarray, sample_rate: int) -> bool:
 
     # Calculate zero-crossing rate (high ZCR often indicates noise or gibberish)
     # First, ensure audio is mono
-    if len(audio_data.shape) > 1 and audio_data.shape[1] > 1:
-        audio_mono = np.mean(audio_data, axis=1)
-    else:
-        audio_mono = audio_data.flatten()
+    audio_mono = np.mean(audio_data, axis=1) if len(audio_data.shape) > 1 and audio_data.shape[1] > 1 else audio_data.flatten()
 
     # Calculate zero crossing rate
     zero_crossings = np.sum(np.abs(np.diff(np.signbit(audio_mono).astype(int))))
@@ -670,7 +667,7 @@ def detect_gibberish_audio(audio_data: np.ndarray, sample_rate: int) -> bool:
     return False
 
 
-def detect_gibberish_audio_with_metrics(audio_data: np.ndarray, sample_rate: int) -> Tuple[bool, Dict[str, float]]:
+def detect_gibberish_audio_with_metrics(audio_data: np.ndarray, sample_rate: int) -> tuple[bool, dict[str, float]]:
     """Detect if the generated audio is likely gibberish or wrong language.
 
     Args:
@@ -682,6 +679,7 @@ def detect_gibberish_audio_with_metrics(audio_data: np.ndarray, sample_rate: int
 
     Raises:
         TTSGibberishError: If audio is detected as gibberish
+
     """
     metrics = {}
 
@@ -695,7 +693,8 @@ def detect_gibberish_audio_with_metrics(audio_data: np.ndarray, sample_rate: int
             "Audio output is all zeros (silent)",
             extra={"subsys": "tts", "event": "gibberish.silent"},
         )
-        raise TTSGibberishError("Audio output is completely silent (all zeros)", metrics)
+        msg = "Audio output is completely silent (all zeros)"
+        raise TTSGibberishError(msg, metrics)
 
     # Calculate metrics
     avg_abs = np.mean(np.abs(audio_data))
@@ -742,6 +741,7 @@ def detect_gibberish_audio_with_metrics(audio_data: np.ndarray, sample_rate: int
         )
 
     if is_gibberish:
-        raise TTSGibberishError("Audio output detected as gibberish", metrics)
+        msg = "Audio output detected as gibberish"
+        raise TTSGibberishError(msg, metrics)
 
     return False, metrics

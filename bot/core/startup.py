@@ -1,22 +1,20 @@
-"""
-Contains bot startup and pre-flight check logic.
-"""
+"""Contains bot startup and pre-flight check logic."""
 
-import discord
-from discord.ext import commands
 import hashlib
 import os
 import socket
-import subprocess
+import subprocess  # nosec B404 - required for Playwright browser install
 import urllib.parse
 from pathlib import Path
-from typing import Optional
+
+import discord
+from discord.ext import commands
 
 from bot.config import ConfigurationError
 from bot.utils.logging import get_logger
 
 
-def _get_playwright_chromium_path() -> Optional[Path]:
+def _get_playwright_chromium_path() -> Path | None:
     """Checks for the Playwright Chromium executable and returns its path if found."""
     try:
         cache_dir = Path.home() / ".cache/ms-playwright"
@@ -52,18 +50,18 @@ def _validate_remote_playwright_url(raw_url: str, logger) -> None:
     except Exception:
         client_ver = "(unknown)"
     expected_server_ver = "1.59"  # must track requirements.txt
-    if not client_ver.startswith(expected_server_ver.split(".")[0] + "."):
+    if not client_ver.startswith(expected_server_ver.split(".", maxsplit=1)[0] + "."):
         logger.warning(f"Playwright version mismatch: client={client_ver}, expected~=server {expected_server_ver}. Run: pip install playwright=={expected_server_ver}")
 
     try:
         sock = socket.create_connection((host, port), timeout=5)
         sock.close()
         logger.info(f"Playwright remote server reachable at {host}:{port} (client v{client_ver}, expected server v{expected_server_ver})")
-    except (ConnectionRefusedError, socket.timeout, OSError) as exc:
+    except (TimeoutError, ConnectionRefusedError, OSError) as exc:
         logger.warning(
             f"Playwright remote server at {host}:{port} is unreachable: {exc}. "
             f"Features requiring Playwright (web scraping, screenshots) will be unavailable. "
-            f"Start the container to restore: sudo docker restart playwright"
+            f"Start the container to restore: sudo docker restart playwright",
         )
 
 
@@ -87,9 +85,8 @@ def check_playwright_browsers(logger) -> None:
         return
 
     logger.warning("❌ Playwright Browser (Chromium) not found. Attempting auto-installation...")
-
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603, B607
             ["uv", "run", "playwright", "install", "chromium"],
             capture_output=True,
             text=True,
@@ -103,9 +100,9 @@ def check_playwright_browsers(logger) -> None:
             logger.error("📛 Failed to install Playwright Browser automatically. Please run `uv run playwright install chromium` manually.")
 
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        logger.error(f"📛 Failed to auto-install Playwright browser: {e.stderr or e}")
+        logger.exception(f"📛 Failed to auto-install Playwright browser: {e.stderr or e}")
     except FileNotFoundError:
-        logger.error("📛 `uv` or `playwright` command not found. Cannot auto-install browsers.")
+        logger.exception("📛 `uv` or `playwright` command not found. Cannot auto-install browsers.")
 
 
 def run_pre_flight_checks(config: dict) -> None:
@@ -117,7 +114,8 @@ def run_pre_flight_checks(config: dict) -> None:
     token = config.get("DISCORD_TOKEN")
     if not token:
         logger.critical("DISCORD_TOKEN is missing. Bot cannot start.")
-        raise ConfigurationError("DISCORD_TOKEN not found in environment.")
+        msg = "DISCORD_TOKEN not found in environment."
+        raise ConfigurationError(msg)
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     logger.info(f"[WIND][INIT] Token hash={token_hash} validated")
 

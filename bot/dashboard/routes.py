@@ -6,27 +6,31 @@ and CSRF protection (for POST endpoints).
 
 from __future__ import annotations
 
+import contextlib
+from datetime import UTC
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from aiohttp import web
 
 from bot.utils.logging import get_logger
+from bot.utils.playwright_helpers import get_playwright_health
 
-from .audit_store import AuditStore
 from .audit_store import (
-    EVENT_DASHBOARD_CHANNEL_VIEW,
-    EVENT_DASHBOARD_DM_VIEW,
+    EVENT_DASHBOARD_BACKFILL_FAILED,
     EVENT_DASHBOARD_BACKFILL_REQUESTED,
     EVENT_DASHBOARD_BACKFILL_STARTED,
-    EVENT_DASHBOARD_BACKFILL_FAILED,
+    EVENT_DASHBOARD_CHANNEL_VIEW,
+    EVENT_DASHBOARD_DM_VIEW,
+    AuditStore,
 )
 from .auth import _get_client_ip, _get_user_agent, auth_required, csrf_required, login_handler, logout_handler
-from .config import DashboardConfig
-from .dm_store import DMStore
-from .message_store import MessageStore
-from .services import DashboardServices
 
-from bot.utils.playwright_helpers import get_playwright_health
+if TYPE_CHECKING:
+    from .config import DashboardConfig
+    from .dm_store import DMStore
+    from .message_store import MessageStore
+    from .services import DashboardServices
 
 logger = get_logger(__name__)
 
@@ -116,16 +120,16 @@ class DashboardRoutes:
                 "status": "ok" if running else "starting",
                 "enabled": config.enabled,
                 "uptime": self._get_uptime_simple(),
-            }
+            },
         )
 
     def _get_uptime_simple(self) -> int:
         """Get uptime in seconds, best-effort."""
         bot = self._services.bot
         if bot and hasattr(bot, "ready_at") and bot.ready_at:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
-            return int((datetime.now(timezone.utc) - bot.ready_at).total_seconds())
+            return int((datetime.now(UTC) - bot.ready_at).total_seconds())
         return 0
 
     async def session_check(self, request: web.Request) -> web.Response:
@@ -142,7 +146,7 @@ class DashboardRoutes:
                     "authenticated": True,
                     "method": "bearer",
                     "user_id": next(iter(config.owner_ids), None),
-                }
+                },
             )
 
         # Check session cookie
@@ -156,7 +160,7 @@ class DashboardRoutes:
                     "method": "session",
                     "user_id": session.get("user_id"),
                     "csrf_token": session.get("csrf_token"),
-                }
+                },
             )
 
         return _json_response({"authenticated": False})
@@ -204,15 +208,13 @@ class DashboardRoutes:
         guilds = []
         if bot and bot.is_ready():
             for g in bot.guilds:
-                try:
+                with contextlib.suppress(Exception):
                     guilds.append({
                         "id": str(g.id),
                         "name": g.name,
                         "icon_url": str(g.icon.url) if g.icon else None,
                         "member_count": g.member_count,
                     })
-                except Exception:
-                    pass
 
         # Bot user info
         bot_username = summary.get("bot_username", "unknown")
@@ -223,8 +225,8 @@ class DashboardRoutes:
                 bot_username = bot.user.display_name or bot.user.name or "unknown"
                 bot_discriminator = bot.user.discriminator if hasattr(bot.user, "discriminator") and bot.user.discriminator and bot.user.discriminator != "0" else None
                 bot_user_id = str(bot.user.id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to get bot user info: {e}")
 
         # Collect recent errors from audit log
         audit_store: AuditStore = request.app.get("audit_store")
@@ -237,8 +239,8 @@ class DashboardRoutes:
                     result="failed",
                 )
                 recent_errors = error_result.get("events", [])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to query audit store for errors: {e}")
 
         # Check Playwright status
         pw_health = get_playwright_health()
@@ -280,7 +282,7 @@ class DashboardRoutes:
                 "guild_count": summary.get("guild_count", 0),
                 "latency_ms": summary.get("latency_ms", 0),
                 "cog_count": summary.get("cog_count", 0),
-            }
+            },
         )
 
     # ------------------------------------------------------------------
@@ -349,10 +351,10 @@ class DashboardRoutes:
                         categories[category_id]["channels"].append(channel_data)
                     else:
                         uncategorized.append(channel_data)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as e:
+                    logger.debug(f"Failed to process channel {ch.id}: {e}")
+        except Exception as e:
+            logger.debug(f"Failed to get guild structure: {e}")
 
         # Sort categories by position
         sorted_categories = sorted(categories.values(), key=lambda c: c["position"])
@@ -377,7 +379,7 @@ class DashboardRoutes:
                 "approximate_presence_count": guild.approximate_presence_count,
                 "categories": sorted_categories,
                 "uncategorized_channels": uncategorized,
-            }
+            },
         )
 
     @auth_required
@@ -426,12 +428,12 @@ class DashboardRoutes:
                             "can_attach_files": bool(perms and perms.attach_files) if perms else False,
                             "is_administrator": bool(perms and perms.administrator) if perms else False,
                             "member_count": getattr(ch, "members", None) and len(ch.members),
-                        }
+                        },
                     )
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception as e:
+                    logger.debug(f"Failed to process DM channel {ch.id}: {e}")
+        except Exception as e:
+            logger.debug(f"Failed to get DM channels: {e}")
 
         # Sort by position
         channels.sort(key=lambda ch: ch.get("position", 0))
@@ -521,15 +523,13 @@ class DashboardRoutes:
         session = request.get("session", {})
         actor_id = session.get("user_id")
         if audit_store:
-            try:
+            with contextlib.suppress(Exception):
                 await audit_store.record(
                     event_type=EVENT_DASHBOARD_CHANNEL_VIEW,
                     result="success",
                     actor_user_id=actor_id,
                     target_channel_id=channel_id,
                 )
-            except Exception:
-                pass
 
         return _json_response(result)
 
@@ -557,8 +557,8 @@ class DashboardRoutes:
                     max_page_size=MAX_PAGE_SIZE,
                 )
                 return _json_response(result)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"MessageStore list_threads failed, falling back to dm_store: {e}")
 
         dm_store: DMStore = request.app.get("dm_store")
         if dm_store is None:
@@ -596,15 +596,13 @@ class DashboardRoutes:
                     _session = request.get("session", {})
                     _actor_id = _session.get("user_id")
                     if _audit:
-                        try:
+                        with contextlib.suppress(Exception):
                             await _audit.record(
                                 event_type=EVENT_DASHBOARD_DM_VIEW,
                                 result="success",
                                 actor_user_id=_actor_id,
                                 target_channel_id=user_id_or_channel_id,
                             )
-                        except Exception:
-                            pass
                     return _json_response(result)
 
                 # Auto-backfill when empty and page=1
@@ -647,19 +645,19 @@ class DashboardRoutes:
                             user = bot.get_user(user_id_or_channel_id)
                             if user is None:
                                 user = await asyncio.wait_for(
-                                    bot.fetch_user(user_id_or_channel_id), timeout=10.0
+                                    bot.fetch_user(user_id_or_channel_id), timeout=10.0,
                                 )
                             if user is not None:
                                 # Get or create DM channel
                                 dm_channel = user.dm_channel
                                 if dm_channel is None:
                                     dm_channel = await asyncio.wait_for(
-                                        user.create_dm(), timeout=10.0
+                                        user.create_dm(), timeout=10.0,
                                     )
                                 if dm_channel is not None:
                                     # Retry live fetch with the real DM channel ID
                                     live2 = await self._services.live_dm_messages(
-                                        channel_id=dm_channel.id, limit=50
+                                        channel_id=dm_channel.id, limit=50,
                                     )
                                     if live2.get("messages"):
                                         # Fetch from DMStore using the real channel ID
@@ -683,10 +681,10 @@ class DashboardRoutes:
                                         )
                                         return_audit = await _record_dm_view_audit(request, user_id_or_channel_id)
                                         return _json_response(result)
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+                        except Exception as e:
+                            logger.debug(f"MessageStore get_thread_messages failed: {e}")
+            except Exception as e:
+                logger.debug(f"MessageStore path failed, falling back to dm_store: {e}")
 
         # Fall back to DMStore
         dm_store: DMStore = request.app.get("dm_store")
@@ -949,8 +947,8 @@ class DashboardRoutes:
                     stored = await message_store.get_message_by_discord_id(message_id)
                     if stored and stored.get("channel_id"):
                         channel_id_str = stored["channel_id"]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to resolve channel_id from message store: {e}")
 
         if not channel_id_str:
             return _json_response({"error": "channel_id is required in body (could not resolve from message store)"}, 400)
@@ -1071,15 +1069,13 @@ class DashboardRoutes:
         _session = request.get("session", {})
         _actor_id = _session.get("user_id")
         if _audit:
-            try:
+            with contextlib.suppress(Exception):
                 await _audit.record(
                     event_type=EVENT_DASHBOARD_BACKFILL_REQUESTED,
                     result="pending",
                     actor_user_id=_actor_id,
                     target_channel_id=channel_id,
                 )
-            except Exception:
-                pass
 
         try:
             result = await backfill_service.backfill_channel(
@@ -1089,7 +1085,7 @@ class DashboardRoutes:
             status_code = 200 if result.get("status") != "failed" else 400
             # Audit log backfill result
             if _audit:
-                try:
+                with contextlib.suppress(Exception):
                     await _audit.record(
                         event_type=EVENT_DASHBOARD_BACKFILL_STARTED if result.get("status") in ("completed", "running", "queued") else EVENT_DASHBOARD_BACKFILL_FAILED,
                         result=result.get("status", "unknown"),
@@ -1097,8 +1093,6 @@ class DashboardRoutes:
                         target_channel_id=channel_id,
                         metadata={"messages_seen": result.get("messages_seen", 0), "messages_inserted": result.get("messages_inserted", 0), "error": result.get("error")},
                     )
-                except Exception:
-                    pass
             return _json_response(result, status=status_code)
         except Exception as e:
             logger.warning("Backfill channel failed: %s", e)
@@ -1127,15 +1121,13 @@ class DashboardRoutes:
         _session = request.get("session", {})
         _actor_id = _session.get("user_id")
         if _audit:
-            try:
+            with contextlib.suppress(Exception):
                 await _audit.record(
                     event_type=EVENT_DASHBOARD_BACKFILL_REQUESTED,
                     result="pending",
                     actor_user_id=_actor_id,
                     target_guild_id=guild_id,
                 )
-            except Exception:
-                pass
 
         try:
             result = await backfill_service.backfill_guild(
@@ -1172,15 +1164,13 @@ class DashboardRoutes:
         _session = request.get("session", {})
         _actor_id = _session.get("user_id")
         if _audit:
-            try:
+            with contextlib.suppress(Exception):
                 await _audit.record(
                     event_type=EVENT_DASHBOARD_BACKFILL_REQUESTED,
                     result="pending",
                     actor_user_id=_actor_id,
                     target_channel_id=user_id_or_channel_id,
                 )
-            except Exception:
-                pass
 
         try:
             result = await backfill_service.backfill_dm(
@@ -1342,7 +1332,7 @@ class DashboardRoutes:
                 "message_page_size": config.message_page_size,
                 "message_page_size_max": config.message_page_size_max,
                 "bot_username": bot_username,
-            }
+            },
         )
 
     @auth_required

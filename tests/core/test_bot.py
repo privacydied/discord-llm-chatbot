@@ -1,7 +1,7 @@
-import pytest
 from unittest.mock import MagicMock
 
 import discord
+import pytest
 from discord.ext import commands
 
 # Import the cog class directly for testing
@@ -9,9 +9,8 @@ from tests.core.cogs.test_cog import PingCog
 
 
 @pytest.mark.asyncio
-async def test_command_registration_direct_add():
-    """
-    Verify that a cog's commands are correctly registered when added directly
+async def test_command_registration_direct_add() -> None:
+    """Verify that a cog's commands are correctly registered when added directly
     via bot.add_cog(). This bypasses the extension loading mechanism to isolate
     the issue.
     """

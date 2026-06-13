@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import os
 import re
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Self
 
 from bot.config import load_config
 from bot.tts.errors import SynthesisError
 from bot.utils.logging import get_logger
 from utils.opus import transcode_to_ogg_opus
+
 from .engines.kokoro import KokoroONNXEngine
 from .engines.kokoro_v8 import KokoroV8Engine
 from .engines.stub import StubEngine
@@ -39,7 +41,7 @@ class TTSManager:
     existing call sites.
     """
 
-    def __init__(self, bot: Any | None = None, config: Optional[dict[str, Any]] = None):
+    def __init__(self, bot: Any | None = None, config: dict[str, Any] | None = None) -> None:
         if config is None and isinstance(bot, dict):
             config = bot
             bot = None
@@ -47,10 +49,8 @@ class TTSManager:
         self.bot = bot
         self.config = dict(config or load_config())
         if bot is not None and hasattr(bot, "config"):
-            try:
-                self.config = dict(getattr(bot, "config"))
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                self.config = dict(bot.config)
 
         self.enabled = bool(self.config.get("TTS_ENABLE", True))
         env_engine = (self.config.get("TTS_ENGINE") or os.getenv("TTS_ENGINE") or "").strip().lower()
@@ -66,7 +66,7 @@ class TTSManager:
         self.voices: list[str] = []
         self.available = False
         self.degraded = False
-        self.degraded_reason: Optional[str] = None
+        self.degraded_reason: str | None = None
         self._warmed_up = False
         self._engine = None
         self._current_jobs: dict[str, asyncio.Task[Any]] = {}
@@ -118,7 +118,7 @@ class TTSManager:
             self._warmed_up = True
             self._warmup_status = "complete"
             logger.info("tts:warmup ok")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._warmup_status = "failed"
             logger.warning("tts:warmup timeout after %.0fs", timeout)
         except Exception as exc:
@@ -173,7 +173,8 @@ class TTSManager:
     def _load_backend(self) -> None:
         engine_cls = ENGINES.get(self.backend)
         if engine_cls is None:
-            raise RuntimeError(f"unsupported tts backend: {self.backend}")
+            msg = f"unsupported tts backend: {self.backend}"
+            raise RuntimeError(msg)
 
         if self.backend == "stub":
             self._engine = engine_cls()
@@ -189,7 +190,8 @@ class TTSManager:
         model_path = self.config.get("TTS_MODEL_PATH") or os.getenv("TTS_MODEL_PATH")
         voices_path = self.config.get("TTS_VOICES_PATH") or os.getenv("TTS_VOICES_PATH")
         if not model_path or not voices_path:
-            raise RuntimeError("kokoro assets missing")
+            msg = "kokoro assets missing"
+            raise RuntimeError(msg)
         try:
             self._engine = engine_cls(
                 model_path=str(model_path),
@@ -207,7 +209,8 @@ class TTSManager:
         if self._engine is not None and self.available:
             return
         if not self.enabled:
-            raise SynthesisError("TTS is disabled")
+            msg = "TTS is disabled"
+            raise SynthesisError(msg)
         try:
             self._load_backend()
         except Exception as exc:
@@ -220,18 +223,19 @@ class TTSManager:
     def _clean_text(self, text: str) -> str:
         text = re.sub(r"https?://\S+", "", text or "")
         text = re.sub(r"[`*_>#~]|\[(.*?)\]\((.*?)\)", " ", text)
-        text = re.sub(r"\s+", " ", text).strip()
-        return text
+        return re.sub(r"\s+", " ", text).strip()
 
     async def synthesize(self, text: str, timeout: float | None = None) -> bytes:
         await self._ensure_engine()
         cleaned = self._clean_text(text)
         if not cleaned:
-            raise ValueError("Text cannot be empty")
+            msg = "Text cannot be empty"
+            raise ValueError(msg)
 
         engine = self._engine
         if engine is None:
-            raise SynthesisError("TTS engine is unavailable")
+            msg = "TTS engine is unavailable"
+            raise SynthesisError(msg)
 
         try:
             result = engine.synthesize(cleaned)
@@ -255,22 +259,25 @@ class TTSManager:
 
     def _coerce_audio_bytes(self, result: Any) -> bytes:
         if result is None:
-            raise SynthesisError("TTS backend returned no audio")
+            msg = "TTS backend returned no audio"
+            raise SynthesisError(msg)
         if isinstance(result, (bytes, bytearray)):
             return bytes(result)
         if isinstance(result, (str, Path)):
             path = Path(result)
             if not path.exists():
-                raise SynthesisError(f"Audio path does not exist: {path}")
+                msg = f"Audio path does not exist: {path}"
+                raise SynthesisError(msg)
             return path.read_bytes()
         if isinstance(result, tuple) and result:
             return self._coerce_audio_bytes(result[0])
-        raise SynthesisError(f"Unsupported audio result type: {type(result)!r}")
+        msg = f"Unsupported audio result type: {type(result)!r}"
+        raise SynthesisError(msg)
 
     async def generate_tts(
         self,
         text: str,
-        voice: Optional[str] = None,
+        voice: str | None = None,
         *,
         out_path: str | Path | None = None,
         timeout: float | None = None,
@@ -279,7 +286,8 @@ class TTSManager:
         await self._ensure_engine()
         cleaned = self._clean_text(text)
         if not cleaned:
-            raise ValueError("Text cannot be empty")
+            msg = "Text cannot be empty"
+            raise ValueError(msg)
 
         if timeout is None:
             timeout = self.timeout_cold_s if not self._warmed_up else self.timeout_warm_s
@@ -287,19 +295,15 @@ class TTSManager:
         chosen_voice = voice or self.voice
         old_voice = getattr(self._engine, "voice", None)
         if hasattr(self._engine, "voice"):
-            try:
-                setattr(self._engine, "voice", chosen_voice)
-            except Exception:
-                pass
+            with contextlib.suppress(Exception):
+                self._engine.voice = chosen_voice
 
         try:
             audio_bytes = await self.synthesize(cleaned, timeout=timeout)
         finally:
             if hasattr(self._engine, "voice") and old_voice is not None:
-                try:
-                    setattr(self._engine, "voice", old_voice)
-                except Exception:
-                    pass
+                with contextlib.suppress(Exception):
+                    self._engine.voice = old_voice
 
         output_format = (output_format or "wav").strip().lower()
         if out_path is None:
@@ -323,10 +327,8 @@ class TTSManager:
                     self._warmed_up = True
                     return final_path
                 finally:
-                    try:
+                    with contextlib.suppress(Exception):
                         wav_path.unlink(missing_ok=True)
-                    except Exception:
-                        pass
             out_path.write_bytes(audio_bytes)
             self._warmed_up = True
             return out_path
@@ -350,7 +352,7 @@ class TTSManager:
                 meta.get(
                     "tts_timeout_cold_s" if cold else "tts_timeout_warm_s",
                     self.timeout_cold_s if cold else self.timeout_warm_s,
-                )
+                ),
             )
 
         audio_path = await self.generate_tts(
@@ -358,10 +360,8 @@ class TTSManager:
             getattr(self, "voice", None),
             timeout=timeout,
         )
-        try:
-            setattr(action, "audio_path", str(audio_path))
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            action.audio_path = str(audio_path)
         return action
 
     async def close(self) -> None:
@@ -383,7 +383,7 @@ class TTSManager:
         except Exception:
             logger.debug("TTS engine close failed", exc_info=True)
 
-    async def __aenter__(self) -> "TTSManager":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:

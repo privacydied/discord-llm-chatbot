@@ -1,6 +1,4 @@
-"""
-Event handlers for the Discord bot.
-"""
+"""Event handlers for the Discord bot."""
 
 import asyncio
 from pathlib import Path
@@ -8,9 +6,9 @@ from pathlib import Path
 import discord
 from discord.ext import commands
 
-from bot.utils.logging import get_logger
-from bot.router import get_router
 from bot.config import load_config
+from bot.router import get_router
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -60,7 +58,7 @@ def get_image_urls(message) -> list:
 
 
 class BotEventHandler(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.router = get_router()
         self.config = load_config()
@@ -76,10 +74,7 @@ class BotEventHandler(commands.Cog):
             return True
 
         # In guilds, only process if mentioned
-        if self.bot.user.mentioned_in(message):
-            return True
-
-        return False
+        return bool(self.bot.user.mentioned_in(message))
 
     # NOTE:
     # This file's message handling is obsolete; routing is handled in bot.py (on_message).
@@ -91,12 +86,9 @@ class BotEventHandler(commands.Cog):
             return False
 
         # Check Discord permissions
-        if user.guild_permissions.administrator:
-            return True
+        return bool(user.guild_permissions.administrator)
 
-        return False
-
-    async def handle_hybrid_reply(self, ctx, text_response: str, mode: str = "both"):
+    async def handle_hybrid_reply(self, ctx, text_response: str, mode: str = "both") -> None:
         """Hybrid inference pipeline for text and TTS responses."""
         # For TTS modes, synthesize and send audio
         if mode in ("tts", "both"):
@@ -113,7 +105,7 @@ class BotEventHandler(commands.Cog):
                         output_format="ogg",
                     )
                     if isinstance(gen_res, tuple):
-                        audio_path, mime_type = gen_res
+                        audio_path, _mime_type = gen_res
                     else:
                         audio_path = gen_res
 
@@ -142,12 +134,12 @@ class BotEventHandler(commands.Cog):
         try:
             return await brain_infer(message.content)
         except InferenceError as e:
-            logger.error(f"Brain inference failed: {str(e)}")
+            logger.exception(f"Brain inference failed: {e!s}")
             return "⚠️ An error occurred while generating the response"
 
 
 # Background task for cache maintenance
-async def cache_maintenance_task(bot: commands.Bot):
+async def cache_maintenance_task(bot: commands.Bot) -> None:
     """Background task to clean up old cache files."""
     logger.info("Starting TTS cache maintenance task [subsys: tts_cache, event: task_start]")
     while True:
@@ -170,7 +162,7 @@ async def cache_maintenance_task(bot: commands.Bot):
 
         except Exception as e:
             logger.error(
-                f"TTS cache maintenance failed: {str(e)} [subsys: tts_cache, event: task_fail]",
+                f"TTS cache maintenance failed: {e!s} [subsys: tts_cache, event: task_fail]",
                 exc_info=True,
             )
             logger.info("Retrying TTS cache maintenance in 1 hour... [subsys: tts_cache, event: task_retry]")

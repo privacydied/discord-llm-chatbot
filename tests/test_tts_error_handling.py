@@ -1,34 +1,34 @@
-"""
-Test TTS error handling for zero audio and OCR soft-dependency.
-"""
+"""Test TTS error handling for zero audio and OCR soft-dependency."""
 
 import pytest
 
 # Skip all tests — require TTS binaries (espeak-ng, tesseract, Kokoro)
 pytestmark = pytest.mark.skip(reason="Requires TTS binaries (espeak-ng, tesseract, Kokoro)")
 
-import unittest
 import tempfile
-import numpy as np
+import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+
+from bot.pdf_utils import PDFProcessor
 
 # Import the modules we want to test
 from bot.tts.errors import TTSSynthesisError
 from bot.tts.kokoro_direct import KokoroDirect
-from bot.pdf_utils import PDFProcessor
 
 
 class TestTTSErrorHandling(unittest.TestCase):
     """Test TTS error handling."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test environment."""
         # Create temporary directory for test files
         self.temp_dir = tempfile.TemporaryDirectory()
         self.temp_path = Path(self.temp_dir.name)
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up after tests."""
         # Clean up temporary directory
         self.temp_dir.cleanup()
@@ -37,7 +37,7 @@ class TestTTSErrorHandling(unittest.TestCase):
     @patch("bot.tts.kokoro_direct.np.sqrt")
     @patch("bot.tts.kokoro_direct.np.mean")
     @patch("bot.tts.kokoro_direct.np.square")
-    def test_zero_audio_detection(self, mock_square, mock_mean, mock_sqrt, mock_max):
+    def test_zero_audio_detection(self, mock_square, mock_mean, mock_sqrt, mock_max) -> None:
         """Test that all-zero audio is detected and raises an error."""
         # Mock audio stats to simulate all-zero audio
         mock_square.return_value = np.zeros(100)
@@ -61,14 +61,14 @@ class TestTTSErrorHandling(unittest.TestCase):
 
             # Test that creating audio with all zeros raises TTSSynthesisError
             output_path = self.temp_path / "output.wav"
-            with self.assertRaises(TTSSynthesisError):
+            with pytest.raises(TTSSynthesisError):
                 kokoro.create(text="Test text", output_path=output_path)
 
             # Verify that soundfile.write was not called (no file written)
             mock_write.assert_not_called()
 
     @patch("bot.pdf_utils.shutil.which")
-    def test_tesseract_detection(self, mock_which):
+    def test_tesseract_detection(self, mock_which) -> None:
         """Test that Tesseract availability is correctly detected."""
         # Test when Tesseract is available
         mock_which.return_value = "/usr/bin/tesseract"
@@ -80,7 +80,7 @@ class TestTTSErrorHandling(unittest.TestCase):
             importlib.reload(__import__("bot.pdf_utils"))
             from bot.pdf_utils import TESSERACT_AVAILABLE
 
-            self.assertTrue(TESSERACT_AVAILABLE)
+            assert TESSERACT_AVAILABLE
 
         # Test when Tesseract is not available
         mock_which.return_value = None
@@ -92,11 +92,11 @@ class TestTTSErrorHandling(unittest.TestCase):
             importlib.reload(__import__("bot.pdf_utils"))
             from bot.pdf_utils import TESSERACT_AVAILABLE
 
-            self.assertFalse(TESSERACT_AVAILABLE)
+            assert not TESSERACT_AVAILABLE
 
     @patch("bot.pdf_utils.TESSERACT_AVAILABLE", False)
     @patch("bot.pdf_utils.fitz.open")
-    def test_pdf_ocr_warning(self, mock_open):
+    def test_pdf_ocr_warning(self, mock_open) -> None:
         """Test that a warning is logged when OCR is needed but not available."""
         # Mock PDF with image-only content
         mock_pdf = MagicMock()
@@ -122,7 +122,7 @@ class TestTTSErrorHandling(unittest.TestCase):
             )
 
             # Check that result is empty
-            self.assertEqual(result, "")
+            assert result == ""
 
 
 if __name__ == "__main__":

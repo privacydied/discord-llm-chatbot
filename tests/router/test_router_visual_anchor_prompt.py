@@ -2,22 +2,22 @@ from bot.router import Router
 
 
 class DummyBot:
-    def __init__(self):
+    def __init__(self) -> None:
         self.config = {}
         self.tts_manager = None
         self.loop = None
 
 
 class CaptureLogger:
-    def __init__(self):
+    def __init__(self) -> None:
         self.info_lines = []
 
-    def info(self, message, *args, **kwargs):
+    def info(self, message, *args, **kwargs) -> None:
         if args:
             message = message % args
         self.info_lines.append(str(message))
 
-    def debug(self, *args, **kwargs):
+    def debug(self, *args, **kwargs) -> None:
         return None
 
 

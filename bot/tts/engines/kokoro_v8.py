@@ -1,5 +1,4 @@
-"""
-Engine adapter for kokoro>=0.8 (KPipeline), which does not require espeak.
+"""Engine adapter for kokoro>=0.8 (KPipeline), which does not require espeak.
 
 STATUS: EXPERIMENTAL — not production-ready.
 The TTS manager routes to kokoro-onnx by default.
@@ -13,24 +12,25 @@ from __future__ import annotations
 import io
 import os
 import wave
-from typing import Optional
 
 import numpy as np
-from bot.utils.logging import get_logger
-from .base import BaseEngine
+
 from bot.tts.errors import TTSError
+from bot.utils.logging import get_logger
+
+from .base import BaseEngine
 
 logger = get_logger(__name__)
 
 
 class KokoroV8Engine(BaseEngine):
-    def __init__(self, voice: Optional[str] = None, lang_code: Optional[str] = None):
+    def __init__(self, voice: str | None = None, lang_code: str | None = None) -> None:
         # Defaults align with common Kokoro-82M examples
         self.voice = voice or os.getenv("TTS_VOICE", "af_heart")
         self.lang_code = lang_code or os.getenv("TTS_LANG_CODE", "a")  # 'a' American English
         self._pipeline = None
 
-    def load(self):
+    def load(self) -> None:
         try:
             from kokoro import KPipeline  # type: ignore
 
@@ -38,7 +38,8 @@ class KokoroV8Engine(BaseEngine):
             logger.info("KokoroV8Engine loaded (KPipeline)")
         except Exception as e:
             logger.error(f"Failed to load KokoroV8Engine: {e}", exc_info=True)
-            raise TTSError(f"Failed to load KokoroV8Engine: {e}") from e
+            msg = f"Failed to load KokoroV8Engine: {e}"
+            raise TTSError(msg) from e
 
     def _to_wav_bytes(self, audio: np.ndarray, sr: int) -> bytes:
         # Normalize to int16 PCM
@@ -68,7 +69,8 @@ class KokoroV8Engine(BaseEngine):
             return self._to_wav_bytes(audio, sr)
         except Exception as e:
             logger.error(f"KokoroV8Engine synthesis failed: {e}", exc_info=True)
-            raise TTSError(f"Kokoro v8 synthesis failed: {e}") from e
+            msg = f"Kokoro v8 synthesis failed: {e}"
+            raise TTSError(msg) from e
 
     async def close(self) -> None:
         """Release pipeline resources (if any)."""

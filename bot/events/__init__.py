@@ -1,5 +1,4 @@
-"""
-Event handlers and utilities for the Discord bot.
+"""Event handlers and utilities for the Discord bot.
 
 This package exposes minimal utilities used by tests (`has_image_attachments`,
 `get_image_urls`) and re-exports `setup_command_error_handler`.
@@ -65,8 +64,8 @@ def __getattr__(name: str):
 
 
 __all__ = [
-    "setup_command_error_handler",
-    "has_image_attachments",
     "get_image_urls",
+    "has_image_attachments",
+    "setup_command_error_handler",
     # 'BotEventHandler' is provided lazily via __getattr__
 ]

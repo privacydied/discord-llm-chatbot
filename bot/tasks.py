@@ -1,13 +1,20 @@
-"""
-Background task management for the Discord bot.
-"""
+"""Background task management for the Discord bot."""
 
 import asyncio
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Any
 
 from discord.ext import commands, tasks
 
+from bot.server_archive import (
+    start_server_archive_service as start_native_server_archive_service,
+)
+from bot.server_archive import (
+    stop_server_archive_service as stop_native_server_archive_service,
+)
+
+from .config import load_config
+from .janitor import start_janitor, stop_janitor
 from .memory import (
     save_all_profiles,
     save_all_server_profiles,
@@ -16,17 +23,11 @@ from .memory import (
     stop_memory_distiller,
     stop_memory_service,
 )
-from .config import load_config
-from .janitor import start_janitor, stop_janitor
-from bot.server_archive import (
-    start_server_archive_service as start_native_server_archive_service,
-    stop_server_archive_service as stop_native_server_archive_service,
-)
 
 logger = logging.getLogger(__name__)
 # Global task registry
-_background_tasks: Dict[str, tasks.Loop] = {}
-_running_tasks: List[asyncio.Task] = []
+_background_tasks: dict[str, tasks.Loop] = {}
+_running_tasks: list[asyncio.Task] = []
 
 
 def _persist_profiles_sync() -> tuple[bool, bool]:
@@ -40,21 +41,20 @@ async def _persist_profiles_nonblocking() -> tuple[bool, bool]:
 
 
 def setup_memory_save_task(bot: commands.Bot) -> tasks.Loop:
-    """
-    Set up a task to periodically save memory profiles.
+    """Set up a task to periodically save memory profiles.
 
     Args:
         bot: The bot instance
 
     Returns:
         The task loop that can be started/stopped
-    """
 
+    """
     initial_config = load_config()
     interval_minutes = initial_config.get("PROFILE_AUTOSAVE_INTERVAL", 10)
 
     @tasks.loop(minutes=interval_minutes)
-    async def memory_save_task():
+    async def memory_save_task() -> None:
         try:
             current_config = load_config()
             target_interval = current_config.get("PROFILE_AUTOSAVE_INTERVAL", 10)
@@ -101,7 +101,7 @@ def setup_memory_save_task(bot: commands.Bot) -> tasks.Loop:
 class TaskManager:
     """Manages background tasks for the bot."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.tasks = {}
         self.running = False
@@ -187,12 +187,11 @@ class TaskManager:
 
     async def _start_profile_autosave(self) -> None:
         """Start the profile auto-save task."""
-
         cfg = load_config()
         interval_minutes = cfg.get("PROFILE_AUTOSAVE_INTERVAL", 10)
 
         @tasks.loop(minutes=interval_minutes)
-        async def profile_autosave():
+        async def profile_autosave() -> None:
             """Automatically save user and server profiles."""
             try:
                 current_cfg = load_config()
@@ -230,16 +229,15 @@ class TaskManager:
 
     async def _start_cleanup_tasks(self) -> None:
         """Start cleanup tasks."""
-
         cfg = load_config()
         interval_hours = cfg.get("CLEANUP_INTERVAL_HOURS", 24)
 
         @tasks.loop(hours=interval_hours)
-        async def cleanup_old_logs():
+        async def cleanup_old_logs() -> None:
             """Clean up old log files."""
             try:
-                from pathlib import Path
                 import time
+                from pathlib import Path
 
                 current_cfg = load_config()
                 target_hours = current_cfg.get("CLEANUP_INTERVAL_HOURS", 24)
@@ -282,12 +280,11 @@ class TaskManager:
 
     async def _start_health_check(self) -> None:
         """Start health check task."""
-
         cfg = load_config()
         interval_minutes = cfg.get("HEALTH_CHECK_INTERVAL", 5)
 
         @tasks.loop(minutes=interval_minutes)
-        async def health_check():
+        async def health_check() -> None:
             """Perform health checks."""
             try:
                 current_cfg = load_config()
@@ -344,7 +341,7 @@ class TaskManager:
 
 
 # Global task manager instance
-_task_manager: Optional[TaskManager] = None
+_task_manager: TaskManager | None = None
 
 
 async def spawn_background_tasks(bot: commands.Bot) -> None:
@@ -382,7 +379,7 @@ async def stop_background_tasks() -> None:
         logger.error(f"Error stopping background tasks: {e}", exc_info=True)
 
 
-def get_task_status() -> Dict[str, Any]:
+def get_task_status() -> dict[str, Any]:
     """Get the status of all background tasks."""
     if _task_manager is None:
         return {"status": "not_initialized", "tasks": {}}

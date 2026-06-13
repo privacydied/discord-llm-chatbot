@@ -8,11 +8,10 @@ assets when they are absent (e.g. CI runners that don't store the 340 MB model).
 
 from __future__ import annotations
 
+from collections.abc import Sequence  # noqa: F401
 from pathlib import Path
-from typing import Sequence  # noqa: F401
 
 import pytest
-
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -29,7 +28,7 @@ def _has_kokoro_assets() -> bool:
 _HAS_KOKORO = _has_kokoro_assets()
 
 
-def pytest_collection_modifyitems(config, items):
+def pytest_collection_modifyitems(config, items) -> None:
     """Skip tests marked 'needs_kokoro_assets' when model files are missing."""
     if _HAS_KOKORO:
         return
@@ -40,7 +39,7 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skipper)
 
 
-def pytest_configure(config: "pytest.Config") -> None:  # noqa: ARG001
+def pytest_configure(config: pytest.Config) -> None:
     """Register custom markers."""
     config.addinivalue_line(
         "markers",

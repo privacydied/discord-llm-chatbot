@@ -1,35 +1,25 @@
-"""
-Tests for config hot-reload and retry manager ladder refresh.
+"""Tests for config hot-reload and retry manager ladder refresh.
 Ensures that editing TEXT_FALLBACK_MODELS at runtime updates the retry manager's
 text ladder for subsequent requests.
 
 These tests use mocking to avoid full bot initialization.
 """
 
-from unittest.mock import patch, MagicMock
 import importlib
-import sys
-
-
-def _reset_enhanced_retry_state(mock_retry_mgr):
-    """Reset the enhanced_retry module state to use our mock."""
-    mod = sys.modules.get("bot.enhanced_retry")
-    if mod:
-        mod._retry_manager = mock_retry_mgr
-        mod.get_retry_manager = lambda: mock_retry_mgr
-        mod.EnhancedRetryManager = lambda *args, **kwargs: mock_retry_mgr
+from unittest.mock import MagicMock, patch
 
 
 class TestRetryManagerLadderRefresh:
     """Test retry manager ladder refresh logic in isolation."""
 
-    def _reload_modules(self):
+    def _reload_modules(self) -> None:
         """Reload modules to clear import caches between tests."""
+        import sys
         for mod in ("bot.config_reload", "bot.config", "bot.config._base"):
             if mod in sys.modules:
                 importlib.reload(sys.modules[mod])
 
-    def test_reload_env_calls_retry_manager_refresh(self):
+    def test_reload_env_calls_retry_manager_refresh(self) -> None:
         """Verify reload_env() calls get_retry_manager().refresh_from_env()."""
         self._reload_modules()
         mock_retry_mgr = MagicMock()
@@ -39,16 +29,14 @@ class TestRetryManagerLadderRefresh:
             "media": ["media-handler"],
         }
 
-        # Reset enhanced_retry state BEFORE imports
-        _reset_enhanced_retry_state(mock_retry_mgr)
-
         with (
-            patch("bot.config.load_config_candidate") as mock_load_config_candidate,
-            patch("bot.config.validate_config_candidate", return_value=(True, [])),
-            patch("bot.config.invalidate_config_cache", MagicMock()),
+            patch("bot.config_reload.load_config_candidate") as mock_load_config_candidate,
+            patch("bot.config_reload.validate_config_candidate", return_value=(True, [])),
+            patch("bot.config_reload.invalidate_config_cache", MagicMock()),
             patch("bot.config_reload._preferred_env_path") as mock_path,
             patch("bot.config_reload.load_dotenv"),
             patch("bot.config_reload._sync_dotenv_file"),
+            patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr),
         ):
             # Setup mocks
             mock_path_obj = MagicMock()
@@ -70,7 +58,7 @@ class TestRetryManagerLadderRefresh:
             mock_retry_mgr.refresh_from_env.assert_called_once()
             assert result["success"] is True
 
-    def test_reload_env_logs_ladder_summary(self):
+    def test_reload_env_logs_ladder_summary(self) -> None:
         """Verify reload_env() logs ladder summary after refresh."""
         self._reload_modules()
         mock_retry_mgr = MagicMock()
@@ -81,16 +69,15 @@ class TestRetryManagerLadderRefresh:
         }
         mock_logger = MagicMock()
 
-        _reset_enhanced_retry_state(mock_retry_mgr)
-
         with (
-            patch("bot.config.load_config_candidate") as mock_load_config_candidate,
-            patch("bot.config.validate_config_candidate", return_value=(True, [])),
-            patch("bot.config.invalidate_config_cache", MagicMock()),
+            patch("bot.config_reload.load_config_candidate") as mock_load_config_candidate,
+            patch("bot.config_reload.validate_config_candidate", return_value=(True, [])),
+            patch("bot.config_reload.invalidate_config_cache", MagicMock()),
             patch("bot.config_reload._preferred_env_path") as mock_path,
             patch("bot.config_reload.load_dotenv"),
             patch("bot.config_reload._sync_dotenv_file"),
             patch("bot.config_reload.logger", mock_logger),
+            patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr),
         ):
             mock_path_obj = MagicMock()
             mock_path_obj.exists.return_value = True
@@ -107,25 +94,24 @@ class TestRetryManagerLadderRefresh:
 
             reload_env()
 
-            info_calls = [call for call in mock_logger.info.call_args_list]
+            info_calls = list(mock_logger.info.call_args_list)
             any("config.reload.ladders" in str(call) or "ladders" in str(call).lower() for call in info_calls)
             assert mock_retry_mgr.refresh_from_env.called
 
-    def test_reload_env_handles_retry_manager_failure_gracefully(self):
+    def test_reload_env_handles_retry_manager_failure_gracefully(self) -> None:
         """Verify reload_env() continues even if retry manager refresh fails."""
         self._reload_modules()
         mock_retry_mgr = MagicMock()
         mock_retry_mgr.refresh_from_env.side_effect = RuntimeError("Simulated failure")
 
-        _reset_enhanced_retry_state(mock_retry_mgr)
-
         with (
-            patch("bot.config.load_config_candidate") as mock_load_config_candidate,
-            patch("bot.config.validate_config_candidate", return_value=(True, [])),
-            patch("bot.config.invalidate_config_cache", MagicMock()),
+            patch("bot.config_reload.load_config_candidate") as mock_load_config_candidate,
+            patch("bot.config_reload.validate_config_candidate", return_value=(True, [])),
+            patch("bot.config_reload.invalidate_config_cache", MagicMock()),
             patch("bot.config_reload._preferred_env_path") as mock_path,
             patch("bot.config_reload.load_dotenv"),
             patch("bot.config_reload._sync_dotenv_file"),
+            patch("bot.enhanced_retry.get_retry_manager", return_value=mock_retry_mgr),
         ):
             mock_path_obj = MagicMock()
             mock_path_obj.exists.return_value = True
@@ -148,7 +134,7 @@ class TestRetryManagerLadderRefresh:
 class TestEnhancedRetryManagerRefresh:
     """Test EnhancedRetryManager.refresh_from_env() behavior."""
 
-    def test_refresh_rebuilds_ladders_from_load_default_configs(self):
+    def test_refresh_rebuilds_ladders_from_load_default_configs(self) -> None:
         """Verify refresh_from_env() calls _load_default_configs()."""
         # Create a mock manager that tracks method calls
         mock_manager = MagicMock()
@@ -159,7 +145,7 @@ class TestEnhancedRetryManagerRefresh:
         # We verify by checking the implementation pattern
         assert True  # Structural test - actual behavior tested via integration
 
-    def test_refresh_preserves_breaker_state_for_existing_providers(self):
+    def test_refresh_preserves_breaker_state_for_existing_providers(self) -> None:
         """Document expected behavior: existing provider breakers are preserved."""
         # This is a documentation test - the actual implementation in enhanced_retry.py
         # lines 304-326 shows:
@@ -169,7 +155,7 @@ class TestEnhancedRetryManagerRefresh:
         # 4. New providers get fresh CircuitBreakerState()
         assert True  # Verified by code review
 
-    def test_refresh_returns_ladder_summary(self):
+    def test_refresh_returns_ladder_summary(self) -> None:
         """Document expected return value from refresh_from_env()."""
         # Returns Dict[str, List[str]] mapping modality to list of model names
         # e.g., {"text": ["model-a", "model-b"], "vision": ["vl-model"], "media": ["handler"]}

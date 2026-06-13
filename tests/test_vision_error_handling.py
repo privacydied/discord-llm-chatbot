@@ -1,5 +1,4 @@
-"""
-Test suite for vision/image inference error handling and retry logic.
+"""Test suite for vision/image inference error handling and retry logic.
 Tests robust error handling patterns for external API calls.
 """
 
@@ -8,26 +7,28 @@ import pytest
 # Skip all tests — many require live vision API or depend on see_infer internals
 pytestmark = pytest.mark.skip(reason="Requires live vision API integration; see_infer internals need refactoring")
 
-from unittest.mock import AsyncMock, MagicMock, patch, mock_open
+from typing import Never
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+
 from openai import InternalServerError
 
+from bot.exceptions import APIError, InferenceError
+from bot.openai_backend import generate_vl_response as openai_generate_vl_response
 from bot.retry_utils import (
+    VISION_RETRY_CONFIG,
     RetryConfig,
-    is_retryable_error,
     calculate_delay,
+    is_retryable_error,
     retry_async,
     with_retry,
-    VISION_RETRY_CONFIG,
 )
-from bot.exceptions import APIError, InferenceError
 from bot.see import see_infer
-from bot.openai_backend import generate_vl_response as openai_generate_vl_response
 
 
 class TestRetryUtils:
     """Test retry utility functions and configurations."""
 
-    def test_retry_config_defaults(self):
+    def test_retry_config_defaults(self) -> None:
         """Test default retry configuration values."""
         config = RetryConfig()
         assert config.max_attempts == 3
@@ -38,7 +39,7 @@ class TestRetryUtils:
         assert APIError in config.retryable_exceptions
         assert 502 in config.retryable_status_codes
 
-    def test_vision_retry_config(self):
+    def test_vision_retry_config(self) -> None:
         """Test vision-specific retry configuration."""
         config = VISION_RETRY_CONFIG
         assert config.max_attempts == 3
@@ -47,7 +48,7 @@ class TestRetryUtils:
         assert APIError in config.retryable_exceptions
         assert InferenceError in config.retryable_exceptions
 
-    def test_is_retryable_error_with_status_codes(self):
+    def test_is_retryable_error_with_status_codes(self) -> None:
         """Test retryable error detection for status codes."""
         config = RetryConfig()
 
@@ -63,7 +64,7 @@ class TestRetryUtils:
         error_404 = APIError("Error code: 404 - Not Found")
         assert is_retryable_error(error_404, config) is False
 
-    def test_is_retryable_error_with_patterns(self):
+    def test_is_retryable_error_with_patterns(self) -> None:
         """Test retryable error detection for common patterns."""
         config = RetryConfig()
 
@@ -83,7 +84,7 @@ class TestRetryUtils:
         auth_error = APIError("Authentication failed")
         assert is_retryable_error(auth_error, config) is False
 
-    def test_calculate_delay(self):
+    def test_calculate_delay(self) -> None:
         """Test delay calculation with exponential backoff."""
         config = RetryConfig(base_delay=1.0, exponential_base=2.0, max_delay=10.0, jitter=False)
 
@@ -95,7 +96,7 @@ class TestRetryUtils:
         # Test max delay cap
         assert calculate_delay(10, config) == 10.0  # Should be capped at max_delay
 
-    def test_calculate_delay_with_jitter(self):
+    def test_calculate_delay_with_jitter(self) -> None:
         """Test delay calculation with jitter."""
         config = RetryConfig(base_delay=1.0, exponential_base=2.0, jitter=True)
 
@@ -104,10 +105,10 @@ class TestRetryUtils:
         assert 0.9 <= delay <= 1.1
 
     @pytest.mark.asyncio
-    async def test_retry_async_success_first_attempt(self):
+    async def test_retry_async_success_first_attempt(self) -> None:
         """Test successful execution on first attempt."""
 
-        async def success_func():
+        async def success_func() -> str:
             return "success"
 
         config = RetryConfig(max_attempts=3)
@@ -115,15 +116,16 @@ class TestRetryUtils:
         assert result == "success"
 
     @pytest.mark.asyncio
-    async def test_retry_async_success_after_retries(self):
+    async def test_retry_async_success_after_retries(self) -> None:
         """Test successful execution after retries."""
         call_count = 0
 
-        async def flaky_func():
+        async def flaky_func() -> str:
             nonlocal call_count
             call_count += 1
             if call_count < 3:
-                raise APIError("Error code: 502 - Bad Gateway")
+                msg = "Error code: 502 - Bad Gateway"
+                raise APIError(msg)
             return "success"
 
         config = RetryConfig(max_attempts=3, base_delay=0.1)
@@ -132,11 +134,12 @@ class TestRetryUtils:
         assert call_count == 3
 
     @pytest.mark.asyncio
-    async def test_retry_async_exhausted_retries(self):
+    async def test_retry_async_exhausted_retries(self) -> None:
         """Test retry exhaustion with persistent error."""
 
-        async def always_fail():
-            raise APIError("Error code: 502 - Bad Gateway")
+        async def always_fail() -> Never:
+            msg = "Error code: 502 - Bad Gateway"
+            raise APIError(msg)
 
         config = RetryConfig(max_attempts=2, base_delay=0.1)
 
@@ -144,11 +147,12 @@ class TestRetryUtils:
             await retry_async(always_fail, config)
 
     @pytest.mark.asyncio
-    async def test_retry_async_non_retryable_error(self):
+    async def test_retry_async_non_retryable_error(self) -> None:
         """Test immediate failure for non-retryable errors."""
 
-        async def auth_fail():
-            raise APIError("Authentication failed")
+        async def auth_fail() -> Never:
+            msg = "Authentication failed"
+            raise APIError(msg)
 
         config = RetryConfig(max_attempts=3)
 
@@ -156,16 +160,17 @@ class TestRetryUtils:
             await retry_async(auth_fail, config)
 
     @pytest.mark.asyncio
-    async def test_with_retry_decorator(self):
+    async def test_with_retry_decorator(self) -> None:
         """Test the retry decorator."""
         call_count = 0
 
         @with_retry(RetryConfig(max_attempts=3, base_delay=0.1))
-        async def decorated_func():
+        async def decorated_func() -> str:
             nonlocal call_count
             call_count += 1
             if call_count < 2:
-                raise APIError("Error code: 502 - Bad Gateway")
+                msg = "Error code: 502 - Bad Gateway"
+                raise APIError(msg)
             return "decorated_success"
 
         result = await decorated_func()
@@ -177,7 +182,7 @@ class TestVisionErrorHandling:
     """Test vision inference error handling and retry logic."""
 
     @pytest.mark.asyncio
-    async def test_see_infer_user_friendly_messages(self):
+    async def test_see_infer_user_friendly_messages(self) -> None:
         """Test user-friendly error messages in see_infer."""
         with (
             patch("bot.see.os.path.exists", return_value=True),
@@ -196,7 +201,7 @@ class TestVisionErrorHandling:
             assert "provider issues" in error_msg
 
     @pytest.mark.asyncio
-    async def test_see_infer_file_not_found_message(self):
+    async def test_see_infer_file_not_found_message(self) -> None:
         """Test file not found error message."""
         with patch("bot.see.os.path.exists", return_value=False):
             with pytest.raises(InferenceError) as exc_info:
@@ -206,7 +211,7 @@ class TestVisionErrorHandling:
             assert "could not be found" in error_msg
 
     @pytest.mark.asyncio
-    async def test_see_infer_format_error_message(self):
+    async def test_see_infer_format_error_message(self) -> None:
         """Test format error message."""
         with (
             patch("bot.see.os.path.exists", return_value=True),
@@ -223,7 +228,7 @@ class TestVisionErrorHandling:
             assert "format is not supported" in error_msg
 
     @pytest.mark.asyncio
-    async def test_ai_backend_error_handling(self):
+    async def test_ai_backend_error_handling(self) -> None:
         """Test AI backend error handling with retry detection."""
         with patch("bot.ai_backend.load_config") as mock_config:
             mock_config.return_value = {"TEXT_BACKEND": "openai"}
@@ -241,7 +246,7 @@ class TestVisionErrorHandling:
                 assert "provider issue" in error_msg
 
     @pytest.mark.asyncio
-    async def test_openai_backend_retry_logic(self):
+    async def test_openai_backend_retry_logic(self) -> None:
         """Test OpenAI backend retry logic integration."""
         call_count = 0
 
@@ -291,7 +296,7 @@ class TestVisionErrorHandling:
 class TestRouterErrorHandling:
     """Test router-level error handling for vision processing."""
 
-    def test_router_error_message_extraction(self):
+    def test_router_error_message_extraction(self) -> None:
         """Test router's ability to extract user-friendly messages from errors."""
         from bot.router import Router
 

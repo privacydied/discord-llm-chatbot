@@ -1,5 +1,4 @@
-"""
-Unit tests for X/Twitter image processing and naked image attachment fixes.
+"""Unit tests for X/Twitter image processing and naked image attachment fixes.
 Tests the key behaviors fixed in the "Fix This Code" implementation.
 """
 
@@ -8,16 +7,17 @@ import pytest
 # Skip all tests — X/Twitter syndication requires API access
 pytestmark = pytest.mark.skip(reason="Requires X/Twitter syndication API access")
 
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock
+
 from bot.syndication.extract import extract_text_and_images_from_syndication
 from bot.syndication.handler import handle_twitter_syndication_to_vl
-from bot.syndication.url_utils import upgrade_pbs_to_orig, pbs_base_key
+from bot.syndication.url_utils import pbs_base_key, upgrade_pbs_to_orig
 
 
 class TestTwitterMediaSelection:
     """Test X/Twitter media selection: prioritize high-res native images over cards."""
 
-    def test_native_photos_prioritized_over_card(self):
+    def test_native_photos_prioritized_over_card(self) -> None:
         """Primary native photos should be chosen over card images."""
         tw_data = {
             "photos": [{"url": "https://pbs.twimg.com/media/test1.jpg:large"}],
@@ -32,7 +32,7 @@ class TestTwitterMediaSelection:
         assert "test1.jpg" in result["image_urls"][0]
         assert result["had_card"] is True  # Card was present but not used
 
-    def test_quoted_fallback_when_no_primary_native(self):
+    def test_quoted_fallback_when_no_primary_native(self) -> None:
         """Quoted tweet photos should be used when primary has no native media."""
         tw_data = {
             "photos": [],  # No primary photos
@@ -46,7 +46,7 @@ class TestTwitterMediaSelection:
         assert len(result["image_urls"]) == 1
         assert "quoted1.jpg" in result["image_urls"][0]
 
-    def test_card_fallback_when_no_native_media(self):
+    def test_card_fallback_when_no_native_media(self) -> None:
         """Card image should only be used when no native media exists."""
         tw_data = {
             "photos": [],  # No primary photos
@@ -61,7 +61,7 @@ class TestTwitterMediaSelection:
         assert len(result["image_urls"]) == 1
         assert "fallback.jpg" in result["image_urls"][0]
 
-    def test_high_res_normalization(self):
+    def test_high_res_normalization(self) -> None:
         """URLs should be upgraded to high-res with name=orig parameter."""
         tw_data = {
             "photos": [
@@ -78,7 +78,7 @@ class TestTwitterMediaSelection:
             assert "name=orig" in url
             assert ":large" not in url  # Legacy suffix removed
 
-    def test_deduplication_by_base_asset(self):
+    def test_deduplication_by_base_asset(self) -> None:
         """Multiple versions of same image should be deduplicated."""
         tw_data = {
             "photos": [
@@ -116,7 +116,7 @@ class TestNakedImageHandling:
         bot.user.id = 67890
         return bot
 
-    def test_empty_content_triggers_ack_thoughts_format(self, mock_message, mock_bot):
+    def test_empty_content_triggers_ack_thoughts_format(self, mock_message, mock_bot) -> None:
         """Empty content with image should use ack+thoughts format."""
         # This would be tested in the actual router logic
         # Testing the pattern matching here
@@ -128,7 +128,7 @@ class TestNakedImageHandling:
 
         assert not clean_content  # Should be empty, triggering naked image logic
 
-    def test_mention_only_content_triggers_ack_thoughts_format(self, mock_message, mock_bot):
+    def test_mention_only_content_triggers_ack_thoughts_format(self, mock_message, mock_bot) -> None:
         """Content with only bot mention should use ack+thoughts format."""
         import re
 
@@ -138,7 +138,7 @@ class TestNakedImageHandling:
 
         assert not clean_content  # Should be empty after mention removal
 
-    def test_text_with_image_uses_normal_flow(self, mock_message, mock_bot):
+    def test_text_with_image_uses_normal_flow(self, mock_message, mock_bot) -> None:
         """Text content with image should use normal processing flow."""
         import re
 
@@ -153,7 +153,7 @@ class TestReplyFormatting:
     """Test reply formatting controls (ack+thoughts vs verbatim)."""
 
     @pytest.mark.asyncio
-    async def test_ack_thoughts_format(self):
+    async def test_ack_thoughts_format(self) -> None:
         """Test ack+thoughts reply format for concise responses."""
         mock_vl_handler = AsyncMock(return_value="This is a cat sitting on a windowsill.")
 
@@ -174,10 +174,10 @@ class TestReplyFormatting:
         assert "here's what the images show" in result
         assert "This is a cat sitting on a windowsill" in result
         # Should truncate long tweet text
-        assert len([line for line in result.split("\n") if "Check out this adorable" in line and len(line) < 150])
+        assert [line for line in result.split("\n") if "Check out this adorable" in line and len(line) < 150]
 
     @pytest.mark.asyncio
-    async def test_verbatim_thoughts_format(self):
+    async def test_verbatim_thoughts_format(self) -> None:
         """Test verbatim+thoughts reply format for detailed responses."""
         mock_vl_handler = AsyncMock(return_value="This is a cat sitting on a windowsill.")
 
@@ -202,7 +202,7 @@ class TestReplyFormatting:
 class TestUrlUtils:
     """Test URL utility functions for high-res upgrades."""
 
-    def test_upgrade_pbs_to_orig(self):
+    def test_upgrade_pbs_to_orig(self) -> None:
         """Test upgrading pbs.twimg.com URLs to name=orig."""
         # Legacy :size suffix
         url1 = "https://pbs.twimg.com/media/test.jpg:large"
@@ -221,7 +221,7 @@ class TestUrlUtils:
         result3 = upgrade_pbs_to_orig(url3)
         assert result3 == url3
 
-    def test_pbs_base_key_deduplication(self):
+    def test_pbs_base_key_deduplication(self) -> None:
         """Test base key generation for deduplication."""
         url1 = "https://pbs.twimg.com/media/test.jpg:large"
         url2 = "https://pbs.twimg.com/media/test.jpg?name=small"

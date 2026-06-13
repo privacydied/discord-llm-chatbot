@@ -1,17 +1,17 @@
-from .types import SearchResult  # expose dataclass used by tests
-
 # Backward-compatibility shims for legacy imports
 # Some older modules referenced functions directly from the package-level namespace
 # e.g. `from bot.search import web_search, search_memories`. Provide minimal shims
 # to prevent ImportError and keep tests deterministic by mocking aiohttp.
-
 import os
 from typing import List
+
 import aiohttp
 from bs4 import BeautifulSoup
 
+from .types import SearchResult  # expose dataclass used by tests
 
-async def web_search(query: str, max_results: int = 5) -> List[SearchResult]:
+
+async def web_search(query: str, max_results: int = 5) -> list[SearchResult]:
     """Simple DuckDuckGo HTML search used by legacy tests.
 
     This implementation uses aiohttp and BeautifulSoup so unit tests can
@@ -21,16 +21,15 @@ async def web_search(query: str, max_results: int = 5) -> List[SearchResult]:
     params = {"q": query, "kl": os.getenv("SEARCH_LOCALE", "us-en")}
     headers = {"User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")}
 
-    results: List[SearchResult] = []
-    async with aiohttp.ClientSession() as session:
-        async with session.post(search_url, data=params, headers=headers) as resp:
-            if resp.status != 200:
-                return []
-            html = await resp.text()
+    results: list[SearchResult] = []
+    async with aiohttp.ClientSession() as session, session.post(search_url, data=params, headers=headers) as resp:
+        if resp.status != 200:
+            return []
+        html = await resp.text()
 
     soup = BeautifulSoup(html, "html.parser")
     items = soup.select(".result")
-    for result in items[: max_results if max_results else len(items)]:
+    for result in items[: max_results or len(items)]:
         title_elem = result.select_one(".result__a")
         if not title_elem:
             continue

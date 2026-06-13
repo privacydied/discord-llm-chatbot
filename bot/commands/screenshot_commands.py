@@ -1,5 +1,4 @@
-"""
-Discord commands for explicit screenshot capture and analysis.
+"""Discord commands for explicit screenshot capture and analysis.
 
 Implements the `!ss` command which is strictly command-gated to
 capture a screenshot of a URL using the configured external API and
@@ -15,13 +14,13 @@ Privacy/Security:
 from __future__ import annotations
 
 import re
-from typing import Optional, TYPE_CHECKING, Dict, Any
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord.ext import commands
 
-from ..utils.logging import get_logger
-from ..modality import InputItem
+from bot.modality import InputItem
+from bot.utils.logging import get_logger
 
 if TYPE_CHECKING:  # type hints only
     from bot.core.bot import LLMBot
@@ -35,12 +34,12 @@ _URL_PATTERN = re.compile(r"https?://[^\s<>\"'\[\]{}|\\^`]+")
 class ScreenshotCommands(commands.Cog):
     """Commands for explicit screenshot capture and VL analysis."""
 
-    def __init__(self, bot: "LLMBot") -> None:
+    def __init__(self, bot: LLMBot) -> None:
         self.bot = bot
         logger.info("📸 ScreenshotCommands cog initialized")
 
-    def _extract_first_url(self, text: str) -> Optional[str]:
-        """Extract the first URL from the provided text. [IV]"""
+    def _extract_first_url(self, text: str) -> str | None:
+        """Extract the first URL from the provided text. [IV]."""
         if not text:
             return None
         m = _URL_PATTERN.search(text)
@@ -48,9 +47,8 @@ class ScreenshotCommands(commands.Cog):
 
     @commands.command(name="ss", aliases=["screenshot"])
     @commands.cooldown(3, 60, type=commands.BucketType.user)
-    async def screenshot_cmd(self, ctx: commands.Context, url: Optional[str] = None) -> None:
-        """
-        Take a screenshot of the given URL and analyze it with the vision model.
+    async def screenshot_cmd(self, ctx: commands.Context, url: str | None = None) -> None:
+        """Take a screenshot of the given URL and analyze it with the vision model.
 
         Usage:
             !ss <url>
@@ -82,7 +80,7 @@ class ScreenshotCommands(commands.Cog):
             tick_ms = int(cfg.get("STREAMING_TICK_MS", 750))
 
             # Prepare initial embed message
-            def make_embed(stage_idx: int, stages: Dict[int, Dict[str, Any]]) -> discord.Embed:
+            def make_embed(stage_idx: int, stages: dict[int, dict[str, Any]]) -> discord.Embed:
                 title = "📸 Screenshot"
                 color = 0x00AEEF
                 if stage_idx >= 6:
@@ -112,7 +110,7 @@ class ScreenshotCommands(commands.Cog):
                 return embed
 
             # Initialize stages map
-            stages: Dict[int, Dict[str, Any]] = {
+            stages: dict[int, dict[str, Any]] = {
                 1: {"key": "validate", "label": "Validate URL", "status": "queued"},
                 2: {"key": "prepare", "label": "Prepare capture", "status": "queued"},
                 3: {"key": "capture", "label": "Capture page", "status": "queued"},
@@ -133,16 +131,15 @@ class ScreenshotCommands(commands.Cog):
 
             last_edit = 0.0
 
-            async def update_stage(stage_num: int):
+            async def update_stage(stage_num: int) -> None:
                 nonlocal last_edit
                 # monotonic progression
                 for i in range(1, stage_num):
                     if stages[i]["status"] != "done":
                         stages[i]["status"] = "done"
                 # set active for current
-                if stage_num <= 6:
-                    if stages[stage_num]["status"] != "done":
-                        stages[stage_num]["status"] = "active"
+                if stage_num <= 6 and stages[stage_num]["status"] != "done":
+                    stages[stage_num]["status"] = "active"
                 # throttle edits
                 now = discord.utils.utcnow().timestamp()
                 if (now - last_edit) * 1000.0 < tick_ms:
@@ -201,7 +198,7 @@ class ScreenshotCommands(commands.Cog):
             await ctx.reply("❌ Failed to capture or analyze the screenshot. This might be a temporary service issue. Please try again.")
 
 
-async def setup(bot: "LLMBot") -> None:
+async def setup(bot: LLMBot) -> None:
     """Set up the screenshot commands cog."""
     await bot.add_cog(ScreenshotCommands(bot))
     logger.info("✅ ScreenshotCommands cog loaded")

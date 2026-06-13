@@ -1,22 +1,19 @@
-"""
-Search functionality for the Discord bot.
-"""
+"""Search functionality for the Discord bot."""
 
-import logging
-from typing import List, Dict
 import asyncio
+import logging
 from datetime import datetime, timedelta
-
-import discord
-import aiohttp
-from bs4 import BeautifulSoup
 from pathlib import Path
 
-# Import bot modules
-from .memory import get_profile, get_server_profile
+import aiohttp
+import discord
+from bs4 import BeautifulSoup
 
 # Import from the utils.py module using absolute import to avoid package conflict
 from bot.utils import download_file, is_text_file
+
+# Import bot modules
+from .memory import get_profile, get_server_profile
 
 # Search result cache
 search_cache = {}
@@ -26,7 +23,7 @@ CACHE_EXPIRY = timedelta(minutes=30)
 class SearchResult:
     """Class to represent a search result."""
 
-    def __init__(self, title: str, url: str, snippet: str, source: str = "web"):
+    def __init__(self, title: str, url: str, snippet: str, source: str = "web") -> None:
         self.title = title
         self.url = url
         self.snippet = snippet
@@ -45,9 +42,8 @@ class SearchResult:
         return embed
 
 
-async def web_search(query: str, max_results: int | None = None) -> List[SearchResult]:
-    """
-    Perform a web search and return results.
+async def web_search(query: str, max_results: int | None = None) -> list[SearchResult]:
+    """Perform a web search and return results.
 
     Args:
         query: Search query
@@ -55,6 +51,7 @@ async def web_search(query: str, max_results: int | None = None) -> List[SearchR
 
     Returns:
         List of SearchResult objects
+
     """
     # Check cache first only when a specific max_results is requested
     cache_key = f"web:{query}:{max_results if max_results is not None else 'all'}"
@@ -76,13 +73,12 @@ async def web_search(query: str, max_results: int | None = None) -> List[SearchR
 
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(search_url, data=params, headers=headers) as response:
-                if response.status != 200:
-                    logging.error(f"Search request failed with status {response.status}")
-                    return []
+        async with aiohttp.ClientSession() as session, session.post(search_url, data=params, headers=headers) as response:
+            if response.status != 200:
+                logging.error(f"Search request failed with status {response.status}")
+                return []
 
-                html = await response.text()
+            html = await response.text()
 
         # Parse HTML with BeautifulSoup
         soup = BeautifulSoup(html, "html.parser")
@@ -115,7 +111,7 @@ async def web_search(query: str, max_results: int | None = None) -> List[SearchR
                 results.append(SearchResult(title, url, snippet, "DuckDuckGo"))
 
             except Exception as e:
-                logging.error(f"Error parsing search result {i}: {e}")
+                logging.exception(f"Error parsing search result {i}: {e}")
                 continue
 
         # Cache the results only when a specific max_results is requested
@@ -132,9 +128,8 @@ async def web_search(query: str, max_results: int | None = None) -> List[SearchR
         return []
 
 
-async def search_memories(query: str, user_id: str = None, guild_id: str = None) -> List[SearchResult]:
-    """
-    Search through user and server memories.
+async def search_memories(query: str, user_id: str | None = None, guild_id: str | None = None) -> list[SearchResult]:
+    """Search through user and server memories.
 
     Args:
         query: Search query
@@ -143,6 +138,7 @@ async def search_memories(query: str, user_id: str = None, guild_id: str = None)
 
     Returns:
         List of SearchResult objects
+
     """
     results = []
 
@@ -159,7 +155,7 @@ async def search_memories(query: str, user_id: str = None, guild_id: str = None)
                                 url="",
                                 snippet=memory["content"],
                                 source="Your Memories",
-                            )
+                            ),
                         )
 
         # Search server memories if guild_id is provided
@@ -174,7 +170,7 @@ async def search_memories(query: str, user_id: str = None, guild_id: str = None)
                                 url="",
                                 snippet=memory["content"],
                                 source=f"{memory.get('added_by', 'Server')}'s Memory",
-                            )
+                            ),
                         )
 
         return results
@@ -184,9 +180,8 @@ async def search_memories(query: str, user_id: str = None, guild_id: str = None)
         return []
 
 
-async def search_files(query: str, attachments: List[discord.Attachment]) -> List[SearchResult]:
-    """
-    Search through message attachments.
+async def search_files(query: str, attachments: list[discord.Attachment]) -> list[SearchResult]:
+    """Search through message attachments.
 
     Args:
         query: Search query
@@ -194,6 +189,7 @@ async def search_files(query: str, attachments: List[discord.Attachment]) -> Lis
 
     Returns:
         List of SearchResult objects
+
     """
     results = []
 
@@ -208,7 +204,7 @@ async def search_files(query: str, attachments: List[discord.Attachment]) -> Lis
                 temp_file = Path("temp") / attachment.filename
                 await download_file(attachment.url, temp_file)
 
-                with open(temp_file, "r", encoding="utf-8", errors="ignore") as f:
+                with open(temp_file, encoding="utf-8", errors="ignore") as f:
                     content = f.read()
 
                 # Simple text search
@@ -228,7 +224,7 @@ async def search_files(query: str, attachments: List[discord.Attachment]) -> Lis
                                     url=attachment.url,
                                     snippet=context,
                                     source="File Attachment",
-                                )
+                                ),
                             )
                             break
 
@@ -237,7 +233,7 @@ async def search_files(query: str, attachments: List[discord.Attachment]) -> Lis
                     temp_file.unlink()
 
             except Exception as e:
-                logging.error(f"Error searching file {attachment.filename}: {e}")
+                logging.exception(f"Error searching file {attachment.filename}: {e}")
                 continue
 
         return results
@@ -249,15 +245,14 @@ async def search_files(query: str, attachments: List[discord.Attachment]) -> Lis
 
 async def search_all(
     query: str,
-    user_id: str = None,
-    guild_id: str = None,
-    attachments: List[discord.Attachment] = None,
+    user_id: str | None = None,
+    guild_id: str | None = None,
+    attachments: list[discord.Attachment] | None = None,
     max_web_results: int = 3,
     max_memory_results: int = 3,
     max_file_results: int = 3,
-) -> Dict[str, List[SearchResult]]:
-    """
-    Perform a comprehensive search across all available sources.
+) -> dict[str, list[SearchResult]]:
+    """Perform a comprehensive search across all available sources.
 
     Args:
         query: Search query
@@ -270,6 +265,7 @@ async def search_all(
 
     Returns:
         Dictionary mapping source types to lists of SearchResult objects
+
     """
     if not query.strip():
         return {}

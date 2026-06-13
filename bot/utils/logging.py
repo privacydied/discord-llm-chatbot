@@ -1,10 +1,11 @@
+import contextlib
 import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import NoReturn, Dict, Any
+from typing import Any, NoReturn
 
 from rich.logging import RichHandler
 
@@ -20,9 +21,7 @@ class LevelIconFilter(logging.Filter):
     """Adds a level icon to each record for console output."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if record.levelno >= logging.CRITICAL:
-            record.level_icon = "✖"
-        elif record.levelno >= logging.ERROR:
+        if record.levelno >= logging.CRITICAL or record.levelno >= logging.ERROR:
             record.level_icon = "✖"
         elif record.levelno >= logging.WARNING:
             record.level_icon = "⚠"
@@ -50,7 +49,7 @@ class JsonlFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         # Local time with millisecond precision
-        ts = datetime.fromtimestamp(record.created, tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        ts = datetime.fromtimestamp(record.created, tz=UTC).astimezone().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
         # Detail prefers explicit record.detail; otherwise message
         try:
@@ -62,7 +61,7 @@ class JsonlFormatter(logging.Formatter):
         if detail is None:
             detail = message
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "ts": ts,
             "level": record.levelname,
             "name": record.name,
@@ -80,15 +79,12 @@ class JsonlFormatter(logging.Formatter):
 
 
 def _ensure_dir(p: Path) -> None:
-    try:
+    with contextlib.suppress(Exception):
         p.parent.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        pass
 
 
 def init_logging() -> None:
     """Configure dual-sink logging: Rich console + JSONL file (enforced)."""
-
     level = os.getenv("LOG_LEVEL", "INFO").upper()
     jsonl_path = Path(os.getenv("LOG_JSONL_PATH", "logs/bot.jsonl"))
     _ensure_dir(jsonl_path)
@@ -177,7 +173,7 @@ def cleanup_rich_handlers() -> None:
 
 
 class SensitiveDataFilter(logging.Filter):
-    """Filter that scrubs sensitive values in structured extras before emission. [SFT]"""
+    """Filter that scrubs sensitive values in structured extras before emission. [SFT]."""
 
     SECRET_KEYS = {
         "OPENAI_API_KEY",
@@ -201,7 +197,7 @@ class SensitiveDataFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         try:
-            for key, value in list(record.__dict__.items()):
+            for _key, value in list(record.__dict__.items()):
                 if isinstance(value, dict):
                     self._scrub_dict_inplace(value)
                 # Also scrub 'detail' if it's a dict-like stored as attribute
@@ -212,7 +208,7 @@ class SensitiveDataFilter(logging.Filter):
             return True
         return True
 
-    def _scrub_dict_inplace(self, obj: Dict[str, Any]) -> None:
+    def _scrub_dict_inplace(self, obj: dict[str, Any]) -> None:
         for k in list(obj.keys()):
             v = obj[k]
             if isinstance(v, dict):

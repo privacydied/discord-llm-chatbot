@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 
 def build_url_transcript_result(
@@ -11,7 +11,7 @@ def build_url_transcript_result(
     download: Any,
     pre: Any,
     atempo_factor: float,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build canonical STT payload for yt-dlp/ffmpeg/whisper URL path."""
     metadata = download.metadata
     return {

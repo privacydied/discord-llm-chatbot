@@ -1,11 +1,13 @@
-import httpx
+import contextlib
 import ipaddress
 import logging
 import os
 import re
 import socket
 from pathlib import Path
-from urllib.parse import urlparse, urlunparse, quote
+from urllib.parse import quote, urlparse, urlunparse
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +16,7 @@ SCREENSHOT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _is_private_hostname(hostname: str) -> bool:
-    """Check if a hostname resolves to a private/internal IP address. [SFT]
+    """Check if a hostname resolves to a private/internal IP address. [SFT].
 
     Prevents SSRF attacks by blocking requests to internal network
     addresses (127.x, 10.x, 172.16-31.x, 192.168.x, link-local, etc.).
@@ -27,7 +29,7 @@ def _is_private_hostname(hostname: str) -> bool:
     try:
         # Resolve hostname to IP and check if it's private
         addr_infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
-        for family, _type, _proto, _canonname, sockaddr in addr_infos:
+        for _family, _type, _proto, _canonname, sockaddr in addr_infos:
             ip_str = sockaddr[0]
             ip = ipaddress.ip_address(ip_str)
             if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
@@ -70,8 +72,7 @@ def _normalize_url_for_screenshot(url: str) -> str:
 
 
 async def external_screenshot(url: str) -> str | None:
-    """
-    Captures a screenshot of a URL using the configurable screenshot API
+    """Captures a screenshot of a URL using the configurable screenshot API
     and saves it to the local cache.
 
     Args:
@@ -79,6 +80,7 @@ async def external_screenshot(url: str) -> str | None:
 
     Returns:
         Optional[str]: The file path to the saved screenshot, or None if failed.
+
     """
     # Basic input validation [IV]
     if not url or not isinstance(url, str) or not url.strip():
@@ -105,10 +107,7 @@ async def external_screenshot(url: str) -> str | None:
 
     # Defensive: ensure we pass a proper str to urllib.parse.quote
     try:
-        if isinstance(normalized_url, (bytes, bytearray)):
-            normalized_url_str = bytes(normalized_url).decode("utf-8", errors="replace")
-        else:
-            normalized_url_str = str(normalized_url)
+        normalized_url_str = bytes(normalized_url).decode("utf-8", errors="replace") if isinstance(normalized_url, (bytes, bytearray)) else str(normalized_url)
     except Exception:
         # Fallback to string coercion on any unexpected type
         normalized_url_str = str(normalized_url)
@@ -171,9 +170,9 @@ async def external_screenshot(url: str) -> str | None:
         fmt = (format_type or "png").lower()
         if fmt in ("jpg", "jpeg"):
             ext = "jpg"
-        elif fmt in ("png",):
+        elif fmt == "png":
             ext = "png"
-        elif fmt in ("webp",):
+        elif fmt == "webp":
             ext = "webp"
         else:
             ext = "png"
@@ -187,13 +186,13 @@ async def external_screenshot(url: str) -> str | None:
         return str(filepath)
 
     except httpx.HTTPStatusError as e:
-        logger.error(f"❌ Screenshot Machine API error: {e.response.status_code} for URL: {original_url_str}")
+        logger.exception(f"❌ Screenshot Machine API error: {e.response.status_code} for URL: {original_url_str}")
         if fallback_enabled:
             logger.info("Attempting Playwright fallback after API error...")
             return await _playwright_screenshot(normalized_url_str)
         return None
     except httpx.RequestError as e:
-        logger.error(f"❌ Failed to connect to Screenshot Machine API for URL: {original_url_str}. Error: {e}")
+        logger.exception(f"❌ Failed to connect to Screenshot Machine API for URL: {original_url_str}. Error: {e}")
         if fallback_enabled:
             logger.info("Attempting Playwright fallback after request error...")
             return await _playwright_screenshot(normalized_url_str)
@@ -222,7 +221,7 @@ async def _playwright_screenshot(url: str) -> str | None:
         # Lazy import to avoid heavy overhead unless needed
         from playwright.async_api import async_playwright
     except Exception as e:
-        logger.error(f"Playwright not available for fallback: {e}")
+        logger.exception(f"Playwright not available for fallback: {e}")
         return None
 
     from .playwright_helpers import connect_browser as _pw_connect_browser
@@ -231,7 +230,7 @@ async def _playwright_screenshot(url: str) -> str | None:
 
     # Phase 15: Use low-resource screenshot dimensions when in low-resource mode
     if not vp:
-        from ..config import _low_resource_int
+        from bot.config import _low_resource_int
 
         default_w = _low_resource_int("SCREENSHOT_LOW_RESOURCE_WIDTH", 1280, 1280)
         default_h = _low_resource_int("SCREENSHOT_LOW_RESOURCE_HEIGHT", 1024, 720)
@@ -272,16 +271,12 @@ async def _playwright_screenshot(url: str) -> str | None:
                 logger.info(f"Playwright screenshot saved to {filepath}")
                 return str(filepath)
             finally:
-                try:
+                with contextlib.suppress(Exception):
                     await context.close()
-                except Exception:
-                    pass
                 # Don't close remote browser; only close locally-launched ones
                 if not getattr(browser, "_is_remote", False):
-                    try:
+                    with contextlib.suppress(Exception):
                         await browser.close()
-                    except Exception:
-                        pass
 
     except Exception as e:
         logger.error(f"Playwright fallback failed for {url}: {e}", exc_info=True)

@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Thin adapter for kokoro-onnx to provide a stable import surface within our codebase.
+"""Thin adapter for kokoro-onnx to provide a stable import surface within our codebase.
 
 Goals:
 - Isolate direct imports of kokoro_onnx to this module only.
@@ -23,14 +21,14 @@ Environment variables commonly used by the surrounding engine:
 
 from __future__ import annotations
 
-from typing import Any, Optional
-import logging
 import importlib
+import logging
+from typing import Any
 
 __all__ = [
     "Kokoro",
-    "get_kokoro_engine",
     "get_direct_wrapper",
+    "get_kokoro_engine",
     "import_kokoro_submodule",
 ]
 
@@ -55,11 +53,12 @@ def Kokoro(*args: Any, **kwargs: Any):  # pragma: no cover - thin wrapper
     ImportError with the original exception chained.
     """
     if _RealKokoro is None:
-        raise ImportError("kokoro_onnx is not available. Install it or patch the Kokoro symbol in tests.") from _IMPORT_ERR
+        msg = "kokoro_onnx is not available. Install it or patch the Kokoro symbol in tests."
+        raise ImportError(msg) from _IMPORT_ERR
     return _RealKokoro(*args, **kwargs)
 
 
-def get_kokoro_engine(model_path: Optional[str] = None, voices_path: Optional[str] = None):
+def get_kokoro_engine(model_path: str | None = None, voices_path: str | None = None):
     """Construct and return a Kokoro engine instance.
 
     This wrapper exists to centralize construction logic in case we need to
@@ -92,8 +91,10 @@ def import_kokoro_submodule(name: str):  # pragma: no cover - import shim
         try:
             import kokoro_onnx  # noqa: F401
         except Exception as e:
-            raise ImportError("kokoro_onnx is not available") from e
+            msg = "kokoro_onnx is not available"
+            raise ImportError(msg) from e
     try:
         return importlib.import_module(f"kokoro_onnx.{name}")
     except Exception as e:
-        raise ImportError(f"Failed to import kokoro_onnx.{name}") from e
+        msg = f"Failed to import kokoro_onnx.{name}"
+        raise ImportError(msg) from e

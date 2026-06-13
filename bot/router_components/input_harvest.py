@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Callable, Iterable, List, Sequence, Set
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Sequence
 
 _URL_STRICT_PATTERN = r"https?://[^\s<>\"'\[\]{}|\\^`]+"
 _URL_LOOSE_PATTERN = r"https?://\S+"
@@ -100,7 +103,7 @@ def is_direct_image_url(url: str) -> bool:
     return bool(re.search(r"\.(jpe?g|png|webp)(?:\?|#|$)", u) or re.search(r"[?&]format=(jpe?g|png|webp)(?:&|$)", u))
 
 
-def extract_urls_loose(text: str) -> List[str]:
+def extract_urls_loose(text: str) -> list[str]:
     """Extract URLs using permissive whitespace-based matching."""
     try:
         return re.findall(_URL_LOOSE_PATTERN, text or "")
@@ -108,7 +111,7 @@ def extract_urls_loose(text: str) -> List[str]:
         return []
 
 
-def extract_urls_strict(text: str) -> List[str]:
+def extract_urls_strict(text: str) -> list[str]:
     """Extract URLs using stricter boundary matching."""
     try:
         return re.findall(_URL_STRICT_PATTERN, text or "")
@@ -134,9 +137,9 @@ def strip_discord_mentions_and_urls(text: str) -> str:
         return (text or "").strip()
 
 
-def existing_url_payloads(items: Sequence[Any], *, strip_payload: bool = False) -> Set[str]:
+def existing_url_payloads(items: Sequence[Any], *, strip_payload: bool = False) -> set[str]:
     """Collect URL payloads from InputItem-like entries into a dedupe set."""
-    urls: Set[str] = set()
+    urls: set[str] = set()
     for it in items or []:
         try:
             if getattr(it, "source_type", None) != "url":
@@ -149,12 +152,12 @@ def existing_url_payloads(items: Sequence[Any], *, strip_payload: bool = False) 
 
 
 def append_unique_url_items(
-    items: List[Any],
+    items: list[Any],
     urls: Iterable[str],
     *,
     item_ctor: Callable[..., Any],
     strip_key: bool = False,
-    existing_urls: Set[str] | None = None,
+    existing_urls: set[str] | None = None,
 ) -> int:
     """Append URL InputItem-like entries in-order, skipping duplicates."""
     seen = existing_urls if existing_urls is not None else existing_url_payloads(items)
@@ -172,7 +175,7 @@ def append_unique_url_items(
     return added
 
 
-def append_embed_related_urls(found_urls: List[str], embeds: Iterable[Any]) -> None:
+def append_embed_related_urls(found_urls: list[str], embeds: Iterable[Any]) -> None:
     """Append URL/video/author URLs from embeds into list with in-list dedupe."""
     for em in embeds or []:
         try:

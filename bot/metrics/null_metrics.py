@@ -1,6 +1,5 @@
 """No-op metrics implementation that provides safe no-op methods."""
 
-from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -9,40 +8,34 @@ logger = logging.getLogger(__name__)
 class NoopMetrics:
     """Metrics provider that does nothing but implements full interface safely."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         logger.info("📊 Prometheus disabled: using NoopMetrics")
 
-    def define_counter(self, name: str, description: str, labels: Optional[list] = None) -> None:
+    def define_counter(self, name: str, description: str, labels: list | None = None) -> None:
         """Define a counter metric (no-op)."""
-        pass
 
     def define_histogram(
         self,
         name: str,
         description: str,
-        labels: Optional[list] = None,
-        buckets: Optional[tuple] = None,
+        labels: list | None = None,
+        buckets: tuple | None = None,
     ) -> None:
         """Define a histogram metric (no-op)."""
-        pass
 
-    def inc(self, name: str, value: int = 1, labels: Optional[dict] = None) -> None:
+    def inc(self, name: str, value: int = 1, labels: dict | None = None) -> None:
         """Increment a counter (no-op)."""
-        pass
 
-    def increment(self, name: str, labels: Optional[dict] = None, value: int = 1) -> None:
+    def increment(self, name: str, labels: dict | None = None, value: int = 1) -> None:
         """Increment a counter (no-op) - alternative interface."""
-        pass
 
-    def observe(self, name: str, value: float, labels: Optional[dict] = None) -> None:
+    def observe(self, name: str, value: float, labels: dict | None = None) -> None:
         """Observe a histogram value (no-op)."""
-        pass
 
-    def gauge(self, name: str, value: float, labels: Optional[dict] = None) -> None:
+    def gauge(self, name: str, value: float, labels: dict | None = None) -> None:
         """Set a gauge value (no-op)."""
-        pass
 
-    def timer(self, name: str, labels: Optional[dict] = None):
+    def timer(self, name: str, labels: dict | None = None):
         """Context manager for timing (no-op)."""
         return NoopTimer()
 

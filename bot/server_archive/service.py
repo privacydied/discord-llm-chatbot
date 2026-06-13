@@ -6,28 +6,36 @@ import asyncio
 import logging
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from bot.config import load_config
 
 from .ingestion_queue import ArchiveIngestionQueue
-from .models import ArchiveMessageBundle, ArchiveSearchResult
+from .store import ServerArchiveStore
 from .sync import (
     build_bundle_from_message,
+)
+from .sync import (
     sync_channel_archive as _sync_channel_archive,
+)
+from .sync import (
     sync_guild_archive as _sync_guild_archive,
+)
+from .sync import (
     sync_thread_archive as _sync_thread_archive,
 )
-from .store import ServerArchiveStore
+
+if TYPE_CHECKING:
+    from .models import ArchiveMessageBundle, ArchiveSearchResult
 
 logger = logging.getLogger(__name__)
 
-_service: "ServerArchiveService | None" = None
+_service: ServerArchiveService | None = None
 _service_lock = asyncio.Lock()
 
 
 class ServerArchiveService:
-    def __init__(self, bot: Any | None = None):
+    def __init__(self, bot: Any | None = None) -> None:
         self.bot = bot
         self.refresh_config()
         self.store = ServerArchiveStore(self.db_path)
@@ -61,7 +69,7 @@ class ServerArchiveService:
             cfg.get(
                 "SERVER_ARCHIVE_ARCHIVE_BOT_MESSAGES",
                 cfg.get("SERVER_ARCHIVE_INCLUDE_BOT_MESSAGES", False),
-            )
+            ),
         )
 
     async def start(self) -> None:
@@ -123,9 +131,7 @@ class ServerArchiveService:
             return True
         if not getattr(message, "content", "") and not getattr(message, "attachments", None):
             return True
-        if self._looks_like_command(message):
-            return True
-        return False
+        return bool(self._looks_like_command(message))
 
     def _looks_like_command(self, message: Any) -> bool:
         content = str(getattr(message, "content", "") or "").lstrip()

@@ -1,6 +1,7 @@
+from unittest.mock import AsyncMock
+
 import httpx
 import pytest
-from unittest.mock import AsyncMock
 
 # Skip — requires Playwright browser installation
 pytestmark = pytest.mark.skip(reason="Requires Playwright browser installation")
@@ -43,7 +44,7 @@ async def test_extract_falls_back_to_tier_b_on_tier_a_failure() -> None:
             tier_used="B",
             canonical_url="https://example.com",
             text="from browser",
-        )
+        ),
     )
 
     res = await svc.extract("https://example.com")
@@ -105,7 +106,8 @@ async def test_extract_does_not_disable_tier_b_on_transient_page_closed_error() 
 @pytest.mark.asyncio
 async def test_extract_does_not_disable_tier_b_on_version_mismatch_428() -> None:
     """A 428 / version-mismatch error from the remote Playwright server must
-    NOT disable Tier B globally -- it is a configuration issue, not fatal."""
+    NOT disable Tier B globally -- it is a configuration issue, not fatal.
+    """
     svc = WebExtractionService()
     svc._tier_b_available = True
 

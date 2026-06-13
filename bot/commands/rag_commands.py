@@ -1,18 +1,17 @@
-"""
-RAG system management commands for Discord bot.
-"""
+"""RAG system management commands for Discord bot."""
 
 import asyncio
+import contextlib
 import re
 from pathlib import Path
-from typing import List
+
 import discord
 from discord.ext import commands
 
-from ..rag.hybrid_search import get_hybrid_search
-from ..rag.config import get_rag_environment_info, validate_rag_environment
-from ..server_features import is_server_feature_enabled
-from ..utils.logging import get_logger
+from bot.rag.config import get_rag_environment_info, validate_rag_environment
+from bot.rag.hybrid_search import get_hybrid_search
+from bot.server_features import is_server_feature_enabled
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -58,7 +57,7 @@ def safe_embed_value(text: str, limit: int = DISCORD_EMBED_FIELD_VALUE_LIMIT) ->
     return truncated + "..."
 
 
-def chunk_text(text: str, chunk_size: int = DISCORD_EMBED_FIELD_VALUE_LIMIT) -> List[str]:
+def chunk_text(text: str, chunk_size: int = DISCORD_EMBED_FIELD_VALUE_LIMIT) -> list[str]:
     """Split text into Discord-safe chunks."""
     if not text:
         return []
@@ -76,7 +75,7 @@ def chunk_text(text: str, chunk_size: int = DISCORD_EMBED_FIELD_VALUE_LIMIT) -> 
 class HybridSearchExtension:
     """Extension class to add hybrid_search method to BaseBot."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         bot.hybrid_search = bot.loop.create_task(self._init_hybrid_search())
 
@@ -92,11 +91,12 @@ _invalidation_in_progress = {}
 class RAGCommands(commands.Cog):
     """Cog for RAG system management commands."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         """Initialize the RAG cog.
 
         Args:
             bot: The bot instance
+
         """
         self.bot = bot
         self.hybrid_search = None
@@ -108,28 +108,26 @@ class RAGCommands(commands.Cog):
         if self._init_task is not None:
             self._init_task.add_done_callback(lambda t: logger.error(f"hybrid search init failed: {t.exception()}", exc_info=t.exception()) if not t.cancelled() and t.exception() else None)
 
-    async def _init_hybrid_search(self):
+    async def _init_hybrid_search(self) -> None:
         """Initialize hybrid search."""
         try:
             self.hybrid_search = await get_hybrid_search()
             logger.info("[RAGCog] Hybrid search initialized")
         except Exception as e:
-            logger.error(f"[RAGCog] Failed to initialize hybrid search: {e}")
+            logger.exception(f"[RAGCog] Failed to initialize hybrid search: {e}")
 
-    async def cog_unload(self):
+    async def cog_unload(self) -> None:
         """Cleanup on cog unload."""
         if self._init_task and not self._init_task.done():
             self._init_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._init_task
-            except asyncio.CancelledError:
-                pass
         if self.hybrid_search:
             await self.hybrid_search.close()
 
     @commands.group(name="rag", invoke_without_command=True)
     @is_admin_user()
-    async def rag_group(self, ctx):
+    async def rag_group(self, ctx) -> None:
         """RAG system management commands."""
         embed = discord.Embed(
             title="🗂️  RAG System Management",
@@ -159,7 +157,7 @@ class RAGCommands(commands.Cog):
 
     @rag_group.command(name="status")
     @is_admin_user()
-    async def rag_status(self, ctx):
+    async def rag_status(self, ctx) -> None:
         """Show the status of the RAG system."""
         try:
             # Get environment info
@@ -190,7 +188,7 @@ class RAGCommands(commands.Cog):
                 except Exception as e:
                     embed.add_field(
                         name="📊 Collection Stats",
-                        value=f"Error getting stats: {str(e)}",
+                        value=f"Error getting stats: {e!s}",
                         inline=False,
                     )
             else:
@@ -207,12 +205,12 @@ class RAGCommands(commands.Cog):
             await ctx.send(embed=embed)
 
         except Exception as e:
-            logger.error(f"[RAG Commands] Status command failed: {e}")
+            logger.exception(f"[RAG Commands] Status command failed: {e}")
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
     @rag_group.command(name="test")
     @is_admin_user()
-    async def rag_test(self, ctx):
+    async def rag_test(self, ctx) -> None:
         """Run comprehensive tests on the RAG system."""
         try:
             # Initial message
@@ -228,7 +226,7 @@ class RAGCommands(commands.Cog):
                         "✅" if is_valid else "❌",
                         "Environment",
                         "Valid" if is_valid else "Invalid configuration",
-                    )
+                    ),
                 )
             except Exception as e:
                 error_msg = safe_embed_value(str(e), 50)
@@ -293,17 +291,17 @@ class RAGCommands(commands.Cog):
             await message.edit(embed=embed)
 
         except Exception as e:
-            logger.error(f"[RAG Commands] Test command failed: {e}")
+            logger.exception(f"[RAG Commands] Test command failed: {e}")
             embed = discord.Embed(
                 title="❌ Test Error",
-                description=safe_embed_value(f"Test execution failed: {str(e)}"),
+                description=safe_embed_value(f"Test execution failed: {e!s}"),
                 color=discord.Color.red(),
             )
             await ctx.send(embed=embed)
 
     @rag_group.command(name="wipe")
     @is_admin_user()
-    async def rag_wipe(self, ctx):
+    async def rag_wipe(self, ctx) -> None:
         """Wipe the entire RAG database. ⚠️ This action is irreversible!"""
         try:
             # Check bot permissions first
@@ -334,7 +332,7 @@ class RAGCommands(commands.Cog):
                     try:
                         await ctx.send(error_msg)
                     except discord.Forbidden:
-                        logger.error("[RAG Commands] Cannot send permission error message - missing Send Messages permission")
+                        logger.exception("[RAG Commands] Cannot send permission error message - missing Send Messages permission")
                     return
 
             # Verify hybrid search is initialized
@@ -360,17 +358,18 @@ class RAGCommands(commands.Cog):
             await ctx.send(embed=embed)
 
         except Exception as e:
-            logger.error(f"[RAG Commands] Wipe command failed: {e}")
+            logger.exception(f"[RAG Commands] Wipe command failed: {e}")
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
     @rag_group.command(name="clear")
     @commands.cooldown(1, 120, type=commands.BucketType.user)
     @is_admin_user()
-    async def rag_clear(self, ctx, *source_patterns: str):
+    async def rag_clear(self, ctx, *source_patterns: str) -> None:
         """Clear documents from the RAG database.
 
         Args:
             source_patterns: Optional source patterns to filter by
+
         """
         try:
             # Verify hybrid search is initialized
@@ -403,16 +402,17 @@ class RAGCommands(commands.Cog):
             await message.edit(embed=embed)
 
         except Exception as e:
-            logger.error(f"[RAG Commands] Clear command failed: {e}")
+            logger.exception(f"[RAG Commands] Clear command failed: {e}")
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
     @rag_group.command(name="search")
     @is_admin_user()
-    async def rag_search(self, ctx, *, query: str):
+    async def rag_search(self, ctx, *, query: str) -> None:
         """Search the RAG database.
 
         Args:
             query: The search query
+
         """
         try:
             # Verify hybrid search is initialized
@@ -469,12 +469,12 @@ class RAGCommands(commands.Cog):
             await message.edit(embeds=embeds)
 
         except Exception as e:
-            logger.error(f"[RAG Commands] Search command failed: {e}")
+            logger.exception(f"[RAG Commands] Search command failed: {e}")
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
     @commands.command(name="index")
     @commands.cooldown(2, 120, type=commands.BucketType.user)
-    async def index_message_content(self, ctx, *, text: str = None):
+    async def index_message_content(self, ctx, *, text: str | None = None) -> None:
         """Index the current message text, URLs, and supported attachments into RAG."""
         try:
             hybrid_search = self.hybrid_search or getattr(ctx.bot, "hybrid_search", None)
@@ -540,7 +540,7 @@ class RAGCommands(commands.Cog):
 
                 if kind == "url":
                     try:
-                        from ..document_ingest import ingest_document_from_url
+                        from bot.document_ingest import ingest_document_from_url
 
                         extracted = await ingest_document_from_url(item)
                         extracted_text = (extracted or {}).get("text") or ""
@@ -568,7 +568,7 @@ class RAGCommands(commands.Cog):
                     continue
 
                 try:
-                    from ..document_ingest import ingest_document_attachment
+                    from bot.document_ingest import ingest_document_attachment
 
                     extracted = await ingest_document_attachment(item)
                     extracted_text = (extracted or {}).get("text") or ""
@@ -603,26 +603,24 @@ class RAGCommands(commands.Cog):
                 summary += f" Failed: {safe_embed_value(', '.join(failures), 1200)}"
             await ctx.send(summary)
         except Exception as e:
-            logger.error(f"[RAG Commands] Index-this command failed: {e}")
+            logger.exception(f"[RAG Commands] Index-this command failed: {e}")
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
     @rag_group.command(name="index")
     @is_admin_user()
-    async def rag_index(self, ctx, directory: str = None):
+    async def rag_index(self, ctx, directory: str | None = None) -> None:
         """Index documents from a directory into the RAG database.
 
         Args:
             directory: Path to the directory to index (defaults to config paths)
+
         """
         try:
-            from ..rag.config import get_text_index_paths
-            from ..rag.document_processing import index_text_directory
+            from bot.rag.config import get_text_index_paths
+            from bot.rag.document_processing import index_text_directory
 
             # Get paths from config or use provided directory
-            if directory:
-                paths = [Path(directory)]
-            else:
-                paths = get_text_index_paths()
+            paths = [Path(directory)] if directory else get_text_index_paths()
 
             if not paths:
                 await ctx.send("❌ **Error**: No text index paths configured. Set TEXT_INDEX_PATHS in .env")
@@ -650,7 +648,7 @@ class RAGCommands(commands.Cog):
                     count = await index_text_directory(path)
                     total_indexed += count
                 except Exception as e:
-                    errors.append(f"Error indexing {path}: {str(e)}")
+                    errors.append(f"Error indexing {path}: {e!s}")
 
             # Final status
             if errors:
@@ -673,15 +671,15 @@ class RAGCommands(commands.Cog):
             await message.edit(embed=embed)
 
         except Exception as e:
-            logger.error(f"[RAG Commands] Index command failed: {e}")
+            logger.exception(f"[RAG Commands] Index command failed: {e}")
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
     @rag_group.command(name="reload")
     @is_admin_user()
-    async def rag_reload(self, ctx):
+    async def rag_reload(self, ctx) -> None:
         """Reload the text index into the ChromaDB vector store."""
         try:
-            from ..rag.document_processing import reload_text_index
+            from bot.rag.document_processing import reload_text_index
 
             message = await ctx.send("🔄 Reloading text index...")
 
@@ -721,12 +719,12 @@ class RAGCommands(commands.Cog):
             await message.edit(embed=embed)
 
         except Exception as e:
-            logger.error(f"[RAG Commands] Reload command failed: {e}")
+            logger.exception(f"[RAG Commands] Reload command failed: {e}")
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
     @rag_group.command(name="invalidate")
     @is_admin_user()
-    async def rag_invalidate(self, ctx):
+    async def rag_invalidate(self, ctx) -> None:
         """Invalidate and rebuild the ChromaDB collection."""
         try:
             global _invalidation_in_progress
@@ -741,7 +739,7 @@ class RAGCommands(commands.Cog):
             _invalidation_in_progress[request_id] = True
 
             try:
-                from ..rag.document_processing import invalidate_collection
+                from bot.rag.document_processing import invalidate_collection
 
                 message = await ctx.send("🔄 Invalidating collection...")
 
@@ -767,10 +765,10 @@ class RAGCommands(commands.Cog):
                 _invalidation_in_progress[request_id] = False
 
         except Exception as e:
-            logger.error(f"[RAG Commands] Invalidate command failed: {e}")
+            logger.exception(f"[RAG Commands] Invalidate command failed: {e}")
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 
 
-async def setup(bot):
+async def setup(bot) -> None:
     """Add the RAG cog to the bot."""
     await bot.add_cog(RAGCommands(bot))

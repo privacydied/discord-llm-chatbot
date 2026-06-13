@@ -1,28 +1,27 @@
-"""
-Image upgrade commands for Twitter/X image-only tweets.
+"""Image upgrade commands for Twitter/X image-only tweets.
 Provides emoji-driven upgrade functionality: detailed descriptions, OCR, tags, explanations, and thread context.
 """
 
 import asyncio
-from typing import Dict, List, Optional, Any
+from typing import Any
+
 import discord
 from discord.ext import commands
 
-from ..utils.logging import get_logger
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class ImageUpgradeManager:
-    """
-    Manages emoji-driven upgrades for image-only tweet responses.
-    Stores upgrade context and handles reaction-based expansions. [CA][REH]
+    """Manages emoji-driven upgrades for image-only tweet responses.
+    Stores upgrade context and handles reaction-based expansions. [CA][REH].
     """
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.config = bot.config
-        self.upgrade_cache: Dict[int, Dict[str, Any]] = {}  # message_id -> upgrade data
+        self.upgrade_cache: dict[int, dict[str, Any]] = {}  # message_id -> upgrade data
         self.cache_ttl = 3600  # 1 hour TTL for upgrade context
 
         # Parse enabled upgrade reactions from config
@@ -34,13 +33,12 @@ class ImageUpgradeManager:
     def store_upgrade_context(
         self,
         message_id: int,
-        url_or_context: Dict[str, Any] | str,
-        syn_data: Optional[Dict[str, Any]] = None,
-        source: Optional[str] = None,
-        original_analysis: Optional[List[str]] = None,
+        url_or_context: dict[str, Any] | str,
+        syn_data: dict[str, Any] | None = None,
+        source: str | None = None,
+        original_analysis: list[str] | None = None,
     ):
-        """
-        Store upgrade context for a message to enable reaction-based expansions.
+        """Store upgrade context for a message to enable reaction-based expansions.
 
         Supports both the expanded signature (message_id, url, syn_data, source,
         original_analysis) and a compact form where a context dict is provided.
@@ -73,7 +71,7 @@ class ImageUpgradeManager:
         fut.set_result(None)
         return fut
 
-    def get_upgrade_context(self, message_id: int) -> Optional[Dict[str, Any]]:
+    def get_upgrade_context(self, message_id: int) -> dict[str, Any] | None:
         """Retrieve cached upgrade context if still valid."""
         context = self.upgrade_cache.get(message_id)
         if not context:
@@ -87,7 +85,7 @@ class ImageUpgradeManager:
         return context
 
     async def add_upgrade_reactions(self, message: discord.Message) -> None:
-        """Add emoji reactions for available upgrades to a message. [REH]"""
+        """Add emoji reactions for available upgrades to a message. [REH]."""
         try:
             for emoji in self.enabled_reactions:
                 await message.add_reaction(emoji)
@@ -96,17 +94,17 @@ class ImageUpgradeManager:
             logger.info(f"✅ Added {len(self.enabled_reactions)} upgrade reactions to message {message.id}")
 
         except Exception as e:
-            logger.error(f"❌ Failed to add upgrade reactions to message {message.id}: {e}")
+            logger.exception(f"❌ Failed to add upgrade reactions to message {message.id}: {e}")
 
-    async def handle_upgrade_reaction(self, payload: discord.RawReactionActionEvent) -> Optional[str]:
-        """
-        Handle upgrade reaction and return expanded content.
+    async def handle_upgrade_reaction(self, payload: discord.RawReactionActionEvent) -> str | None:
+        """Handle upgrade reaction and return expanded content.
 
         Args:
             payload: Discord reaction event payload
 
         Returns:
             Expanded content string or None if no upgrade needed
+
         """
         try:
             message_id = payload.message_id
@@ -147,9 +145,8 @@ class ImageUpgradeManager:
             logger.error(f"❌ Error handling upgrade reaction: {e}", exc_info=True)
             return None
 
-    async def _process_upgrade(self, emoji: str, context: Dict[str, Any]) -> Optional[str]:
-        """
-        Process a specific upgrade request and return expanded content.
+    async def _process_upgrade(self, emoji: str, context: dict[str, Any]) -> str | None:
+        """Process a specific upgrade request and return expanded content.
 
         Args:
             emoji: Upgrade emoji that was reacted
@@ -157,6 +154,7 @@ class ImageUpgradeManager:
 
         Returns:
             Expanded content string or None
+
         """
         try:
             url = context["url"]
@@ -168,40 +166,39 @@ class ImageUpgradeManager:
             if emoji == "🖼️":  # Detailed caption
                 return await self._generate_detailed_caption(photos, original_analysis, url)
 
-            elif emoji == "🔎":  # OCR details
+            if emoji == "🔎":  # OCR details
                 return await self._generate_ocr_details(photos, url)
 
-            elif emoji == "🏷️":  # Tags
+            if emoji == "🏷️":  # Tags
                 return await self._generate_tags(original_analysis, url)
 
-            elif emoji == "🧠":  # Explain
+            if emoji == "🧠":  # Explain
                 return await self._generate_explanation(syn_data, original_analysis, url)
 
-            elif emoji == "↩️":  # Thread context
+            if emoji == "↩️":  # Thread context
                 return await self._generate_thread_context(syn_data, url)
 
-            else:
-                logger.warning(f"⚠️ Unknown upgrade emoji: {emoji}")
-                return None
+            logger.warning(f"⚠️ Unknown upgrade emoji: {emoji}")
+            return None
 
         except Exception as e:
             logger.error(f"❌ Error processing upgrade {emoji}: {e}", exc_info=True)
             return None
 
-    async def _get_detailed_vision_analysis(self, photo: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def _get_detailed_vision_analysis(self, photo: dict[str, Any]) -> dict[str, Any] | None:
         """Stub for detailed vision analysis; can be patched in tests."""
         return None
 
-    async def _get_ocr_analysis(self, photo: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def _get_ocr_analysis(self, photo: dict[str, Any]) -> dict[str, Any] | None:
         """Stub for OCR extraction; can be patched in tests."""
         return None
 
-    async def _get_thread_context(self, syn_data: Dict[str, Any], url: str) -> Optional[Dict[str, Any]]:
+    async def _get_thread_context(self, syn_data: dict[str, Any], url: str) -> dict[str, Any] | None:
         """Stub for thread context retrieval; can be patched in tests."""
         return None
 
-    async def _generate_detailed_caption(self, photos: List[Dict[str, Any]], original_analysis: List[str], url: str) -> str:
-        """Generate detailed image captions with composition and attributes. [CA]"""
+    async def _generate_detailed_caption(self, photos: list[dict[str, Any]], original_analysis: list[str], url: str) -> str:
+        """Generate detailed image captions with composition and attributes. [CA]."""
         try:
             detailed_parts = ["🖼️ **Detailed Caption**"]
 
@@ -234,11 +231,11 @@ class ImageUpgradeManager:
             return "\n\n".join([p for p in detailed_parts if p])
 
         except Exception as e:
-            logger.error(f"❌ Error generating detailed caption: {e}")
+            logger.exception(f"❌ Error generating detailed caption: {e}")
             return "⚠️ Could not generate detailed description right now."
 
-    async def _generate_ocr_details(self, photos: List[Dict[str, Any]], url: str) -> str:
-        """Generate detailed OCR text extraction from images. [IV]"""
+    async def _generate_ocr_details(self, photos: list[dict[str, Any]], url: str) -> str:
+        """Generate detailed OCR text extraction from images. [IV]."""
         try:
             ocr_parts = ["🔎 **OCR Text Details**"]
             found_text = False
@@ -261,10 +258,7 @@ class ImageUpgradeManager:
                     if ocr_result is None and router and hasattr(router, "_vl_describe_image_from_url"):
                         ocr_result = await router._vl_describe_image_from_url(photo_url, prompt=ocr_prompt)
 
-                    if isinstance(ocr_result, dict):
-                        ocr_text = ocr_result.get("ocr_text") or ""
-                    else:
-                        ocr_text = ocr_result or ""
+                    ocr_text = ocr_result.get("ocr_text") or "" if isinstance(ocr_result, dict) else ocr_result or ""
 
                     if ocr_text and any(keyword in ocr_text.lower() for keyword in ["text", "says", "reads", '"', "invoice"]):
                         found_text = True
@@ -275,7 +269,7 @@ class ImageUpgradeManager:
                         ocr_parts.append(f"{header}\n*No readable text detected*".strip())
 
                 except Exception as ocr_err:
-                    logger.error(f"❌ OCR analysis failed for image {idx}: {ocr_err}")
+                    logger.exception(f"❌ OCR analysis failed for image {idx}: {ocr_err}")
                     ocr_parts.append(f"**Image {idx}/{len(photos)}:** Could not extract text")
 
             if not found_text and len(photos) == 1:
@@ -284,11 +278,11 @@ class ImageUpgradeManager:
             return "\n\n".join(ocr_parts)
 
         except Exception as e:
-            logger.error(f"❌ Error generating OCR details: {e}")
+            logger.exception(f"❌ Error generating OCR details: {e}")
             return "⚠️ Could not extract text content right now."
 
-    async def _generate_tags(self, original_analysis: List[str], url: str) -> str:
-        """Generate keyword tags for searchability. [AS]"""
+    async def _generate_tags(self, original_analysis: list[str], url: str) -> str:
+        """Generate keyword tags for searchability. [AS]."""
         try:
             if not bool(self.config.get("VISION_TAGS_ENABLE", True)):
                 return "**🏷️ Tags:** *Tag generation is disabled*"
@@ -344,15 +338,14 @@ class ImageUpgradeManager:
             if found_tags:
                 tags_str = " • ".join(found_tags)
                 return f"**🏷️ Tags**\n\n{tags_str}"
-            else:
-                return "**🏷️ Tags**\n\n*No specific tags identified*"
+            return "**🏷️ Tags**\n\n*No specific tags identified*"
 
         except Exception as e:
-            logger.error(f"❌ Error generating tags: {e}")
+            logger.exception(f"❌ Error generating tags: {e}")
             return "⚠️ Could not generate tags right now."
 
-    async def _generate_explanation(self, syn_data: Dict[str, Any], original_analysis: List[str], url: str) -> str:
-        """Generate neutral explanation of why the image might be interesting. [SFT]"""
+    async def _generate_explanation(self, syn_data: dict[str, Any], original_analysis: list[str], url: str) -> str:
+        """Generate neutral explanation of why the image might be interesting. [SFT]."""
         try:
             # Extract context
             user = syn_data.get("user") or {}
@@ -391,11 +384,11 @@ class ImageUpgradeManager:
             return "\n".join(explanation_parts)
 
         except Exception as e:
-            logger.error(f"❌ Error generating explanation: {e}")
+            logger.exception(f"❌ Error generating explanation: {e}")
             return "⚠️ Could not generate explanation right now."
 
-    async def _generate_thread_context(self, syn_data: Dict[str, Any], url: str) -> str:
-        """Generate thread context if this tweet is part of a conversation. [AS]"""
+    async def _generate_thread_context(self, syn_data: dict[str, Any], url: str) -> str:
+        """Generate thread context if this tweet is part of a conversation. [AS]."""
         try:
             override = await self._get_thread_context(syn_data, url)
             if override:
@@ -439,11 +432,11 @@ class ImageUpgradeManager:
             return "\n".join(context_parts)
 
         except Exception as e:
-            logger.error(f"❌ Error generating thread context: {e}")
+            logger.exception(f"❌ Error generating thread context: {e}")
             return "⚠️ Could not generate thread context right now."
 
     async def cleanup_expired_cache(self) -> None:
-        """Clean up expired upgrade contexts. [RM]"""
+        """Clean up expired upgrade contexts. [RM]."""
         try:
             current_time = asyncio.get_event_loop().time()
             expired_keys = []
@@ -459,19 +452,19 @@ class ImageUpgradeManager:
                 logger.info(f"🧹 Cleaned up {len(expired_keys)} expired upgrade contexts")
 
         except Exception as e:
-            logger.error(f"❌ Error cleaning up upgrade cache: {e}")
+            logger.exception(f"❌ Error cleaning up upgrade cache: {e}")
 
 
 class ImageUpgradeCommands(commands.Cog):
     """Discord cog for handling image upgrade reactions and commands."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.upgrade_manager = ImageUpgradeManager(bot)
         logger.info("✅ ImageUpgradeCommands cog initialized")
 
     @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
         """Handle reaction additions for image upgrades."""
         try:
             # Only process reactions in guilds and DMs where bot is active
@@ -518,12 +511,12 @@ class ImageUpgradeCommands(commands.Cog):
                 except discord.Forbidden:
                     logger.warning(f"⚠️ No permission to edit message {payload.message_id}")
                 except Exception as e:
-                    logger.error(f"❌ Error applying upgrade to message {payload.message_id}: {e}")
+                    logger.exception(f"❌ Error applying upgrade to message {payload.message_id}: {e}")
 
         except Exception as e:
-            logger.error(f"❌ Error handling reaction upgrade: {e}")
+            logger.exception(f"❌ Error handling reaction upgrade: {e}")
 
-    async def cog_unload(self):
+    async def cog_unload(self) -> None:
         """Cleanup when cog is unloaded."""
         await self.upgrade_manager.cleanup_expired_cache()
         logger.info("🧹 ImageUpgradeCommands cog unloaded")

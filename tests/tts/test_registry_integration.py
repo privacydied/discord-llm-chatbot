@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test registry integration for TTS Kokoro pipeline.
+"""Test registry integration for TTS Kokoro pipeline.
 
 Tests the new Decision-based tokenization system that routes
 phonemes/graphemes correctly to KokoroDirect and prevents misaki
@@ -11,18 +10,18 @@ import pytest
 
 # Skip — requires TTS engine and phoneme binaries
 pytestmark = pytest.mark.skip(reason="Requires TTS engine and phoneme binaries")
-from unittest.mock import patch, MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-from bot.tokenizer_registry import select_for_language, Decision
-from bot.tts.kokoro_direct import KokoroDirect
+from bot.tokenizer_registry import Decision, select_for_language
 from bot.tts.engines.kokoro import KokoroONNXEngine
+from bot.tts.kokoro_direct import KokoroDirect
 
 
 class TestRegistryIntegration:
     """Test registry integration with Decision objects."""
 
-    def test_en_env_misaki_falls_back_to_phonemizer(self, monkeypatch):
+    def test_en_env_misaki_falls_back_to_phonemizer(self, monkeypatch) -> None:
         """Test that TTS_TOKENISER=misaki for English falls back to phonemizer with debug log."""
         monkeypatch.setenv("TTS_TOKENISER", "misaki")
 
@@ -45,7 +44,7 @@ class TestRegistryIntegration:
             registry._select_tokenizer_with_fallback.assert_called_once()
             # The method should have logged the fallback
 
-    def test_phoneme_decision_paths_phonemes_to_kd(self, mocker):
+    def test_phoneme_decision_paths_phonemes_to_kd(self, mocker) -> None:
         """Test that phoneme decisions route correctly to KokoroDirect."""
         kd = MagicMock(spec=KokoroDirect)
         kd.create.return_value = Path("/tmp/test.wav")
@@ -68,7 +67,7 @@ class TestRegistryIntegration:
         assert kwargs.get("phonemes") == "həˈloʊ wɝːld"
         assert kwargs.get("disable_autodiscovery") is True
 
-    def test_grapheme_quiet_path_no_autodiscovery_logs(self, caplog):
+    def test_grapheme_quiet_path_no_autodiscovery_logs(self, caplog) -> None:
         """Test that grapheme path with disable_autodiscovery produces no tokenizer noise."""
         caplog.set_level("DEBUG")
 
@@ -108,7 +107,7 @@ class TestRegistryIntegration:
         # But should still have the basic logs
         assert "Using pre-tokenized tokens" in logs or mock_kd.create.called
 
-    def test_registry_phoneme_tokenization(self):
+    def test_registry_phoneme_tokenization(self) -> None:
         """Test that registry properly tokenizes text to phonemes."""
         with patch("bot.tokenizer_registry.TokenizerRegistry.get_instance") as mock_registry:
             registry = MagicMock()
@@ -125,7 +124,7 @@ class TestRegistryIntegration:
             assert decision.payload == "həˈloʊ wɝːld"
             assert decision.alphabet == "IPA"
 
-    def test_registry_grapheme_fallback(self):
+    def test_registry_grapheme_fallback(self) -> None:
         """Test that registry falls back to grapheme when tokenization fails."""
         with patch("bot.tokenizer_registry.TokenizerRegistry.get_instance") as mock_registry:
             registry = MagicMock()
@@ -142,7 +141,7 @@ class TestRegistryIntegration:
             assert decision.payload == "hello world"
             assert decision.alphabet == "GRAPHEME"
 
-    def test_registry_lexicon_application(self):
+    def test_registry_lexicon_application(self) -> None:
         """Test that lexicon overrides are applied before tokenization."""
         with patch("bot.tokenizer_registry.TokenizerRegistry.get_instance") as mock_registry:
             registry = MagicMock()
@@ -163,7 +162,7 @@ class TestRegistryIntegration:
 class TestEngineIntegration:
     """Test KokoroONNXEngine integration with registry decisions."""
 
-    def test_engine_uses_registry_decisions(self, mocker):
+    def test_engine_uses_registry_decisions(self, mocker) -> None:
         """Test that KokoroONNXEngine uses registry decisions for routing."""
         # Mock all the dependencies
         mock_kd_class = mocker.patch("bot.tts.kokoro_direct.KokoroDirect")
@@ -184,10 +183,8 @@ class TestEngineIntegration:
             engine = KokoroONNXEngine("test.onnx", "test.npz")
 
             # Mock file reading and force non-English branch to use registry path
-            with patch("builtins.open", mocker.mock_open(read_data=b"test wav data")):
-                with patch("pathlib.Path.exists", return_value=True):
-                    with patch("pathlib.Path.unlink"):
-                        engine.synthesize("hello world", language="es")
+            with patch("builtins.open", mocker.mock_open(read_data=b"test wav data")), patch("pathlib.Path.exists", return_value=True), patch("pathlib.Path.unlink"):
+                engine.synthesize("hello world", language="es")
 
             # Verify registry was consulted
             mock_select.assert_called_once_with("en", "hello world")
@@ -198,7 +195,7 @@ class TestEngineIntegration:
             assert kwargs.get("phonemes") == "həˈloʊ wɝːld"
             assert kwargs.get("disable_autodiscovery") is True
 
-    def test_engine_grapheme_path(self, mocker):
+    def test_engine_grapheme_path(self, mocker) -> None:
         """Test that grapheme decisions route to text path."""
         mock_kd_class = mocker.patch("bot.tts.kokoro_direct.KokoroDirect")
         mock_kd = MagicMock()
@@ -216,10 +213,8 @@ class TestEngineIntegration:
             engine = KokoroONNXEngine("test.onnx", "test.npz")
 
             # Force non-English branch to use registry path
-            with patch("builtins.open", mocker.mock_open(read_data=b"test wav data")):
-                with patch("pathlib.Path.exists", return_value=True):
-                    with patch("pathlib.Path.unlink"):
-                        engine.synthesize("hello world", language="es")
+            with patch("builtins.open", mocker.mock_open(read_data=b"test wav data")), patch("pathlib.Path.exists", return_value=True), patch("pathlib.Path.unlink"):
+                engine.synthesize("hello world", language="es")
 
             # Verify KokoroDirect was called with text
             mock_kd.create.assert_called_once()

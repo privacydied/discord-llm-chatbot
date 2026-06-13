@@ -1,12 +1,10 @@
-"""
-Discord commands for manual janitor operations.
-"""
+"""Discord commands for manual janitor operations."""
 
 import discord
 from discord.ext import commands
 
-from ..janitor import manual_clean
-from ..utils.logging import get_logger
+from bot.janitor import manual_clean
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -14,7 +12,7 @@ logger = get_logger(__name__)
 class JanitorCommands(commands.Cog):
     """Commands for manual cache and log cleanup operations."""
 
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
 
     @commands.command(name="clean", aliases=["cleanup", "janitor"])
@@ -123,12 +121,7 @@ class JanitorCommands(commands.Cog):
     async def clean_status(self, ctx: commands.Context) -> None:
         """Show janitor configuration and status (Admin only)."""
         try:
-            from ..janitor import (
-                JANITOR_INTERVAL_MINUTES,
-                HOLD_OFF_MINUTES,
-                LOG_RETENTION_DAYS,
-                LOG_TOTAL_CAP_MB,
-            )
+            from bot.janitor import HOLD_OFF_MINUTES, JANITOR_INTERVAL_MINUTES, LOG_RETENTION_DAYS, LOG_TOTAL_CAP_MB
 
             embed = discord.Embed(
                 title="🧹 Janitor Status",

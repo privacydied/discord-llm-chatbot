@@ -1,13 +1,14 @@
-"""
-Tests for concurrent processing module.
+"""Tests for concurrent processing module.
 
 [PA] Bounded async concurrency
 [REH] Timeout handling
 """
 
 import asyncio
-import pytest
+from typing import Never
 from unittest.mock import Mock
+
+import pytest
 
 
 # Mock InputModality for tests
@@ -20,12 +21,12 @@ class MockInputModality:
     GENERAL_URL = Mock(name="GENERAL_URL")
     AUDIO_VIDEO_FILE = Mock(name="AUDIO_VIDEO_FILE")
 
-    def __init__(self, name):
+    def __init__(self, name) -> None:
         self.name = name
 
 
 class TestBatchConfig:
-    def test_default_values(self):
+    def test_default_values(self) -> None:
         from bot.concurrent_processing import BatchConfig
 
         config = BatchConfig()
@@ -33,7 +34,7 @@ class TestBatchConfig:
         assert config.heavy_timeout == 120.0
         assert config.enable_coalescing is True
 
-    def test_custom_values(self):
+    def test_custom_values(self) -> None:
         from bot.concurrent_processing import BatchConfig
 
         config = BatchConfig(
@@ -48,14 +49,14 @@ class TestBatchConfig:
 
 class TestProcessItemWithBudget:
     @pytest.mark.asyncio
-    async def test_successful_processing(self):
+    async def test_successful_processing(self) -> None:
         from bot.concurrent_processing import _process_item_with_budget
 
         item = Mock()
         modality = Mock()
         modality.name = "TEST"
 
-        async def handler(item, message=None):
+        async def handler(item, message=None) -> str:
             return "processed_result"
 
         result = await _process_item_with_budget(item, modality, handler, timeout=10.0, message=None)
@@ -65,14 +66,14 @@ class TestProcessItemWithBudget:
         assert result.modality == modality
 
     @pytest.mark.asyncio
-    async def test_timeout_handling(self):
+    async def test_timeout_handling(self) -> None:
         from bot.concurrent_processing import _process_item_with_budget
 
         item = Mock()
         modality = Mock()
         modality.name = "TEST"
 
-        async def slow_handler(item, message=None):
+        async def slow_handler(item, message=None) -> str:
             await asyncio.sleep(10)  # Will timeout
             return "never"
 
@@ -83,15 +84,16 @@ class TestProcessItemWithBudget:
         assert result.duration < 1.0  # Should fail fast
 
     @pytest.mark.asyncio
-    async def test_exception_handling(self):
+    async def test_exception_handling(self) -> None:
         from bot.concurrent_processing import _process_item_with_budget
 
         item = Mock()
         modality = Mock()
         modality.name = "TEST"
 
-        async def failing_handler(item, message=None):
-            raise ValueError("processing error")
+        async def failing_handler(item, message=None) -> Never:
+            msg = "processing error"
+            raise ValueError(msg)
 
         result = await _process_item_with_budget(item, modality, failing_handler, timeout=10.0, message=None)
 
@@ -101,10 +103,10 @@ class TestProcessItemWithBudget:
 
 class TestProcessIndependentItemsConcurrently:
     @pytest.mark.asyncio
-    async def test_empty_items(self):
+    async def test_empty_items(self) -> None:
         from bot.concurrent_processing import (
-            process_independent_items_concurrently,
             BatchConfig,
+            process_independent_items_concurrently,
         )
 
         results = await process_independent_items_concurrently(items=[], message=None, config=BatchConfig())
@@ -112,17 +114,17 @@ class TestProcessIndependentItemsConcurrently:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_single_item(self):
+    async def test_single_item(self) -> None:
         from bot.concurrent_processing import (
-            process_independent_items_concurrently,
             BatchConfig,
+            process_independent_items_concurrently,
         )
 
         item = Mock()
         modality = Mock()
         modality.name = "TEST"
 
-        async def handler(item, message=None):
+        async def handler(item, message=None) -> str:
             return "single_result"
 
         results = await process_independent_items_concurrently(
@@ -136,16 +138,16 @@ class TestProcessIndependentItemsConcurrently:
         assert results[0].result_text == "single_result"
 
     @pytest.mark.asyncio
-    async def test_concurrent_processing(self):
+    async def test_concurrent_processing(self) -> None:
         from bot.concurrent_processing import (
-            process_independent_items_concurrently,
             BatchConfig,
+            process_independent_items_concurrently,
         )
 
         execution_order = []
 
         async def make_handler(idx):
-            async def handler(item, message=None):
+            async def handler(item, message=None) -> str:
                 execution_order.append(("start", idx))
                 await asyncio.sleep(0.05)
                 execution_order.append(("end", idx))
@@ -175,17 +177,18 @@ class TestProcessIndependentItemsConcurrently:
         assert all(r.success for r in results)
 
     @pytest.mark.asyncio
-    async def test_partial_success_preserved(self):
+    async def test_partial_success_preserved(self) -> None:
         from bot.concurrent_processing import (
-            process_independent_items_concurrently,
             BatchConfig,
+            process_independent_items_concurrently,
         )
 
-        async def success_handler(item, message=None):
+        async def success_handler(item, message=None) -> str:
             return "success"
 
-        async def fail_handler(item, message=None):
-            raise ValueError("failure")
+        async def fail_handler(item, message=None) -> Never:
+            msg = "failure"
+            raise ValueError(msg)
 
         modality = Mock()
         modality.name = "TEST"
@@ -204,18 +207,18 @@ class TestProcessIndependentItemsConcurrently:
         assert results[2].success is True
 
     @pytest.mark.asyncio
-    async def test_progress_callback(self):
+    async def test_progress_callback(self) -> None:
         from bot.concurrent_processing import (
-            process_independent_items_concurrently,
             BatchConfig,
+            process_independent_items_concurrently,
         )
 
         progress_calls = []
 
-        def progress_logger(current, total, desc):
+        def progress_logger(current, total, desc) -> None:
             progress_calls.append((current, total, desc))
 
-        async def handler(item, message=None):
+        async def handler(item, message=None) -> str:
             return "done"
 
         modality = Mock()
@@ -235,7 +238,7 @@ class TestProcessIndependentItemsConcurrently:
 
 class TestProcessItemsSequentialWithTimeout:
     @pytest.mark.asyncio
-    async def test_sequential_order(self):
+    async def test_sequential_order(self) -> None:
         from bot.concurrent_processing import (
             process_items_sequential_with_timeout,
         )
@@ -243,7 +246,7 @@ class TestProcessItemsSequentialWithTimeout:
         execution_order = []
 
         async def make_handler(idx):
-            async def handler(item, message=None):
+            async def handler(item, message=None) -> str:
                 execution_order.append(idx)
                 return f"result_{idx}"
 
@@ -264,27 +267,27 @@ class TestProcessItemsSequentialWithTimeout:
 
 
 class TestUrlNormalization:
-    def test_normalization_strips_www(self):
+    def test_normalization_strips_www(self) -> None:
         from bot.concurrent_processing import _normalize_url_for_dedup
 
         result = _normalize_url_for_dedup("https://www.example.com/path")
         assert "www." not in result
         assert "example.com" in result
 
-    def test_normalization_lowercases_domain(self):
+    def test_normalization_lowercases_domain(self) -> None:
         from bot.concurrent_processing import _normalize_url_for_dedup
 
         result = _normalize_url_for_dedup("https://EXAMPLE.COM/Path")
         assert "example.com" in result.lower()
 
-    def test_normalization_removes_tracking_params(self):
+    def test_normalization_removes_tracking_params(self) -> None:
         from bot.concurrent_processing import _normalize_url_for_dedup
 
         result = _normalize_url_for_dedup("https://example.com/page?utm_source=google&fbclid=123")
         assert "utm_source" not in result
         assert "fbclid" not in result
 
-    def test_normalization_preserves_important_params(self):
+    def test_normalization_preserves_important_params(self) -> None:
         from bot.concurrent_processing import _normalize_url_for_dedup
 
         result = _normalize_url_for_dedup("https://example.com/page?id=123&sort=asc")

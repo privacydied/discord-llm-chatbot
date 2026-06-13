@@ -1,5 +1,4 @@
-"""
-Per-file attachment classification for robust multimodal handling.
+"""Per-file attachment classification for robust multimodal handling.
 
 This module provides attachment bucketing that doesn't short-circuit on .txt files,
 allowing proper handling of mixed attachments (e.g., .txt + PDF + voice note).
@@ -9,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from .utils.logging import get_logger
 
@@ -42,8 +41,7 @@ class ClassifiedAttachment:
 
 
 def classify_attachment(attachment: discord.Attachment) -> ClassifiedAttachment:
-    """
-    Classify a single attachment into its processing bucket.
+    """Classify a single attachment into its processing bucket.
 
     Args:
         attachment: Discord attachment to classify
@@ -58,6 +56,7 @@ def classify_attachment(attachment: discord.Attachment) -> ClassifiedAttachment:
     - IMAGE: image/* MIME or image extensions
     - TXT_PROMPT: .txt files or text/plain
     - OTHER: Everything else
+
     """
     # Extract metadata with safe defaults [REH]
     try:
@@ -112,8 +111,7 @@ def classify_attachment(attachment: discord.Attachment) -> ClassifiedAttachment:
 
 
 def _determine_bucket(filename: str, content_type: str, is_voice_message: bool) -> AttachmentBucket:
-    """
-    Determine the bucket for an attachment based on filename, MIME, and flags.
+    """Determine the bucket for an attachment based on filename, MIME, and flags.
 
     First matching rule wins.
     """
@@ -225,11 +223,11 @@ def _determine_bucket(filename: str, content_type: str, is_voice_message: bool) 
     # text/plain but not .txt (might be misidentified; safer to treat as doc)
     if mime_root.startswith("text/plain") and not filename.endswith(".txt"):
         # Check if it's actually an audio/video file with wrong MIME
-        if any(filename.endswith(ext) for ext in {".mp3", ".wav", ".ogg", ".mp4", ".webm"}):
+        if any(filename.endswith(ext) for ext in (".mp3", ".wav", ".ogg", ".mp4", ".webm")):
             # Re-classify based on extension
-            if any(filename.endswith(ext) for ext in {".mp3", ".wav", ".ogg"}):
+            if any(filename.endswith(ext) for ext in (".mp3", ".wav", ".ogg")):
                 return AttachmentBucket.AUDIO
-            elif any(filename.endswith(ext) for ext in {".mp4", ".webm"}):
+            if any(filename.endswith(ext) for ext in (".mp4", ".webm")):
                 return AttachmentBucket.VIDEO
         return AttachmentBucket.TXT_PROMPT
 
@@ -242,13 +240,13 @@ def _determine_bucket(filename: str, content_type: str, is_voice_message: bool) 
         # Try to infer from extension
         if any(filename.endswith(ext) for ext in audio_exts):
             return AttachmentBucket.AUDIO
-        elif any(filename.endswith(ext) for ext in video_exts):
+        if any(filename.endswith(ext) for ext in video_exts):
             return AttachmentBucket.VIDEO
-        elif any(filename.endswith(ext) for ext in image_exts):
+        if any(filename.endswith(ext) for ext in image_exts):
             return AttachmentBucket.IMAGE
-        elif any(filename.endswith(ext) for ext in doc_exts):
+        if any(filename.endswith(ext) for ext in doc_exts):
             return AttachmentBucket.DOC
-        elif filename.endswith(".txt"):
+        if filename.endswith(".txt"):
             return AttachmentBucket.TXT_PROMPT
 
     # Default: OTHER (unsupported)
@@ -256,16 +254,16 @@ def _determine_bucket(filename: str, content_type: str, is_voice_message: bool) 
 
 
 def classify_attachments(
-    attachments: List[discord.Attachment],
-) -> List[ClassifiedAttachment]:
-    """
-    Classify multiple attachments independently (no short-circuiting).
+    attachments: list[discord.Attachment],
+) -> list[ClassifiedAttachment]:
+    """Classify multiple attachments independently (no short-circuiting).
 
     Args:
         attachments: List of Discord attachments
 
     Returns:
         List of ClassifiedAttachment objects in same order
+
     """
     if not attachments:
         return []
@@ -289,7 +287,7 @@ def classify_attachments(
     return classified
 
 
-def get_by_bucket(classified: List[ClassifiedAttachment], bucket: AttachmentBucket) -> List[ClassifiedAttachment]:
+def get_by_bucket(classified: list[ClassifiedAttachment], bucket: AttachmentBucket) -> list[ClassifiedAttachment]:
     """Filter classified attachments by bucket."""
     return [c for c in classified if c.bucket == bucket]
 
@@ -315,7 +313,7 @@ _AUDIO_MIMES = frozenset(
         "audio/x-m4a",
         "audio/mp4",
         "application/ogg",
-    }
+    },
 )
 
 _VIDEO_MIMES = frozenset(
@@ -330,7 +328,7 @@ _VIDEO_MIMES = frozenset(
         "video/x-ms-wmv",
         "video/mpeg",
         "video/ogg",
-    }
+    },
 )
 
 _IMAGE_MIMES = frozenset(
@@ -344,7 +342,7 @@ _IMAGE_MIMES = frozenset(
         "image/tiff",
         "image/svg+xml",
         "image/x-icon",
-    }
+    },
 )
 
 _DOC_MIMES = frozenset(
@@ -359,14 +357,14 @@ _DOC_MIMES = frozenset(
         "text/markdown",
         "text/x-markdown",
         "application/vnd.oasis.opendocument.text",
-    }
+    },
 )
 
 _WEB_PAGE_MIMES = frozenset(
     {
         "text/html",
         "application/xhtml+xml",
-    }
+    },
 )
 
 # Extension → bucket mappings (lowercase, with leading dot)
@@ -382,7 +380,7 @@ _AUDIO_EXTS = frozenset(
         ".wma",
         ".webm",
         ".oga",
-    }
+    },
 )
 
 _VIDEO_EXTS = frozenset(
@@ -397,7 +395,7 @@ _VIDEO_EXTS = frozenset(
         ".wmv",
         ".mpg",
         ".mpeg",
-    }
+    },
 )
 
 _IMAGE_EXTS = frozenset(
@@ -412,7 +410,7 @@ _IMAGE_EXTS = frozenset(
         ".ico",
         ".tiff",
         ".tif",
-    }
+    },
 )
 
 _DOC_EXTS = frozenset(
@@ -426,7 +424,7 @@ _DOC_EXTS = frozenset(
         ".markdown",
         ".xls",
         ".xlsx",
-    }
+    },
 )
 
 _TXT_EXTS = frozenset({".txt"})
@@ -436,8 +434,7 @@ def classify_mime_and_extension(
     content_type: str | None,
     filename_or_path: str | None,
 ) -> AttachmentBucket:
-    """
-    Classify content into a processing bucket based on MIME type and/or filename extension.
+    """Classify content into a processing bucket based on MIME type and/or filename extension.
 
     This is a unified helper for both Discord attachments and URL-fetched content.
 
@@ -456,6 +453,7 @@ def classify_mime_and_extension(
     - IMAGE: image/* MIME or image extensions
     - TXT_PROMPT: .txt files
     - OTHER: Everything else
+
     """
     # Normalize inputs
     mime_root = ""
@@ -533,14 +531,14 @@ def classify_mime_and_extension(
 
 
 def is_web_page_mime(content_type: str | None) -> bool:
-    """
-    Check if the content type indicates an HTML web page.
+    """Check if the content type indicates an HTML web page.
 
     Args:
         content_type: MIME type string (may include charset)
 
     Returns:
         True if this is an HTML page that should go through web scraping
+
     """
     if not content_type:
         return False

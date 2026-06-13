@@ -1,5 +1,4 @@
-"""
-Single-flight cache system with deduplication for router optimization. [PA][DRY]
+"""Single-flight cache system with deduplication for router optimization. [PA][DRY].
 
 This module prevents duplicate external calls by ensuring only one request per unique key
 is in flight at any time. Additional requests for the same key wait for the result
@@ -22,9 +21,12 @@ import json
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, TypeVar, Callable, Awaitable
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from .utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 logger = get_logger(__name__)
 
@@ -32,7 +34,7 @@ T = TypeVar("T")
 
 
 class CacheFamily(Enum):
-    """Cache families with different TTL and policies. [CMV]"""
+    """Cache families with different TTL and policies. [CMV]."""
 
     TWEET_TEXT = "tweet_text"  # Tweet text/photos: 24h TTL
     TWEET_NEGATIVE = "tweet_negative"  # Failed tweet fetches: 15m TTL
@@ -44,7 +46,7 @@ class CacheFamily(Enum):
 
 @dataclass
 class CacheEntry:
-    """Individual cache entry with metadata. [CA]"""
+    """Individual cache entry with metadata. [CA]."""
 
     key: str
     value: Any
@@ -68,7 +70,7 @@ class CacheEntry:
 
 @dataclass
 class CacheMetrics:
-    """Cache metrics for monitoring. [PA]"""
+    """Cache metrics for monitoring. [PA]."""
 
     total_requests: int = 0
     cache_hits: int = 0
@@ -86,13 +88,13 @@ class CacheMetrics:
 
 
 class SingleFlightGroup:
-    """Manages in-flight operations to prevent duplication. [PA][DRY]"""
+    """Manages in-flight operations to prevent duplication. [PA][DRY]."""
 
-    def __init__(self):
-        self.in_flight: Dict[str, asyncio.Future] = {}
-        self.locks: Dict[str, asyncio.Lock] = {}
+    def __init__(self) -> None:
+        self.in_flight: dict[str, asyncio.Future] = {}
+        self.locks: dict[str, asyncio.Lock] = {}
 
-    async def do(self, key: str, fn: Callable[[], Awaitable[T]]) -> Tuple[T, bool]:
+    async def do(self, key: str, fn: Callable[[], Awaitable[T]]) -> tuple[T, bool]:
         """Execute function with single-flight semantics.
 
         Returns: (result, was_duplicate) where was_duplicate=True if this
@@ -111,11 +113,11 @@ class SingleFlightGroup:
                 try:
                     result = await future
                     return result, True  # This was a duplicate request
-                except Exception as e:
+                except Exception:
                     # If the in-flight operation failed, we still need to try
                     # Remove failed future and continue
                     self.in_flight.pop(key, None)
-                    raise e
+                    raise
 
             # Start new operation
             future = asyncio.create_task(fn())
@@ -133,15 +135,15 @@ class SingleFlightGroup:
 
 
 class LRUCache:
-    """In-memory LRU cache with TTL support. [PA][RM]"""
+    """In-memory LRU cache with TTL support. [PA][RM]."""
 
-    def __init__(self, max_size: int = 1000):
+    def __init__(self, max_size: int = 1000) -> None:
         self.max_size = max_size
-        self.cache: Dict[str, CacheEntry] = {}
-        self.access_order: List[str] = []  # Most recently used at end
+        self.cache: dict[str, CacheEntry] = {}
+        self.access_order: list[str] = []  # Most recently used at end
         self.lock = asyncio.Lock()
 
-    async def get(self, key: str) -> Optional[CacheEntry]:
+    async def get(self, key: str) -> CacheEntry | None:
         """Get entry from cache if not expired."""
         async with self.lock:
             if key not in self.cache:
@@ -172,9 +174,8 @@ class LRUCache:
         """Put entry in cache with LRU eviction."""
         async with self.lock:
             # Remove existing entry if present
-            if key in self.cache:
-                if key in self.access_order:
-                    self.access_order.remove(key)
+            if key in self.cache and key in self.access_order:
+                self.access_order.remove(key)
 
             # Add new entry
             self.cache[key] = entry
@@ -205,7 +206,7 @@ class LRUCache:
             self.cache.clear()
             self.access_order.clear()
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         async with self.lock:
             total_size = sum(len(str(entry.value)) for entry in self.cache.values())
@@ -219,9 +220,9 @@ class LRUCache:
 
 
 class SingleFlightCache:
-    """Main cache with single-flight deduplication. [PA][DRY]"""
+    """Main cache with single-flight deduplication. [PA][DRY]."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize cache with configuration."""
         self.config = config or {}
 
@@ -247,17 +248,14 @@ class SingleFlightCache:
 
         logger.info(f"💾 SingleFlightCache initialized (backend: {self.cache_backend}, max_entries: {max_entries})")
 
-    def _make_cache_key(self, family: CacheFamily, key_parts: List[str]) -> str:
-        """Create cache key from family and parts. [IV]"""
+    def _make_cache_key(self, family: CacheFamily, key_parts: list[str]) -> str:
+        """Create cache key from family and parts. [IV]."""
         # Normalize key parts to ensure consistent caching
         normalized_parts = []
         for part in key_parts:
             if isinstance(part, (dict, list)):
                 # Sort dict keys for consistent hashing
-                if isinstance(part, dict):
-                    part = json.dumps(part, sort_keys=True)
-                else:
-                    part = json.dumps(part)
+                part = json.dumps(part, sort_keys=True) if isinstance(part, dict) else json.dumps(part)
             normalized_parts.append(str(part))
 
         # Create hash of key parts to handle long URLs and normalize spacing
@@ -269,10 +267,10 @@ class SingleFlightCache:
     async def get_or_compute(
         self,
         family: CacheFamily,
-        key_parts: List[str],
+        key_parts: list[str],
         compute_fn: Callable[[], Awaitable[T]],
         negative_on_exception: bool = True,
-    ) -> Tuple[T, bool]:
+    ) -> tuple[T, bool]:
         """Get from cache or compute with single-flight semantics.
 
         Returns: (result, cache_hit) where cache_hit=True if result came from cache.
@@ -296,8 +294,8 @@ class SingleFlightCache:
                 # Re-raise the cached exception
                 if isinstance(entry.value, Exception):
                     raise entry.value
-                else:
-                    raise ValueError(f"Cached negative result for {family.value}")
+                msg = f"Cached negative result for {family.value}"
+                raise ValueError(msg)
 
             return entry.value, True
 
@@ -339,7 +337,7 @@ class SingleFlightCache:
                     )
                     await self.cache.put(cache_key, entry)
 
-                raise e
+                raise
 
         try:
             result, was_duplicate = await self.single_flight.do(cache_key, compute_and_cache)
@@ -351,16 +349,16 @@ class SingleFlightCache:
             self.metrics.calculate_hit_rate()
             return result, False
 
-        except Exception as e:
+        except Exception:
             self.metrics.calculate_hit_rate()
-            raise e
+            raise
 
     async def put(
         self,
         family: CacheFamily,
-        key_parts: List[str],
+        key_parts: list[str],
         value: Any,
-        ttl_override: Optional[float] = None,
+        ttl_override: float | None = None,
     ) -> None:
         """Manually put value in cache."""
         if not self.enabled:
@@ -381,7 +379,7 @@ class SingleFlightCache:
 
         await self.cache.put(cache_key, entry)
 
-    async def invalidate(self, family: CacheFamily, key_parts: List[str]) -> bool:
+    async def invalidate(self, family: CacheFamily, key_parts: list[str]) -> bool:
         """Remove specific entry from cache."""
         if not self.enabled:
             return False
@@ -435,11 +433,11 @@ class SingleFlightCache:
 
 
 # Global singleton instance
-_cache_instance: Optional[SingleFlightCache] = None
+_cache_instance: SingleFlightCache | None = None
 
 
-def get_cache(config: Optional[Dict[str, Any]] = None) -> SingleFlightCache:
-    """Get or create the global cache instance. [CA]"""
+def get_cache(config: dict[str, Any] | None = None) -> SingleFlightCache:
+    """Get or create the global cache instance. [CA]."""
     global _cache_instance
 
     if _cache_instance is None:

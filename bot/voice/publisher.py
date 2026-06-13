@@ -1,24 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
-import contextlib
-import wave
-import time
 import shutil
+import time
+import wave
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import aiohttp
-import discord
 
 from bot.config import load_config
 from bot.retry_utils import API_RETRY_CONFIG, retry_async
 from utils.opus import transcode_to_ogg_opus
 from utils.waveform import compute_waveform_b64
 
+if TYPE_CHECKING:
+    import discord
 
 IS_VOICE_MESSAGE_FLAG = 8192  # Discord message flags: IS_VOICE_MESSAGE
 USER_AGENT = "DiscordVoicePublisher/1.0"
@@ -28,18 +29,17 @@ BLOCK_TTL_SECONDS = 15 * 60  # 15 minutes [PA]
 
 @dataclass
 class VoicePublishResult:
-    message: Optional[discord.Message]
-    ogg_path: Optional[Path]
+    message: discord.Message | None
+    ogg_path: Path | None
     ok: bool
 
 
 class VoiceMessagePublisher:
-    """
-    Publish Discord-native voice messages via attachments.create + upload + message create.
-    Follows official-ish flow documented by community references. [CA][REH][IV]
+    """Publish Discord-native voice messages via attachments.create + upload + message create.
+    Follows official-ish flow documented by community references. [CA][REH][IV].
     """
 
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(self, logger: logging.Logger | None = None) -> None:
         self.logger = logger or logging.getLogger(__name__)
         # Channels that recently returned 50173 (Cannot send voice messages in this channel) [REH]
         self._blocked_channels: dict[int, float] = {}
@@ -52,7 +52,7 @@ class VoiceMessagePublisher:
         self._tools_ok: bool = False
 
     def _check_tools(self) -> bool:
-        """Preflight check for ffmpeg and ffprobe. Cache the result and log once. [REH]"""
+        """Preflight check for ffmpeg and ffprobe. Cache the result and log once. [REH]."""
         if self._tools_checked:
             return self._tools_ok
         self._tools_checked = True
@@ -127,7 +127,7 @@ class VoiceMessagePublisher:
         # Do NOT send bot Authorization to the upload_url (usually a signed CDN/S3 URL). [REH]
         headers = {"Content-Type": "audio/ogg"}
 
-        async def _do():
+        async def _do() -> None:
             async with session.put(
                 upload_url,
                 headers=headers,
@@ -149,7 +149,7 @@ class VoiceMessagePublisher:
                     except Exception:
                         pass
                     raise err
-                return None
+                return
 
         return await retry_async(_do, API_RETRY_CONFIG)
 
@@ -161,7 +161,7 @@ class VoiceMessagePublisher:
         uploaded_filename: str,
         duration_secs: float,
         waveform_b64: str,
-        reply_to_id: Optional[int],
+        reply_to_id: int | None,
     ) -> dict:
         url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
         attachments = [
@@ -171,7 +171,7 @@ class VoiceMessagePublisher:
                 "uploaded_filename": uploaded_filename,
                 "duration_secs": float(round(duration_secs, 3)),
                 "waveform": waveform_b64,
-            }
+            },
         ]
         payload: dict = {"flags": IS_VOICE_MESSAGE_FLAG, "attachments": attachments}
         if reply_to_id:
@@ -212,10 +212,9 @@ class VoiceMessagePublisher:
         message: discord.Message,
         wav_path: str | Path,
         include_transcript: bool = False,
-        transcript_text: Optional[str] = None,
+        transcript_text: str | None = None,
     ) -> VoicePublishResult:
-        """
-        Publish a native voice message to the message's channel replying to the original.
+        """Publish a native voice message to the message's channel replying to the original.
         Returns VoicePublishResult with the created discord.Message (if fetched) and ogg path.
         On failure, returns (None, ogg_path or None) and logs errors for fallback.
         """
@@ -318,7 +317,8 @@ class VoiceMessagePublisher:
                 # API typically returns 'upload_filename'; be tolerant if 'uploaded_filename' appears.
                 upload_filename = attach.get("upload_filename") or attach.get("uploaded_filename")
                 if not upload_url or not upload_filename:
-                    raise RuntimeError(f"attachments.create missing fields: {attach}")
+                    msg = f"attachments.create missing fields: {attach}"
+                    raise RuntimeError(msg)
 
                 await self._upload_file(session, upload_url, token, ogg_bytes)
                 msg_json = await self._post_voice_message(
@@ -334,7 +334,7 @@ class VoiceMessagePublisher:
             # 3) Fetch created message (optional) and return success
             try:
                 created_id = int(msg_json.get("id")) if isinstance(msg_json.get("id"), (str, int)) else None
-                created_msg: Optional[discord.Message] = None
+                created_msg: discord.Message | None = None
                 if created_id:
                     created_msg = await message.channel.fetch_message(created_id)
                 self.logger.info(
@@ -382,7 +382,7 @@ class VoiceMessagePublisher:
             self.logger.error(f"voice.native.upload_failed | {e}", exc_info=True)
             return VoicePublishResult(message=None, ogg_path=ogg_p, ok=False)
 
-    async def _probe_duration(self, path: Path) -> Optional[float]:
+    async def _probe_duration(self, path: Path) -> float | None:
         """Probe audio duration using ffprobe; return seconds (rounded to 0 decimals per reference) or None."""
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -405,6 +405,6 @@ class VoiceMessagePublisher:
                 return None
             data = json.loads(stdout.decode("utf-8", errors="ignore"))
             dur = float(data.get("format", {}).get("duration", 0.0))
-            return float(int(round(dur)))
+            return float(round(dur))
         except Exception:
             return None

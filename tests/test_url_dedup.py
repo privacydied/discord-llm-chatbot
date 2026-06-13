@@ -7,27 +7,27 @@ from bot.utils.url_dedup import deduplicate_urls
 
 
 class TestDeduplicateUrls:
-    def test_empty_list(self):
+    def test_empty_list(self) -> None:
         assert deduplicate_urls([]) == []
 
-    def test_single_url(self):
+    def test_single_url(self) -> None:
         urls = ["https://example.com"]
         assert deduplicate_urls(urls) == ["https://example.com"]
 
-    def test_exact_duplicates(self):
+    def test_exact_duplicates(self) -> None:
         urls = ["https://example.com", "https://example.com", "https://other.com"]
         result = deduplicate_urls(urls)
         assert len(result) == 2
         assert "https://example.com" in result
         assert "https://other.com" in result
 
-    def test_case_normalization(self):
+    def test_case_normalization(self) -> None:
         urls = ["https://EXAMPLE.COM/path", "https://example.com/path"]
         result = deduplicate_urls(urls)
         # Both normalize to same logical URL, keep first occurrence
         assert len(result) == 1
 
-    def test_tracking_params_stripped(self):
+    def test_tracking_params_stripped(self) -> None:
         urls = [
             "https://example.com/path?utm_source=t&ref=abc",
             "https://example.com/path",
@@ -35,7 +35,7 @@ class TestDeduplicateUrls:
         result = deduplicate_urls(urls)
         assert len(result) == 1
 
-    def test_different_paths_preserved(self):
+    def test_different_paths_preserved(self) -> None:
         urls = [
             "https://example.com/a",
             "https://example.com/b",
@@ -43,7 +43,7 @@ class TestDeduplicateUrls:
         result = deduplicate_urls(urls)
         assert len(result) == 2
 
-    def test_preserve_order(self):
+    def test_preserve_order(self) -> None:
         urls = [
             "https://z.com",
             "https://a.com",
@@ -52,7 +52,7 @@ class TestDeduplicateUrls:
         result = deduplicate_urls(urls)
         assert result == urls
 
-    def test_mixed_protocols(self):
+    def test_mixed_protocols(self) -> None:
         urls = ["http://example.com", "https://example.com"]
         # Different protocols = different safe keys after normalization
         # The dedup normalizes to lower but keeps protocol

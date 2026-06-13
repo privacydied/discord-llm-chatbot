@@ -1,24 +1,24 @@
-"""
-Tests for the fixed KokoroDirect implementation.
-"""
+"""Tests for the fixed KokoroDirect implementation."""
 
-import os
 import logging
-import pytest
-import numpy as np
+import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import numpy as np
+import pytest
+
+from bot.tts.errors import TTSWriteError
 
 # Import the fixed implementation
 from bot.tts.kokoro_direct import KokoroDirect
-from bot.tts.errors import TTSWriteError
 
 
 class TestKokoroDirect:
     """Test the fixed KokoroDirect implementation."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         # Load paths from environment variables
         self.model_path = os.getenv("TTS_MODEL_PATH", "tts/onnx/kokoro-v1.0.onnx")
         self.voices_path = os.getenv("TTS_VOICES_PATH", "tts/onnx/voices/voices-v1.0.bin")
@@ -99,19 +99,19 @@ class TestKokoroDirect:
             yield mock
 
     @pytest.mark.needs_kokoro_assets
-    def test_initialization(self, mock_tokenizer, mock_ort, mock_np_load):
+    def test_initialization(self, mock_tokenizer, mock_ort, mock_np_load) -> None:
         """Test KokoroDirect initialization."""
         assert self.engine.tokenizer is not None
         assert self.engine.sess is not None
         assert self.test_voice_id in self.engine.voices
         assert self.test_voice_id in self.engine.voices_data
 
-    def test_get_voice_names(self):
+    def test_get_voice_names(self) -> None:
         """Test get_voice_names method."""
         voices = self.engine.get_voice_names()
         assert self.test_voice_id in voices
 
-    def test_create_audio(self):
+    def test_create_audio(self) -> None:
         """Test _create_audio method."""
         voice_embedding = np.random.rand(512, 256).astype(np.float32)
         audio, sample_rate = self.engine._create_audio("This is a test.", voice_embedding)
@@ -120,7 +120,7 @@ class TestKokoroDirect:
         assert len(audio) > 0
         assert sample_rate == 24000
 
-    def test_create_with_voice_id(self, mock_soundfile):
+    def test_create_with_voice_id(self, mock_soundfile) -> None:
         """Test create method with voice ID."""
         with tempfile.TemporaryDirectory() as temp_dir:
             out_path = Path(temp_dir) / "test_output.wav"
@@ -129,7 +129,7 @@ class TestKokoroDirect:
             assert result_path == out_path
             mock_soundfile.assert_called_once()
 
-    def test_create_with_embedding(self, mock_soundfile):
+    def test_create_with_embedding(self, mock_soundfile) -> None:
         """Test create method with voice embedding."""
         voice_embedding = np.random.rand(512, 256).astype(np.float32)
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -139,7 +139,7 @@ class TestKokoroDirect:
             assert result_path == out_path
             mock_soundfile.assert_called_once()
 
-    def test_create_auto_path(self, mock_soundfile):
+    def test_create_auto_path(self, mock_soundfile) -> None:
         """Test create method with auto-generated output path."""
         result_path = self.engine.create("This is a test.", self.test_voice_id)
 
@@ -147,15 +147,15 @@ class TestKokoroDirect:
         assert result_path.suffix == ".wav"
         mock_soundfile.assert_called_once()
 
-    def test_create_soundfile_error_raises(self, mock_soundfile):
-        """soundfile failure should raise TTSWriteError (no scipy fallback)."""
+    def test_create_soundfile_error_raises(self, mock_soundfile) -> None:
+        """Soundfile failure should raise TTSWriteError (no scipy fallback)."""
         # Make soundfile.write raise an exception
         mock_soundfile.side_effect = Exception("Soundfile error")
 
         with pytest.raises(TTSWriteError):
             self.engine.create("This is a test.", self.test_voice_id)
 
-    def test_create_soundfile_error_raises_ttswriteerror(self, mock_soundfile):
+    def test_create_soundfile_error_raises_ttswriteerror(self, mock_soundfile) -> None:
         """Ensure no fallback and raise on writer error."""
         # Make soundfile.write raise an exception
         mock_soundfile.side_effect = Exception("Soundfile error")
@@ -163,7 +163,7 @@ class TestKokoroDirect:
         with pytest.raises(TTSWriteError):
             self.engine.create("This is a test.", self.test_voice_id)
 
-    def test_create_empty_audio(self, mock_ort):
+    def test_create_empty_audio(self, mock_ort) -> None:
         """Test handling of empty audio."""
         # Make the model return empty audio
         mock_ort.return_value.run.return_value = [np.array([])]
@@ -171,7 +171,7 @@ class TestKokoroDirect:
         with pytest.raises(TTSWriteError):
             self.engine.create("This is a test.", self.test_voice_id)
 
-    def test_phonemiser_selection(self):
+    def test_phonemiser_selection(self) -> None:
         """Test phonemiser selection based on language."""
         # Test English
         with patch.dict(os.environ, {"TTS_LANGUAGE": "en"}):
@@ -188,7 +188,7 @@ class TestKokoroDirect:
             engine = KokoroDirect(self.model_path, self.voices_path)
             assert engine.phonemiser == "misaki"
 
-    def test_kd_quiet_path_no_tokenizer_noise(self, caplog):
+    def test_kd_quiet_path_no_tokenizer_noise(self, caplog) -> None:
         """Test that the quiet path (disable_autodiscovery=True) produces no tokenizer-related noise."""
         caplog.set_level("DEBUG")
 
@@ -216,10 +216,11 @@ class TestKokoroDirect:
 
         # But should still have the expected logs
         assert "Using pre-tokenized tokens" in logs
-        assert "Created" in logs and "audio" in logs
+        assert "Created" in logs
+        assert "audio" in logs
         assert "Saved audio" in logs
 
-    def test_tts_audio_quality_fixes(self, caplog):
+    def test_tts_audio_quality_fixes(self, caplog) -> None:
         """Test TTS audio quality fixes: IPA routing, WAV normalization, quiet path."""
         caplog.set_level("DEBUG")
 

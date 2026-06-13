@@ -1,33 +1,34 @@
-"""
-Command handlers for the Discord bot.
-"""
+"""Command handlers for the Discord bot."""
 
-from typing import Dict, Any, Callable
 import logging
+from collections.abc import Callable
+from typing import Any, Dict
 
 # Command modules are loaded via the setup_commands function below.
 
 # This will be populated with all registered commands
-commands: Dict[str, Any] = {}
+commands: dict[str, Any] = {}
 
 
 def register_command(name: str, func: Callable[..., Any], **kwargs) -> None:
-    """
-    Register a command with the given name and handler function.
+    """Register a command with the given name and handler function.
 
     [REH] Robust error handling with input validation
     [SFT] Security-first thinking with parameter validation
     """
     # Input validation [SFT]
     if not name or not isinstance(name, str):
-        raise ValueError("Command name must be a non-empty string")
+        msg = "Command name must be a non-empty string"
+        raise ValueError(msg)
     if not callable(func):
-        raise ValueError("Command handler must be callable")
+        msg = "Command handler must be callable"
+        raise ValueError(msg)
 
     # Sanitize command name
     name = name.strip().lower()
     if not name.replace("_", "").replace("-", "").isalnum():
-        raise ValueError(f"Command name '{name}' contains invalid characters")
+        msg = f"Command name '{name}' contains invalid characters"
+        raise ValueError(msg)
 
     # Check for duplicates with stronger handling [REH]
     if name in commands:
@@ -36,15 +37,16 @@ def register_command(name: str, func: Callable[..., Any], **kwargs) -> None:
             logging.error(f"❌ CRITICAL: Command '{name}' already exists with different handler!")
             logging.error(f"   Existing: {existing_cmd['handler'].__module__}.{existing_cmd['handler'].__name__}")
             logging.error(f"   New: {func.__module__}.{func.__name__}")
-            raise ValueError(f"Command '{name}' is already registered with a different handler")
-        else:
-            logging.debug(f"🔄 Command '{name}' re-registered with same handler")
-            return  # Skip duplicate registration
+            msg = f"Command '{name}' is already registered with a different handler"
+            raise ValueError(msg)
+        logging.debug(f"🔄 Command '{name}' re-registered with same handler")
+        return  # Skip duplicate registration
 
     # Validate aliases [SFT]
     aliases = kwargs.get("aliases", [])
     if not isinstance(aliases, list):
-        raise ValueError("Aliases must be a list")
+        msg = "Aliases must be a list"
+        raise ValueError(msg)
 
     validated_aliases = []
     for alias in aliases:
@@ -90,8 +92,7 @@ def get_all_commands() -> dict:
 
 
 async def setup_commands(bot) -> None:
-    """
-    Set up all command modules with the bot instance.
+    """Set up all command modules with the bot instance.
     This function is called during bot startup to register all commands.
     """
     import logging

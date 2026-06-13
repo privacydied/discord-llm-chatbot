@@ -1,5 +1,4 @@
-"""
-Vision Safety Filter - Content validation and filtering
+"""Vision Safety Filter - Content validation and filtering.
 
 Implements comprehensive content safety checks for vision generation requests:
 - Prompt safety analysis using keywords and patterns
@@ -12,22 +11,24 @@ Follows Security-First Thinking (SFT) and Input Validation (IV) principles.
 """
 
 from __future__ import annotations
-import re
+
 import json
-from typing import Dict, List, Optional, Any
-from pathlib import Path
+import re
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
-from bot.utils.logging import get_logger
 from bot.config import load_config
+from bot.utils.logging import get_logger
+
 from .types import VisionRequest, VisionTask
 
 logger = get_logger(__name__)
 
 
 class SafetyLevel(Enum):
-    """Content safety severity levels"""
+    """Content safety severity levels."""
 
     SAFE = "safe"
     WARNING = "warning"
@@ -36,18 +37,17 @@ class SafetyLevel(Enum):
 
 @dataclass
 class SafetyResult:
-    """Result of safety filtering check"""
+    """Result of safety filtering check."""
 
     approved: bool
     level: SafetyLevel
     reason: str
     user_message: str
-    detected_issues: List[str]
+    detected_issues: list[str]
 
 
 class VisionSafetyFilter:
-    """
-    Content safety filter for vision generation requests
+    """Content safety filter for vision generation requests.
 
     Features:
     - Multi-layer prompt analysis (keywords, patterns, ML)
@@ -57,7 +57,7 @@ class VisionSafetyFilter:
     - Clear user messaging for policy violations
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         self.config = config or load_config()
         self.logger = get_logger("vision.safety_filter")
 
@@ -75,14 +75,14 @@ class VisionSafetyFilter:
         self.logger.info(f"Vision Safety Filter initialized - blocked_patterns: {len(self.blocked_patterns)}, warning_patterns: {len(self.warning_patterns)}, blocked_keywords: {len(self.blocked_keywords)}")
 
     async def validate_request(self, request: VisionRequest) -> SafetyResult:
-        """
-        Validate vision generation request for safety compliance
+        """Validate vision generation request for safety compliance.
 
         Args:
             request: Vision generation request to validate
 
         Returns:
             SafetyResult with approval decision and details
+
         """
         detected_issues = []
         max_level = SafetyLevel.SAFE
@@ -136,18 +136,18 @@ class VisionSafetyFilter:
             return result
 
         except Exception as e:
-            self.logger.error(f"Safety validation error - error: {str(e)}, user_id: {request.user_id}")
+            self.logger.exception(f"Safety validation error - error: {e!s}, user_id: {request.user_id}")
             # Fail safe - block on error
             return SafetyResult(
                 approved=False,
                 level=SafetyLevel.BLOCKED,
-                reason=f"Safety validation error: {str(e)}",
+                reason=f"Safety validation error: {e!s}",
                 user_message="Unable to validate content safety. Please try again.",
                 detected_issues=["system_error"],
             )
 
     def _analyze_text_content(self, text: str, field_name: str) -> SafetyResult:
-        """Analyze text content for safety issues [IV]"""
+        """Analyze text content for safety issues [IV]."""
         detected_issues = []
         max_level = SafetyLevel.SAFE
 
@@ -209,12 +209,12 @@ class VisionSafetyFilter:
         )
 
     def _validate_task_specific(self, request: VisionRequest) -> SafetyResult:
-        """Task-specific safety validations [SFT]"""
+        """Task-specific safety validations [SFT]."""
         detected_issues = []
         max_level = SafetyLevel.SAFE
 
         # Image editing tasks have stricter controls
-        if request.task in [VisionTask.IMAGE_TO_IMAGE]:
+        if request.task == VisionTask.IMAGE_TO_IMAGE:
             if not request.input_image_url and not request.input_image_data:
                 detected_issues.append("missing_input_image")
                 max_level = SafetyLevel.BLOCKED
@@ -267,7 +267,7 @@ class VisionSafetyFilter:
         )
 
     def _check_server_policies(self, request: VisionRequest) -> SafetyResult:
-        """Check server-specific policies (NSFW, etc.) [SFT]"""
+        """Check server-specific policies (NSFW, etc.) [SFT]."""
         detected_issues = []
         max_level = SafetyLevel.SAFE
 
@@ -317,8 +317,8 @@ class VisionSafetyFilter:
             detected_issues=detected_issues,
         )
 
-    def _detect_nsfw_content(self, request: VisionRequest) -> List[str]:
-        """Detect potential NSFW content indicators [SFT]"""
+    def _detect_nsfw_content(self, request: VisionRequest) -> list[str]:
+        """Detect potential NSFW content indicators [SFT]."""
         nsfw_indicators = []
 
         # NSFW keywords from policy
@@ -353,8 +353,8 @@ class VisionSafetyFilter:
 
         return nsfw_indicators
 
-    def _heuristic_analysis(self, text: str) -> List[str]:
-        """Heuristic analysis for additional safety checks [IV]"""
+    def _heuristic_analysis(self, text: str) -> list[str]:
+        """Heuristic analysis for additional safety checks [IV]."""
         issues = []
 
         # Check for excessive capitalization (shouting)
@@ -388,8 +388,8 @@ class VisionSafetyFilter:
 
         return issues
 
-    def _generate_reason(self, issues: List[str], level: SafetyLevel) -> str:
-        """Generate technical reason for logging [CMV]"""
+    def _generate_reason(self, issues: list[str], level: SafetyLevel) -> str:
+        """Generate technical reason for logging [CMV]."""
         if not issues:
             return "No safety issues detected"
 
@@ -401,8 +401,8 @@ class VisionSafetyFilter:
         summary_parts = [f"{k}({v})" for k, v in issue_summary.items()]
         return f"{level.value}: {', '.join(summary_parts)}"
 
-    def _generate_user_message(self, issues: List[str], level: SafetyLevel, request: VisionRequest) -> str:
-        """Generate user-friendly message for policy violations [CMV]"""
+    def _generate_user_message(self, issues: list[str], level: SafetyLevel, request: VisionRequest) -> str:
+        """Generate user-friendly message for policy violations [CMV]."""
         if level == SafetyLevel.SAFE:
             return ""
 
@@ -442,15 +442,15 @@ class VisionSafetyFilter:
 
         return "".join(message_parts)
 
-    def _load_safety_policy(self) -> Dict[str, Any]:
-        """Load safety policy from vision policy file [CMV]"""
+    def _load_safety_policy(self) -> dict[str, Any]:
+        """Load safety policy from vision policy file [CMV]."""
         try:
             policy_path = Path(self.config["VISION_POLICY_PATH"])
             if not policy_path.exists():
                 self.logger.warning(f"Vision policy file not found: {policy_path}")
                 return self._get_default_safety_policy()
 
-            with open(policy_path, "r") as f:
+            with open(policy_path) as f:
                 policy_data = json.load(f)
 
             safety_policy = policy_data.get("safety_filter", {})
@@ -459,11 +459,11 @@ class VisionSafetyFilter:
             return safety_policy
 
         except Exception as e:
-            self.logger.error(f"Failed to load safety policy: {e}")
+            self.logger.exception(f"Failed to load safety policy: {e}")
             return self._get_default_safety_policy()
 
-    def _get_default_safety_policy(self) -> Dict[str, Any]:
-        """Get default safety policy if file loading fails [CMV]"""
+    def _get_default_safety_policy(self) -> dict[str, Any]:
+        """Get default safety policy if file loading fails [CMV]."""
         return {
             "blocked_keywords": [
                 "explicit",

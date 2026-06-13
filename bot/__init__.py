@@ -1,5 +1,4 @@
-"""
-Discord LLM Chatbot Package
+"""Discord LLM Chatbot Package.
 
 A production-ready Discord bot with AI capabilities, featuring:
 - Multi-backend AI support (OpenAI, Ollama)

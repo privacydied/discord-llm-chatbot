@@ -7,7 +7,8 @@ instance (discord.ext.commands.Bot) and return clear results with reasons.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional
+import contextlib
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from bot.utils.logging import get_logger
 
@@ -25,6 +26,7 @@ class PermissionResult(NamedTuple):
         allowed: Whether the action is permitted.
         reason: Human-readable explanation if denied.
         permissions: Dict of permission_name -> bool for granular access.
+
     """
 
     allowed: bool
@@ -32,7 +34,7 @@ class PermissionResult(NamedTuple):
     permissions: dict[str, bool]
 
 
-def _get_bot_member(guild: discord.Guild) -> Optional[discord.Member]:
+def _get_bot_member(guild: discord.Guild) -> discord.Member | None:
     """Get the bot's Member object for a guild. Returns None if unavailable."""
     try:
         return guild.me
@@ -97,7 +99,7 @@ def _safe_permissions(channel: Any) -> dict[str, bool]:
 # ---------------------------------------------------------------------------
 
 
-def can_view_channel(bot: "DiscordBot", channel_id: int) -> PermissionResult:
+def can_view_channel(bot: DiscordBot, channel_id: int) -> PermissionResult:
     """Check if the bot can view (read messages in) a channel.
 
     The bot must be in the guild, the channel must exist, and the bot must
@@ -119,7 +121,7 @@ def can_view_channel(bot: "DiscordBot", channel_id: int) -> PermissionResult:
     return PermissionResult(True, "ok", perms)
 
 
-def can_read_message_history(bot: "DiscordBot", channel_id: int) -> PermissionResult:
+def can_read_message_history(bot: DiscordBot, channel_id: int) -> PermissionResult:
     """Check if the bot can read message history in a channel.
 
     Requires both read_messages and read_message_history (or administrator).
@@ -141,7 +143,7 @@ def can_read_message_history(bot: "DiscordBot", channel_id: int) -> PermissionRe
     return PermissionResult(True, "ok", perms)
 
 
-def can_send_messages(bot: "DiscordBot", channel_id: int) -> PermissionResult:
+def can_send_messages(bot: DiscordBot, channel_id: int) -> PermissionResult:
     """Check if the bot can send messages in a channel.
 
     Requires send_messages (or send_messages_in_threads for thread channels).
@@ -168,7 +170,7 @@ def can_send_messages(bot: "DiscordBot", channel_id: int) -> PermissionResult:
     return PermissionResult(True, "ok", perms)
 
 
-def get_channel_permissions(bot: "DiscordBot", channel_id: int) -> dict[str, Any]:
+def get_channel_permissions(bot: DiscordBot, channel_id: int) -> dict[str, Any]:
     """Get a channel info dict plus a detailed permission summary.
 
     Returns a dict with keys:
@@ -204,10 +206,8 @@ def get_channel_permissions(bot: "DiscordBot", channel_id: int) -> dict[str, Any
     granted.sort()
 
     channel_type = None
-    try:
+    with contextlib.suppress(Exception):
         channel_type = str(getattr(channel, "type", "text"))
-    except Exception:
-        pass
 
     return {
         "found": True,
@@ -221,7 +221,7 @@ def get_channel_permissions(bot: "DiscordBot", channel_id: int) -> dict[str, Any
     }
 
 
-def can_send_dm(bot: "DiscordBot", user_id: int) -> PermissionResult:
+def can_send_dm(bot: DiscordBot, user_id: int) -> PermissionResult:
     """Check if the bot can send a DM to a user.
 
     Checks:
@@ -252,8 +252,8 @@ def can_send_dm(bot: "DiscordBot", user_id: int) -> PermissionResult:
         # Having a DM channel object doesn't guarantee the user allows DMs
         # from bot users — Discord automatically creates DM channels for
         # mutual guild members. We'll report it as likely possible.
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to access dm_channel for user {user.id}: {e}")
 
     return PermissionResult(
         True,
@@ -267,7 +267,7 @@ def can_send_dm(bot: "DiscordBot", user_id: int) -> PermissionResult:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_channel(bot: "DiscordBot", channel_id: int) -> Any:
+def _resolve_channel(bot: DiscordBot, channel_id: int) -> Any:
     """Resolve a channel by ID across all guilds the bot can see.
 
     First tries bot.get_channel() (which covers all connected guilds),
@@ -277,8 +277,8 @@ def _resolve_channel(bot: "DiscordBot", channel_id: int) -> Any:
         channel = bot.get_channel(channel_id)
         if channel is not None:
             return channel
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"bot.get_channel failed for {channel_id}: {e}")
 
     # DM channels are not guild channels — bot.get_channel won't find them
     # for DM-specific checks we need the DMStore or user lookup instead.

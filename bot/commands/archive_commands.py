@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class ArchiveCommands(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._service: Any | None = None
 

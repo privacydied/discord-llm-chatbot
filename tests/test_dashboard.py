@@ -11,12 +11,12 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
 
-from bot.dashboard.audit_store import AuditStore, EVENT_DASHBOARD_LOGIN_SUCCESS
+from bot.dashboard.audit_store import EVENT_DASHBOARD_LOGIN_SUCCESS, AuditStore
 from bot.dashboard.backfill import (
     BACKFILL_STATUS_CANCELLED,
     BACKFILL_STATUS_COMPLETED,
@@ -37,7 +37,6 @@ from bot.dashboard.permissions import (
     get_channel_permissions,
 )
 
-
 # ===================================================================
 # Fixtures
 # ===================================================================
@@ -47,32 +46,28 @@ from bot.dashboard.permissions import (
 def msg_store(tmp_path):
     """MessageStore backed by a temp file."""
     db = tmp_path / "test_messages.db"
-    store = MessageStore(str(db), retention_days=90)
-    return store
+    return MessageStore(str(db), retention_days=90)
 
 
 @pytest.fixture
 def audit_store(tmp_path):
     """AuditStore backed by a temp file."""
     db = tmp_path / "test_audit.db"
-    store = AuditStore(str(db), retention_days=180)
-    return store
+    return AuditStore(str(db), retention_days=180)
 
 
 @pytest.fixture
 def dm_store(tmp_path):
     """DMStore backed by a temp file."""
     db = tmp_path / "test_dm.db"
-    store = DMStore(str(db), retention_days=90)
-    return store
+    return DMStore(str(db), retention_days=90)
 
 
 @pytest.fixture
 def bj_store(tmp_path):
     """BackfillJobStore backed by a temp file."""
     db = tmp_path / "test_backfill.db"
-    store = BackfillJobStore(str(db))
-    return store
+    return BackfillJobStore(str(db))
 
 
 # ===================================================================
@@ -83,7 +78,7 @@ def bj_store(tmp_path):
 class TestMessageStoreInsertAndRetrieve:
     """Insert a message and retrieve it by Discord ID."""
 
-    async def test_insert_and_retrieve(self, msg_store):
+    async def test_insert_and_retrieve(self, msg_store) -> None:
         inserted = await msg_store.insert_message(
             discord_message_id=1001,
             channel_id=2001,
@@ -109,9 +104,10 @@ class TestMessageStoreInsertAndRetrieve:
 class TestMessageStoreDuplicateInsert:
     """Inserting the same discord_message_id twice succeeds (no constraint on ID column)."""
 
-    async def test_duplicate_not_ignored(self, msg_store):
+    async def test_duplicate_not_ignored(self, msg_store) -> None:
         """The messages table has no UNIQUE constraint on discord_message_id,
-        so duplicate IDs are accepted. This is the current design."""
+        so duplicate IDs are accepted. This is the current design.
+        """
         inserted1 = await msg_store.insert_message(
             discord_message_id=1002,
             channel_id=2002,
@@ -137,7 +133,7 @@ class TestMessageStoreDuplicateInsert:
 class TestMessageStoreGetChannelMessages:
     """Get channel messages with pagination."""
 
-    async def test_get_channel_messages_paginated(self, msg_store):
+    async def test_get_channel_messages_paginated(self, msg_store) -> None:
         # Insert 5 messages in channel 2010
         for i in range(5):
             await msg_store.insert_message(
@@ -166,7 +162,7 @@ class TestMessageStoreGetChannelMessages:
 class TestMessageStoreGetDMThreadMessages:
     """Get DM thread messages via MessageStore."""
 
-    async def test_get_dm_thread_messages(self, msg_store):
+    async def test_get_dm_thread_messages(self, msg_store) -> None:
         # Insert messages in a DM channel (no guild_id)
         for i in range(3):
             await msg_store.insert_message(
@@ -186,7 +182,7 @@ class TestMessageStoreGetDMThreadMessages:
 class TestMessageStoreSearchMessages:
     """Search messages by content."""
 
-    async def test_search_by_content(self, msg_store):
+    async def test_search_by_content(self, msg_store) -> None:
         await msg_store.insert_message(
             discord_message_id=1201,
             channel_id=2050,
@@ -226,7 +222,7 @@ class TestMessageStoreSearchMessages:
 class TestMessageStoreUpsertDMThread:
     """Upsert DM thread metadata."""
 
-    async def test_upsert_dm_thread(self, msg_store):
+    async def test_upsert_dm_thread(self, msg_store) -> None:
         await msg_store.upsert_dm_thread(
             dm_channel_id=999002,
             user_id=5002,
@@ -256,10 +252,10 @@ class TestMessageStoreUpsertDMThread:
 class TestMessageStoreCleanupRetention:
     """Soft-delete old messages."""
 
-    async def test_cleanup_retention(self, msg_store):
+    async def test_cleanup_retention(self, msg_store) -> None:
         # Insert one recent and one old message
-        old_ts = (datetime.now(timezone.utc) - timedelta(days=200)).strftime(
-            "%Y-%m-%dT%H:%M:%S.%fZ"
+        old_ts = (datetime.now(UTC) - timedelta(days=200)).strftime(
+            "%Y-%m-%dT%H:%M:%S.%fZ",
         )
         await msg_store.insert_message(
             discord_message_id=1401,
@@ -298,7 +294,7 @@ class TestMessageStoreCleanupRetention:
 class TestAuditStoreRecordAndQuery:
     """Record events and query them back."""
 
-    async def test_record_and_query(self, audit_store):
+    async def test_record_and_query(self, audit_store) -> None:
         aid = await audit_store.record(
             event_type=EVENT_DASHBOARD_LOGIN_SUCCESS,
             result="success",
@@ -317,7 +313,7 @@ class TestAuditStoreRecordAndQuery:
 class TestAuditStorePagination:
     """Pagination works correctly."""
 
-    async def test_pagination(self, audit_store):
+    async def test_pagination(self, audit_store) -> None:
         for i in range(10):
             await audit_store.record(
                 event_type=f"test.event.{i}",
@@ -339,7 +335,7 @@ class TestAuditStorePagination:
 class TestAuditStoreFilterByEventType:
     """Filter audit events by event_type."""
 
-    async def test_filter_by_event_type(self, audit_store):
+    async def test_filter_by_event_type(self, audit_store) -> None:
         await audit_store.record(event_type="type.a", result="success")
         await audit_store.record(event_type="type.b", result="success")
         await audit_store.record(event_type="type.a", result="success")
@@ -357,7 +353,7 @@ class TestAuditStoreFilterByEventType:
 class TestAuditStoreFilterByResult:
     """Filter audit events by result field."""
 
-    async def test_filter_by_result(self, audit_store):
+    async def test_filter_by_result(self, audit_store) -> None:
         await audit_store.record(event_type="evt.1", result="success")
         await audit_store.record(event_type="evt.2", result="failure")
         await audit_store.record(event_type="evt.3", result="success")
@@ -372,7 +368,7 @@ class TestAuditStoreFilterByResult:
 class TestAuditStoreGetSingleEvent:
     """Fetch a single audit event by ID."""
 
-    async def test_get_single_event(self, audit_store):
+    async def test_get_single_event(self, audit_store) -> None:
         aid = await audit_store.record(
             event_type="test.single",
             result="success",
@@ -394,9 +390,9 @@ class TestAuditStoreGetSingleEvent:
 class TestAuditStoreCleanupRetention:
     """Remove events older than retention period."""
 
-    async def test_cleanup_retention(self, audit_store):
-        old_ts = (datetime.now(timezone.utc) - timedelta(days=365)).strftime(
-            "%Y-%m-%dT%H:%M:%S.%fZ"
+    async def test_cleanup_retention(self, audit_store) -> None:
+        old_ts = (datetime.now(UTC) - timedelta(days=365)).strftime(
+            "%Y-%m-%dT%H:%M:%S.%fZ",
         )
         import uuid
 
@@ -451,7 +447,7 @@ class TestAuditStoreCleanupRetention:
 class TestDMStoreUpsertUser:
     """Upsert a DM user."""
 
-    async def test_upsert_user(self, dm_store):
+    async def test_upsert_user(self, dm_store) -> None:
         await dm_store.upsert_user(
             user_id=6001,
             username="dmuser1",
@@ -475,7 +471,7 @@ class TestDMStoreUpsertUser:
 class TestDMStoreAddMessage:
     """Add messages to a DM conversation."""
 
-    async def test_add_message(self, dm_store):
+    async def test_add_message(self, dm_store) -> None:
         await dm_store.upsert_user(user_id=7001, username="sender")
         await dm_store.add_message(
             message_id=8001,
@@ -496,7 +492,7 @@ class TestDMStoreAddMessage:
 class TestDMStoreListThreads:
     """List DM threads with latest message info."""
 
-    async def test_list_threads(self, dm_store):
+    async def test_list_threads(self, dm_store) -> None:
         # Two DM conversations
         for uid, mid, content in [
             (7101, 8101, "First msg from A"),
@@ -521,7 +517,7 @@ class TestDMStoreListThreads:
 class TestDMStoreGetThreadMessages:
     """Get paginated messages for a DM thread."""
 
-    async def test_get_thread_messages(self, dm_store):
+    async def test_get_thread_messages(self, dm_store) -> None:
         await dm_store.upsert_user(user_id=7201, username="chatty")
         for i in range(5):
             await dm_store.add_message(
@@ -550,7 +546,7 @@ class TestDMStoreGetThreadMessages:
 class TestDashboardConfigDefaults:
     """Default values when no env vars are set."""
 
-    def test_defaults(self):
+    def test_defaults(self) -> None:
         cfg = DashboardConfig()
         assert cfg.enabled is False
         assert cfg.host == "127.0.0.1"
@@ -571,7 +567,7 @@ class TestDashboardConfigDefaults:
 class TestDashboardConfigCustomEnv:
     """Custom values via environment variables."""
 
-    def test_custom_env_values(self, monkeypatch):
+    def test_custom_env_values(self, monkeypatch) -> None:
         monkeypatch.setenv("DASHBOARD_ENABLED", "true")
         monkeypatch.setenv("DASHBOARD_HOST", "0.0.0.0")
         monkeypatch.setenv("DASHBOARD_PORT", "9090")
@@ -596,7 +592,7 @@ class TestDashboardConfigCustomEnv:
         assert cfg.message_db_path == "/custom/path/msgs.db"
         assert cfg.backfill_db_path == "/custom/path/bf.db"
 
-    def test_auth_requirement(self, monkeypatch):
+    def test_auth_requirement(self, monkeypatch) -> None:
         """Dashboard should be disabled if auth_token is missing when enabled."""
         monkeypatch.setenv("DASHBOARD_ENABLED", "true")
         # No DASHBOARD_AUTH_TOKEN set
@@ -606,7 +602,7 @@ class TestDashboardConfigCustomEnv:
         assert cfg.enabled is False  # Auto-disabled due to missing auth token
         assert cfg.auth_token is None
 
-    def test_owner_ids_merged_with_existing(self, monkeypatch):
+    def test_owner_ids_merged_with_existing(self, monkeypatch) -> None:
         """DASHBOARD_OWNER_IDS should merge with OWNER_IDS."""
         monkeypatch.setenv("OWNER_IDS", "99999")
         monkeypatch.setenv("DASHBOARD_OWNER_IDS", "11111,22222")
@@ -621,7 +617,7 @@ class TestDashboardConfigBoolParsing:
     """Boolean parsing edge cases."""
 
     @pytest.mark.parametrize(
-        "env_val,expected",
+        ("env_val", "expected"),
         [
             ("true", True),
             ("1", True),
@@ -637,7 +633,7 @@ class TestDashboardConfigBoolParsing:
             (None, False),
         ],
     )
-    def test_bool_parsing(self, monkeypatch, env_val, expected):
+    def test_bool_parsing(self, monkeypatch, env_val, expected) -> None:
         if env_val is not None:
             monkeypatch.setenv("DASHBOARD_ENABLED", env_val)
         else:
@@ -719,7 +715,7 @@ def _make_mock_channel(
 class TestPermissionsCanViewChannel:
     """can_view_channel behavior."""
 
-    def test_sufficient_permissions(self):
+    def test_sufficient_permissions(self) -> None:
         channel = _make_mock_channel()
         bot = _make_mock_bot(channel=channel)
         result = can_view_channel(bot, 123)
@@ -727,7 +723,7 @@ class TestPermissionsCanViewChannel:
         assert result.reason == "ok"
         assert result.permissions["read_messages"] is True
 
-    def test_without_read_messages(self):
+    def test_without_read_messages(self) -> None:
         channel = _make_mock_channel(permissions={"read_messages": False})
         bot = _make_mock_bot(channel=channel)
         result = can_view_channel(bot, 123)
@@ -735,13 +731,13 @@ class TestPermissionsCanViewChannel:
         assert "read_messages" in result.reason
         assert result.permissions["read_messages"] is False
 
-    def test_channel_not_found(self):
+    def test_channel_not_found(self) -> None:
         bot = _make_mock_bot(channel=None)
         result = can_view_channel(bot, 999)
         assert result.allowed is False
         assert "not found" in result.reason.lower()
 
-    def test_channel_no_guild(self):
+    def test_channel_no_guild(self) -> None:
         channel = MagicMock()
         channel.id = 123
         channel.guild = None
@@ -753,40 +749,40 @@ class TestPermissionsCanViewChannel:
 class TestPermissionsCanSendMessages:
     """can_send_messages behavior."""
 
-    def test_sufficient_permissions(self):
+    def test_sufficient_permissions(self) -> None:
         channel = _make_mock_channel()
         bot = _make_mock_bot(channel=channel)
         result = can_send_messages(bot, 123)
         assert result.allowed is True
         assert result.reason == "ok"
 
-    def test_without_send_messages(self):
+    def test_without_send_messages(self) -> None:
         channel = _make_mock_channel(
             permissions={
                 "read_messages": True,
                 "send_messages": False,
                 "send_messages_in_threads": True,
-            }
+            },
         )
         bot = _make_mock_bot(channel=channel)
         result = can_send_messages(bot, 123)
         assert result.allowed is False
         assert "send messages" in result.reason
 
-    def test_administrator_override(self):
+    def test_administrator_override(self) -> None:
         channel = _make_mock_channel(
             permissions={
                 "read_messages": True,
                 "send_messages": False,
                 "administrator": True,
-            }
+            },
         )
         bot = _make_mock_bot(channel=channel)
         result = can_send_messages(bot, 123)
         assert result.allowed is True
         assert "administrator" in result.reason
 
-    def test_thread_channel_uses_send_messages_in_threads(self):
+    def test_thread_channel_uses_send_messages_in_threads(self) -> None:
         channel = _make_mock_channel(
             is_thread=True,
             permissions={
@@ -799,7 +795,7 @@ class TestPermissionsCanSendMessages:
         result = can_send_messages(bot, 123)
         assert result.allowed is True
 
-    def test_thread_channel_without_permission(self):
+    def test_thread_channel_without_permission(self) -> None:
         channel = _make_mock_channel(
             is_thread=True,
             permissions={
@@ -812,7 +808,7 @@ class TestPermissionsCanSendMessages:
         result = can_send_messages(bot, 123)
         assert result.allowed is False
 
-    def test_channel_not_found(self):
+    def test_channel_not_found(self) -> None:
         bot = _make_mock_bot(channel=None)
         result = can_send_messages(bot, 999)
         assert result.allowed is False
@@ -821,31 +817,31 @@ class TestPermissionsCanSendMessages:
 class TestPermissionsCanReadMessageHistory:
     """can_read_message_history behavior."""
 
-    def test_sufficient_permissions(self):
+    def test_sufficient_permissions(self) -> None:
         channel = _make_mock_channel()
         bot = _make_mock_bot(channel=channel)
         result = can_read_message_history(bot, 123)
         assert result.allowed is True
 
-    def test_missing_read_message_history(self):
+    def test_missing_read_message_history(self) -> None:
         channel = _make_mock_channel(
             permissions={
                 "read_messages": True,
                 "read_message_history": False,
-            }
+            },
         )
         bot = _make_mock_bot(channel=channel)
         result = can_read_message_history(bot, 123)
         assert result.allowed is False
         assert "read_message_history" in result.reason
 
-    def test_administrator_override(self):
+    def test_administrator_override(self) -> None:
         channel = _make_mock_channel(
             permissions={
                 "read_messages": False,
                 "read_message_history": False,
                 "administrator": True,
-            }
+            },
         )
         bot = _make_mock_bot(channel=channel)
         result = can_read_message_history(bot, 123)
@@ -855,7 +851,7 @@ class TestPermissionsCanReadMessageHistory:
 class TestPermissionsGetChannelPermissions:
     """get_channel_permissions returns expected structure."""
 
-    def test_returns_expected_structure(self):
+    def test_returns_expected_structure(self) -> None:
         channel = _make_mock_channel()
         bot = _make_mock_bot(channel=channel)
 
@@ -870,21 +866,21 @@ class TestPermissionsGetChannelPermissions:
         assert isinstance(result["permission_summary"], list)
         assert "read messages" in result["permission_summary"]
 
-    def test_channel_not_found(self):
+    def test_channel_not_found(self) -> None:
         bot = _make_mock_bot(channel=None)
         result = get_channel_permissions(bot, 999)
         assert result["found"] is False
         assert result["channel_id"] == "999"
         assert result["permission_summary"] == []
 
-    def test_summary_contains_granted_permissions(self):
+    def test_summary_contains_granted_permissions(self) -> None:
         channel = _make_mock_channel(
             permissions={
                 "read_messages": True,
                 "send_messages": True,
                 "embed_links": False,
                 "administrator": False,
-            }
+            },
         )
         bot = _make_mock_bot(channel=channel)
         result = get_channel_permissions(bot, 123)
@@ -902,7 +898,7 @@ class TestPermissionsGetChannelPermissions:
 class TestBackfillJobStoreCreateJob:
     """Create a backfill job."""
 
-    async def test_create_job(self, bj_store):
+    async def test_create_job(self, bj_store) -> None:
         job_id = await bj_store.create_job(
             target_type="channel",
             target_id="2001",
@@ -916,7 +912,7 @@ class TestBackfillJobStoreCreateJob:
         assert job["target_id"] == "2001"
         assert job["status"] == BACKFILL_STATUS_QUEUED
 
-    async def test_create_duplicate_target_returns_existing(self, bj_store):
+    async def test_create_duplicate_target_returns_existing(self, bj_store) -> None:
         jid1 = await bj_store.create_job(target_type="channel", target_id="2002")
         jid2 = await bj_store.create_job(target_type="channel", target_id="2002")
         # Should return the same job_id (INSERT OR IGNORE)
@@ -926,7 +922,7 @@ class TestBackfillJobStoreCreateJob:
 class TestBackfillJobStoreUpdateStatus:
     """Update job status with valid transitions."""
 
-    async def test_queued_to_running(self, bj_store):
+    async def test_queued_to_running(self, bj_store) -> None:
         jid = await bj_store.create_job(target_type="guild", target_id="g100")
         ok = await bj_store.update_status(jid, BACKFILL_STATUS_RUNNING)
         assert ok is True
@@ -935,7 +931,7 @@ class TestBackfillJobStoreUpdateStatus:
         assert job["status"] == BACKFILL_STATUS_RUNNING
         assert job["started_at"] is not None
 
-    async def test_running_to_completed(self, bj_store):
+    async def test_running_to_completed(self, bj_store) -> None:
         jid = await bj_store.create_job(target_type="guild", target_id="g101")
         await bj_store.update_status(jid, BACKFILL_STATUS_RUNNING)
         ok = await bj_store.update_status(
@@ -952,7 +948,7 @@ class TestBackfillJobStoreUpdateStatus:
         assert job["messages_inserted"] == 48
         assert job["finished_at"] is not None
 
-    async def test_invalid_transition(self, bj_store):
+    async def test_invalid_transition(self, bj_store) -> None:
         jid = await bj_store.create_job(target_type="dm", target_id="u100")
         # Cannot go directly from queued to completed
         ok = await bj_store.update_status(jid, BACKFILL_STATUS_COMPLETED)
@@ -965,7 +961,7 @@ class TestBackfillJobStoreUpdateStatus:
 class TestBackfillJobStoreListJobs:
     """List jobs with pagination and filters."""
 
-    async def test_list_jobs(self, bj_store):
+    async def test_list_jobs(self, bj_store) -> None:
         for i in range(5):
             await bj_store.create_job(target_type="channel", target_id=f"c{i}")
 
@@ -974,7 +970,7 @@ class TestBackfillJobStoreListJobs:
         assert result["total_pages"] == 3
         assert len(result["jobs"]) == 2
 
-    async def test_list_jobs_with_status_filter(self, bj_store):
+    async def test_list_jobs_with_status_filter(self, bj_store) -> None:
         jid1 = await bj_store.create_job(target_type="channel", target_id="c100")
         jid2 = await bj_store.create_job(target_type="channel", target_id="c101")
 
@@ -986,7 +982,7 @@ class TestBackfillJobStoreListJobs:
         r2 = await bj_store.list_jobs(status_filter=BACKFILL_STATUS_QUEUED)
         assert r2["total"] == 1
 
-    async def test_list_jobs_with_type_filter(self, bj_store):
+    async def test_list_jobs_with_type_filter(self, bj_store) -> None:
         await bj_store.create_job(target_type="channel", target_id="c200")
         await bj_store.create_job(target_type="guild", target_id="g200")
         await bj_store.create_job(target_type="dm", target_id="u200")
@@ -999,7 +995,7 @@ class TestBackfillJobStoreListJobs:
 class TestBackfillJobStoreCancelJob:
     """Cancel a running or queued job."""
 
-    async def test_cancel_queued_job(self, bj_store):
+    async def test_cancel_queued_job(self, bj_store) -> None:
         jid = await bj_store.create_job(target_type="channel", target_id="c300")
         ok = await bj_store.cancel_job(jid)
         assert ok is True
@@ -1007,7 +1003,7 @@ class TestBackfillJobStoreCancelJob:
         job = await bj_store.get_job(jid)
         assert job["status"] == BACKFILL_STATUS_CANCELLED
 
-    async def test_cancel_running_job(self, bj_store):
+    async def test_cancel_running_job(self, bj_store) -> None:
         jid = await bj_store.create_job(target_type="channel", target_id="c301")
         await bj_store.update_status(jid, BACKFILL_STATUS_RUNNING)
         ok = await bj_store.cancel_job(jid)
@@ -1016,7 +1012,7 @@ class TestBackfillJobStoreCancelJob:
         job = await bj_store.get_job(jid)
         assert job["status"] == BACKFILL_STATUS_CANCELLED
 
-    async def test_cancel_completed_job_fails(self, bj_store):
+    async def test_cancel_completed_job_fails(self, bj_store) -> None:
         jid = await bj_store.create_job(target_type="channel", target_id="c302")
         await bj_store.update_status(jid, BACKFILL_STATUS_RUNNING)
         await bj_store.update_status(jid, BACKFILL_STATUS_COMPLETED)
@@ -1027,7 +1023,7 @@ class TestBackfillJobStoreCancelJob:
 class TestBackfillJobStoreResetStale:
     """Reset stuck 'running' jobs back to 'queued'."""
 
-    async def test_reset_stale_jobs(self, bj_store):
+    async def test_reset_stale_jobs(self, bj_store) -> None:
         jid1 = await bj_store.create_job(target_type="channel", target_id="c400")
         jid2 = await bj_store.create_job(target_type="channel", target_id="c401")
 

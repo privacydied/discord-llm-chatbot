@@ -17,7 +17,7 @@ class _BlockedProducerStream(BasePCMStream):
 
 
 @pytest.mark.asyncio
-async def test_abort_finalize_does_not_hang_with_full_queue():
+async def test_abort_finalize_does_not_hang_with_full_queue() -> None:
     stream = _BlockedProducerStream(sample_rate=16000, frame_samples=160, queue_depth=2)
     await stream.start()
     await asyncio.sleep(0.05)

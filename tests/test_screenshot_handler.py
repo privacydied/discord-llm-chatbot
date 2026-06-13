@@ -25,11 +25,11 @@ def url_ctx() -> RouteContext:
 # ------------------------------------------------------------------ #
 
 
-def test_can_handle_url(handler, url_ctx):
+def test_can_handle_url(handler, url_ctx) -> None:
     assert handler.can_handle(url_ctx) is True
 
 
-def test_can_handle_non_url(handler):
+def test_can_handle_non_url(handler) -> None:
     non_url = RouteContext(source_type="text", payload="hello")
     assert handler.can_handle(non_url) is False
 
@@ -42,7 +42,7 @@ def test_can_handle_non_url(handler):
 @pytest.mark.asyncio
 @patch("bot.utils.external_api.external_screenshot")
 @patch("bot.routing.screenshot_handler.see_infer")
-async def test_handle_success(mock_see, mock_ss, handler, url_ctx):
+async def test_handle_success(mock_see, mock_ss, handler, url_ctx) -> None:
     mock_ss = AsyncMock(return_value="/tmp/screenshot.png")
     mock_see = AsyncMock(return_value="A webpage with text")
 
@@ -63,7 +63,7 @@ async def test_handle_success(mock_see, mock_ss, handler, url_ctx):
 
 @pytest.mark.asyncio
 @patch("bot.utils.external_api.external_screenshot", return_value=None)
-async def test_handle_screenshot_api_empty(mock_ss, handler, url_ctx):
+async def test_handle_screenshot_api_empty(mock_ss, handler, url_ctx) -> None:
     result = await handler.handle(url_ctx)
 
     assert "Could not capture" in result
@@ -78,7 +78,7 @@ async def test_handle_screenshot_api_empty(mock_ss, handler, url_ctx):
 @pytest.mark.asyncio
 @patch("bot.utils.external_api.external_screenshot", return_value="/tmp/test.png")
 @patch("bot.routing.screenshot_handler.see_infer")
-async def test_handle_vision_error(mock_see, mock_ss, handler, url_ctx):
+async def test_handle_vision_error(mock_see, mock_ss, handler, url_ctx) -> None:
     mock_see.side_effect = RuntimeError("VL service unavailable")
 
     result = await handler.handle(url_ctx)
@@ -90,7 +90,7 @@ async def test_handle_vision_error(mock_see, mock_ss, handler, url_ctx):
 @pytest.mark.asyncio
 @patch("bot.utils.external_api.external_screenshot", return_value="/tmp/test.png")
 @patch("bot.routing.screenshot_handler.see_infer", return_value=None)
-async def test_handle_vision_empty(mock_see, mock_ss, handler, url_ctx):
+async def test_handle_vision_empty(mock_see, mock_ss, handler, url_ctx) -> None:
     result = await handler.handle(url_ctx)
 
     assert "no content" in result
@@ -107,7 +107,7 @@ async def test_handle_vision_empty(mock_see, mock_ss, handler, url_ctx):
     "bot.utils.external_api.external_screenshot",
     side_effect=ConnectionError("Network down"),
 )
-async def test_handle_exception_recovery(mock_ss, handler, url_ctx):
+async def test_handle_exception_recovery(mock_ss, handler, url_ctx) -> None:
     result = await handler.handle(url_ctx)
 
     assert "Failed to screenshot" in result
@@ -122,7 +122,7 @@ async def test_handle_exception_recovery(mock_ss, handler, url_ctx):
 @pytest.mark.asyncio
 @patch("bot.utils.external_api.external_screenshot", return_value="/tmp/screenshot.png")
 @patch("bot.routing.screenshot_handler.see_infer", return_value="Content here")
-async def test_handle_screenshot_url_compat(mock_see, mock_ss):
+async def test_handle_screenshot_url_compat(mock_see, mock_ss) -> None:
     item = MagicMock()
     item.source_type = "url"
     item.payload = "https://example.com/page"

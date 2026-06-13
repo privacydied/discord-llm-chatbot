@@ -1,11 +1,12 @@
 """Tests for tokenizer discovery and selection."""
 
+import logging
 import os
 import sys
-import pytest
 import unittest
-from unittest.mock import patch, MagicMock
-import logging
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Skip all tests in this module — they require system-level tokenizer binaries
 pytestmark = pytest.mark.skip(reason="Requires system-level tokenizer binaries (espeak-ng, phonemizer)")
@@ -15,21 +16,21 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 # Import the bot module directly
 import bot.tts.validation
+from bot.tts.errors import MissingTokeniserError
 from bot.tts.validation import (
+    AVAILABLE_TOKENIZERS,
     TokenizerType,
     detect_available_tokenizers,
-    select_tokenizer_for_language,
-    is_tokenizer_warning_needed,
     get_tokenizer_warning_message,
-    AVAILABLE_TOKENIZERS,
+    is_tokenizer_warning_needed,
+    select_tokenizer_for_language,
 )
-from bot.tts.errors import MissingTokeniserError
 
 
 class TestTokenizerDiscovery(unittest.TestCase):
     """Test tokenizer discovery and selection."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up test environment."""
         # Save original environment
         self.original_env = os.environ.copy()
@@ -39,7 +40,7 @@ class TestTokenizerDiscovery(unittest.TestCase):
         # Set up logging
         logging.basicConfig(level=logging.DEBUG)
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         """Clean up after tests."""
         # Restore original environment
         os.environ.clear()
@@ -48,7 +49,7 @@ class TestTokenizerDiscovery(unittest.TestCase):
         AVAILABLE_TOKENIZERS.clear()
         AVAILABLE_TOKENIZERS.update(self.original_tokenizers)
 
-    def test_detect_available_tokenizers_none_available(self):
+    def test_detect_available_tokenizers_none_available(self) -> None:
         """Test tokenizer detection when none are available."""
         # Clear the global set before testing
         AVAILABLE_TOKENIZERS.clear()
@@ -77,21 +78,21 @@ class TestTokenizerDiscovery(unittest.TestCase):
 
             # Should still return a dict with grapheme available
             available = detect_available_tokenizers()
-            self.assertTrue(available[TokenizerType.GRAPHEME.value])
-            self.assertFalse(available[TokenizerType.ESPEAK.value])
-            self.assertFalse(available[TokenizerType.ESPEAK_NG.value])
-            self.assertFalse(available[TokenizerType.PHONEMIZER.value])
-            self.assertFalse(available[TokenizerType.G2P_EN.value])
-            self.assertFalse(available[TokenizerType.MISAKI.value])
+            assert available[TokenizerType.GRAPHEME.value]
+            assert not available[TokenizerType.ESPEAK.value]
+            assert not available[TokenizerType.ESPEAK_NG.value]
+            assert not available[TokenizerType.PHONEMIZER.value]
+            assert not available[TokenizerType.G2P_EN.value]
+            assert not available[TokenizerType.MISAKI.value]
 
             # Force update the global AVAILABLE_TOKENIZERS set (mutate in place)
             bot.tts.validation.AVAILABLE_TOKENIZERS.clear()
             bot.tts.validation.AVAILABLE_TOKENIZERS.update({TokenizerType.GRAPHEME.value})
 
             # Verify that only grapheme is in the global set
-            self.assertEqual(AVAILABLE_TOKENIZERS, {TokenizerType.GRAPHEME.value})
+            assert {TokenizerType.GRAPHEME.value} == AVAILABLE_TOKENIZERS
 
-    def test_detect_available_tokenizers_espeak_available(self):
+    def test_detect_available_tokenizers_espeak_available(self) -> None:
         """Test tokenizer detection when espeak is available."""
         # Clear the global set before testing
         AVAILABLE_TOKENIZERS.clear()
@@ -126,21 +127,18 @@ class TestTokenizerDiscovery(unittest.TestCase):
             mock_run.side_effect = mock_run_side_effect
 
             available = detect_available_tokenizers()
-            self.assertTrue(available[TokenizerType.ESPEAK.value])
-            self.assertTrue(available[TokenizerType.GRAPHEME.value])
-            self.assertFalse(available[TokenizerType.ESPEAK_NG.value])
+            assert available[TokenizerType.ESPEAK.value]
+            assert available[TokenizerType.GRAPHEME.value]
+            assert not available[TokenizerType.ESPEAK_NG.value]
 
             # Force update the global AVAILABLE_TOKENIZERS set (mutate in place)
             bot.tts.validation.AVAILABLE_TOKENIZERS.clear()
             bot.tts.validation.AVAILABLE_TOKENIZERS.update({TokenizerType.ESPEAK.value, TokenizerType.GRAPHEME.value})
 
             # Verify that espeak and grapheme are in the global set
-            self.assertEqual(
-                AVAILABLE_TOKENIZERS,
-                {TokenizerType.ESPEAK.value, TokenizerType.GRAPHEME.value},
-            )
+            assert {TokenizerType.ESPEAK.value, TokenizerType.GRAPHEME.value} == AVAILABLE_TOKENIZERS
 
-    def test_detect_available_tokenizers_phonemizer_available(self):
+    def test_detect_available_tokenizers_phonemizer_available(self) -> None:
         """Test tokenizer detection when phonemizer is available."""
         # Clear the global set before testing
         AVAILABLE_TOKENIZERS.clear()
@@ -177,21 +175,18 @@ class TestTokenizerDiscovery(unittest.TestCase):
             mock_run.return_value = mock_process
 
             available = detect_available_tokenizers()
-            self.assertTrue(available[TokenizerType.PHONEMIZER.value])
-            self.assertTrue(available[TokenizerType.GRAPHEME.value])
-            self.assertFalse(available[TokenizerType.ESPEAK.value])
+            assert available[TokenizerType.PHONEMIZER.value]
+            assert available[TokenizerType.GRAPHEME.value]
+            assert not available[TokenizerType.ESPEAK.value]
 
             # Force update the global AVAILABLE_TOKENIZERS set (mutate in place)
             bot.tts.validation.AVAILABLE_TOKENIZERS.clear()
             bot.tts.validation.AVAILABLE_TOKENIZERS.update({TokenizerType.PHONEMIZER.value, TokenizerType.GRAPHEME.value})
 
             # Verify that phonemizer and grapheme are in the global set
-            self.assertEqual(
-                AVAILABLE_TOKENIZERS,
-                {TokenizerType.PHONEMIZER.value, TokenizerType.GRAPHEME.value},
-            )
+            assert {TokenizerType.PHONEMIZER.value, TokenizerType.GRAPHEME.value} == AVAILABLE_TOKENIZERS
 
-    def test_select_tokenizer_for_language_english_with_espeak(self):
+    def test_select_tokenizer_for_language_english_with_espeak(self) -> None:
         """Test tokenizer selection for English when espeak is available."""
         # Set up available tokenizers
         available = {
@@ -205,9 +200,9 @@ class TestTokenizerDiscovery(unittest.TestCase):
 
         # Should select espeak for English
         tokenizer = select_tokenizer_for_language("en", available)
-        self.assertEqual(tokenizer, TokenizerType.ESPEAK.value)
+        assert tokenizer == TokenizerType.ESPEAK.value
 
-    def test_select_tokenizer_for_language_english_no_phonetic(self):
+    def test_select_tokenizer_for_language_english_no_phonetic(self) -> None:
         """Test tokenizer selection for English when no phonetic tokenizer is available."""
         # Set up available tokenizers with only grapheme
         available = {
@@ -220,10 +215,10 @@ class TestTokenizerDiscovery(unittest.TestCase):
         }
 
         # Should raise MissingTokeniserError for English
-        with self.assertRaises(MissingTokeniserError):
+        with pytest.raises(MissingTokeniserError):
             select_tokenizer_for_language("en", available)
 
-    def test_select_tokenizer_for_language_japanese(self):
+    def test_select_tokenizer_for_language_japanese(self) -> None:
         """Test tokenizer selection for Japanese."""
         # Set up available tokenizers with misaki
         available = {
@@ -239,9 +234,9 @@ class TestTokenizerDiscovery(unittest.TestCase):
         with patch.dict(os.environ, {"TTS_TOKENISER": ""}, clear=False):
             # Should select misaki for Japanese
             tokenizer = select_tokenizer_for_language("ja", available)
-        self.assertEqual(tokenizer, TokenizerType.MISAKI.value)
+        assert tokenizer == TokenizerType.MISAKI.value
 
-    def test_select_tokenizer_for_language_env_override(self):
+    def test_select_tokenizer_for_language_env_override(self) -> None:
         """Test tokenizer selection with environment variable override."""
         # Set up available tokenizers
         available = {
@@ -258,12 +253,12 @@ class TestTokenizerDiscovery(unittest.TestCase):
 
         # Should select espeak-ng regardless of language
         tokenizer = select_tokenizer_for_language("en", available)
-        self.assertEqual(tokenizer, TokenizerType.ESPEAK_NG.value)
+        assert tokenizer == TokenizerType.ESPEAK_NG.value
 
         tokenizer = select_tokenizer_for_language("ja", available)
-        self.assertEqual(tokenizer, TokenizerType.ESPEAK_NG.value)
+        assert tokenizer == TokenizerType.ESPEAK_NG.value
 
-    def test_select_tokenizer_for_language_invalid_env_override(self):
+    def test_select_tokenizer_for_language_invalid_env_override(self) -> None:
         """Test tokenizer selection with invalid environment variable override."""
         # Set up available tokenizers
         available = {
@@ -280,9 +275,9 @@ class TestTokenizerDiscovery(unittest.TestCase):
 
         # Should ignore invalid override and select espeak for English
         tokenizer = select_tokenizer_for_language("en", available)
-        self.assertEqual(tokenizer, TokenizerType.ESPEAK.value)
+        assert tokenizer == TokenizerType.ESPEAK.value
 
-    def test_is_tokenizer_warning_needed_grapheme_only(self):
+    def test_is_tokenizer_warning_needed_grapheme_only(self) -> None:
         """Test warning detection when only grapheme tokenizer is available."""
         # Save original and set new value
         original = AVAILABLE_TOKENIZERS.copy()
@@ -291,13 +286,13 @@ class TestTokenizerDiscovery(unittest.TestCase):
 
         try:
             # Should need warning when only grapheme is available
-            self.assertTrue(is_tokenizer_warning_needed())
+            assert is_tokenizer_warning_needed()
         finally:
             # Restore original
             AVAILABLE_TOKENIZERS.clear()
             AVAILABLE_TOKENIZERS.update(original)
 
-    def test_is_tokenizer_warning_needed_with_phonetic(self):
+    def test_is_tokenizer_warning_needed_with_phonetic(self) -> None:
         """Test warning detection when phonetic tokenizer is available."""
         # Save original and set new value
         original = AVAILABLE_TOKENIZERS.copy()
@@ -307,28 +302,28 @@ class TestTokenizerDiscovery(unittest.TestCase):
 
         try:
             # Should not need warning when phonetic tokenizer is available
-            self.assertFalse(is_tokenizer_warning_needed())
+            assert not is_tokenizer_warning_needed()
         finally:
             # Restore original
             AVAILABLE_TOKENIZERS.clear()
             AVAILABLE_TOKENIZERS.update(original)
 
-    def test_get_tokenizer_warning_message(self):
+    def test_get_tokenizer_warning_message(self) -> None:
         """Test warning message generation."""
         # Should return a non-empty string
         message = get_tokenizer_warning_message("en")
-        self.assertIsInstance(message, str)
-        self.assertTrue(len(message) > 0)
+        assert isinstance(message, str)
+        assert len(message) > 0
 
         # Should mention espeak for English
-        self.assertIn("espeak", message.lower())
+        assert "espeak" in message.lower()
 
         # Should be different for other languages
         message_ja = get_tokenizer_warning_message("ja")
-        self.assertNotEqual(message, message_ja)
+        assert message != message_ja
 
         # Check for Asian language reference instead of specific 'Japanese' text
-        self.assertIn("Asian", message_ja)
+        assert "Asian" in message_ja
 
 
 if __name__ == "__main__":

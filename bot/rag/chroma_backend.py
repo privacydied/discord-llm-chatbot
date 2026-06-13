@@ -1,16 +1,16 @@
-"""
-ChromaDB backend implementation for RAG vector storage.
-"""
+"""ChromaDB backend implementation for RAG vector storage."""
 
-import os
 import asyncio
-from typing import List, Dict, Any, Optional
+import contextlib
+import os
 from pathlib import Path
+from typing import Any
+
+from bot.utils.logging import get_logger
 
 from .embedding_interface import EmbeddingInterface, create_embedding_model
-from .vector_schema import VectorDocument, HybridSearchConfig, SearchResult
 from .text_chunker import TextChunker, create_chunker
-from ..utils.logging import get_logger
+from .vector_schema import HybridSearchConfig, SearchResult, VectorDocument
 
 logger = get_logger(__name__)
 
@@ -22,9 +22,9 @@ class ChromaRAGBackend:
         self,
         db_path: str = "./chroma_db",
         collection_name: str = "knowledge_base",
-        embedding_model: Optional[EmbeddingInterface] = None,
-        config: Optional[HybridSearchConfig] = None,
-    ):
+        embedding_model: EmbeddingInterface | None = None,
+        config: HybridSearchConfig | None = None,
+    ) -> None:
         self.db_path = Path(db_path)
         self.collection_name = collection_name
         self.config = config or HybridSearchConfig()
@@ -41,7 +41,8 @@ class ChromaRAGBackend:
         # Validate embedding model is available and usable
         if self.embedding_model is None or not (hasattr(self.embedding_model, "encode") and hasattr(self.embedding_model, "encode_single")):
             logger.error("[RAG] Embedding model is not initialized or missing required methods. Check RAG_EMBEDDING_MODEL_TYPE and RAG_EMBEDDING_MODEL_NAME environment variables.")
-            raise ValueError("Embedding model initialization failed: missing encode/encode_single")
+            msg = "Embedding model initialization failed: missing encode/encode_single"
+            raise ValueError(msg)
 
         # ChromaDB components (lazy initialization)
         self.client = None
@@ -76,21 +77,20 @@ class ChromaRAGBackend:
             logger.info(f"✔ ChromaDB initialized [path={self.db_path}, collection={self.collection_name}]")
 
         except ImportError:
-            logger.error("chromadb not installed. Install with: pip install chromadb")
+            logger.exception("chromadb not installed. Install with: pip install chromadb")
             raise
         except Exception as e:
-            logger.error(f"Failed to initialize ChromaDB: {e}")
+            logger.exception(f"Failed to initialize ChromaDB: {e}")
             raise
 
     async def add_document(
         self,
         source_id: str,
         text: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
         file_type: str = "text",
-    ) -> List[VectorDocument]:
-        """
-        Add a document to the vector store with chunking and embedding.
+    ) -> list[VectorDocument]:
+        """Add a document to the vector store with chunking and embedding.
 
         Args:
             source_id: Unique identifier for the source document
@@ -100,6 +100,7 @@ class ChromaRAGBackend:
 
         Returns:
             List of created VectorDocument objects
+
         """
         await self.initialize()
 
@@ -117,7 +118,7 @@ class ChromaRAGBackend:
                 return []
 
             # Generate embeddings for all chunks (extract text content)
-            chunk_texts = [chunk for chunk in chunking_result.chunks]
+            chunk_texts = list(chunking_result.chunks)
             embeddings = await self.embedding_model.encode(chunk_texts)
 
             # Create VectorDocument objects
@@ -125,7 +126,7 @@ class ChromaRAGBackend:
             chunk_metadata = metadata or {}
             chunk_metadata.update(chunking_result.metadata)
 
-            for i, (chunk_text, embedding) in enumerate(zip(chunk_texts, embeddings)):
+            for i, (chunk_text, embedding) in enumerate(zip(chunk_texts, embeddings, strict=False)):
                 doc = VectorDocument.create(
                     source_id=source_id,
                     chunk_text=chunk_text,
@@ -142,10 +143,10 @@ class ChromaRAGBackend:
             return documents
 
         except Exception as e:
-            logger.error(f"[RAG] Failed to add document {source_id}: {e}")
+            logger.exception(f"[RAG] Failed to add document {source_id}: {e}")
             raise
 
-    async def _store_documents(self, documents: List[VectorDocument]) -> None:
+    async def _store_documents(self, documents: list[VectorDocument]) -> None:
         """Store documents in ChromaDB collection."""
         if not documents:
             return
@@ -196,13 +197,12 @@ class ChromaRAGBackend:
         query: str,
         n_results: int = 5,
         *,
-        max_results: Optional[int] = None,
-        user_id: Optional[str] = None,
-        guild_id: Optional[str] = None,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> List[SearchResult]:
-        """
-        Perform vector similarity search.
+        max_results: int | None = None,
+        user_id: str | None = None,
+        guild_id: str | None = None,
+        filters: dict[str, Any] | None = None,
+    ) -> list[SearchResult]:
+        """Perform vector similarity search.
 
         Args:
             query: Search query text
@@ -214,6 +214,7 @@ class ChromaRAGBackend:
 
         Returns:
             List of SearchResult objects
+
         """
         await self.initialize()
 
@@ -226,20 +227,18 @@ class ChromaRAGBackend:
 
             # Determine effective number of results to request
             effective_n = max_results if isinstance(max_results, int) and max_results > 0 else n_results
-            try:
+            with contextlib.suppress(Exception):
                 effective_n = min(effective_n, self.config.max_vector_results)
-            except Exception:
-                pass
 
             # Additional low-resource cap [Phase 6-9]
             try:
-                from ..config import load_config as _chroma_load_config
+                from bot.config import load_config as _chroma_load_config
 
                 _cc = _chroma_load_config()
                 chroma_max = int(_cc.get("CHROMADB_MAX_RESULTS", 5))
                 effective_n = min(effective_n, chroma_max)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"Failed to load CHROMADB_MAX_RESULTS: {exc}")
 
             # Perform vector search (run in thread pool)
             loop = asyncio.get_event_loop()
@@ -262,7 +261,7 @@ class ChromaRAGBackend:
                 documents = results["documents"][0] or []
                 distances = results["distances"][0] or []
 
-                for i, (doc_id, metadata, document_text, distance) in enumerate(zip(ids, metadatas, documents, distances)):
+                for i, (doc_id, metadata, document_text, distance) in enumerate(zip(ids, metadatas, documents, distances, strict=False)):
                     # Ensure metadata is a dict to avoid NoneType errors
                     metadata = metadata or {}
                     # Convert distance to similarity score (ChromaDB uses L2 distance)
@@ -303,7 +302,7 @@ class ChromaRAGBackend:
             return search_results
 
         except Exception as e:
-            logger.error(f"[RAG] Vector search failed: {e}")
+            logger.exception(f"[RAG] Vector search failed: {e}")
             if self.config.fallback_to_keyword_on_failure:
                 logger.warning("[RAG] Falling back to keyword search")
                 return await self._keyword_search_fallback(query, n_results, user_id, guild_id)
@@ -313,9 +312,9 @@ class ChromaRAGBackend:
         self,
         query: str,
         n_results: int,
-        user_id: Optional[str] = None,
-        guild_id: Optional[str] = None,
-    ) -> List[SearchResult]:
+        user_id: str | None = None,
+        guild_id: str | None = None,
+    ) -> list[SearchResult]:
         """Fallback keyword search when vector search fails."""
         # This is a simple implementation - could be enhanced with proper text search
         try:
@@ -336,7 +335,7 @@ class ChromaRAGBackend:
             metadatas_list = all_results.get("metadatas") or []
             documents_list = all_results.get("documents") or []
             if ids_list:
-                for i, (doc_id, metadata, document_text) in enumerate(zip(ids_list, metadatas_list, documents_list)):
+                for i, (doc_id, metadata, document_text) in enumerate(zip(ids_list, metadatas_list, documents_list, strict=False)):
                     # Ensure metadata is a dict
                     metadata = metadata or {}
                     if not document_text:
@@ -365,7 +364,7 @@ class ChromaRAGBackend:
                                 search_type="keyword_fallback",
                                 rank=i + 1,
                                 explanation=f"Keyword overlap: {overlap}/{len(query_words)} words",
-                            )
+                            ),
                         )
 
             # Sort by score and limit results
@@ -373,15 +372,15 @@ class ChromaRAGBackend:
             return matches[:n_results]
 
         except Exception as e:
-            logger.error(f"[RAG] Keyword fallback search failed: {e}")
+            logger.exception(f"[RAG] Keyword fallback search failed: {e}")
             return []
 
     def _build_where_clause(
         self,
-        user_id: Optional[str] = None,
-        guild_id: Optional[str] = None,
-        additional_filters: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        user_id: str | None = None,
+        guild_id: str | None = None,
+        additional_filters: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
         """Build ChromaDB where clause for filtering."""
         where_conditions = []
 
@@ -401,20 +400,18 @@ class ChromaRAGBackend:
         # Combine conditions with AND
         if len(where_conditions) == 0:
             return None
-        elif len(where_conditions) == 1:
+        if len(where_conditions) == 1:
             return where_conditions[0]
-        else:
-            return {"$and": where_conditions}
+        return {"$and": where_conditions}
 
     async def update_document(
         self,
         source_id: str,
         text: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
         file_type: str = "text",
-    ) -> List[VectorDocument]:
-        """
-        Update an existing document by removing old chunks and adding new ones.
+    ) -> list[VectorDocument]:
+        """Update an existing document by removing old chunks and adding new ones.
 
         Args:
             source_id: Source document identifier
@@ -424,6 +421,7 @@ class ChromaRAGBackend:
 
         Returns:
             List of new VectorDocument objects
+
         """
         await self.initialize()
 
@@ -435,18 +433,18 @@ class ChromaRAGBackend:
             return await self.add_document(source_id, text, metadata, file_type)
 
         except Exception as e:
-            logger.error(f"[RAG] Failed to update document {source_id}: {e}")
+            logger.exception(f"[RAG] Failed to update document {source_id}: {e}")
             raise
 
     async def remove_document(self, source_id: str) -> int:
-        """
-        Remove all chunks for a source document.
+        """Remove all chunks for a source document.
 
         Args:
             source_id: Source document identifier
 
         Returns:
             Number of chunks removed
+
         """
         await self.initialize()
 
@@ -468,16 +466,16 @@ class ChromaRAGBackend:
             return 0
 
         except Exception as e:
-            logger.error(f"[RAG] Failed to remove document {source_id}: {e}")
+            logger.exception(f"[RAG] Failed to remove document {source_id}: {e}")
             raise
 
-    async def get_collection_stats(self) -> Dict[str, Any]:
+    async def get_collection_stats(self) -> dict[str, Any]:
         """Get statistics about the collection."""
         await self.initialize()
 
         try:
             loop = asyncio.get_event_loop()
-            count = await loop.run_in_executor(None, lambda: self.collection.count())
+            count = await loop.run_in_executor(None, self.collection.count)
 
             # Safely handle cases where embedding_model may be absent/misconfigured
             model_name = getattr(self.embedding_model, "model_name", "unknown")
@@ -496,7 +494,7 @@ class ChromaRAGBackend:
             }
 
         except Exception as e:
-            logger.error(f"[RAG] Failed to get collection stats: {e}")
+            logger.exception(f"[RAG] Failed to get collection stats: {e}")
             return {"error": str(e)}
 
     async def wipe_collection(self) -> None:
@@ -509,10 +507,10 @@ class ChromaRAGBackend:
             # Get count before wiping for logging (with timeout)
             try:
                 count_before = await asyncio.wait_for(
-                    loop.run_in_executor(None, lambda: self.collection.count()),
+                    loop.run_in_executor(None, self.collection.count),
                     timeout=30.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("[RAG] Count operation timed out, proceeding with wipe")
                 count_before = "unknown"
 
@@ -542,11 +540,11 @@ class ChromaRAGBackend:
 
             logger.info(f"[RAG] Successfully wiped collection '{self.collection_name}' ({count_before} chunks removed)")
 
-        except asyncio.TimeoutError:
-            logger.error(f"[RAG] Wipe operation timed out for collection '{self.collection_name}'")
+        except TimeoutError:
+            logger.exception(f"[RAG] Wipe operation timed out for collection '{self.collection_name}'")
             raise
         except Exception as e:
-            logger.error(f"[RAG] Failed to wipe collection: {e}")
+            logger.exception(f"[RAG] Failed to wipe collection: {e}")
             raise
 
     async def close(self) -> None:

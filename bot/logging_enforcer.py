@@ -1,5 +1,4 @@
-"""
-Logging enforcement system for router speed overhaul. [CA][REH]
+"""Logging enforcement system for router speed overhaul. [CA][REH].
 
 Enforces dual sink strategy at startup:
 - Pretty Console Sink with colors, emojis, padding, level symbols
@@ -17,22 +16,23 @@ User requirements:
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any
+
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.text import Text
 from rich.panel import Panel
+from rich.text import Text
 
 # ---- Repeated-warning suppressor [Phase 18] ----
 # Caps identical warning messages to once per SUPPRESS_WINDOW seconds.
 _SUPPRESS_WINDOW: float = 60.0
-_warning_last_seen: Dict[str, float] = {}
+_warning_last_seen: dict[str, float] = {}
 
 
 def _is_warning_suppressed(msg: str) -> bool:
@@ -48,12 +48,12 @@ def _is_warning_suppressed(msg: str) -> bool:
 class SuppressingLogger(logging.Logger):
     """Logger subclass that rate-limits repeated warning/critical messages."""
 
-    def warning(self, msg, *args, **kwargs):
+    def warning(self, msg, *args, **kwargs) -> None:
         if _is_warning_suppressed(msg):
             return
         super().warning(msg, *args, **kwargs)
 
-    def warn(self, msg, *args, **kwargs):
+    def warn(self, msg, *args, **kwargs) -> None:
         self.warning(msg, *args, **kwargs)
 
 
@@ -65,7 +65,7 @@ def _rich_tracebacks_supported() -> bool:
 
 
 class StructuredJsonFormatter(logging.Formatter):
-    """JSON formatter with frozen key set preservation. [CA]"""
+    """JSON formatter with frozen key set preservation. [CA]."""
 
     FROZEN_KEYS = {
         "ts",
@@ -80,9 +80,9 @@ class StructuredJsonFormatter(logging.Formatter):
     }
 
     def format(self, record: logging.LogRecord) -> str:
-        """Format log record as structured JSON. [CA]"""
+        """Format log record as structured JSON. [CA]."""
         # Start with frozen key set
-        log_entry = {key: None for key in self.FROZEN_KEYS}
+        log_entry = dict.fromkeys(self.FROZEN_KEYS)
 
         # Set timestamp with millisecond precision, local time
         log_entry["ts"] = datetime.fromtimestamp(record.created).isoformat()
@@ -115,7 +115,7 @@ class StructuredJsonFormatter(logging.Formatter):
 
 
 class PrettyConsoleHandler(RichHandler):
-    """Enhanced RichHandler with custom formatting. [CA]"""
+    """Enhanced RichHandler with custom formatting. [CA]."""
 
     LEVEL_SYMBOLS = {
         "DEBUG": "🔍",  # Blue-grey debug
@@ -133,8 +133,8 @@ class PrettyConsoleHandler(RichHandler):
         "CRITICAL": "red bold",
     }
 
-    def __init__(self, console: Optional[Console] = None, **kwargs):
-        """Initialize with custom console settings. [CA]"""
+    def __init__(self, console: Console | None = None, **kwargs) -> None:
+        """Initialize with custom console settings. [CA]."""
         if console is None:
             console = Console(stderr=True, force_terminal=True, width=120, legacy_windows=False)
 
@@ -151,7 +151,7 @@ class PrettyConsoleHandler(RichHandler):
         )
 
     def render_message(self, record: logging.LogRecord, message: str) -> Text:
-        """Render message with level symbols and colors. [CA]"""
+        """Render message with level symbols and colors. [CA]."""
         # Get level symbol and color
         symbol = self.LEVEL_SYMBOLS.get(record.levelname, "ℹ️")
         color = self.LEVEL_COLORS.get(record.levelname, "white")
@@ -173,19 +173,19 @@ class PrettyConsoleHandler(RichHandler):
 
 
 class LoggingEnforcer:
-    """Enforces dual sink logging strategy at startup. [REH]"""
+    """Enforces dual sink logging strategy at startup. [REH]."""
 
-    def __init__(self, log_dir: Path = None):
-        """Initialize logging enforcer. [CA]"""
+    def __init__(self, log_dir: Path | None = None) -> None:
+        """Initialize logging enforcer. [CA]."""
         self.log_dir = log_dir or Path("logs")
         self.log_dir.mkdir(exist_ok=True)
 
-        self.pretty_handler: Optional[PrettyConsoleHandler] = None
-        self.jsonl_handler: Optional[logging.FileHandler] = None
+        self.pretty_handler: PrettyConsoleHandler | None = None
+        self.jsonl_handler: logging.FileHandler | None = None
         self.root_logger = logging.getLogger()
 
     def setup_dual_sinks(self) -> None:
-        """Set up both pretty console and JSON file handlers. [CA]"""
+        """Set up both pretty console and JSON file handlers. [CA]."""
         # Clear existing handlers to avoid conflicts
         self.root_logger.handlers.clear()
 
@@ -218,7 +218,7 @@ class LoggingEnforcer:
         )
 
     def enforce_startup_assertion(self) -> None:
-        """Assert both handlers are active at startup, abort if missing. [REH]"""
+        """Assert both handlers are active at startup, abort if missing. [REH]."""
         active_handlers = self.root_logger.handlers
 
         # Check for pretty handler
@@ -228,17 +228,9 @@ class LoggingEnforcer:
         jsonl_active = any(isinstance(h, logging.FileHandler) and isinstance(h.formatter, StructuredJsonFormatter) for h in active_handlers)
 
         if not pretty_active:
-            print(
-                "❌ FATAL: Pretty console handler missing from logging configuration",
-                file=sys.stderr,
-            )
             sys.exit(1)
 
         if not jsonl_active:
-            print(
-                "❌ FATAL: JSONL file handler missing from logging configuration",
-                file=sys.stderr,
-            )
             sys.exit(1)
 
         # Success - log confirmation
@@ -255,8 +247,8 @@ class LoggingEnforcer:
             },
         )
 
-    def get_logging_status(self) -> Dict[str, Any]:
-        """Get current logging configuration status. [PA]"""
+    def get_logging_status(self) -> dict[str, Any]:
+        """Get current logging configuration status. [PA]."""
         handlers = self.root_logger.handlers
 
         return {
@@ -270,8 +262,8 @@ class LoggingEnforcer:
         }
 
 
-def initialize_logging(config: Optional[Dict[str, Any]] = None) -> LoggingEnforcer:
-    """Initialize dual sink logging system with enforcement. [CA]"""
+def initialize_logging(config: dict[str, Any] | None = None) -> LoggingEnforcer:
+    """Initialize dual sink logging system with enforcement. [CA]."""
     log_dir = None
     if config and "LOG_DIR" in config:
         log_dir = Path(config["LOG_DIR"])
@@ -283,32 +275,32 @@ def initialize_logging(config: Optional[Dict[str, Any]] = None) -> LoggingEnforc
     return enforcer
 
 
-def create_structured_logger(name: str, subsys: Optional[str] = None) -> logging.Logger:
-    """Create logger with structured logging helpers. [CA]"""
+def create_structured_logger(name: str, subsys: str | None = None) -> logging.Logger:
+    """Create logger with structured logging helpers. [CA]."""
     logger = logging.getLogger(name)
 
     # Install SuppressingLogger for repeated-warning suppression [Phase 18]
     logger.__class__ = SuppressingLogger
 
     # Add convenience methods for structured logging
-    def info_event(event: str, detail: Optional[Dict[str, Any]] = None, **kwargs):
-        """Log info event with structured data. [CA]"""
+    def info_event(event: str, detail: dict[str, Any] | None = None, **kwargs) -> None:
+        """Log info event with structured data. [CA]."""
         extra = {"event": event, "subsys": subsys}
         if detail:
             extra["detail"] = detail
         extra.update(kwargs)
         logger.info(f"[{subsys or name}] {event}", extra=extra)
 
-    def warning_event(event: str, detail: Optional[Dict[str, Any]] = None, **kwargs):
-        """Log warning event with structured data. [REH]"""
+    def warning_event(event: str, detail: dict[str, Any] | None = None, **kwargs) -> None:
+        """Log warning event with structured data. [REH]."""
         extra = {"event": event, "subsys": subsys}
         if detail:
             extra["detail"] = detail
         extra.update(kwargs)
         logger.warning(f"[{subsys or name}] {event}", extra=extra)
 
-    def error_event(event: str, detail: Optional[Dict[str, Any]] = None, **kwargs):
-        """Log error event with structured data. [REH]"""
+    def error_event(event: str, detail: dict[str, Any] | None = None, **kwargs) -> None:
+        """Log error event with structured data. [REH]."""
         extra = {"event": event, "subsys": subsys}
         if detail:
             extra["detail"] = detail
@@ -328,10 +320,10 @@ __all__ = [
     "LoggingEnforcer",
     "PrettyConsoleHandler",
     "StructuredJsonFormatter",
-    "initialize_logging",
-    "create_structured_logger",
     "SuppressingLogger",
     "_is_warning_suppressed",
+    "create_structured_logger",
+    "initialize_logging",
 ]
 
 
@@ -371,5 +363,5 @@ if __name__ == "__main__":
             f"JSONL: {'✔️' if status['jsonl_handler_active'] else '❌'}\n"
             f"Compliant: {'✔️' if status['enforcement_compliant'] else '❌'}",
             title="Dual Sink Status",
-        )
+        ),
     )

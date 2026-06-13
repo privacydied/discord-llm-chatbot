@@ -1,5 +1,4 @@
-"""
-Async asset management for Kokoro-ONNX models.
+"""Async asset management for Kokoro-ONNX models.
 
 - Removes legacy paths under tts/onnx and tts/voices
 - Downloads model and voices concurrently to tts/
@@ -15,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Tuple
 
 from bot.utils.logging import get_logger
 
@@ -35,13 +33,12 @@ async def _download_aiohttp(url: str, dest: Path, timeout: int = 120) -> None:
     import aiohttp  # type: ignore
 
     dest.parent.mkdir(parents=True, exist_ok=True)
-    async with aiohttp.ClientSession(raise_for_status=True) as session:
-        async with session.get(url, timeout=timeout) as resp:
-            with open(dest.with_suffix(dest.suffix + ".tmp"), "wb") as f:
-                async for chunk in resp.content.iter_chunked(1024 * 1024):
-                    if not chunk:
-                        continue
-                    f.write(chunk)
+    async with aiohttp.ClientSession(raise_for_status=True) as session, session.get(url, timeout=timeout) as resp:
+        with open(dest.with_suffix(dest.suffix + ".tmp"), "wb") as f:
+            async for chunk in resp.content.iter_chunked(1024 * 1024):
+                if not chunk:
+                    continue
+                f.write(chunk)
     tmp = dest.with_suffix(dest.suffix + ".tmp")
     tmp.replace(dest)
 
@@ -93,7 +90,7 @@ async def _ensure_file(url: str, dest: Path, force: bool) -> None:
     )
 
 
-async def ensure_kokoro_assets(out_dir: Path = Path("tts"), force: bool = False) -> Tuple[Path, Path]:
+async def ensure_kokoro_assets(out_dir: Path = Path("tts"), force: bool = False) -> tuple[Path, Path]:
     """Ensure Kokoro-ONNX model and voices exist under out_dir.
 
     - Deletes legacy paths under tts/onnx and tts/voices.

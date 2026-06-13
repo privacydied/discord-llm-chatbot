@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 import sqlite3
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from bot.maintenance.diagnostics import checkpoint_wal, get_storage_status
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class TestGetStorageStatus:
     """Tests for get_storage_status()."""
 
     @pytest.mark.asyncio
-    async def test_returns_string_with_expected_fields_missing_dirs(self, tmp_path: Path):
+    async def test_returns_string_with_expected_fields_missing_dirs(self, tmp_path: Path) -> None:
         """When project dirs don't exist, get_storage_status reports 'not found'."""
         # We can't easily relocate the project root, so we mock the paths
         # indirectly by creating a minimal real scenario and checking the
@@ -35,7 +38,7 @@ class TestGetStorageStatus:
             assert field in result, f"Expected '{field}' in storage status output"
 
     @pytest.mark.asyncio
-    async def test_shows_found_when_files_exist(self, tmp_path: Path):
+    async def test_shows_found_when_files_exist(self, tmp_path: Path) -> None:
         """When the data directory with sqlite3 files exists, sizes are shown."""
         # This test verifies the function works with real paths that actually
         # exist in the project. The project already has data/server_archive.sqlite3.
@@ -45,7 +48,7 @@ class TestGetStorageStatus:
         # (unless the path was moved)
 
     @pytest.mark.asyncio
-    async def test_disk_usage_percentage_format(self):
+    async def test_disk_usage_percentage_format(self) -> None:
         """Verify output is under 200 chars per line (Discord-safe)."""
         result = await get_storage_status()
         for line in result.splitlines():
@@ -54,14 +57,14 @@ class TestGetStorageStatus:
 
 class TestCheckpointWAL:
     @pytest.mark.asyncio
-    async def test_returns_false_for_nonexistent_db(self, tmp_path: Path):
+    async def test_returns_false_for_nonexistent_db(self, tmp_path: Path) -> None:
         """checkpoint_wal should return False when the database file does not exist."""
         fake_db = str(tmp_path / "nonexistent.sqlite3")
         result = await checkpoint_wal(fake_db)
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_returns_true_for_valid_db(self, tmp_path: Path):
+    async def test_returns_true_for_valid_db(self, tmp_path: Path) -> None:
         """checkpoint_wal should succeed on a valid SQLite database."""
         db_path = str(tmp_path / "test.sqlite3")
         # Create a minimal database

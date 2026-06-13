@@ -1,20 +1,17 @@
-"""
-Tests for TikTok STT URL isolation and cache key uniqueness.
+"""Tests for TikTok STT URL isolation and cache key uniqueness.
 Ensures that different TikTok URLs produce different cache keys
 and that transcripts are not cross-contaminated.
 """
 
 import hashlib
-from urllib.parse import urlparse
-
 
 # Inline copies of the functions under test (to avoid import issues)
 import re
+from urllib.parse import urlparse
 
 
 def _normalize_tiktok_url(url: str) -> str:
-    """
-    Normalize TikTok URLs to a canonical form for consistent cache keying.
+    """Normalize TikTok URLs to a canonical form for consistent cache keying.
     Also extracts video ID from player/embed URLs to map them to canonical identity.
     """
     if not url:
@@ -112,37 +109,37 @@ def _compute_download_key(
 class TestTikTokUrlNormalization:
     """Test TikTok URL normalization for consistent cache keying."""
 
-    def test_normalize_short_url(self):
+    def test_normalize_short_url(self) -> None:
         """Short /t/ URLs should normalize to canonical form."""
         url = "https://www.tiktok.com/t/ZP8UxRTSU/"
         normalized = _normalize_tiktok_url(url)
         assert normalized == "tiktok:///t/ZP8UxRTSU"
 
-    def test_normalize_vm_url(self):
+    def test_normalize_vm_url(self) -> None:
         """vm.tiktok.com URLs should normalize."""
         url = "https://vm.tiktok.com/ZP8UxRTSU/"
         normalized = _normalize_tiktok_url(url)
         assert normalized == "tiktok:///ZP8UxRTSU"
 
-    def test_normalize_full_url(self):
+    def test_normalize_full_url(self) -> None:
         """Full @user/video URLs should normalize to video ID."""
         url = "https://www.tiktok.com/@user/video/7123456789"
         normalized = _normalize_tiktok_url(url)
         assert normalized == "tiktok://video/7123456789"
 
-    def test_normalize_player_url(self):
+    def test_normalize_player_url(self) -> None:
         """Player/embed URLs should normalize to video ID."""
         url = "https://www.tiktok.com/player/v1/7578893205815495958"
         normalized = _normalize_tiktok_url(url)
         assert normalized == "tiktok://video/7578893205815495958"
 
-    def test_player_and_canonical_same_identity(self):
+    def test_player_and_canonical_same_identity(self) -> None:
         """Player URL and canonical URL for same video should normalize to same identity."""
         player_url = "https://www.tiktok.com/player/v1/7578893205815495958"
         canonical_url = "https://www.tiktok.com/@mmukss/video/7578893205815495958"
         assert _normalize_tiktok_url(player_url) == _normalize_tiktok_url(canonical_url)
 
-    def test_different_tiktoks_different_normalized(self):
+    def test_different_tiktoks_different_normalized(self) -> None:
         """Different TikTok URLs should produce different normalized forms."""
         url1 = "https://www.tiktok.com/t/ABC123/"
         url2 = "https://www.tiktok.com/t/XYZ789/"
@@ -150,7 +147,7 @@ class TestTikTokUrlNormalization:
         norm2 = _normalize_tiktok_url(url2)
         assert norm1 != norm2
 
-    def test_non_tiktok_unchanged(self):
+    def test_non_tiktok_unchanged(self) -> None:
         """Non-TikTok URLs should be returned unchanged."""
         url = "https://www.youtube.com/watch?v=abc123"
         normalized = _normalize_tiktok_url(url)
@@ -160,27 +157,27 @@ class TestTikTokUrlNormalization:
 class TestTikTokPlayerUrlDetection:
     """Test TikTok player/embed URL detection."""
 
-    def test_player_v1_url(self):
+    def test_player_v1_url(self) -> None:
         """Player v1 URLs should be detected."""
         url = "https://www.tiktok.com/player/v1/7578893205815495958"
         assert _is_tiktok_player_url(url) is True
 
-    def test_player_url_without_version(self):
+    def test_player_url_without_version(self) -> None:
         """Player URLs without version should be detected."""
         url = "https://www.tiktok.com/player/7578893205815495958"
         assert _is_tiktok_player_url(url) is True
 
-    def test_canonical_url_not_player(self):
+    def test_canonical_url_not_player(self) -> None:
         """Canonical video URLs should not be detected as player URLs."""
         url = "https://www.tiktok.com/@user/video/7578893205815495958"
         assert _is_tiktok_player_url(url) is False
 
-    def test_short_url_not_player(self):
+    def test_short_url_not_player(self) -> None:
         """Short /t/ URLs should not be detected as player URLs."""
         url = "https://www.tiktok.com/t/ZP8UxRTSU/"
         assert _is_tiktok_player_url(url) is False
 
-    def test_youtube_not_player(self):
+    def test_youtube_not_player(self) -> None:
         """Non-TikTok URLs should not be detected as player URLs."""
         url = "https://www.youtube.com/watch?v=abc123"
         assert _is_tiktok_player_url(url) is False
@@ -189,7 +186,7 @@ class TestTikTokPlayerUrlDetection:
 class TestCacheKeyIsolation:
     """Test cache key uniqueness for different videos."""
 
-    def test_different_tiktoks_different_keys(self):
+    def test_different_tiktoks_different_keys(self) -> None:
         """Different TikTok URLs should produce different cache keys."""
         # Simulate same resolved CDN URL (worst case scenario)
         same_resolved = "https://cdn.tiktok.com/video/abc123.mp4"
@@ -209,7 +206,7 @@ class TestCacheKeyIsolation:
 
         assert key1 != key2, "Different TikTok URLs must produce different cache keys"
 
-    def test_same_tiktok_same_key(self):
+    def test_same_tiktok_same_key(self) -> None:
         """Same TikTok URL should produce same cache key."""
         resolved = "https://cdn.tiktok.com/video/abc123.mp4"
         original = "https://www.tiktok.com/t/ABC123/"
@@ -219,7 +216,7 @@ class TestCacheKeyIsolation:
 
         assert key1 == key2, "Same TikTok URL should produce same cache key"
 
-    def test_youtube_has_identity_suffix(self):
+    def test_youtube_has_identity_suffix(self) -> None:
         """YouTube URLs should have identity suffix in key."""
         resolved = "https://cdn.youtube.com/video/abc123.mp4"
 
@@ -233,7 +230,7 @@ class TestCacheKeyIsolation:
         # Key should have the "-v" identity suffix
         assert "-v" in key
 
-    def test_tiktok_has_identity_suffix(self):
+    def test_tiktok_has_identity_suffix(self) -> None:
         """TikTok URLs should have identity suffix in key."""
         resolved = "https://cdn.tiktok.com/video/abc123.mp4"
 
@@ -246,20 +243,20 @@ class TestCacheKeyIsolation:
 class TestUrlHashUniqueness:
     """Test URL hash uniqueness."""
 
-    def test_hash_different_for_different_urls(self):
+    def test_hash_different_for_different_urls(self) -> None:
         """Different URLs should produce different hashes."""
         hash1 = _hash_resolved_url("https://example.com/video1.mp4")
         hash2 = _hash_resolved_url("https://example.com/video2.mp4")
         assert hash1 != hash2
 
-    def test_hash_same_for_same_url(self):
+    def test_hash_same_for_same_url(self) -> None:
         """Same URL should produce same hash."""
         url = "https://example.com/video.mp4"
         hash1 = _hash_resolved_url(url)
         hash2 = _hash_resolved_url(url)
         assert hash1 == hash2
 
-    def test_hash_length(self):
+    def test_hash_length(self) -> None:
         """Hash should be 16 characters."""
         h = _hash_resolved_url("https://example.com/video.mp4")
         assert len(h) == 16

@@ -7,7 +7,10 @@ existing coercion/default behavior while centralizing read-once settings.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 _X_SYNDICATION_ACCEPT_DOMAINS_DEFAULT = "pbs.twimg.com,video.twimg.com,fxtwitter.com,vxtwitter.com"
 _X_SYNDICATION_ACCEPT_DOMAINS_FALLBACK = {

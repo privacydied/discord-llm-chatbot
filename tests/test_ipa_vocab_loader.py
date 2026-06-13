@@ -1,6 +1,5 @@
-def test_normalize_ipa_rewrites_to_official_symbols(monkeypatch):
-    from bot.tts import ipa_vocab_loader
-    from bot.tts import ipa_vocab_kokoro_v1
+def test_normalize_ipa_rewrites_to_official_symbols(monkeypatch) -> None:
+    from bot.tts import ipa_vocab_kokoro_v1, ipa_vocab_loader
 
     sample_vocab = {
         "ɡ": 0,
@@ -18,7 +17,7 @@ def test_normalize_ipa_rewrites_to_official_symbols(monkeypatch):
     assert cleaned == "ɡ ɚ ʤ ʧ θ"
 
 
-def test_load_vocab_raises_when_vocab_missing(monkeypatch):
+def test_load_vocab_raises_when_vocab_missing(monkeypatch) -> None:
     from bot.tts import ipa_vocab_loader
 
     monkeypatch.setattr(ipa_vocab_loader, "PHONEME_TO_ID", {}, raising=False)
@@ -29,4 +28,5 @@ def test_load_vocab_raises_when_vocab_missing(monkeypatch):
     except RuntimeError as exc:
         assert "vocabulary" in str(exc).lower()
     else:  # pragma: no cover - sanity guard
-        raise AssertionError("Expected RuntimeError when vocabulary missing")
+        msg = "Expected RuntimeError when vocabulary missing"
+        raise AssertionError(msg)

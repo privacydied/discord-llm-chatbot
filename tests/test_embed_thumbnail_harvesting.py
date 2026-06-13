@@ -22,8 +22,8 @@ def test_collect_image_urls_prefers_thumbnail_proxy_over_thumbnail_url_when_no_i
                 image_url=None,
                 thumb_url="https://cdn.discordapp.com/thumb.png",
                 thumb_proxy="https://media.discordapp.net/thumb.png",
-            )
-        ]
+            ),
+        ],
     )
 
     refs = collect_image_urls_from_message(msg)
@@ -40,8 +40,8 @@ def test_collect_image_urls_uses_embed_image_and_adds_thumbnail_candidates() -> 
                 image_url="https://cdn.discordapp.com/image.png",
                 thumb_url="https://cdn.discordapp.com/thumb.png",
                 thumb_proxy="https://media.discordapp.net/thumb.png",
-            )
-        ]
+            ),
+        ],
     )
 
     refs = collect_image_urls_from_message(msg)

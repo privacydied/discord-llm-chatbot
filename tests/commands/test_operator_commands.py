@@ -44,13 +44,13 @@ def mock_ctx():
     return ctx
 
 
-def test_operator_commands_are_registered(operator_cog):
+def test_operator_commands_are_registered(operator_cog) -> None:
     command_names = {command.name for command in operator_cog.get_commands()}
     assert {"help", "status", "feature"}.issubset(command_names)
 
 
 @pytest.mark.asyncio
-async def test_help_command_returns_capability_embed(operator_cog, mock_ctx):
+async def test_help_command_returns_capability_embed(operator_cog, mock_ctx) -> None:
     await operator_cog.help_command.callback(operator_cog, mock_ctx)
 
     mock_ctx.reply.assert_called_once()
@@ -65,7 +65,7 @@ async def test_help_command_returns_capability_embed(operator_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_status_command_reports_core_health_fields(operator_cog, mock_ctx, monkeypatch):
+async def test_status_command_reports_core_health_fields(operator_cog, mock_ctx, monkeypatch) -> None:
     fake_psutil = SimpleNamespace(Process=lambda: SimpleNamespace(memory_info=lambda: SimpleNamespace(rss=128 * 1024 * 1024)))
     monkeypatch.setitem(sys.modules, "psutil", fake_psutil)
     monkeypatch.setattr(
@@ -113,7 +113,7 @@ async def test_status_command_reports_core_health_fields(operator_cog, mock_ctx,
 
 
 @pytest.mark.asyncio
-async def test_status_command_gracefully_handles_missing_optional_fields(mock_bot, monkeypatch):
+async def test_status_command_gracefully_handles_missing_optional_fields(mock_bot, monkeypatch) -> None:
     cog = OperatorCommands(mock_bot)
     ctx = MagicMock()
     ctx.guild = None

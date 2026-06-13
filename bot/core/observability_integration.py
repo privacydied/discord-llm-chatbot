@@ -19,22 +19,22 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
-from bot.utils.logging import get_logger
+from bot.core.background_task_monitor import RestartPolicy, TaskConfig, get_task_monitor
+from bot.core.config_validation import (
+    HealthStatus,
+    get_health_monitor,
+    validate_config_or_exit,
+)
+from bot.core.resource_monitor import get_resource_monitor
 from bot.core.startup_orchestrator import (
-    StartupOrchestrator,
     ComponentSpec,
     ComponentStatus,
+    StartupOrchestrator,
 )
-from bot.core.config_validation import (
-    validate_config_or_exit,
-    get_health_monitor,
-    HealthStatus,
-)
-from bot.core.background_task_monitor import get_task_monitor, TaskConfig, RestartPolicy
-from bot.core.resource_monitor import get_resource_monitor
-from bot.metrics import metrics, is_degraded_mode, METRIC_STARTUP_TOTAL_DURATION
+from bot.metrics import METRIC_STARTUP_TOTAL_DURATION, is_degraded_mode, metrics
+from bot.utils.logging import get_logger
 
 # Integration with existing bot components
 try:
@@ -53,7 +53,7 @@ class ObservabilityManager:
     [RAT: CA, CDiP] - Clean Architecture, Continuous Documentation in Progress
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize observability manager."""
         self.logger = get_logger(__name__)
         self.startup_orchestrator = StartupOrchestrator()
@@ -68,6 +68,7 @@ class ObservabilityManager:
 
         Returns:
             True if initialization successful, False otherwise
+
         """
         try:
             # Step 1: Validate configuration (fail-fast on errors)
@@ -262,7 +263,7 @@ class ObservabilityManager:
                 timeout_seconds=30.0,
                 is_fatal=True,
                 retry_count=3,
-            )
+            ),
         ]
 
         # Register all components
@@ -275,11 +276,12 @@ class ObservabilityManager:
             extra={"subsys": "observability"},
         )
 
-    async def execute_startup_orchestration(self) -> Dict[str, Any]:
+    async def execute_startup_orchestration(self) -> dict[str, Any]:
         """Execute startup orchestration if enabled.
 
         Returns:
             Startup results summary
+
         """
         parallel_startup = os.getenv("OBS_PARALLEL_STARTUP", "false").lower() == "true"
 
@@ -326,7 +328,7 @@ class ObservabilityManager:
             )
             return {"status": "failed", "error": str(e)}
 
-    def _log_startup_summary(self, summary: Dict[str, Any], duration: float) -> None:
+    def _log_startup_summary(self, summary: dict[str, Any], duration: float) -> None:
         """Log structured startup summary with Rich Panel formatting."""
         try:
             from rich.console import Console
@@ -391,7 +393,7 @@ class ObservabilityManager:
                 extra={"subsys": "observability"},
             )
 
-    async def get_comprehensive_health_status(self) -> Dict[str, Any]:
+    async def get_comprehensive_health_status(self) -> dict[str, Any]:
         """Get comprehensive system health including all monitoring systems."""
         try:
             system_health = await self.health_monitor.get_health_status()
@@ -407,7 +409,7 @@ class ObservabilityManager:
                     "resource_monitoring": resource_stats,
                     "metrics_degraded": is_degraded_mode(),
                     "uptime_seconds": time.time() - self.start_time,
-                }
+                },
             )
 
             return health_summary
@@ -475,7 +477,8 @@ class ObservabilityManager:
             prompts = load_system_prompts()
             self.logger.info(f"✅ Loaded {len(prompts)} system prompts", extra={"subsys": "startup"})
         except Exception as e:
-            raise RuntimeError(f"Failed to load system prompts: {e}")
+            msg = f"Failed to load system prompts: {e}"
+            raise RuntimeError(msg)
 
     async def _init_memory_system(self) -> None:
         """Initialize memory system."""
@@ -486,7 +489,8 @@ class ObservabilityManager:
         if os.getenv("TTS_ENABLED", "false").lower() == "true":
             self.logger.info("✅ TTS system initialized", extra={"subsys": "startup"})
         else:
-            raise RuntimeError("TTS not enabled")
+            msg = "TTS not enabled"
+            raise RuntimeError(msg)
 
     async def _tts_fallback(self) -> None:
         """Fallback for TTS system."""
@@ -497,7 +501,8 @@ class ObservabilityManager:
         if os.getenv("RAG_EAGER_VECTOR_LOAD", "false").lower() == "true":
             self.logger.info("✅ RAG system initialized", extra={"subsys": "startup"})
         else:
-            raise RuntimeError("RAG eager loading not enabled")
+            msg = "RAG eager loading not enabled"
+            raise RuntimeError(msg)
 
     async def _rag_fallback(self) -> None:
         """Fallback for RAG system."""
@@ -539,7 +544,7 @@ class ObservabilityManager:
                     wrapper.heartbeat(f"System health: {health.status.value}")
                     await asyncio.sleep(30)
                 except Exception as e:
-                    self.logger.error(
+                    self.logger.exception(
                         f"Health check task error: {e}",
                         extra={"subsys": "background_task"},
                     )
@@ -547,7 +552,7 @@ class ObservabilityManager:
 
 
 # Global observability manager instance
-_observability_manager: Optional[ObservabilityManager] = None
+_observability_manager: ObservabilityManager | None = None
 
 
 def get_observability_manager() -> ObservabilityManager:

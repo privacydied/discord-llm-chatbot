@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-DEFAULT_SAFE_FIELDS: Dict[str, Optional[int]] = {
+DEFAULT_SAFE_FIELDS: dict[str, int | None] = {
     "title": 200,
     "uploader": 100,
     "source": 50,
@@ -19,16 +19,16 @@ DEFAULT_SAFE_FIELDS: Dict[str, Optional[int]] = {
 
 
 def sanitize_metadata(
-    metadata: Optional[Dict[str, Any]],
+    metadata: dict[str, Any] | None,
     *,
-    safe_fields: Optional[Dict[str, Optional[int]]] = None,
-) -> Dict[str, Any]:
+    safe_fields: dict[str, int | None] | None = None,
+) -> dict[str, Any]:
     """Sanitize metadata for safe prompt/context usage."""
     if not metadata:
         return {}
 
     fields = safe_fields or DEFAULT_SAFE_FIELDS
-    sanitized: Dict[str, Any] = {}
+    sanitized: dict[str, Any] = {}
 
     for field, max_length in fields.items():
         if field not in metadata:
@@ -55,7 +55,7 @@ def sanitize_metadata(
     return sanitized
 
 
-def build_media_context(transcription: str, metadata: Dict[str, Any], url: str) -> str:
+def build_media_context(transcription: str, metadata: dict[str, Any], url: str) -> str:
     """Build enriched LLM context from transcription + metadata."""
     context_parts = []
 

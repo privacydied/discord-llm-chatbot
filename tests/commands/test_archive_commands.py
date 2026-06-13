@@ -26,7 +26,7 @@ class NonAdminAuthor:
 
 
 class DummyContext:
-    def __init__(self, *, author=None, channel_id=10):
+    def __init__(self, *, author=None, channel_id=10) -> None:
         self.guild = SimpleNamespace(id=1)
         self.channel = SimpleNamespace(id=channel_id, guild=self.guild)
         self.author = author or DummyAuthor()
@@ -39,7 +39,7 @@ class DummyContext:
         return content
 
 
-@pytest.fixture()
+@pytest.fixture
 def archive_config(tmp_path):
     return {
         "SERVER_ARCHIVE_ENABLED": True,
@@ -78,7 +78,7 @@ async def make_cog(monkeypatch: pytest.MonkeyPatch, config: dict[str, object]) -
 
 
 @pytest.mark.asyncio
-async def test_archive_status_output_is_short(monkeypatch, archive_config):
+async def test_archive_status_output_is_short(monkeypatch, archive_config) -> None:
     cog, service = await make_cog(monkeypatch, archive_config)
     try:
         ctx = DummyContext()
@@ -90,7 +90,7 @@ async def test_archive_status_output_is_short(monkeypatch, archive_config):
                 ctx.replies[0]["kwargs"]["embed"].title or "",
                 ctx.replies[0]["kwargs"]["embed"].description or "",
                 ctx.replies[0]["kwargs"]["embed"].footer.text if ctx.replies[0]["kwargs"]["embed"].footer else "",
-            ]
+            ],
         )
         assert len(embed_text) < 2000
     finally:
@@ -98,7 +98,7 @@ async def test_archive_status_output_is_short(monkeypatch, archive_config):
 
 
 @pytest.mark.asyncio
-async def test_archive_search_output_is_short(monkeypatch, archive_config):
+async def test_archive_search_output_is_short(monkeypatch, archive_config) -> None:
     cog, service = await make_cog(monkeypatch, archive_config)
     try:
 
@@ -114,7 +114,7 @@ async def test_archive_search_output_is_short(monkeypatch, archive_config):
                     content="x" * 400,
                     jump_url="https://discord.com/channels/1/10/100",
                     created_at="2026-05-08T00:00:00+00:00",
-                )
+                ),
             ]
 
         monkeypatch.setattr(archive_commands_module, "search_archive", fake_search)
@@ -127,7 +127,7 @@ async def test_archive_search_output_is_short(monkeypatch, archive_config):
 
 
 @pytest.mark.asyncio
-async def test_archive_commands_are_admin_only(monkeypatch, archive_config):
+async def test_archive_commands_are_admin_only(monkeypatch, archive_config) -> None:
     cog, service = await make_cog(monkeypatch, archive_config)
     try:
         ctx = DummyContext(author=NonAdminAuthor())
@@ -138,7 +138,7 @@ async def test_archive_commands_are_admin_only(monkeypatch, archive_config):
 
 
 @pytest.mark.asyncio
-async def test_archive_search_disabled_message(monkeypatch, archive_config):
+async def test_archive_search_disabled_message(monkeypatch, archive_config) -> None:
     disabled = {
         **archive_config,
         "SERVER_ARCHIVE_ENABLED": False,

@@ -1,6 +1,6 @@
 import asyncio
 from collections import OrderedDict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -10,12 +10,12 @@ from bot.core.bot import LLMBot
 from bot.memory.curator import CuratedMemoryCurator
 from bot.memory.ingestion_queue import CuratedMemoryIngestionQueue
 from bot.memory.persistent_store import MemoryRecord, PersistentMemoryStore
-from bot.memory.service import CuratedMemoryService
 from bot.memory.scoring import combined_score, recency_score
+from bot.memory.service import CuratedMemoryService
 
 
 class FakeSemanticStore:
-    def __init__(self, records=None):
+    def __init__(self, records=None) -> None:
         self.records = records or {}
         self.calls = []
         self.upserts = []
@@ -23,7 +23,7 @@ class FakeSemanticStore:
         self.deleted_many = []
         self.initialized = False
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         self.initialized = True
 
     async def upsert(self, memory_id, document, metadata):
@@ -35,11 +35,11 @@ class FakeSemanticStore:
         }
         return memory_id
 
-    async def delete(self, memory_id):
+    async def delete(self, memory_id) -> None:
         self.deleted.append(memory_id)
         self.records.pop(memory_id, None)
 
-    async def delete_many(self, memory_ids):
+    async def delete_many(self, memory_ids) -> None:
         self.deleted_many.append(list(memory_ids))
         for memory_id in memory_ids:
             self.records.pop(memory_id, None)
@@ -51,7 +51,7 @@ class FakeSemanticStore:
                 "top_k": top_k,
                 "where": where,
                 "where_document": where_document,
-            }
+            },
         )
         results = []
         for payload in self.records.values():
@@ -66,16 +66,16 @@ class FakeSemanticStore:
                     "document": payload["document"],
                     "metadata": payload["metadata"],
                     "semantic_score": 0.92,
-                }
+                },
             )
         return results[:top_k]
 
 
 class DummyQueue:
-    def __init__(self):
+    def __init__(self) -> None:
         self.enqueued = []
 
-    async def enqueue(self, candidate):
+    async def enqueue(self, candidate) -> bool:
         self.enqueued.append(candidate)
         return True
 
@@ -90,28 +90,28 @@ async def persistent_store(tmp_path):
 @pytest.fixture
 def make_record():
     def _make_record(**kwargs):
-        now = datetime.now(timezone.utc).isoformat()
-        payload = dict(
-            memory_id="mem-1",
-            user_id="user-1",
-            guild_id="guild-1",
-            channel_id="channel-1",
-            thread_id=None,
-            source_message_id=None,
-            context_type="user_preference",
-            text="I prefer dark mode",
-            summary="prefers dark mode",
-            importance=0.9,
-            confidence=0.95,
-            created_at=now,
-            updated_at=now,
-            last_accessed_at=None,
-            expires_at=None,
-            source="explicit_memory_command",
-            deleted_at=None,
-            chroma_id=None,
-            metadata_json="{}",
-        )
+        now = datetime.now(UTC).isoformat()
+        payload = {
+            "memory_id": "mem-1",
+            "user_id": "user-1",
+            "guild_id": "guild-1",
+            "channel_id": "channel-1",
+            "thread_id": None,
+            "source_message_id": None,
+            "context_type": "user_preference",
+            "text": "I prefer dark mode",
+            "summary": "prefers dark mode",
+            "importance": 0.9,
+            "confidence": 0.95,
+            "created_at": now,
+            "updated_at": now,
+            "last_accessed_at": None,
+            "expires_at": None,
+            "source": "explicit_memory_command",
+            "deleted_at": None,
+            "chroma_id": None,
+            "metadata_json": "{}",
+        }
         payload.update(kwargs)
         return MemoryRecord(**payload)
 
@@ -131,7 +131,7 @@ def service(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_schema_bootstrap_is_idempotent(tmp_path):
+async def test_schema_bootstrap_is_idempotent(tmp_path) -> None:
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
     await store.initialize()
@@ -150,7 +150,7 @@ async def test_schema_bootstrap_is_idempotent(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_explicit_memory_add_stores_sqlite_and_semantic(service):
+async def test_explicit_memory_add_stores_sqlite_and_semantic(service) -> None:
     record = await service.add_explicit_memory(
         user_id="user-1",
         text="I prefer dark mode",
@@ -171,10 +171,10 @@ async def test_explicit_memory_add_stores_sqlite_and_semantic(service):
 
 
 @pytest.mark.asyncio
-async def test_delete_and_wipe_remove_from_retrieval(tmp_path):
+async def test_delete_and_wipe_remove_from_retrieval(tmp_path) -> None:
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     active = MemoryRecord(
         memory_id="mem-active",
         user_id="user-1",
@@ -228,7 +228,7 @@ async def test_delete_and_wipe_remove_from_retrieval(tmp_path):
                     "confidence": 0.95,
                 },
             },
-        }
+        },
     )
     svc = CuratedMemoryService(bot=None)
     svc.enabled = True
@@ -276,10 +276,10 @@ async def test_delete_and_wipe_remove_from_retrieval(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_expired_memories_are_not_returned(tmp_path):
+async def test_expired_memories_are_not_returned(tmp_path) -> None:
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
-    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     record = MemoryRecord(
         memory_id="mem-expired",
         user_id="user-1",
@@ -317,8 +317,8 @@ async def test_expired_memories_are_not_returned(tmp_path):
                     "importance": 0.4,
                     "confidence": 0.8,
                 },
-            }
-        }
+            },
+        },
     )
     svc = CuratedMemoryService(bot=None)
     svc.enabled = True
@@ -339,10 +339,10 @@ async def test_expired_memories_are_not_returned(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_retrieval_filters_by_scope(tmp_path):
+async def test_retrieval_filters_by_scope(tmp_path) -> None:
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     rec_user = MemoryRecord(
         memory_id="mem-user",
         user_id="user-1",
@@ -371,7 +371,7 @@ async def test_retrieval_filters_by_scope(tmp_path):
             "user_id": "user-2",
             "summary": "guild fact",
             "text": "guild fact",
-        }
+        },
     )
     rec_channel = MemoryRecord(
         **{
@@ -381,7 +381,7 @@ async def test_retrieval_filters_by_scope(tmp_path):
             "channel_id": "channel-9",
             "summary": "channel fact",
             "text": "channel fact",
-        }
+        },
     )
     await store.upsert_memory(rec_user)
     await store.upsert_memory(rec_guild)
@@ -428,7 +428,7 @@ async def test_retrieval_filters_by_scope(tmp_path):
                     "confidence": 0.95,
                 },
             },
-        }
+        },
     )
     svc = CuratedMemoryService(bot=None)
     svc.enabled = True
@@ -454,10 +454,10 @@ async def test_retrieval_filters_by_scope(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_top_k_and_max_prompt_chars_are_enforced(tmp_path):
+async def test_top_k_and_max_prompt_chars_are_enforced(tmp_path) -> None:
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     records = {}
     for idx in range(10):
         memory_id = f"mem-{idx}"
@@ -520,8 +520,8 @@ async def test_top_k_and_max_prompt_chars_are_enforced(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_queue_full_drops_inferred_memory_without_blocking():
-    async def persist_callback(batch):
+async def test_queue_full_drops_inferred_memory_without_blocking() -> None:
+    async def persist_callback(batch) -> None:
         await asyncio.sleep(0)
 
     queue = CuratedMemoryIngestionQueue(persist_callback, max_size=1, workers=1, batch_size=1)
@@ -536,7 +536,7 @@ async def test_queue_full_drops_inferred_memory_without_blocking():
 
 
 @pytest.mark.asyncio
-async def test_explicit_memory_command_rejects_internal_traces_and_secrets():
+async def test_explicit_memory_command_rejects_internal_traces_and_secrets() -> None:
     curator = CuratedMemoryCurator()
     assert curator.build_explicit_candidate(user_id="u", text="my API key is sk-123...7890") is None
     assert curator.build_explicit_candidate(user_id="u", text="tool trace: hidden reasoning") is None
@@ -548,7 +548,7 @@ async def test_explicit_memory_command_rejects_internal_traces_and_secrets():
 
 
 @pytest.mark.asyncio
-async def test_inferred_accepts_harmless_stable_user_preference():
+async def test_inferred_accepts_harmless_stable_user_preference() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -559,7 +559,7 @@ async def test_inferred_accepts_harmless_stable_user_preference():
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_old_vague_project_rule():
+async def test_inferred_rejects_old_vague_project_rule() -> None:
     """Vague project chatter without instruction/preference signals should be rejected."""
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
@@ -570,7 +570,7 @@ async def test_inferred_rejects_old_vague_project_rule():
 
 
 @pytest.mark.asyncio
-async def test_inferred_accepts_conversation_decision():
+async def test_inferred_accepts_conversation_decision() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -581,7 +581,7 @@ async def test_inferred_accepts_conversation_decision():
 
 
 @pytest.mark.asyncio
-async def test_inferred_accepts_bot_correction():
+async def test_inferred_accepts_bot_correction() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -592,7 +592,7 @@ async def test_inferred_accepts_bot_correction():
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_temporary_context_for_now():
+async def test_inferred_rejects_temporary_context_for_now() -> None:
     """Temporary phrasing without strong instruction content should be rejected."""
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
@@ -608,7 +608,7 @@ async def test_inferred_rejects_temporary_context_for_now():
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_broad_race_demographic_claim():
+async def test_inferred_rejects_broad_race_demographic_claim() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -618,7 +618,7 @@ async def test_inferred_rejects_broad_race_demographic_claim():
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_political_social_claim():
+async def test_inferred_rejects_political_social_claim() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -628,7 +628,7 @@ async def test_inferred_rejects_political_social_claim():
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_finance_media_academia_claim():
+async def test_inferred_rejects_finance_media_academia_claim() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -638,7 +638,7 @@ async def test_inferred_rejects_finance_media_academia_claim():
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_quoted_article_content():
+async def test_inferred_rejects_quoted_article_content() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -648,7 +648,7 @@ async def test_inferred_rejects_quoted_article_content():
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_one_off_opinion():
+async def test_inferred_rejects_one_off_opinion() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -658,7 +658,7 @@ async def test_inferred_rejects_one_off_opinion():
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_sensitive_identity_statement():
+async def test_inferred_rejects_sensitive_identity_statement() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -668,7 +668,7 @@ async def test_inferred_rejects_sensitive_identity_statement():
 
 
 @pytest.mark.asyncio
-async def test_inferred_accepts_real_bot_bug_report():
+async def test_inferred_accepts_real_bot_bug_report() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -679,7 +679,7 @@ async def test_inferred_accepts_real_bot_bug_report():
 
 
 @pytest.mark.asyncio
-async def test_inferred_accepts_real_implementation_requirement():
+async def test_inferred_accepts_real_implementation_requirement() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -690,7 +690,7 @@ async def test_inferred_accepts_real_implementation_requirement():
 
 
 @pytest.mark.asyncio
-async def test_inferred_accepts_project_architecture_fact():
+async def test_inferred_accepts_project_architecture_fact() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -701,7 +701,7 @@ async def test_inferred_accepts_project_architecture_fact():
 
 
 @pytest.mark.asyncio
-async def test_inferred_accepts_project_audit_fact():
+async def test_inferred_accepts_project_audit_fact() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -712,49 +712,49 @@ async def test_inferred_accepts_project_audit_fact():
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_code_is_wrong():
+async def test_inferred_rejects_code_is_wrong() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(user_id="u", text="the code is wrong")
     assert c is None, "Debugging chatter should be rejected"
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_correct_this_function():
+async def test_inferred_rejects_correct_this_function() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(user_id="u", text="correct this function")
     assert c is None, "Instruction to fix code is not a bot-behavior correction"
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_i_dont_remember():
+async def test_inferred_rejects_i_dont_remember() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(user_id="u", text="I don't remember")
     assert c is None, "Casual 'don't remember' is not durable"
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_do_you_remember_this():
+async def test_inferred_rejects_do_you_remember_this() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(user_id="u", text="do you remember this?")
     assert c is None, "Question about memory is not durable"
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_today_was_annoying():
+async def test_inferred_rejects_today_was_annoying() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(user_id="u", text="today was annoying")
     assert c is None, "Casual time-bound complaint is not durable"
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_short_banter():
+async def test_inferred_rejects_short_banter() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(user_id="u", text="nice")
     assert c is None, "Short banter should not become memory"
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_token_like_content():
+async def test_inferred_rejects_token_like_content() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -764,7 +764,7 @@ async def test_inferred_rejects_token_like_content():
 
 
 @pytest.mark.asyncio
-async def test_inferred_rejects_internal_tool_trace():
+async def test_inferred_rejects_internal_tool_trace() -> None:
     curator = CuratedMemoryCurator()
     c = curator.curate_inferred_candidate(
         user_id="u",
@@ -779,7 +779,7 @@ async def test_inferred_rejects_internal_tool_trace():
 
 
 @pytest.mark.asyncio
-async def test_dedupe_repeated_preference_updates_existing(service):
+async def test_dedupe_repeated_preference_updates_existing(service) -> None:
     # Insert first memory
     r1 = await service.add_explicit_memory(
         user_id="u",
@@ -801,7 +801,7 @@ async def test_dedupe_repeated_preference_updates_existing(service):
 
 
 @pytest.mark.asyncio
-async def test_dedupe_inferred_exact_normalized_match(tmp_path):
+async def test_dedupe_inferred_exact_normalized_match(tmp_path) -> None:
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
 
@@ -845,7 +845,7 @@ async def test_dedupe_inferred_exact_normalized_match(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_dedupe_semantic_high_similarity_merges(tmp_path):
+async def test_dedupe_semantic_high_similarity_merges(tmp_path) -> None:
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
 
@@ -857,7 +857,7 @@ async def test_dedupe_semantic_high_similarity_merges(tmp_path):
                     "top_k": top_k,
                     "where": where,
                     "where_document": where_document,
-                }
+                },
             )
             query_lower = (query or "").lower()
             if "prefer" not in query_lower:
@@ -870,7 +870,7 @@ async def test_dedupe_semantic_high_similarity_merges(tmp_path):
                             "document": payload["document"],
                             "metadata": payload["metadata"],
                             "semantic_score": 0.91,
-                        }
+                        },
                     ]
             return []
 
@@ -913,7 +913,7 @@ async def test_dedupe_semantic_high_similarity_merges(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_dedupe_unrelated_memories_insert_separately(tmp_path):
+async def test_dedupe_unrelated_memories_insert_separately(tmp_path) -> None:
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
 
@@ -952,10 +952,10 @@ async def test_dedupe_unrelated_memories_insert_separately(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_no_raw_transcript_is_injected_into_prompt(tmp_path):
+async def test_no_raw_transcript_is_injected_into_prompt(tmp_path) -> None:
     store = PersistentMemoryStore(tmp_path / "memory.db")
     await store.initialize()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     raw_transcript = "USER RAW TRANSCRIPT: I said a lot of details that should not be injected."
     record = MemoryRecord(
         memory_id="mem-raw",
@@ -993,8 +993,8 @@ async def test_no_raw_transcript_is_injected_into_prompt(tmp_path):
                     "importance": 0.9,
                     "confidence": 0.95,
                 },
-            }
-        }
+            },
+        },
     )
     svc = CuratedMemoryService(bot=None)
     svc.enabled = True
@@ -1016,7 +1016,7 @@ async def test_no_raw_transcript_is_injected_into_prompt(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_bot_message_handling_does_not_await_slow_chroma_writes(monkeypatch):
+async def test_bot_message_handling_does_not_await_slow_chroma_writes(monkeypatch) -> None:
     bot = LLMBot.__new__(LLMBot)
     bot.context_manager = SimpleNamespace(append=lambda message: None)
     bot.enhanced_context_manager = AsyncMock()
@@ -1038,7 +1038,7 @@ async def test_bot_message_handling_does_not_await_slow_chroma_writes(monkeypatc
     slow_started = asyncio.Event()
     slow_finished = asyncio.Event()
 
-    async def slow_enqueue_inferred_memory(**kwargs):
+    async def slow_enqueue_inferred_memory(**kwargs) -> bool:
         slow_started.set()
         await asyncio.sleep(0.2)
         slow_finished.set()
@@ -1070,8 +1070,8 @@ async def test_bot_message_handling_does_not_await_slow_chroma_writes(monkeypatc
     assert not slow_finished.is_set()
 
 
-def test_recency_and_combined_scoring_decay_with_age():
-    now = datetime.now(timezone.utc)
+def test_recency_and_combined_scoring_decay_with_age() -> None:
+    now = datetime.now(UTC)
     fresh = now.isoformat()
     old = (now - timedelta(days=180)).isoformat()
     assert recency_score(fresh, now=now) > recency_score(old, now=now)

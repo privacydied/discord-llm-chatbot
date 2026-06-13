@@ -1,42 +1,43 @@
-"""
-Vision Gateway - Provider-agnostic facade for image/video generation
+"""Vision Gateway - Provider-agnostic facade for image/video generation.
 
 Unified gateway using pluggable provider system with automatic failover,
 retry logic, and cost estimation following REH and CA principles.
 """
 
 from __future__ import annotations
+
 import asyncio
 import base64
 import os
 import time
-from urllib.parse import urlparse, unquote
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any
+from urllib.parse import unquote, urlparse
+
 import aiohttp
 
-from bot.utils.logging import get_logger
 from bot.config import load_config
-from bot.retry_utils import with_retry, API_RETRY_CONFIG
 from bot.exceptions import APIError
+from bot.retry_utils import API_RETRY_CONFIG, with_retry
+from bot.utils.logging import get_logger
+
+from .money import Money
+from .pricing_loader import get_pricing_table
 from .types import (
+    VisionError,
+    VisionErrorType,
+    VisionProvider,
     VisionRequest,
     VisionResponse,
     VisionTask,
-    VisionProvider,
-    VisionError,
-    VisionErrorType,
 )
-from .unified_adapter import UnifiedVisionAdapter, UnifiedStatus
-from .money import Money
-from .pricing_loader import get_pricing_table
+from .unified_adapter import UnifiedStatus, UnifiedVisionAdapter
 
 logger = get_logger(__name__)
 
 
 class VisionGateway:
-    """
-    Unified gateway for vision generation tasks using pluggable provider system
+    """Unified gateway for vision generation tasks using pluggable provider system.
 
     Handles:
     - Automatic provider selection and fallback [REH]
@@ -46,13 +47,13 @@ class VisionGateway:
     - Result standardization and error mapping [CA]
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         self.config = config or load_config()
         self.logger = get_logger("vision.gateway")
 
         # Initialize unified adapter
         self.adapter = UnifiedVisionAdapter(self.config)
-        self.active_jobs: Dict[str, Dict[str, Any]] = {}
+        self.active_jobs: dict[str, dict[str, Any]] = {}
         self._active_jobs_lock = asyncio.Lock()
 
         # Initialize pricing table for cost calculations [CA]
@@ -60,7 +61,7 @@ class VisionGateway:
 
         self.logger.info("VisionGateway initialized with unified adapter")
 
-    def update_config(self, config: Dict[str, Any]) -> None:
+    def update_config(self, config: dict[str, Any]) -> None:
         """Hot-reload gateway and adapter config snapshot."""
         self.config = config
         if hasattr(self.adapter, "update_config"):
@@ -68,30 +69,29 @@ class VisionGateway:
         else:
             self.adapter.config = config
 
-    async def startup(self):
-        """Initialize gateway and adapter connections [REH]"""
+    async def startup(self) -> None:
+        """Initialize gateway and adapter connections [REH]."""
         try:
             await self.adapter.startup()
             self.logger.info("VisionGateway startup complete")
         except Exception as e:
-            self.logger.error(f"Failed to start VisionGateway: {e}")
+            self.logger.exception(f"Failed to start VisionGateway: {e}")
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Gateway startup failed: {e}",
                 user_message="Vision system could not be initialized. Please try again later.",
             )
 
-    async def shutdown(self):
-        """Cleanup gateway resources [RM]"""
+    async def shutdown(self) -> None:
+        """Cleanup gateway resources [RM]."""
         try:
             await self.adapter.shutdown()
             self.logger.info("VisionGateway shutdown complete")
         except Exception as e:
-            self.logger.error(f"Error during VisionGateway shutdown: {e}")
+            self.logger.exception(f"Error during VisionGateway shutdown: {e}")
 
     async def submit_job(self, request: VisionRequest) -> str:
-        """
-        Submit vision generation job through unified adapter [CA]
+        """Submit vision generation job through unified adapter [CA].
 
         Args:
             request: Vision generation request
@@ -101,6 +101,7 @@ class VisionGateway:
 
         Raises:
             VisionError: On submission failure
+
         """
         # Initialize job_id early for robust logging and error paths
         # Use the request's idempotency key as a provisional identifier until the provider returns a job id.
@@ -137,13 +138,13 @@ class VisionGateway:
             self.logger.error(f"Vision gateway failed for job {job_id}: {e}", exc_info=True)
             raise VisionError(
                 error_type=VisionErrorType.PROVIDER_ERROR,
-                message=f"Vision processing failed: {str(e)}",
+                message=f"Vision processing failed: {e!s}",
                 user_message="I encountered an error while processing your request. Please try again.",
                 provider=VisionProvider.NOVITA,
             )
 
-    def _calculate_actual_cost(self, job_meta: Dict[str, Any], result) -> Money:
-        """Calculate actual cost using pricing table instead of trusting provider values [CA][REH]"""
+    def _calculate_actual_cost(self, job_meta: dict[str, Any], result) -> Money:
+        """Calculate actual cost using pricing table instead of trusting provider values [CA][REH]."""
         try:
             request = job_meta.get("request")
             if not request:
@@ -166,8 +167,7 @@ class VisionGateway:
             return Money("0.006")
 
     async def generate(self, request: VisionRequest) -> VisionResponse:
-        """
-        Direct generation method - submit job and wait for completion [CA]
+        """Direct generation method - submit job and wait for completion [CA].
 
         Args:
             request: Vision generation request
@@ -177,6 +177,7 @@ class VisionGateway:
 
         Raises:
             VisionError: On generation failure
+
         """
         # Exception-safe scoping - initialize at top level
         job_id = None
@@ -206,20 +207,18 @@ class VisionGateway:
                         result = await self.get_job_result(job_id)
                         if result:
                             return result
-                        else:
-                            raise VisionError(
-                                error_type=VisionErrorType.PROVIDER_ERROR,
-                                message="Job completed but no result available",
-                                user_message="Generation completed but result could not be retrieved.",
-                            )
-                    else:
-                        # Job failed
-                        error_msg = status.get("progress_message", "Generation failed")
                         raise VisionError(
                             error_type=VisionErrorType.PROVIDER_ERROR,
-                            message=f"Generation failed: {error_msg}",
-                            user_message="Image generation failed. Please try again.",
+                            message="Job completed but no result available",
+                            user_message="Generation completed but result could not be retrieved.",
                         )
+                    # Job failed
+                    error_msg = status.get("progress_message", "Generation failed")
+                    raise VisionError(
+                        error_type=VisionErrorType.PROVIDER_ERROR,
+                        message=f"Generation failed: {error_msg}",
+                        user_message="Image generation failed. Please try again.",
+                    )
 
                 # Wait before next poll (exponential backoff)
                 await asyncio.sleep(poll_interval)
@@ -238,7 +237,7 @@ class VisionGateway:
         except VisionError:
             raise
         except Exception as e:
-            self.logger.error(f"Unexpected error in generate(): {e}")
+            self.logger.exception(f"Unexpected error in generate(): {e}")
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Unexpected error: {e}",
@@ -250,15 +249,15 @@ class VisionGateway:
                 # Release reservation if it existed (future budget integration)
                 pass
 
-    async def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get current job status through unified adapter [PA]
+    async def get_job_status(self, job_id: str) -> dict[str, Any] | None:
+        """Get current job status through unified adapter [PA].
 
         Args:
             job_id: Job identifier
 
         Returns:
             Status dictionary with progress, phase, costs, etc.
+
         """
         if job_id not in self.active_jobs:
             return None
@@ -289,7 +288,7 @@ class VisionGateway:
             }
 
         except Exception as e:
-            self.logger.error(f"Failed to get status for job {job_id}: {e}")
+            self.logger.exception(f"Failed to get status for job {job_id}: {e}")
             return {
                 "job_id": job_id,
                 "state": "failed",
@@ -298,15 +297,15 @@ class VisionGateway:
                 "is_terminal": True,
             }
 
-    async def get_job_result(self, job_id: str) -> Optional[VisionResponse]:
-        """
-        Get final job result through unified adapter [CA]
+    async def get_job_result(self, job_id: str) -> VisionResponse | None:
+        """Get final job result through unified adapter [CA].
 
         Args:
             job_id: Job identifier
 
         Returns:
             VisionResponse with generated content or None if not ready
+
         """
         if job_id not in self.active_jobs:
             return None
@@ -322,9 +321,9 @@ class VisionGateway:
             job_meta = self.active_jobs[job_id]
 
             # Download and save assets locally with retries [REH][RM]
-            assets_urls: List[str] = result.assets or []
-            saved_artifacts: List[Path] = []
-            warnings: List[str] = []
+            assets_urls: list[str] = result.assets or []
+            saved_artifacts: list[Path] = []
+            warnings: list[str] = []
             total_size = 0
 
             # Create job-specific artifacts directory to prevent collisions
@@ -370,11 +369,11 @@ class VisionGateway:
                     """Detect image MIME type from byte signature."""
                     if data.startswith(b"\x89PNG\r\n\x1a\n"):
                         return "image/png"
-                    elif data.startswith(b"\xff\xd8\xff"):
+                    if data.startswith(b"\xff\xd8\xff"):
                         return "image/jpeg"
-                    elif data.startswith(b"RIFF") and b"WEBP" in data[:12]:
+                    if data.startswith(b"RIFF") and b"WEBP" in data[:12]:
                         return "image/webp"
-                    elif data.startswith((b"GIF87a", b"GIF89a")):
+                    if data.startswith((b"GIF87a", b"GIF89a")):
                         return "image/gif"
                     return "image/png"  # default fallback
 
@@ -390,7 +389,7 @@ class VisionGateway:
 
                 def _try_decode_data_image_url(
                     url: str,
-                ) -> tuple[Optional[bytes], Optional[str]]:
+                ) -> tuple[bytes | None, str | None]:
                     """Decode data:image/*;base64,... URLs.
                     Returns (bytes, mime_type) or (None, None) if not a decodable data URL.
                     """
@@ -485,7 +484,7 @@ class VisionGateway:
             return response
 
         except Exception as e:
-            self.logger.error(f"Failed to get result for job {job_id}: {e}")
+            self.logger.exception(f"Failed to get result for job {job_id}: {e}")
             # Clean up failed job with thread-safe access
             async with self._active_jobs_lock:
                 if job_id in self.active_jobs:
@@ -493,14 +492,14 @@ class VisionGateway:
             return None
 
     async def cancel_job(self, job_id: str) -> bool:
-        """
-        Cancel running job [REH]
+        """Cancel running job [REH].
 
         Args:
             job_id: Job identifier
 
         Returns:
             True if cancelled successfully
+
         """
         if job_id not in self.active_jobs:
             return False
@@ -515,11 +514,11 @@ class VisionGateway:
             return success
 
         except Exception as e:
-            self.logger.error(f"Failed to cancel job {job_id}: {e}")
+            self.logger.exception(f"Failed to cancel job {job_id}: {e}")
             return False
 
     def _map_status_to_state(self, status: UnifiedStatus) -> str:
-        """Map unified status to gateway state format [CMV]"""
+        """Map unified status to gateway state format [CMV]."""
         mapping = {
             UnifiedStatus.QUEUED: "queued",
             UnifiedStatus.RUNNING: "processing",
@@ -532,14 +531,14 @@ class VisionGateway:
         }
         return mapping.get(status, "unknown")
 
-    def get_supported_tasks(self) -> List[VisionTask]:
-        """Get list of supported tasks from unified adapter"""
+    def get_supported_tasks(self) -> list[VisionTask]:
+        """Get list of supported tasks from unified adapter."""
         return self.adapter.get_supported_tasks()
 
-    def get_providers_for_task(self, task: VisionTask) -> List[VisionProvider]:
-        """Get available providers for specific task from unified adapter"""
+    def get_providers_for_task(self, task: VisionTask) -> list[VisionProvider]:
+        """Get available providers for specific task from unified adapter."""
         return self.adapter.get_providers_for_task(task)
 
-    def get_models_for_task(self, task: VisionTask, provider: Optional[VisionProvider] = None) -> List[str]:
-        """Get available models for task from unified adapter"""
+    def get_models_for_task(self, task: VisionTask, provider: VisionProvider | None = None) -> list[str]:
+        """Get available models for task from unified adapter."""
         return self.adapter.get_models_for_task(task, provider)

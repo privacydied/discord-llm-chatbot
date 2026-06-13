@@ -1,20 +1,19 @@
-"""
-Fast-Path Router with Decision Budget - Optimized routing for simple DM messages.
+"""Fast-Path Router with Decision Budget - Optimized routing for simple DM messages.
 Implements PA (Performance Awareness) and REH (Robust Error Handling) rules.
 """
 
-import asyncio
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Any, Optional
-import re
+from typing import Any
 
-from discord import Message, DMChannel
+from discord import DMChannel, Message
+
+from bot.utils.logging import get_logger
 
 from .phase_constants import PhaseConstants as PC
-from .phase_timing import get_timing_manager, PipelineTracker
-from ..utils.logging import get_logger
+from .phase_timing import PipelineTracker, get_timing_manager
 
 logger = get_logger(__name__)
 
@@ -47,7 +46,7 @@ class RouteAnalysis:
     decision_time_ms: int
     confidence: float = 1.0
     reasoning: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     # Fast-path optimizations detected
     skip_context_heavy: bool = False
@@ -81,7 +80,7 @@ class MessageFeatures:
 class FastPathClassifier:
     """Lightweight message classifier for routing decisions."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Pre-compiled regex patterns for performance [PA]
         self.url_pattern = re.compile(r"https?://[^\s]+")
         self.question_pattern = re.compile(r"\?|\bhow\b|\bwhat\b|\bwhy\b|\bwhen\b|\bwhere\b", re.IGNORECASE)
@@ -147,7 +146,6 @@ class FastPathClassifier:
 
     def classify_complexity(self, features: MessageFeatures) -> MessageComplexity:
         """Classify message complexity based on features [PA]."""
-
         # Command detection
         if features.has_command_prefix:
             return MessageComplexity.COMMAND
@@ -180,14 +178,13 @@ class FastPathClassifier:
         # Classify based on total complexity
         if complexity_factors >= 3:
             return MessageComplexity.COMPLEX_TEXT
-        else:
-            return MessageComplexity.SIMPLE_TEXT
+        return MessageComplexity.SIMPLE_TEXT
 
 
 class FastPathRouter:
     """High-performance router with fast-path optimizations and decision budget."""
 
-    def __init__(self, decision_budget_ms: int = None):
+    def __init__(self, decision_budget_ms: int | None = None) -> None:
         self.decision_budget_ms = decision_budget_ms or PC.ROUTER_DECISION_BUDGET_MS
         self.classifier = FastPathClassifier()
 
@@ -202,7 +199,7 @@ class FastPathRouter:
 
         logger.info(f"🚀 FastPathRouter initialized (budget: {self.decision_budget_ms}ms)")
 
-    async def analyze_message_route(self, message: Message, tracker: Optional[PipelineTracker] = None) -> RouteAnalysis:
+    async def analyze_message_route(self, message: Message, tracker: PipelineTracker | None = None) -> RouteAnalysis:
         """Analyze message and determine optimal routing path [PA]."""
         start_time = time.time()
 
@@ -225,7 +222,7 @@ class FastPathRouter:
             # Python 3.12 compatibility: use contextlib.nullcontext instead of asyncio.nullcontext
             from contextlib import nullcontext
 
-            async with phase_context if phase_context else nullcontext():
+            async with phase_context or nullcontext():
                 # Extract message features quickly [PA]
                 features = self.classifier.extract_features(message)
 
@@ -276,9 +273,9 @@ class FastPathRouter:
 
                 return analysis
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             # Emergency fallback on timeout [REH]
-            logger.error(f"❌ Router decision timeout after {self.decision_budget_ms}ms")
+            logger.exception(f"❌ Router decision timeout after {self.decision_budget_ms}ms")
             self.stats["budget_exceeded"] += 1
 
             # Default to safe fast-path for DMs, standard for guild
@@ -302,7 +299,7 @@ class FastPathRouter:
                 decision=RouteDecision.STANDARD_PIPELINE,
                 decision_time_ms=int((time.time() - start_time) * 1000),
                 confidence=0.5,
-                reasoning=f"Error fallback: {str(e)}",
+                reasoning=f"Error fallback: {e!s}",
                 metadata={"error": str(e)},
             )
 
@@ -311,7 +308,7 @@ class FastPathRouter:
         features: MessageFeatures,
         complexity: MessageComplexity,
         remaining_budget_ms: int,
-    ) -> tuple[RouteDecision, Dict[str, bool]]:
+    ) -> tuple[RouteDecision, dict[str, bool]]:
         """Make routing decision with optimizations [PA]."""
         optimizations = {
             "skip_context_heavy": False,
@@ -338,7 +335,7 @@ class FastPathRouter:
                         "skip_rag_search": True,
                         "skip_modality_detection": True,
                         "use_simple_template": True,
-                    }
+                    },
                 )
                 return RouteDecision.FAST_PATH_TEXT, optimizations
 
@@ -349,7 +346,7 @@ class FastPathRouter:
                 {
                     "skip_context_heavy": True,
                     "use_simple_template": features.char_count < 150,
-                }
+                },
             )
 
         return RouteDecision.STANDARD_PIPELINE, optimizations
@@ -418,7 +415,7 @@ class FastPathRouter:
 
         return ", ".join(reasons) if reasons else "default routing"
 
-    def _log_routing_decision(self, message: Message, analysis: RouteAnalysis):
+    def _log_routing_decision(self, message: Message, analysis: RouteAnalysis) -> None:
         """Log routing decision with Rich formatting [CA]."""
         # Choose icon based on decision
         decision_icons = {
@@ -459,7 +456,7 @@ class FastPathRouter:
         else:
             logger.info(msg, extra={"detail": log_detail})
 
-    def _update_stats(self, analysis: RouteAnalysis):
+    def _update_stats(self, analysis: RouteAnalysis) -> None:
         """Update router performance statistics [PA]."""
         self.stats["total_decisions"] += 1
 
@@ -473,7 +470,7 @@ class FastPathRouter:
         old_avg = self.stats["avg_decision_time_ms"]
         self.stats["avg_decision_time_ms"] = (old_avg * (self.stats["total_decisions"] - 1) + analysis.decision_time_ms) / self.stats["total_decisions"]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get router performance statistics."""
         total_decisions = self.stats["total_decisions"]
         fast_path_rate = self.stats["fast_path_decisions"] / total_decisions if total_decisions > 0 else 0
@@ -489,7 +486,7 @@ class FastPathRouter:
 
 
 # Global fast-path router instance [PA]
-_router_instance: Optional[FastPathRouter] = None
+_router_instance: FastPathRouter | None = None
 
 
 def get_fast_path_router() -> FastPathRouter:

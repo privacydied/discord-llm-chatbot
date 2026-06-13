@@ -1,8 +1,9 @@
 """Admin alert manager — session lifecycle, reaction queue, discovery, and broadcasting."""
 
 import asyncio
+import contextlib
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 import discord
 
@@ -16,13 +17,13 @@ from bot.utils.logging import get_logger
 
 
 class AdminAlertManager:
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
         self.config = load_config()
         self.logger = get_logger(f"{__name__}.AdminAlertManager")
-        self.sessions: Dict[int, AlertSession] = {}
+        self.sessions: dict[int, AlertSession] = {}
         self._sessions_lock = asyncio.Lock()
-        self.reaction_queues: Dict[int, List] = {}  # Per-message reaction queues
+        self.reaction_queues: dict[int, list] = {}  # Per-message reaction queues
 
         self.enabled = self.config.get("ALERT_ENABLE", "false").lower() == "true"
         self.admin_user_ids = self._build_authorized_user_ids()
@@ -30,7 +31,7 @@ class AdminAlertManager:
 
         self.logger.info(f"Admin alert system initialized: enabled={self.enabled}")
 
-    async def _queue_reaction_operation(self, message, emoji: str, operation: str, user):
+    async def _queue_reaction_operation(self, message, emoji: str, operation: str, user) -> None:
         """Queue reaction add/remove operations with spacing to prevent rate limits."""
         message_id = message.id
         if message_id not in self.reaction_queues:
@@ -66,50 +67,51 @@ class AdminAlertManager:
         if message_id in self.reaction_queues and not self.reaction_queues[message_id]:
             del self.reaction_queues[message_id]
 
-    def _parse_admin_user_ids(self) -> Set[int]:
+    def _parse_admin_user_ids(self) -> set[int]:
         try:
             admin_ids_str = self.config.get("ALERT_ADMIN_USER_IDS", "")
             if not admin_ids_str:
                 return set()
             return {int(s.strip()) for s in admin_ids_str.split(",") if s.strip()}
         except Exception as e:
-            self.logger.error(f"Failed to parse admin user IDs: {e}")
+            self.logger.exception(f"Failed to parse admin user IDs: {e}")
             return set()
 
-    def _build_authorized_user_ids(self) -> Set[int]:
+    def _build_authorized_user_ids(self) -> set[int]:
         explicit = self._parse_admin_user_ids()
         if explicit:
             return set(explicit)
-        authorized: Set[int] = set()
+        authorized: set[int] = set()
         try:
             owners = self.config.get("OWNER_IDS", [])
             if isinstance(owners, list):
                 for owner_id in owners:
                     try:
                         authorized.add(int(owner_id))
-                    except Exception:
-                        continue
-        except Exception:
-            pass
+                    except (ValueError, TypeError) as e:
+                        self.logger.debug(f"Invalid owner ID {owner_id}: {e}")
+        except Exception as e:
+            self.logger.debug(f"Failed to parse OWNER_IDS: {e}")
         return authorized
 
     def refresh_config(self) -> None:
         try:
             self.config = load_config()
-        except Exception:
+        except Exception as e:
+            self.logger.debug(f"Failed to reload config: {e}")
             return
         try:
             self.enabled = self.config.get("ALERT_ENABLE", "false").lower() == "true"
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Failed to parse ALERT_ENABLE: {e}")
         try:
             self.admin_user_ids = self._build_authorized_user_ids()
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Failed to build authorized user IDs: {e}")
         try:
             self.session_timeout = int(self.config.get("ALERT_SESSION_TIMEOUT_S", "1800"))
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Failed to parse ALERT_SESSION_TIMEOUT_S: {e}")
 
     def is_admin_user(self, user_id: int) -> bool:
         return user_id in self.admin_user_ids
@@ -134,7 +136,7 @@ class AdminAlertManager:
         self.logger.info(f"Created alert session {session_id}")
         return session
 
-    def get_session(self, user_id: int) -> Optional[AlertSession]:
+    def get_session(self, user_id: int) -> AlertSession | None:
         session = self.sessions.get(user_id)
         if not session:
             return None
@@ -171,9 +173,9 @@ class AdminAlertManager:
             self.logger.warning(f"Embed exceeds 6000 chars ({total}), may cause errors")
         return embed
 
-    def _discover_available_destinations(self, invoking_user_id: int) -> List[AlertDestination]:
+    def _discover_available_destinations(self, invoking_user_id: int) -> list[AlertDestination]:
         """Cache-based, permission-aware discovery of available guilds/channels."""
-        destinations: List[AlertDestination] = []
+        destinations: list[AlertDestination] = []
         guilds_shown = 0
         channels_shown = 0
         max_guilds = 10
@@ -204,14 +206,14 @@ class AdminAlertManager:
                                 channel_id=ch.id,
                                 channel_name=ch.name,
                                 guild_name=guild.name,
-                            )
+                            ),
                         )
             total_guilds = len(self.bot.guilds)
             total_channels = sum(len(g.text_channels) for g in self.bot.guilds)
             self.logger.info(f"alert:discovery guilds={total_guilds} channels={total_channels} shown_guilds={guilds_shown} shown_channels={channels_shown}")
             return destinations
         except Exception as e:
-            self.logger.error(f"Discovery failed: {e}")
+            self.logger.exception(f"Discovery failed: {e}")
             return []
 
     async def build_composer_embed(self, session: AlertSession) -> discord.Embed:
@@ -261,8 +263,8 @@ class AdminAlertManager:
         embed.set_footer(text=f"Session: {session.session_id}")
         return self._validate_embed_limits(embed)
 
-    async def get_accessible_channels(self) -> List[discord.TextChannel]:
-        accessible: List[discord.TextChannel] = []
+    async def get_accessible_channels(self) -> list[discord.TextChannel]:
+        accessible: list[discord.TextChannel] = []
         for guild in self.bot.guilds:
             member = getattr(guild, "me", None) or guild.get_member(self.bot.user.id)
             if member is None:
@@ -274,7 +276,7 @@ class AdminAlertManager:
         accessible.sort(key=lambda c: (c.guild.name.lower(), c.guild.id, c.position, c.name.lower()))
         return accessible
 
-    async def send_alert(self, session: AlertSession) -> Dict[str, Any]:
+    async def send_alert(self, session: AlertSession) -> dict[str, Any]:
         self.logger.info(f"Sending alert from session {session.session_id}")
         session.status = AlertSessionStatus.POSTING
         MAX_CAP = 20
@@ -307,7 +309,7 @@ class AdminAlertManager:
                 results["send_results"].append({"channel_id": dest.channel_id, "success": True, "message_id": msg.id})
                 results["successful_sends"] += 1
             except Exception as e:
-                self.logger.error(f"Failed to send to {dest.channel_name}: {e}")
+                self.logger.exception(f"Failed to send to {dest.channel_name}: {e}")
                 results["send_results"].append({"channel_id": dest.channel_id, "success": False, "error": str(e)})
                 results["failed_sends"] += 1
         session.status = AlertSessionStatus.COMPLETED

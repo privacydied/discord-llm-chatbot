@@ -1,21 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
-
-from discord import Embed, File
+from typing import TYPE_CHECKING, Any
 
 from .public_output import sanitize_embed_collection_for_public
+
+if TYPE_CHECKING:
+    from discord import Embed, File
 
 
 @dataclass
 class BotAction:
     content: str = ""
-    embeds: List[Embed] = field(default_factory=list)
-    files: List[File] = field(default_factory=list)
-    audio_path: Optional[str] = None
+    embeds: list[Embed] = field(default_factory=list)
+    files: list[File] = field(default_factory=list)
+    audio_path: str | None = None
     error: bool = False
-    meta: Dict[str, Any] = field(default_factory=dict)
+    meta: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Apply final safety net to sanitize content before sending to Discord."""
@@ -23,8 +24,7 @@ class BotAction:
         self.embeds = sanitize_embed_collection_for_public(self.embeds)
 
     def _apply_final_sanitization(self, content: str) -> str:
-        """
-        Final safety net to remove any chain-of-thought leakage before Discord send.
+        """Final safety net to remove any chain-of-thought leakage before Discord send.
         This is a belt-and-suspenders approach that should rarely trigger.
         """
         from .public_output import (
@@ -32,8 +32,8 @@ class BotAction:
             has_reasoning_leakage,
             sanitize_public_text,
         )
-        from .vl.postprocess import sanitize_model_output, has_reasoning_content
         from .utils.logging import get_logger
+        from .vl.postprocess import has_reasoning_content, sanitize_model_output
 
         logger = get_logger("bot.action.safety_net")
 
@@ -53,7 +53,7 @@ class BotAction:
                     vl_handled = True
                     content = sanitized
             except Exception as e:
-                logger.error(f"VL sanitization failed: {e}")
+                logger.exception(f"VL sanitization failed: {e}")
 
         if not vl_handled:
             # Third layer: strip internal labels, aggregation markers, etc.
@@ -71,7 +71,7 @@ class BotAction:
         return self.content
 
     @text.setter
-    def text(self, v):
+    def text(self, v) -> None:
         self.content = v
 
     @property

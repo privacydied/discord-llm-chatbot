@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import inspect
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Never
 
 import pytest
 
@@ -18,8 +19,7 @@ from bot.server_archive.models import (
 from bot.server_archive.service import ServerArchiveService
 from bot.server_archive.store import ServerArchiveStore
 
-
-FIXED_NOW = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc).isoformat()
+FIXED_NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC).isoformat()
 
 
 def make_bundle(*, message_id: str, guild_id: str, channel_id: str, content: str) -> ArchiveMessageBundle:
@@ -52,7 +52,7 @@ class FakeHistoryChannel:
         channel_id: str,
         *,
         messages: list[SimpleNamespace] | None = None,
-    ):
+    ) -> None:
         self.guild = guild
         self.id = channel_id
         self.name = f"channel-{channel_id}"
@@ -79,13 +79,14 @@ class PermissionDeniedChannel(FakeHistoryChannel):
         self.history_calls.append(kwargs)
 
         async def iterator():
-            raise PermissionError("not allowed")
+            msg = "not allowed"
+            raise PermissionError(msg)
             yield  # pragma: no cover
 
         return iterator()
 
 
-@pytest.fixture()
+@pytest.fixture
 def archive_config(tmp_path):
     return {
         "SERVER_ARCHIVE_ENABLED": True,
@@ -138,10 +139,11 @@ async def test_live_tail_enqueue_does_not_write_to_sqlite_immediately(tmp_path, 
     try:
         called = False
 
-        async def fail_upsert(*args, **kwargs):
+        async def fail_upsert(*args, **kwargs) -> Never:
             nonlocal called
             called = True
-            raise AssertionError("archive writes should not happen inline")
+            msg = "archive writes should not happen inline"
+            raise AssertionError(msg)
 
         monkeypatch.setattr(service.store, "upsert_bundles", fail_upsert)
 
@@ -153,7 +155,7 @@ async def test_live_tail_enqueue_does_not_write_to_sqlite_immediately(tmp_path, 
             clean_content="hello",
             attachments=[],
             mentions=[],
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             edited_at=None,
             jump_url=None,
             reference=None,
@@ -179,7 +181,7 @@ async def test_pause_blocks_live_tail_enqueue(tmp_path, monkeypatch: pytest.Monk
             clean_content="hello",
             attachments=[],
             mentions=[],
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             edited_at=None,
             jump_url=None,
             reference=None,
@@ -208,7 +210,7 @@ async def test_sync_checkpoint_is_stored_and_reused(tmp_path, archive_config, mo
                 content="first",
                 clean_content="first",
                 attachments=[],
-                created_at=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
+                created_at=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
                 edited_at=None,
                 jump_url=None,
                 reference=None,
@@ -223,7 +225,7 @@ async def test_sync_checkpoint_is_stored_and_reused(tmp_path, archive_config, mo
                 content="second",
                 clean_content="second",
                 attachments=[],
-                created_at=datetime(2026, 1, 1, 12, 1, tzinfo=timezone.utc),
+                created_at=datetime(2026, 1, 1, 12, 1, tzinfo=UTC),
                 edited_at=None,
                 jump_url=None,
                 reference=None,
@@ -253,14 +255,14 @@ async def test_sync_checkpoint_is_stored_and_reused(tmp_path, archive_config, mo
                 content="third",
                 clean_content="third",
                 attachments=[],
-                created_at=datetime(2026, 1, 1, 12, 2, tzinfo=timezone.utc),
+                created_at=datetime(2026, 1, 1, 12, 2, tzinfo=UTC),
                 edited_at=None,
                 jump_url=None,
                 reference=None,
                 mentions=[],
                 embeds=[],
-            )
-        ]
+            ),
+        ],
     )
 
     second = await archive_sync.sync_channel_archive(store, channel)
@@ -291,13 +293,13 @@ async def test_failed_channel_sync_does_not_abort_whole_guild_sync(tmp_path, arc
                 content="ok",
                 clean_content="ok",
                 attachments=[],
-                created_at=datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc),
+                created_at=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
                 edited_at=None,
                 jump_url=None,
                 reference=None,
                 mentions=[],
                 embeds=[],
-            )
+            ),
         ],
     )
     bad_channel = PermissionDeniedChannel(guild, "222")

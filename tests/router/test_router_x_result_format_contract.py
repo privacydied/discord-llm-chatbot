@@ -2,7 +2,7 @@ from bot.router import Router
 
 
 class DummyBot:
-    def __init__(self, *, system_prompts=None):
+    def __init__(self, *, system_prompts=None) -> None:
         self.config = {"X_API_ENABLED": False}
         self.tts_manager = None
         self.loop = None

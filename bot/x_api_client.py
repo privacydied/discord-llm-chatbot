@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
-
+from typing import Any, Self
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 
-from .utils.logging import get_logger
 from .exceptions import APIError
-from .retry_utils import with_retry, API_RETRY_CONFIG
+from .retry_utils import API_RETRY_CONFIG, with_retry
+from .utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -24,22 +23,21 @@ _X_URL_QUERY_ID_KEYS = ("id", "tweet_id", "status", "status_id")
 
 
 class XApiClient:
-    """
-    Async client for Twitter/X v2 API: Get Tweet by ID with hydrated expansions.
+    """Async client for Twitter/X v2 API: Get Tweet by ID with hydrated expansions.
 
     Security: never logs bearer token, only presence via has_token. [SFT]
     """
 
     def __init__(
         self,
-        bearer_token: Optional[str],
+        bearer_token: str | None,
         timeout_ms: int = 8000,
-        default_tweet_fields: Optional[List[str]] = None,
-        default_expansions: Optional[List[str]] = None,
-        default_media_fields: Optional[List[str]] = None,
-        default_user_fields: Optional[List[str]] = None,
-        default_poll_fields: Optional[List[str]] = None,
-        default_place_fields: Optional[List[str]] = None,
+        default_tweet_fields: list[str] | None = None,
+        default_expansions: list[str] | None = None,
+        default_media_fields: list[str] | None = None,
+        default_user_fields: list[str] | None = None,
+        default_poll_fields: list[str] | None = None,
+        default_place_fields: list[str] | None = None,
         base_url: str = _X_API_BASE_URL,
     ) -> None:
         self._base_url = base_url.rstrip("/")
@@ -70,7 +68,7 @@ class XApiClient:
                         "poll_fields": self._poll_fields,
                         "place_fields": self._place_fields,
                     },
-                }
+                },
             },
         )
 
@@ -80,15 +78,15 @@ class XApiClient:
         except Exception as e:
             logger.debug(f"XApiClient close error: {e}")
 
-    async def __aenter__(self) -> "XApiClient":
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
         await self.aclose()
 
     @staticmethod
-    def extract_tweet_id(value: str) -> Optional[str]:
-        """Extract tweet ID from raw ID or URL. Returns None if not found. [IV]"""
+    def extract_tweet_id(value: str) -> str | None:
+        """Extract tweet ID from raw ID or URL. Returns None if not found. [IV]."""
         if not value or not isinstance(value, str):
             return None
         value = value.strip()
@@ -122,7 +120,7 @@ class XApiClient:
             pass
         return None
 
-    def _build_headers(self, bearer_token: Optional[str]) -> Dict[str, str]:
+    def _build_headers(self, bearer_token: str | None) -> dict[str, str]:
         headers = {"User-Agent": "discord-bot-x-integration/1.0"}
         if bearer_token:
             headers["Authorization"] = f"Bearer {bearer_token}"
@@ -130,19 +128,19 @@ class XApiClient:
 
     def _build_params(
         self,
-        tweet_fields: Optional[List[str]] = None,
-        expansions: Optional[List[str]] = None,
-        media_fields: Optional[List[str]] = None,
-        user_fields: Optional[List[str]] = None,
-        poll_fields: Optional[List[str]] = None,
-        place_fields: Optional[List[str]] = None,
-    ) -> Dict[str, str]:
-        def _csv(v: Optional[List[str]]) -> Optional[str]:
+        tweet_fields: list[str] | None = None,
+        expansions: list[str] | None = None,
+        media_fields: list[str] | None = None,
+        user_fields: list[str] | None = None,
+        poll_fields: list[str] | None = None,
+        place_fields: list[str] | None = None,
+    ) -> dict[str, str]:
+        def _csv(v: list[str] | None) -> str | None:
             if not v:
                 return None
             return ",".join(sorted({s.strip() for s in v if s and s.strip()}))
 
-        params: Dict[str, str] = {}
+        params: dict[str, str] = {}
         tf = _csv(tweet_fields or self._tweet_fields)
         ex = _csv(expansions or self._expansions)
         mf = _csv(media_fields or self._media_fields)
@@ -168,16 +166,15 @@ class XApiClient:
         self,
         tweet_id: str,
         *,
-        tweet_fields: Optional[List[str]] = None,
-        expansions: Optional[List[str]] = None,
-        media_fields: Optional[List[str]] = None,
-        user_fields: Optional[List[str]] = None,
-        poll_fields: Optional[List[str]] = None,
-        place_fields: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Fetch a tweet by ID with field hydration.
-        Raises APIError with status-specific messages. [REH]
+        tweet_fields: list[str] | None = None,
+        expansions: list[str] | None = None,
+        media_fields: list[str] | None = None,
+        user_fields: list[str] | None = None,
+        poll_fields: list[str] | None = None,
+        place_fields: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Fetch a tweet by ID with field hydration.
+        Raises APIError with status-specific messages. [REH].
         """
         params = self._build_params(
             tweet_fields,
@@ -194,16 +191,18 @@ class XApiClient:
             # Raise for status to unify handling
             if resp.status_code >= 400:
                 await self._raise_for_status(resp)
-            data = resp.json()
-            return data
+            return resp.json()
         except httpx.HTTPStatusError as he:
             # Note: with_retry checks status text too; re-raise as APIError for consistency
             status = he.response.status_code if he.response is not None else None
-            raise APIError(f"HTTP error from X API: {status}") from he
+            msg = f"HTTP error from X API: {status}"
+            raise APIError(msg) from he
         except (httpx.TimeoutException, httpx.TransportError) as te:
-            raise APIError(f"Transport error from X API: {te}") from te
+            msg = f"Transport error from X API: {te}"
+            raise APIError(msg) from te
         except Exception as e:
-            raise APIError(f"Unexpected X API error: {e}") from e
+            msg = f"Unexpected X API error: {e}"
+            raise APIError(msg) from e
 
     async def _raise_for_status(self, resp: httpx.Response) -> None:
         status = resp.status_code
@@ -217,10 +216,12 @@ class XApiClient:
         # Strict mapping per spec [REH][SFT]
         if status in (401, 403):
             logger.info("X API access denied", extra=extra)
-            raise APIError(f"X API access denied ({status})")
+            msg = f"X API access denied ({status})"
+            raise APIError(msg)
         if status in (404, 410):
             logger.info("X API post not found or deleted", extra=extra)
-            raise APIError(f"X API post not found or deleted ({status})")
+            msg = f"X API post not found or deleted ({status})"
+            raise APIError(msg)
         if status == 429:
             retry_after = resp.headers.get("retry-after")
             # Best-effort parse Retry-After seconds (Twitter typically returns seconds)
@@ -238,24 +239,26 @@ class XApiClient:
             err = APIError("429 Too Many Requests")
             try:
                 if retry_after_secs and retry_after_secs > 0:
-                    setattr(err, "retry_after_seconds", float(retry_after_secs))
+                    err.retry_after_seconds = float(retry_after_secs)
             except Exception:
                 pass
             # Allow retries via decorator
             raise err
         if 500 <= status <= 599:
             logger.warning("X API server error", extra=extra)
-            raise APIError(f"X API server error ({status})")
+            msg = f"X API server error ({status})"
+            raise APIError(msg)
 
         # Fallback generic
         logger.error("X API unexpected status", extra=extra)
-        raise APIError(f"X API unexpected status: {status}")
+        msg = f"X API unexpected status: {status}"
+        raise APIError(msg)
 
 
 # Convenience helpers [CA]
 
 
-def parse_csv_env(value: Optional[str], default: List[str]) -> List[str]:
+def parse_csv_env(value: str | None, default: list[str]) -> list[str]:
     if value is None or not value.strip():
         return default
     return [s.strip() for s in value.split(",") if s.strip()]

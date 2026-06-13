@@ -1,13 +1,17 @@
 """Configuration loading and environment setup."""
 
+import contextlib
 import os
 import sys
-from pathlib import Path
-from dotenv import load_dotenv
-from ..exceptions import ConfigurationError
-from ..utils.logging import get_logger
 import time
-from typing import Dict, Any, Optional, Callable
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from dotenv import load_dotenv
+
+from bot.exceptions import ConfigurationError
+from bot.utils.logging import get_logger
 
 # CHANGE: Enhanced .env loading with comprehensive audit and logging
 logger = get_logger(__name__)
@@ -20,8 +24,7 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", verbose=False)
 
 
 def audit_env_file() -> None:
-    """
-    Audit .env file by reading and logging every variable.
+    """Audit .env file by reading and logging every variable.
     CHANGE: Enhanced comprehensive .env audit with critical environment variable verification.
     """
     env_file_path = Path.cwd() / ".env"
@@ -60,8 +63,7 @@ def audit_env_file() -> None:
 
 
 def validate_required_env() -> None:
-    """
-    Validate that all required environment variables are present.
+    """Validate that all required environment variables are present.
     CHANGE: Enhanced validation to include PROMPT_FILE and VL_PROMPT_FILE.
     """
     required_vars = ["DISCORD_TOKEN", "PROMPT_FILE", "VL_PROMPT_FILE"]
@@ -75,26 +77,27 @@ def validate_required_env() -> None:
             logger.debug(f"✅ {var}: [SET]")
 
     if missing_vars:
-        raise ConfigurationError(f"Missing required environment variables: {', '.join(missing_vars)}")
+        msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+        raise ConfigurationError(msg)
 
 
 def validate_prompt_files() -> None:
-    """
-    Validate that prompt files exist and are readable.
-    """
+    """Validate that prompt files exist and are readable."""
     prompt_file = os.getenv("PROMPT_FILE")
     vl_prompt_file = os.getenv("VL_PROMPT_FILE")
 
     if prompt_file:
         prompt_path = Path(prompt_file)
         if not prompt_path.exists():
-            raise ConfigurationError(f"PROMPT_FILE not found: {prompt_path}")
+            msg = f"PROMPT_FILE not found: {prompt_path}"
+            raise ConfigurationError(msg)
         logger.debug(f"✅ Text prompt file found: {prompt_path}")
 
     if vl_prompt_file:
         vl_prompt_path = Path(vl_prompt_file)
         if not vl_prompt_path.exists():
-            raise ConfigurationError(f"VL_PROMPT_FILE not found: {vl_prompt_path}")
+            msg = f"VL_PROMPT_FILE not found: {vl_prompt_path}"
+            raise ConfigurationError(msg)
         logger.debug(f"✅ VL prompt file found: {vl_prompt_path}")
 
 
@@ -124,8 +127,7 @@ def load_system_prompts() -> dict[str, str]:
 
 
 def check_venv_activation() -> None:
-    """
-    Enforce exclusive .venv usage as specified in requirements.
+    """Enforce exclusive .venv usage as specified in requirements.
     CHANGE: Added .venv enforcement check to ensure proper environment usage.
     """
     if ".venv" not in sys.prefix:
@@ -135,7 +137,7 @@ def check_venv_activation() -> None:
         logger.debug(f"✅ Running in .venv: {sys.prefix}")
 
 
-def _safe_int(value: Optional[str], default: str, var_name: str) -> int:
+def _safe_int(value: str | None, default: str, var_name: str) -> int:
     """Safely convert environment variable to int, handling malformed values."""
     try:
         # Clean value by removing comments and whitespace
@@ -146,7 +148,7 @@ def _safe_int(value: Optional[str], default: str, var_name: str) -> int:
         return int(default)
 
 
-def _safe_float(value: Optional[str], default: str, var_name: str) -> float:
+def _safe_float(value: str | None, default: str, var_name: str) -> float:
     """Safely convert environment variable to float, handling malformed values."""
     try:
         # Clean value by removing comments and whitespace
@@ -157,9 +159,8 @@ def _safe_float(value: Optional[str], default: str, var_name: str) -> float:
         return float(default)
 
 
-def _clean_env_value(value: Optional[str]) -> str:
-    """
-    Clean environment variable value by removing inline comments.
+def _clean_env_value(value: str | None) -> str:
+    """Clean environment variable value by removing inline comments.
     CHANGE: Added to handle .env files with inline comments.
     """
     if not value:
@@ -169,7 +170,7 @@ def _clean_env_value(value: Optional[str]) -> str:
 
 
 # Robust boolean parsing to avoid bool("off") traps [IV][CMV]
-def _parse_bool_str(raw: Optional[str], default: bool) -> bool:
+def _parse_bool_str(raw: str | None, default: bool) -> bool:
     """Parse truthy/falsey strings with explicit tokens. ENV > default."""
     if raw is None:
         return default
@@ -184,15 +185,15 @@ def _parse_bool_str(raw: Optional[str], default: bool) -> bool:
 
 
 # Global config cache for performance optimization
-_config_cache: Optional[Dict[str, Any]] = None
+_config_cache: dict[str, Any] | None = None
 _cache_timestamp: float = 0
 CACHE_TTL = 300  # 5 minute cache TTL
 
 # Last known good config for hot-reload rollback
-_last_good_config: Optional[Dict[str, Any]] = None
+_last_good_config: dict[str, Any] | None = None
 
 
-def _parse_model_list(raw: Optional[str]) -> list[str]:
+def _parse_model_list(raw: str | None) -> list[str]:
     if not raw:
         return []
     return [part.strip() for part in raw.split(",") if part.strip()]
@@ -204,9 +205,8 @@ _DEFAULT_VL_MODEL_LADDER = [
 ]
 
 
-def _build_config(env_getter: Callable[[str, Optional[str]], Optional[str]]) -> Dict[str, Any]:
-    """
-    Build configuration dictionary using the provided environment getter function.
+def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[str, Any]:
+    """Build configuration dictionary using the provided environment getter function.
 
     Args:
         env_getter: Function(key, default) -> value. Called for each config key.
@@ -215,6 +215,7 @@ def _build_config(env_getter: Callable[[str, Optional[str]], Optional[str]]) -> 
 
     Returns:
         Configuration dictionary.
+
     """
     # Centralized VISION flags with robust parsing and defaults [CA]
     _ve_raw = _clean_env_value(env_getter("VISION_ENABLED"))
@@ -750,10 +751,8 @@ def _build_config(env_getter: Callable[[str, Optional[str]], Optional[str]]) -> 
     return config
 
 
-def load_config() -> Dict[str, Any]:
-    """
-    Load configuration from environment variables with intelligent caching.
-    """
+def load_config() -> dict[str, Any]:
+    """Load configuration from environment variables with intelligent caching."""
     global _config_cache, _cache_timestamp, _last_good_config
 
     # Check if we have a valid cached config (performance optimization)
@@ -762,7 +761,7 @@ def load_config() -> Dict[str, Any]:
         return _config_cache
 
     # Build config using os.environ
-    def os_env_getter(key: str, default: Optional[str] = None) -> Optional[str]:
+    def os_env_getter(key: str, default: str | None = None) -> str | None:
         return os.getenv(key, default)
 
     config = _build_config(os_env_getter)
@@ -776,8 +775,8 @@ def load_config() -> Dict[str, Any]:
         _ve = _parse_bool_str(_ve_raw, True)
         _t2i = _parse_bool_str(_t2i_raw, True)
         logger.info(f"VISION_FLAGS raw={{VISION_ENABLED:{_ve_raw}, VISION_T2I_ENABLED:{_t2i_raw}}} parsed={{vision_enabled:{_ve}, t2i:{_t2i}}} source={{vision_enabled:{ve_src}, t2i:{t2i_src}}}")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to log VISION_FLAGS: {e}")
 
     # Cache the config for performance (avoid repeated env var lookups)
     _config_cache = config
@@ -788,9 +787,8 @@ def load_config() -> Dict[str, Any]:
     return config
 
 
-def load_config_candidate(env_path: Path) -> Dict[str, Any]:
-    """
-    Load configuration from a specific .env file WITHOUT mutating global state.
+def load_config_candidate(env_path: Path) -> dict[str, Any]:
+    """Load configuration from a specific .env file WITHOUT mutating global state.
 
     This is used for hot-reload candidate validation — it reads the .env file
     directly and builds a config dict from its values, without touching
@@ -801,6 +799,7 @@ def load_config_candidate(env_path: Path) -> Dict[str, Any]:
 
     Returns:
         Configuration dictionary built from the candidate .env file.
+
     """
     from dotenv import dotenv_values
 
@@ -812,15 +811,14 @@ def load_config_candidate(env_path: Path) -> Dict[str, Any]:
 
     # Build config using ONLY the candidate env values (NO fallback to os.environ)
     # This ensures validation tests the candidate file in isolation
-    def candidate_env_getter(key: str, default: Optional[str] = None) -> Optional[str]:
+    def candidate_env_getter(key: str, default: str | None = None) -> str | None:
         return candidate_env.get(key, default)
 
     return _build_config(candidate_env_getter)
 
 
 def get_vl_model_ladder() -> list[str]:
-    """
-    Return the configured VL model ladder. Supports comma-separated VL_MODEL.
+    """Return the configured VL model ladder. Supports comma-separated VL_MODEL.
     Falls back to a safe default ladder when unset.
     """
     config = load_config()
@@ -835,19 +833,19 @@ def get_vl_model_ladder() -> list[str]:
     return _DEFAULT_VL_MODEL_LADDER.copy()
 
 
-def get_last_good_config() -> Optional[Dict[str, Any]]:
+def get_last_good_config() -> dict[str, Any] | None:
     """Get the last known good configuration (for hot-reload rollback)."""
     return _last_good_config.copy() if _last_good_config else None
 
 
-def validate_config_candidate(config: Dict[str, Any]) -> tuple[bool, list[str]]:
-    """
-    Validate a candidate configuration for hot-reload.
+def validate_config_candidate(config: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Validate a candidate configuration for hot-reload.
 
     Returns:
         Tuple of (is_valid, missing_required_keys).
         If is_valid is False, missing_required_keys contains the names of
         missing or invalid required variables.
+
     """
     missing = []
 
@@ -881,7 +879,7 @@ def invalidate_config_cache() -> None:
     global _config_cache, _cache_timestamp
     _config_cache = None
     _cache_timestamp = 0.0
-    try:
+    with contextlib.suppress(Exception):
         logger.info(
             "config.cache.invalidate",
             extra={
@@ -889,11 +887,9 @@ def invalidate_config_cache() -> None:
                 "detail": {"reason": "reload_request"},
             },
         )
-    except Exception:
-        pass
 
 
-def get_config_cache() -> Optional[Dict[str, Any]]:
+def get_config_cache() -> dict[str, Any] | None:
     """Get the current config cache (for test introspection)."""
     return _config_cache
 

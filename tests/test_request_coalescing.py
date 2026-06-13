@@ -1,11 +1,12 @@
-"""
-Tests for request coalescing module.
+"""Tests for request coalescing module.
 
 [PA] Deduplication for expensive operations
 [RM] Memory cleanup
 """
 
 import asyncio
+from typing import Never
+
 import pytest
 
 from bot.request_coalescing import (
@@ -22,21 +23,21 @@ class TestRequestCoalescer:
         return RequestCoalescer[str](name="test", result_ttl_s=0.1, cleanup_interval_s=0.05)
 
     @pytest.mark.asyncio
-    async def test_single_request_executes(self, coalescer):
+    async def test_single_request_executes(self, coalescer) -> None:
         """A single request should execute normally."""
 
-        async def operation():
+        async def operation() -> str:
             return "result"
 
         result = await coalescer.execute("key", operation)
         assert result == "result"
 
     @pytest.mark.asyncio
-    async def test_concurrent_requests_share_result(self, coalescer):
+    async def test_concurrent_requests_share_result(self, coalescer) -> None:
         """Multiple concurrent requests for same key should share one execution."""
         call_count = 0
 
-        async def slow_operation():
+        async def slow_operation() -> str:
             nonlocal call_count
             call_count += 1
             await asyncio.sleep(0.05)
@@ -53,11 +54,11 @@ class TestRequestCoalescer:
         assert call_count == 1
 
     @pytest.mark.asyncio
-    async def test_sequential_requests_re_execute(self, coalescer):
+    async def test_sequential_requests_re_execute(self, coalescer) -> None:
         """Sequential requests should execute separately (after TTL)."""
         call_count = 0
 
-        async def operation():
+        async def operation() -> str:
             nonlocal call_count
             call_count += 1
             return f"result_{call_count}"
@@ -75,11 +76,12 @@ class TestRequestCoalescer:
         assert call_count == 2
 
     @pytest.mark.asyncio
-    async def test_error_propagation(self, coalescer):
+    async def test_error_propagation(self, coalescer) -> None:
         """Errors should be propagated to all waiters."""
 
-        async def failing_operation():
-            raise ValueError("test error")
+        async def failing_operation() -> Never:
+            msg = "test error"
+            raise ValueError(msg)
 
         # Multiple concurrent requests
         tasks = [coalescer.execute("error_key", failing_operation) for _ in range(3)]
@@ -92,10 +94,10 @@ class TestRequestCoalescer:
             assert str(r) == "test error"
 
     @pytest.mark.asyncio
-    async def test_timeout(self, coalescer):
+    async def test_timeout(self, coalescer) -> None:
         """Timeout should be enforced."""
 
-        async def slow_operation():
+        async def slow_operation() -> str:
             await asyncio.sleep(10)  # Very slow
             return "result"
 
@@ -103,12 +105,12 @@ class TestRequestCoalescer:
             await coalescer.execute("timeout_key", slow_operation, timeout=0.01)
 
     @pytest.mark.asyncio
-    async def test_different_keys_independent(self, coalescer):
+    async def test_different_keys_independent(self, coalescer) -> None:
         """Different keys should execute independently."""
         results = []
 
         async def make_operation(key):
-            async def operation():
+            async def operation() -> str:
                 results.append(key)
                 return f"result_{key}"
 
@@ -123,11 +125,11 @@ class TestRequestCoalescer:
         assert len(results) == 5
 
     @pytest.mark.asyncio
-    async def test_cache_hit_returns_cached_result(self, coalescer):
+    async def test_cache_hit_returns_cached_result(self, coalescer) -> None:
         """Quick re-requests should use cached result."""
         call_count = 0
 
-        async def operation():
+        async def operation() -> str:
             nonlocal call_count
             call_count += 1
             return "cached_value"
@@ -144,14 +146,14 @@ class TestRequestCoalescer:
 
 
 class TestGlobalCoalescers:
-    def test_get_url_processing_coalescer(self):
+    def test_get_url_processing_coalescer(self) -> None:
         """URL processing coalescer should be a singleton."""
         c1 = get_url_processing_coalescer()
         c2 = get_url_processing_coalescer()
         assert c1 is c2
         assert c1.name == "url_proc"
 
-    def test_get_vl_image_coalescer(self):
+    def test_get_vl_image_coalescer(self) -> None:
         """VL image coalescer should be a singleton."""
         c1 = get_vl_image_coalescer()
         c2 = get_vl_image_coalescer()
@@ -160,7 +162,7 @@ class TestGlobalCoalescers:
 
 
 class TestCoalescedEntry:
-    def test_entry_creation(self):
+    def test_entry_creation(self) -> None:
         """Entry should be created with proper defaults."""
         entry = _CoalescedEntry(key="test_key", future=asyncio.Future())
         assert entry.key == "test_key"

@@ -1,5 +1,4 @@
-"""
-Tests for reply routing fixes to ensure correct male/female target resolution and context isolation.
+"""Tests for reply routing fixes to ensure correct male/female target resolution and context isolation.
 Covers the scenarios from the Fix-This-Code prompt.
 """
 
@@ -9,10 +8,11 @@ import pytest
 pytestmark = pytest.mark.skip(reason="Stale tests against refactored router reply/context APIs")
 
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import discord
 
-from bot.router import Router, BotAction
 from bot.core.bot import LLMBot
+from bot.router import BotAction, Router
 
 
 @pytest.fixture
@@ -60,7 +60,7 @@ class TestReplyTargetResolution:
     """Test reply target resolution logic across different scenarios."""
 
     @pytest.mark.asyncio
-    async def test_reply_plus_mention_minimal_text(self, router, mock_bot, mock_human_author):
+    async def test_reply_plus_mention_minimal_text(self, router, mock_bot, mock_human_author) -> None:
         """Reply + @mention + minimal text ("yo") should target the parent, route to text, no link nag."""
         # Mock parent message
         parent_msg = MagicMock(spec=discord.Message)
@@ -99,7 +99,7 @@ class TestReplyTargetResolution:
             assert "yo" in args[0][0]  # Content should contain "yo"
 
     @pytest.mark.asyncio
-    async def test_thread_reply_to_newest_human(self, router, mock_bot, mock_human_author, mock_bot_author):
+    async def test_thread_reply_to_newest_human(self, router, mock_bot, mock_human_author, mock_bot_author) -> None:
         """Thread reply should target newest message (or newest human if newest is bot)."""
         # Create thread context
         mock_thread = MagicMock(spec=discord.Thread)
@@ -145,7 +145,7 @@ class TestReplyTargetResolution:
             mock_invoke.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_plain_mention_text_only(self, router, mock_bot, mock_human_author):
+    async def test_plain_mention_text_only(self, router, mock_bot, mock_human_author) -> None:
         """Plain @mention with text like "@Bot yo" should route to text, no link nag."""
         # Mock message
         msg = MagicMock(spec=discord.Message)
@@ -178,7 +178,7 @@ class TestReplyTargetResolution:
             # We verify it was called, which means the mention was processed
 
     @pytest.mark.asyncio
-    async def test_reply_with_link_harvests_parent(self, router, mock_bot, mock_human_author):
+    async def test_reply_with_link_harvests_parent(self, router, mock_bot, mock_human_author) -> None:
         """Reply to post with link should harvest that link and route correctly."""
         # Mock parent with URL
         parent_msg = MagicMock(spec=discord.Message)
@@ -218,7 +218,7 @@ class TestContextIsolation:
     """Test that context collection is locality-first with proper scope isolation."""
 
     @pytest.mark.asyncio
-    async def test_thread_context_tail_only(self, router, mock_bot, mock_human_author):
+    async def test_thread_context_tail_only(self, router, mock_bot, mock_human_author) -> None:
         """Thread context should only include thread tail, not channel-wide memory."""
         # Create thread
         mock_thread = MagicMock(spec=discord.Thread)
@@ -255,7 +255,7 @@ class TestContextIsolation:
             mock_collect.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_reply_context_near_trigger(self, router, mock_bot, mock_human_author):
+    async def test_reply_context_near_trigger(self, router, mock_bot, mock_human_author) -> None:
         """Reply context builds linear chain root→…→parent→current, with tail near trigger."""
         # Create message chain
         root_msg = MagicMock(spec=discord.Message)
@@ -294,7 +294,7 @@ class TestContextIsolation:
             mock_multi.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_plain_message_no_downstream_bleed(self, router, mock_bot, mock_human_author):
+    async def test_plain_message_no_downstream_bleed(self, router, mock_bot, mock_human_author) -> None:
         """Plain messages should treat current message as fresh prompt without stale channel memory."""
         # Mock plain message
         msg = MagicMock(spec=discord.Message)
@@ -330,7 +330,7 @@ class TestTextDefaultBehavior:
     """Test that text is the default unless explicit media intent is shown."""
 
     @pytest.mark.asyncio
-    async def test_substantive_text_routes_to_text(self, router, mock_bot, mock_human_author):
+    async def test_substantive_text_routes_to_text(self, router, mock_bot, mock_human_author) -> None:
         """Any substantive text should route to text flow."""
         msg = MagicMock(spec=discord.Message)
         msg.id = 111
@@ -370,7 +370,7 @@ class TestTextDefaultBehavior:
             mock_multi.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_only_media_intent_triggers_nag(self, router, mock_bot, mock_human_author):
+    async def test_only_media_intent_triggers_nag(self, router, mock_bot, mock_human_author) -> None:
         """Only explicit media intent with no media should trigger link nag."""
         # Mock message with no attachments and mention-free minimal content
         msg = MagicMock(spec=discord.Message)
@@ -416,7 +416,7 @@ class TestLoggingEnhancements:
     """Test that proper logging is implemented for debugging routing decisions."""
 
     @pytest.mark.asyncio
-    async def test_reply_target_ok_logged(self, router, mock_bot, mock_human_author):
+    async def test_reply_target_ok_logged(self, router, mock_bot, mock_human_author) -> None:
         """Reply target resolution logs the 'reply_target_ok' event."""
         # Mock parent message
         parent_msg = MagicMock(spec=discord.Message)
@@ -448,7 +448,7 @@ class TestLoggingEnhancements:
             # The implementation handles logging correctly
 
     @pytest.mark.asyncio
-    async def test_text_default_reason_logged(self, router, mock_bot, mock_human_author):
+    async def test_text_default_reason_logged(self, router, mock_bot, mock_human_author) -> None:
         """Text default routing logs the reason."""
         # This is tested in bot.py gate logic, which was improved
         msg = MagicMock(spec=discord.Message)

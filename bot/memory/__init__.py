@@ -1,3 +1,10 @@
+from .archive_distiller import (
+    get_memory_distiller,
+    get_memory_distiller_status,
+    run_memory_distiller_once,
+    start_memory_distiller,
+    stop_memory_distiller,
+)
 from .context_manager import ContextManager
 from .identity import is_self_recall_intent, resolve_memory_subject_user_id
 from .profiles import (
@@ -11,6 +18,7 @@ from .profiles import (
     server_profiles,
     user_profiles,
 )
+from .retrieval import build_relevant_memory_block, get_relevant_memories
 from .service import (
     add_explicit_memory,
     build_memory_prompt_block,
@@ -23,43 +31,35 @@ from .service import (
     stop_memory_service,
     wipe_user_memories,
 )
-from .archive_distiller import (
-    get_memory_distiller,
-    get_memory_distiller_status,
-    run_memory_distiller_once,
-    start_memory_distiller,
-    stop_memory_distiller,
-)
-from .retrieval import build_relevant_memory_block, get_relevant_memories
 
 __all__ = [
     "ContextManager",
-    "is_self_recall_intent",
-    "resolve_memory_subject_user_id",
-    "get_profile",
-    "get_server_profile",
-    "load_all_profiles",
-    "save_all_profiles",
-    "save_all_server_profiles",
-    "save_profile",
-    "save_server_profile",
-    "server_profiles",
-    "user_profiles",
     "add_explicit_memory",
     "build_memory_prompt_block",
     "build_relevant_memory_block",
     "delete_memory",
     "enqueue_inferred_memory",
-    "get_memory_service",
     "get_memory_distiller",
     "get_memory_distiller_status",
+    "get_memory_service",
+    "get_profile",
     "get_relevant_memories",
+    "get_server_profile",
+    "is_self_recall_intent",
     "list_user_memories",
+    "load_all_profiles",
+    "resolve_memory_subject_user_id",
     "run_memory_distiller_once",
+    "save_all_profiles",
+    "save_all_server_profiles",
+    "save_profile",
+    "save_server_profile",
     "search_user_memories",
-    "start_memory_service",
+    "server_profiles",
     "start_memory_distiller",
-    "stop_memory_service",
+    "start_memory_service",
     "stop_memory_distiller",
+    "stop_memory_service",
+    "user_profiles",
     "wipe_user_memories",
 ]

@@ -1,5 +1,4 @@
-"""
-Central exception hierarchy for the Discord bot.
+"""Central exception hierarchy for the Discord bot.
 
 All bot-specific exceptions should be defined here and imported
 wherever needed.  Legacy local definitions in other modules should
@@ -177,7 +176,8 @@ def __getattr__(name: str) -> Any:
         "VisionErrorType",
     ):
         return globals()[name]
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
 
 
 def _resolve_vision_exceptions() -> None:

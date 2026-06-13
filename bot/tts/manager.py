@@ -1,5 +1,4 @@
-"""
-Canonical TTS manager for the Discord bot.
+"""Canonical TTS manager for the Discord bot.
 
 Exposes ``TTSManager`` with environment variable resolution, tokenizer
 registry bootstrap, lazy ``KokoroDirect`` loading, and a synchronous
@@ -9,13 +8,14 @@ registry bootstrap, lazy ``KokoroDirect`` loading, and a synchronous
 from __future__ import annotations
 
 import asyncio
-import os
+import contextlib
 import logging
+import os
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
-from ..config import _low_resource_int, _low_resource_bool
+from bot.config import _low_resource_bool, _low_resource_int
 
 if TYPE_CHECKING:
     from .kokoro_direct import KokoroDirect
@@ -48,8 +48,7 @@ _WARMUP_TIMEOUT = 60  # seconds budget for warmup synthesis
 
 
 class TTSManager:
-    """
-    Minimal TTS manager compatible with legacy tests and code.
+    """Minimal TTS manager compatible with legacy tests and code.
 
     Responsibilities:
     - Resolve model/voices paths from env or config with new→old precedence
@@ -58,8 +57,8 @@ class TTSManager:
     - Provide synchronous generate_speech() that returns a Path
     """
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
-        self.config: Dict[str, Any] = config or {}
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
+        self.config: dict[str, Any] = config or {}
 
         # Public attributes expected by tests/scripts
         self.backend: str = str(self.config.get("TTS_BACKEND") or os.getenv("TTS_BACKEND") or "kokoro-onnx")
@@ -67,7 +66,7 @@ class TTSManager:
         self.available: bool = False
 
         # Internal state
-        self.kokoro: Optional["KokoroDirect"] = None
+        self.kokoro: KokoroDirect | None = None
         self._warmup_status: str = "not_started"
 
         # Best‑effort tokenizer registry init (safe if patched in tests)
@@ -97,14 +96,13 @@ class TTSManager:
                 extra={"subsys": "tts", "event": "manager.registry_init.unavailable"},
             )
 
-    def _resolve_paths(self) -> Tuple[str, str]:
-        """
-        Resolve model and voices paths with precedence:
+    def _resolve_paths(self) -> tuple[str, str]:
+        """Resolve model and voices paths with precedence:
         1) New env vars: TTS_MODEL_PATH, TTS_VOICES_PATH
         2) Old env vars: TTS_MODEL_FILE, TTS_VOICE_FILE
         3) Config nested: config['tts']['model_path'|'voices_path']
         4) Config flat: config['TTS_MODEL_PATH'|'TTS_VOICES_PATH'|'TTS_MODEL_FILE'|'TTS_VOICE_FILE']
-        5) Reasonable defaults
+        5) Reasonable defaults.
         """
         # 1) New env
         model_path = os.getenv("TTS_MODEL_PATH")
@@ -142,7 +140,7 @@ class TTSManager:
         )
         return model_path, voices_path
 
-    def _load_kokoro(self, model_path: str, voices_path: str) -> "KokoroDirect":
+    def _load_kokoro(self, model_path: str, voices_path: str) -> KokoroDirect:
         """Create KokoroDirect instance. Broken out for test patching.
 
         Resolves KokoroDirect through the module so that
@@ -168,7 +166,7 @@ class TTSManager:
         """Return current warmup state: 'not_started', 'running', 'complete', or 'failed'."""
         return self._warmup_status
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Return a dict of TTS subsystem status for !status display and diagnostics."""
         return {
             "available": self.available,
@@ -177,7 +175,7 @@ class TTSManager:
             "warmup_status": self._warmup_status,
         }
 
-    def start_warmup(self, loop: Optional[asyncio.AbstractEventLoop] = None) -> None:
+    def start_warmup(self, loop: asyncio.AbstractEventLoop | None = None) -> None:
         """Schedule TTS warmup as a non-blocking background task.
 
         If TTS_SKIP_WARMUP is True (default in LOW_RESOURCE_MODE), warmup is skipped
@@ -207,7 +205,8 @@ class TTSManager:
                 # Reuse the existing lazy-load path
                 self.load_model()
                 if not self.kokoro:
-                    raise RuntimeError("TTS engine not available for warmup")
+                    msg = "TTS engine not available for warmup"
+                    raise RuntimeError(msg)
 
                 warmup_path = Path(tempfile.mkdtemp()) / "warmup.wav"
 
@@ -224,10 +223,8 @@ class TTSManager:
                     fut.result(timeout=_WARMUP_TIMEOUT)
 
                 # Discard the generated audio
-                try:
+                with contextlib.suppress(Exception):
                     warmup_path.unlink(missing_ok=True)
-                except Exception:
-                    pass
 
                 self._warmup_status = "complete"
                 logger.info(
@@ -266,9 +263,8 @@ class TTSManager:
             extra={"subsys": "tts", "event": "manager.available"},
         )
 
-    def generate_speech(self, text: str, voice: Optional[str] = None, *, out_path: Optional[Path] = None) -> Path:
-        """
-        Generate speech synchronously using KokoroDirect.create.
+    def generate_speech(self, text: str, voice: str | None = None, *, out_path: Path | None = None) -> Path:
+        """Generate speech synchronously using KokoroDirect.create.
 
         Args:
             text: Text to synthesize
@@ -277,11 +273,13 @@ class TTSManager:
 
         Returns:
             Path to generated WAV file
+
         """
         if self.kokoro is None:
             self.load_model()
         if not self.kokoro:
-            raise RuntimeError("TTS engine not available")  # [REH]
+            msg = "TTS engine not available"
+            raise RuntimeError(msg)  # [REH]
 
         # Enforce TTS text length cap [Phase 12-16]
         if len(text) > _TTS_MAX_CHARS:
@@ -291,14 +289,14 @@ class TTSManager:
                     len(text),
                     _TTS_MAX_CHARS,
                 )
-                raise RuntimeError(f"TTS text exceeds {_TTS_MAX_CHARS} chars; skipped (TTS_SKIP_LONG_RESPONSES=True)")
-            else:
-                logger.warning(
-                    "tts:trim_text len=%d max=%d",
-                    len(text),
-                    _TTS_MAX_CHARS,
-                )
-                text = text[:_TTS_MAX_CHARS]
+                msg = f"TTS text exceeds {_TTS_MAX_CHARS} chars; skipped (TTS_SKIP_LONG_RESPONSES=True)"
+                raise RuntimeError(msg)
+            logger.warning(
+                "tts:trim_text len=%d max=%d",
+                len(text),
+                _TTS_MAX_CHARS,
+            )
+            text = text[:_TTS_MAX_CHARS]
 
         chosen_voice = voice or self.voice
         logger.debug(
@@ -314,7 +312,8 @@ class TTSManager:
 def __getattr__(name):
     if name == "KokoroDirect":
         return _kokoro_direct()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
 
 
-__all__ = ["TTSManager", "KokoroDirect"]
+__all__ = ["KokoroDirect", "TTSManager"]

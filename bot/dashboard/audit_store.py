@@ -8,9 +8,9 @@ import json
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from bot.utils.logging import get_logger, redact_sensitive_values
 
@@ -64,7 +64,7 @@ def _truncate_hash(value: str, length: int = 16) -> str:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def _truncate_ip(ip: str) -> str:
@@ -143,16 +143,16 @@ class AuditStore:
         self,
         event_type: str,
         result: str = "success",
-        actor_user_id: Optional[int] = None,
-        actor_source_ip: Optional[str] = None,
-        actor_user_agent: Optional[str] = None,
-        target_user_id: Optional[int] = None,
-        target_guild_id: Optional[int] = None,
-        target_channel_id: Optional[int] = None,
-        message_id: Optional[int] = None,
-        error_code: Optional[str] = None,
-        content_preview: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None,
+        actor_user_id: int | None = None,
+        actor_source_ip: str | None = None,
+        actor_user_agent: str | None = None,
+        target_user_id: int | None = None,
+        target_guild_id: int | None = None,
+        target_channel_id: int | None = None,
+        message_id: int | None = None,
+        error_code: str | None = None,
+        content_preview: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """Append an audit event. Thread-safe via asyncio.to_thread."""
         await self.initialize()
@@ -181,16 +181,16 @@ class AuditStore:
         audit_id: str,
         event_type: str,
         result: str,
-        actor_user_id: Optional[str],
-        actor_source_ip: Optional[str],
+        actor_user_id: str | None,
+        actor_source_ip: str | None,
         actor_user_agent: str,
-        target_user_id: Optional[str],
-        target_guild_id: Optional[str],
-        target_channel_id: Optional[str],
-        message_id: Optional[str],
-        error_code: Optional[str],
-        content_preview: Optional[str],
-        content_hash: Optional[str],
+        target_user_id: str | None,
+        target_guild_id: str | None,
+        target_channel_id: str | None,
+        message_id: str | None,
+        error_code: str | None,
+        content_preview: str | None,
+        content_hash: str | None,
         metadata: dict[str, Any],
     ) -> None:
         with self._lock:
@@ -232,13 +232,13 @@ class AuditStore:
         page: int = 1,
         page_size: int = 50,
         max_page_size: int = 200,
-        event_type: Optional[str] = None,
-        actor_user_id: Optional[int] = None,
-        target_guild_id: Optional[int] = None,
-        target_user_id: Optional[int] = None,
-        result: Optional[str] = None,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
+        event_type: str | None = None,
+        actor_user_id: int | None = None,
+        target_guild_id: int | None = None,
+        target_user_id: int | None = None,
+        result: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
     ) -> dict[str, Any]:
         """Query audit events with pagination and filters."""
         await self.initialize()
@@ -278,7 +278,7 @@ class AuditStore:
                     "content_hash": row["content_hash"],
                     "metadata": json.loads(row["metadata_json"]),
                     "created_at": row["created_at"],
-                }
+                },
             )
 
         return {
@@ -293,13 +293,13 @@ class AuditStore:
         self,
         page_size: int,
         offset: int,
-        event_type: Optional[str] = None,
-        actor_user_id: Optional[int] = None,
-        target_guild_id: Optional[int] = None,
-        target_user_id: Optional[int] = None,
-        result: Optional[str] = None,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
+        event_type: str | None = None,
+        actor_user_id: int | None = None,
+        target_guild_id: int | None = None,
+        target_user_id: int | None = None,
+        result: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
     ) -> tuple[list, int]:
         with self._lock:
             conn = self._connect()
@@ -340,7 +340,7 @@ class AuditStore:
                     ORDER BY created_at DESC
                     LIMIT ? OFFSET ?
                     """,  # nosec B608 — where_sql built from whitelist of column names, values parameterized
-                    params + [page_size, offset],
+                    [*params, page_size, offset],
                 ).fetchall()
                 return rows, count
             finally:
@@ -349,10 +349,10 @@ class AuditStore:
     async def cleanup_retention(self) -> int:
         """Remove audit events older than retention period. Returns deleted count."""
         await self.initialize()
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=self._retention_days)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        cutoff = (datetime.now(UTC) - timedelta(days=self._retention_days)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         return await asyncio.to_thread(self._cleanup_sync, cutoff)
 
-    async def get_single_event(self, event_id: str) -> Optional[dict]:
+    async def get_single_event(self, event_id: str) -> dict | None:
         """Fetch a single audit event by its UUID. Returns the event dict or None."""
         await self.initialize()
         return await asyncio.to_thread(self._get_single_event_sync, event_id)
@@ -367,7 +367,7 @@ class AuditStore:
             finally:
                 conn.close()
 
-    def _get_single_event_sync(self, event_id: str) -> Optional[dict]:
+    def _get_single_event_sync(self, event_id: str) -> dict | None:
         """Thread-safe sync helper: fetch one audit event by audit_id."""
         with self._lock:
             conn = self._connect()

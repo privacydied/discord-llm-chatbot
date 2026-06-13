@@ -1,9 +1,11 @@
-import pytest
+from typing import Never
 from unittest.mock import AsyncMock, MagicMock
-import discord
 
-from bot.core.bot import LLMBot
+import discord
+import pytest
+
 from bot.action import BotAction
+from bot.core.bot import LLMBot
 
 
 class _AsyncTyping:
@@ -15,7 +17,7 @@ class _AsyncTyping:
 
 
 @pytest.mark.asyncio
-async def test_reply_anchors_to_triggering_user(monkeypatch):
+async def test_reply_anchors_to_triggering_user(monkeypatch) -> None:
     """In REPLY_CASE, the bot should anchor to the triggering user message (never the bot/parent).
     We assert that message.reply() is called, not parent_msg.reply().
     """
@@ -80,7 +82,7 @@ async def test_reply_anchors_to_triggering_user(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_reply_missing_parent_still_targets_triggering_user(monkeypatch):
+async def test_reply_missing_parent_still_targets_triggering_user(monkeypatch) -> None:
     """If the reply's parent cannot be fetched or is missing, we still anchor to the triggering user message.
     This verifies the fallback is resilient and does not crash or self-anchor.
     """
@@ -103,8 +105,9 @@ async def test_reply_missing_parent_still_targets_triggering_user(monkeypatch):
     bot.enhanced_context_manager = None
 
     # Mock channel typing context and fetch_message raising
-    async def _fetch_message(_):
-        raise Exception("not found")
+    async def _fetch_message(_) -> Never:
+        msg = "not found"
+        raise Exception(msg)
 
     channel = MagicMock(spec=discord.TextChannel)
     channel.typing = MagicMock(return_value=_AsyncTyping())

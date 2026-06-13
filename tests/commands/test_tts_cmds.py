@@ -1,6 +1,7 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from bot.commands.tts_cmds import TTSCommands
 from bot.tts.state import tts_state
@@ -35,7 +36,7 @@ def mock_ctx():
 
 
 @pytest.fixture(autouse=True)
-def reset_tts_state():
+def reset_tts_state() -> None:
     """Reset the tts_state before each test to ensure isolation."""
     tts_state.user_preferences.clear()
     tts_state.global_enabled = False
@@ -43,7 +44,7 @@ def reset_tts_state():
 
 
 @pytest.mark.asyncio
-async def test_tts_on(tts_cog, mock_ctx):
+async def test_tts_on(tts_cog, mock_ctx) -> None:
     """Verify that the 'tts on' command enables TTS for a user."""
     await tts_cog.tts_on.callback(tts_cog, mock_ctx)
 
@@ -52,7 +53,7 @@ async def test_tts_on(tts_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_tts_off(tts_cog, mock_ctx):
+async def test_tts_off(tts_cog, mock_ctx) -> None:
     """Verify that the 'tts off' command disables TTS for a user."""
     # First, enable it to ensure the test correctly changes the state
     tts_state.set_user_tts(mock_ctx.author.id, True)
@@ -65,7 +66,7 @@ async def test_tts_off(tts_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_tts_all_on_by_admin(tts_cog, mock_ctx):
+async def test_tts_all_on_by_admin(tts_cog, mock_ctx) -> None:
     """Verify that an admin can enable global TTS."""
     # Simulate admin permissions
     mock_ctx.author.guild_permissions.administrator = True
@@ -76,7 +77,7 @@ async def test_tts_all_on_by_admin(tts_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_tts_all_off_by_admin(tts_cog, mock_ctx):
+async def test_tts_all_off_by_admin(tts_cog, mock_ctx) -> None:
     """Verify that an admin can disable global TTS."""
     tts_state.set_global_tts(True)
     mock_ctx.author.guild_permissions.administrator = True
@@ -87,7 +88,7 @@ async def test_tts_all_off_by_admin(tts_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_tts_all_invalid_setting(tts_cog, mock_ctx):
+async def test_tts_all_invalid_setting(tts_cog, mock_ctx) -> None:
     """Verify that an invalid setting for 'tts all' is handled correctly."""
     mock_ctx.author.guild_permissions.administrator = True
     await tts_cog.tts_all.callback(tts_cog, mock_ctx, setting="invalid")
@@ -97,7 +98,7 @@ async def test_tts_all_invalid_setting(tts_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_speak_command_no_text(tts_cog, mock_ctx):
+async def test_speak_command_no_text(tts_cog, mock_ctx) -> None:
     """Verify that '!speak' without text sets a one-time TTS flag."""
     await tts_cog.speak.callback(tts_cog, mock_ctx)
 
@@ -106,7 +107,7 @@ async def test_speak_command_no_text(tts_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_speak_command_with_text(tts_cog, mock_ctx):
+async def test_speak_command_with_text(tts_cog, mock_ctx) -> None:
     """Verify that '!speak <text>' delegates to the 'say' command."""
     tts_cog.say = AsyncMock()
     text_to_speak = "Hello world"
@@ -117,7 +118,7 @@ async def test_speak_command_with_text(tts_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_say_command_with_text(tts_cog, mock_ctx, mock_bot, monkeypatch):
+async def test_say_command_with_text(tts_cog, mock_ctx, mock_bot, monkeypatch) -> None:
     """Verify that '!say <text>' generates a TTS response directly via TTSManager.process."""
     # Mock discord.File to prevent FileNotFoundError in a test environment
     mock_discord_file = MagicMock()
@@ -139,7 +140,7 @@ async def test_say_command_with_text(tts_cog, mock_ctx, mock_bot, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_say_command_timeout_meta_forwarding(tts_cog, mock_ctx, mock_bot, monkeypatch):
+async def test_say_command_timeout_meta_forwarding(tts_cog, mock_ctx, mock_bot, monkeypatch) -> None:
     """Verify that '!say' forwards timeout meta to TTSManager.process."""
     mock_discord_file = MagicMock()
     monkeypatch.setattr("discord.File", mock_discord_file)
@@ -159,7 +160,7 @@ async def test_say_command_timeout_meta_forwarding(tts_cog, mock_ctx, mock_bot, 
 
     # Inspect BotAction passed to process
     assert mock_bot.tts_manager.process.call_count == 1
-    call_args, call_kwargs = mock_bot.tts_manager.process.call_args
+    call_args, _call_kwargs = mock_bot.tts_manager.process.call_args
     assert len(call_args) == 1
     action = call_args[0]
     meta = getattr(action, "meta", {})
@@ -170,7 +171,7 @@ async def test_say_command_timeout_meta_forwarding(tts_cog, mock_ctx, mock_bot, 
 
 
 @pytest.mark.asyncio
-async def test_say_command_with_attachment(tts_cog, mock_ctx, mock_bot):
+async def test_say_command_with_attachment(tts_cog, mock_ctx, mock_bot) -> None:
     """Verify that '!say' with an attachment dispatches to the router."""
     mock_ctx.message.attachments = [MagicMock()]
 
@@ -182,7 +183,7 @@ async def test_say_command_with_attachment(tts_cog, mock_ctx, mock_bot):
 
 
 @pytest.mark.asyncio
-async def test_tts_group_with_text(tts_cog, mock_ctx):
+async def test_tts_group_with_text(tts_cog, mock_ctx) -> None:
     """Verify that '!tts <text>' delegates to the 'speak' command."""
     tts_cog.speak = AsyncMock()
     text_to_speak = "Speak this"
@@ -193,7 +194,7 @@ async def test_tts_group_with_text(tts_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_tts_group_no_text(tts_cog, mock_ctx):
+async def test_tts_group_no_text(tts_cog, mock_ctx) -> None:
     """Verify that '!tts' without text sends a help message."""
     await tts_cog.tts_group.callback(tts_cog, mock_ctx, text=None)
 
@@ -201,7 +202,7 @@ async def test_tts_group_no_text(tts_cog, mock_ctx):
 
 
 @pytest.mark.asyncio
-async def test_say_disabled_on_server_short_circuits(tts_cog, mock_ctx, mock_bot, monkeypatch):
+async def test_say_disabled_on_server_short_circuits(tts_cog, mock_ctx, mock_bot, monkeypatch) -> None:
     mock_ctx.guild = SimpleNamespace(id=321)
     monkeypatch.setattr(
         "bot.commands.tts_cmds.is_server_feature_enabled",
@@ -215,7 +216,7 @@ async def test_say_disabled_on_server_short_circuits(tts_cog, mock_ctx, mock_bot
 
 
 @pytest.mark.asyncio
-async def test_say_native_voice_publish_success(tts_cog, mock_ctx, mock_bot, monkeypatch):
+async def test_say_native_voice_publish_success(tts_cog, mock_ctx, mock_bot, monkeypatch) -> None:
     """When VoiceMessagePublisher.publish succeeds, the command should return without sending a file."""
     # Patch discord.File to avoid filesystem operations if fallback were used
     monkeypatch.setattr("discord.File", MagicMock())
@@ -250,7 +251,7 @@ async def test_say_native_voice_publish_success(tts_cog, mock_ctx, mock_bot, mon
 
 
 @pytest.mark.asyncio
-async def test_say_native_voice_publish_fallback_to_file(tts_cog, mock_ctx, mock_bot, monkeypatch):
+async def test_say_native_voice_publish_fallback_to_file(tts_cog, mock_ctx, mock_bot, monkeypatch) -> None:
     """If native voice publish reports not ok, fall back to sending an attachment in channel."""
     # Patch discord.File to avoid filesystem and assert call
     mock_discord_file = MagicMock()

@@ -1,23 +1,24 @@
-"""
-Hybrid search integration that combines vector and keyword search with fallback logic.
-"""
+"""Hybrid search integration that combines vector and keyword search with fallback logic."""
 
-import os
-import time
-import threading
-from typing import List, Dict, Any, Optional
 import asyncio
+import os
+import threading
+import time
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
-from .chroma_backend import ChromaRAGBackend
-from .vector_schema import HybridSearchConfig
+from bot.search import SearchResult as LegacySearchResult
+from bot.search.factory import get_search_provider
+from bot.search.types import SafeSearch, SearchQueryParams
+from bot.utils.logging import get_logger
+
 from .bootstrap import create_rag_system
 from .indexing_queue import IndexingQueue, IndexingTask
-from ..search import SearchResult as LegacySearchResult
-from ..search.factory import get_search_provider
-from ..search.types import SearchQueryParams, SafeSearch
-from ..utils.logging import get_logger
+from .vector_schema import HybridSearchConfig
+
+if TYPE_CHECKING:
+    from .chroma_backend import ChromaRAGBackend
 
 logger = get_logger(__name__)
 
@@ -40,8 +41,8 @@ class HybridSearchResult:
     source: str
     score: float
     search_type: str  # "vector", "keyword", "hybrid", "fallback"
-    explanation: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    explanation: str | None = None
+    metadata: dict[str, Any] | None = None
 
     def to_legacy_result(self) -> LegacySearchResult:
         """Convert to legacy SearchResult format for backward compatibility."""
@@ -60,28 +61,28 @@ class HybridRAGSearch:
         self,
         kb_path: str = "kb",
         db_path: str = "./chroma_db",
-        config: Optional[HybridSearchConfig] = None,
+        config: HybridSearchConfig | None = None,
         enable_rag: bool = True,
-    ):
+    ) -> None:
         self.kb_path = kb_path
         self.db_path = db_path
         self.config = config or HybridSearchConfig()
         self.enable_rag = enable_rag and os.getenv("ENABLE_RAG", "true").lower() == "true"
 
         # RAG components (lazy initialization)
-        self.rag_backend: Optional[ChromaRAGBackend] = None
+        self.rag_backend: ChromaRAGBackend | None = None
         self.bootstrap = None
         self._initialized = False
 
         # Index state management [RAG]
         self._index_state = IndexState.NOT_LOADED
         self._index_load_lock = threading.Lock()
-        self._index_load_start_time: Optional[float] = None
-        self._reranker_load_time: Optional[float] = None
-        self._vector_load_time: Optional[float] = None
+        self._index_load_start_time: float | None = None
+        self._reranker_load_time: float | None = None
+        self._vector_load_time: float | None = None
 
         # Background indexing [RAG]
-        self._indexing_queue: Optional[IndexingQueue] = None
+        self._indexing_queue: IndexingQueue | None = None
 
         # Performance tracking
         self.search_stats = {
@@ -98,8 +99,7 @@ class HybridRAGSearch:
         logger.info(f"[RAG] Hybrid search configured: eager_vector_load={self.config.eager_vector_load}, background_indexing={self.config.background_indexing}, indexing_workers={self.config.indexing_workers}")
 
     async def initialize(self) -> bool:
-        """
-        Initialize the RAG system with reranker loading and optional eager vector loading.
+        """Initialize the RAG system with reranker loading and optional eager vector loading.
         Returns True if successful, False if fallback needed.
         """
         if self._initialized:
@@ -158,25 +158,25 @@ class HybridRAGSearch:
                 f"✔ Hybrid RAG search system initialized: "
                 f"reranker_load_time={self._reranker_load_time:.1f}ms, "
                 f"vector_index={'loaded' if self._index_state == IndexState.LOADED else 'deferred'}, "
-                f"background_indexing={'enabled' if self.config.background_indexing else 'disabled'}"
+                f"background_indexing={'enabled' if self.config.background_indexing else 'disabled'}",
             )
             return True
 
         except Exception as e:
-            logger.error(f"[RAG] Failed to initialize RAG system: {e}")
+            logger.exception(f"[RAG] Failed to initialize RAG system: {e}")
             logger.warning("[RAG] Falling back to legacy search only")
             self._initialized = True
             return False
 
     async def _load_vector_index(self) -> bool:
-        """
-        Load the vector index with thread-safe, idempotent behavior.
+        """Load the vector index with thread-safe, idempotent behavior.
 
         This method implements the NOT_LOADED → LOADING → LOADED state machine
         with proper locking to ensure only one load operation occurs.
 
         Returns:
             True if loaded successfully, False if failed
+
         """
         # Quick check without lock for already loaded state
         if self._index_state == IndexState.LOADED:
@@ -241,35 +241,35 @@ class HybridRAGSearch:
             with self._index_load_lock:
                 self._index_state = IndexState.FAILED
 
-            logger.error(f"[RAG] ✖ Lazy vector index load failed: {e}")
+            logger.exception(f"[RAG] ✖ Lazy vector index load failed: {e}")
             return False
 
     def is_index_loaded(self) -> bool:
-        """
-        Check if the vector index is loaded and ready for search.
+        """Check if the vector index is loaded and ready for search.
 
         Returns:
             True if index is loaded, False otherwise
+
         """
         return self._index_state == IndexState.LOADED
 
     def get_index_state(self) -> str:
-        """
-        Get the current index loading state.
+        """Get the current index loading state.
 
         Returns:
             String representation of current state
+
         """
         return self._index_state.value
 
     async def _ensure_vector_index_loaded(self) -> bool:
-        """
-        Ensure the vector index is loaded before performing vector search.
+        """Ensure the vector index is loaded before performing vector search.
 
         This is the main entry point for lazy loading triggered by search operations.
 
         Returns:
             True if index is available, False if unavailable
+
         """
         if self._index_state == IndexState.LOADED:
             return True
@@ -292,13 +292,12 @@ class HybridRAGSearch:
     async def search(
         self,
         query: str,
-        user_id: Optional[str] = None,
-        guild_id: Optional[str] = None,
+        user_id: str | None = None,
+        guild_id: str | None = None,
         max_results: int = 5,
         search_type: str = "hybrid",
-    ) -> List[HybridSearchResult]:
-        """
-        Perform hybrid search across vector and keyword sources.
+    ) -> list[HybridSearchResult]:
+        """Perform hybrid search across vector and keyword sources.
 
         This method implements lazy loading: if the vector index is not loaded,
         it will trigger a one-time load before performing vector search.
@@ -312,6 +311,7 @@ class HybridRAGSearch:
 
         Returns:
             List of search results with provenance tracking
+
         """
         search_start = time.time()
 
@@ -332,7 +332,8 @@ class HybridRAGSearch:
                 self.search_stats["keyword_searches"] += 1
                 results = await self._keyword_search(query, user_id, guild_id, max_results)
             else:
-                raise ValueError(f"Invalid search_type: {search_type}")
+                msg = f"Invalid search_type: {search_type}"
+                raise ValueError(msg)
 
             search_time = (time.time() - search_start) * 1000
 
@@ -343,7 +344,7 @@ class HybridRAGSearch:
 
         except Exception as e:
             search_time = (time.time() - search_start) * 1000
-            logger.error(f"[RAG] Search failed: type={search_type}, time={search_time:.1f}ms, error={e}")
+            logger.exception(f"[RAG] Search failed: type={search_type}, time={search_time:.1f}ms, error={e}")
 
             # Fallback to keyword search on error
             if search_type != "keyword":
@@ -357,12 +358,11 @@ class HybridRAGSearch:
     async def _hybrid_search(
         self,
         query: str,
-        user_id: Optional[str],
-        guild_id: Optional[str],
+        user_id: str | None,
+        guild_id: str | None,
         max_results: int,
-    ) -> List[HybridSearchResult]:
+    ) -> list[HybridSearchResult]:
         """Perform hybrid vector + keyword search with lazy loading."""
-
         # Try vector search first (with lazy loading)
         vector_results = await self._vector_search(query, user_id, guild_id, self.config.max_vector_results)
         if vector_results is None:
@@ -400,10 +400,10 @@ class HybridRAGSearch:
     async def _vector_search(
         self,
         query: str,
-        user_id: Optional[str],
-        guild_id: Optional[str],
+        user_id: str | None,
+        guild_id: str | None,
         max_results: int,
-    ) -> List[HybridSearchResult]:
+    ) -> list[HybridSearchResult]:
         """Perform vector similarity search with lazy loading."""
         # Ensure vector index is loaded before search [RAG]
         if not await self._ensure_vector_index_loaded():
@@ -427,7 +427,7 @@ class HybridRAGSearch:
 
             # Convert to hybrid results
             hybrid_results = []
-            for i, result in enumerate(vector_results):
+            for _i, result in enumerate(vector_results):
                 hybrid_result = HybridSearchResult(
                     title=result.title,
                     snippet=result.snippet,
@@ -445,7 +445,7 @@ class HybridRAGSearch:
             return hybrid_results
 
         except Exception as e:
-            logger.error(f"[RAG] Vector search failed: {e}")
+            logger.exception(f"[RAG] Vector search failed: {e}")
             if self.config.fallback_to_keyword_on_failure:
                 logger.warning("[RAG] Vector search failed, falling back to keyword")
                 return await self._keyword_search(query, user_id, guild_id, max_results)
@@ -454,10 +454,10 @@ class HybridRAGSearch:
     async def _keyword_search(
         self,
         query: str,
-        user_id: Optional[str],
-        guild_id: Optional[str],
+        user_id: str | None,
+        guild_id: str | None,
         max_results: int,
-    ) -> List[HybridSearchResult]:
+    ) -> list[HybridSearchResult]:
         """Perform legacy keyword search."""
         self.search_stats["keyword_searches"] += 1
 
@@ -486,7 +486,7 @@ class HybridRAGSearch:
             web_results = await provider.search(params)
 
             # Convert provider results to hybrid format
-            hybrid_results: List[HybridSearchResult] = []
+            hybrid_results: list[HybridSearchResult] = []
             for res in web_results[:max_results]:
                 hybrid_results.append(
                     HybridSearchResult(
@@ -497,20 +497,20 @@ class HybridRAGSearch:
                         search_type="keyword",
                         explanation="Web keyword search match",
                         metadata={"url": res.url},
-                    )
+                    ),
                 )
 
             return hybrid_results
 
         except Exception as e:
-            logger.error(f"[RAG] Keyword search failed: {e}")
+            logger.exception(f"[RAG] Keyword search failed: {e}")
             return []
 
     def _combine_results(
         self,
-        vector_results: List[HybridSearchResult],
-        keyword_results: List[HybridSearchResult],
-    ) -> List[HybridSearchResult]:
+        vector_results: list[HybridSearchResult],
+        keyword_results: list[HybridSearchResult],
+    ) -> list[HybridSearchResult]:
         """Combine vector and keyword results with weighted scoring."""
         combined = []
 
@@ -531,7 +531,7 @@ class HybridRAGSearch:
 
         return combined
 
-    def _deduplicate_results(self, results: List[HybridSearchResult]) -> List[HybridSearchResult]:
+    def _deduplicate_results(self, results: list[HybridSearchResult]) -> list[HybridSearchResult]:
         """Remove duplicate results based on content similarity."""
         if not results:
             return results
@@ -575,11 +575,10 @@ class HybridRAGSearch:
         self,
         source_id: str,
         text: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
         file_type: str = "text",
     ) -> bool:
-        """
-        Add a document to the RAG system.
+        """Add a document to the RAG system.
 
         Args:
             source_id: Unique identifier for the document
@@ -589,6 +588,7 @@ class HybridRAGSearch:
 
         Returns:
             True if successful, False otherwise
+
         """
         rag_available = await self.initialize()
 
@@ -609,8 +609,7 @@ class HybridRAGSearch:
                 if enq_ok:
                     logger.info(f"[RAG] Enqueued document for background indexing: {source_id}")
                     return True
-                else:
-                    logger.warning(f"[RAG] Indexing queue full, processing document synchronously: {source_id}")
+                logger.warning(f"[RAG] Indexing queue full, processing document synchronously: {source_id}")
                     # Fall through to synchronous path
 
             # Synchronous processing (background disabled or enqueue failed)
@@ -618,10 +617,10 @@ class HybridRAGSearch:
             logger.info(f"[RAG] Added document to RAG system: {source_id}")
             return True
         except Exception as e:
-            logger.error(f"[RAG] Failed to add document {source_id}: {e}")
+            logger.exception(f"[RAG] Failed to add document {source_id}: {e}")
             return False
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get search statistics and system status."""
         stats = {
             "rag_enabled": self.enable_rag,
@@ -644,6 +643,7 @@ class HybridRAGSearch:
 
         Returns:
             True if successful, False otherwise
+
         """
         rag_available = await self.initialize()
 
@@ -668,7 +668,7 @@ class HybridRAGSearch:
             return True
 
         except Exception as e:
-            logger.error(f"[RAG] Failed to wipe collection: {e}")
+            logger.exception(f"[RAG] Failed to wipe collection: {e}")
             return False
 
     async def close(self) -> None:
@@ -701,7 +701,7 @@ class HybridRAGSearch:
 
 
 # Global instance for the bot
-_hybrid_search: Optional[HybridRAGSearch] = None
+_hybrid_search: HybridRAGSearch | None = None
 _shutdown_in_progress: bool = False
 
 
@@ -712,7 +712,8 @@ async def get_hybrid_search() -> HybridRAGSearch:
     # Prevent initialization during shutdown
     if _shutdown_in_progress:
         logger.warning("[RAG] Preventing RAG initialization during shutdown")
-        raise RuntimeError("RAG system initialization blocked during shutdown")
+        msg = "RAG system initialization blocked during shutdown"
+        raise RuntimeError(msg)
 
     if _hybrid_search is None:
         logger.info("[RAG] Initializing hybrid search system...")
@@ -734,13 +735,12 @@ def set_shutdown_flag(shutdown: bool = True) -> None:
 
 async def hybrid_search(
     query: str,
-    user_id: Optional[str] = None,
-    guild_id: Optional[str] = None,
+    user_id: str | None = None,
+    guild_id: str | None = None,
     max_results: int = 5,
     search_type: str = "hybrid",
-) -> List[LegacySearchResult]:
-    """
-    Convenience function for hybrid search that returns legacy SearchResult format.
+) -> list[LegacySearchResult]:
+    """Convenience function for hybrid search that returns legacy SearchResult format.
 
     This function maintains backward compatibility with existing code.
     """
@@ -755,6 +755,5 @@ async def hybrid_search(
     )
 
     # Convert to legacy format
-    legacy_results = [result.to_legacy_result() for result in hybrid_results]
+    return [result.to_legacy_result() for result in hybrid_results]
 
-    return legacy_results

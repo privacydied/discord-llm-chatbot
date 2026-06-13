@@ -1,49 +1,47 @@
-"""
-Pricing table loader and cost estimator [CA][PA]
+"""Pricing table loader and cost estimator [CA][PA].
 
 Loads canonical pricing from JSON and provides deterministic cost estimation
 for vision generation tasks across all providers.
 """
 
-from pathlib import Path
-from typing import Dict, Any, Optional
-from decimal import Decimal
 import json
 import os
+from decimal import Decimal
+from pathlib import Path
+from typing import Any
 
-from bot.vision.money import Money
-from bot.vision.types import VisionTask, VisionProvider
 from bot.utils.logging import get_logger
+from bot.vision.money import Money
+from bot.vision.types import VisionProvider, VisionTask
 
 logger = get_logger(__name__)
 
 
 class PricingTable:
-    """
-    Canonical pricing table for vision generation costs.
+    """Canonical pricing table for vision generation costs.
 
     Provides deterministic cost estimation based on provider, task type,
     model, and generation parameters.
     """
 
-    def __init__(self, pricing_file: Optional[Path] = None):
-        """
-        Initialize pricing table from JSON file.
+    def __init__(self, pricing_file: Path | None = None) -> None:
+        """Initialize pricing table from JSON file.
 
         Args:
             pricing_file: Path to pricing JSON file (defaults to vision_pricing.json)
+
         """
         if pricing_file is None:
             pricing_file = Path(__file__).parent / "pricing" / "vision_pricing.json"
 
         self.pricing_file = pricing_file
-        self.pricing_data: Dict[str, Any] = {}
+        self.pricing_data: dict[str, Any] = {}
         self.load_pricing()
 
     def load_pricing(self) -> None:
-        """Load pricing data from JSON file [REH]"""
+        """Load pricing data from JSON file [REH]."""
         try:
-            with open(self.pricing_file, "r") as f:
+            with open(self.pricing_file) as f:
                 self.pricing_data = json.load(f)
             providers = list(self.pricing_data.get("providers", {}).keys())
             logger.info(
@@ -55,14 +53,14 @@ class PricingTable:
                 },
             )
         except FileNotFoundError:
-            logger.error(f"Pricing file not found: {self.pricing_file}")
+            logger.exception(f"Pricing file not found: {self.pricing_file}")
             self.pricing_data = self._get_fallback_pricing()
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid pricing JSON: {e}")
+            logger.exception(f"Invalid pricing JSON: {e}")
             self.pricing_data = self._get_fallback_pricing()
 
-    def _get_fallback_pricing(self) -> Dict[str, Any]:
-        """Get fallback pricing if file cannot be loaded [REH]"""
+    def _get_fallback_pricing(self) -> dict[str, Any]:
+        """Get fallback pricing if file cannot be loaded [REH]."""
         logger.warning("Using fallback pricing data")
         return {
             "version": "fallback",
@@ -90,10 +88,9 @@ class PricingTable:
         height: int = 1024,
         num_images: int = 1,
         duration_seconds: float = 4.0,
-        model: Optional[str] = None,
+        model: str | None = None,
     ) -> Money:
-        """
-        Estimate cost for a vision generation task.
+        """Estimate cost for a vision generation task.
 
         Args:
             provider: Vision provider to use
@@ -106,6 +103,7 @@ class PricingTable:
 
         Returns:
             Estimated cost as Money object
+
         """
         # Check for environment variable overrides first
         provider_name = provider.value.lower()
@@ -175,14 +173,14 @@ class PricingTable:
             extra={
                 "subsys": "vision",
                 "event": "pricing.estimate",
-                "detail": f"cost={str(cost)}, width={width}, height={height}, num_images={num_images}, duration_seconds={duration_seconds}, model={model}",
+                "detail": f"cost={cost!s}, width={width}, height={height}, num_images={num_images}, duration_seconds={duration_seconds}, model={model}",
             },
         )
 
         return cost
 
     def _task_to_pricing_key(self, task: VisionTask) -> str:
-        """Convert VisionTask enum to pricing key"""
+        """Convert VisionTask enum to pricing key."""
         # Map all task types to their pricing categories
         mapping = {
             VisionTask.TEXT_TO_IMAGE: "text_to_image",
@@ -201,37 +199,36 @@ class PricingTable:
         return mapping.get(task, "text_to_image")
 
     def _get_size_key(self, width: int, height: int) -> str:
-        """Get size key for multiplier lookup"""
+        """Get size key for multiplier lookup."""
         # Find closest standard size
         size = max(width, height)
         if size <= 512:
             return "512x512"
-        elif size <= 768:
+        if size <= 768:
             return "768x768"
-        elif size <= 1024:
+        if size <= 1024:
             return "1024x1024"
-        elif size <= 1536:
+        if size <= 1536:
             return "1536x1536"
-        else:
-            return "2048x2048"
+        return "2048x2048"
 
     def _normalize_model_name(self, model: str) -> str:
-        """Normalize model name for multiplier lookup"""
+        """Normalize model name for multiplier lookup."""
         model_lower = model.lower()
         if "flux" in model_lower:
             if "schnell" in model_lower:
                 return "flux-schnell"
-            elif "pro" in model_lower:
+            if "pro" in model_lower:
                 return "flux-pro"
             return "flux"
-        elif "sdxl" in model_lower:
+        if "sdxl" in model_lower:
             return "sdxl"
-        elif "playground" in model_lower:
+        if "playground" in model_lower:
             return "playground"
         return "default"
 
     def _get_default_estimate(self, task: VisionTask, num_images: int = 1, duration_seconds: float = 4.0) -> Money:
-        """Get default estimate when provider/task pricing not available"""
+        """Get default estimate when provider/task pricing not available."""
         defaults = self.pricing_data.get("default_estimates", {})
         task_key = self._task_to_pricing_key(task)
         base_cost = defaults.get(task_key, defaults.get("unknown", 0.05))
@@ -243,13 +240,11 @@ class PricingTable:
         ]:
             # Scale by duration for video
             return Money(base_cost) * (duration_seconds / 4.0)
-        else:
-            # Scale by number of images
-            return Money(base_cost) * num_images
+        # Scale by number of images
+        return Money(base_cost) * num_images
 
-    def normalize_provider_usage(self, provider: VisionProvider, usage_data: Dict[str, Any]) -> Money:
-        """
-        Normalize provider usage data to USD.
+    def normalize_provider_usage(self, provider: VisionProvider, usage_data: dict[str, Any]) -> Money:
+        """Normalize provider usage data to USD.
 
         Handles different provider formats:
         - Credits-based (Novita, Chutes)
@@ -262,6 +257,7 @@ class PricingTable:
 
         Returns:
             Normalized cost as Money object
+
         """
         provider_name = provider.value.lower()
         provider_config = self.pricing_data.get("providers", {}).get(provider_name, {})
@@ -269,9 +265,8 @@ class PricingTable:
         # Check for direct USD amount
         if "cost_usd" in usage_data:
             return Money(usage_data["cost_usd"])
-        elif "cost" in usage_data and "currency" in usage_data:
-            if usage_data["currency"].upper() == "USD":
-                return Money(usage_data["cost"])
+        if "cost" in usage_data and "currency" in usage_data and usage_data["currency"].upper() == "USD":
+            return Money(usage_data["cost"])
 
         # Check for credits
         if "credits" in usage_data or "credits_used" in usage_data:
@@ -302,20 +297,20 @@ class PricingTable:
         return Money.zero()
 
     def get_max_discrepancy_ratio(self) -> Decimal:
-        """Get maximum allowed discrepancy ratio between estimate and actual"""
+        """Get maximum allowed discrepancy ratio between estimate and actual."""
         return Decimal(str(self.pricing_data.get("estimation_config", {}).get("max_discrepancy_ratio", 5.0)))
 
     def get_warning_discrepancy_ratio(self) -> Decimal:
-        """Get discrepancy ratio threshold for warnings"""
+        """Get discrepancy ratio threshold for warnings."""
         return Decimal(str(self.pricing_data.get("estimation_config", {}).get("warning_discrepancy_ratio", 2.0)))
 
 
 # Global pricing table instance
-_pricing_table: Optional[PricingTable] = None
+_pricing_table: PricingTable | None = None
 
 
 def get_pricing_table() -> PricingTable:
-    """Get or create global pricing table instance [PA]"""
+    """Get or create global pricing table instance [PA]."""
     global _pricing_table
     if _pricing_table is None:
         _pricing_table = PricingTable()

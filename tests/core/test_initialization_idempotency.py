@@ -1,15 +1,14 @@
-"""
-Test suite for bot initialization idempotency.
+"""Test suite for bot initialization idempotency.
 
 Ensures that bot setup runs exactly once, even if setup_hook() or on_ready()
 are called multiple times, preventing duplicate initialization.
 """
 
 import asyncio
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import discord
+import pytest
 from rich.console import Console
 
 from bot.core.bot import LLMBot, log_commands_setup
@@ -63,7 +62,7 @@ def test_bot(mock_config, mock_intents):
 
 
 @pytest.mark.asyncio
-async def test_setup_hook_idempotency(test_bot):
+async def test_setup_hook_idempotency(test_bot) -> None:
     """Test that setup_hook() can be called multiple times but only runs once."""
     # Verify initial state
     assert not test_bot._boot_completed
@@ -98,7 +97,7 @@ async def test_setup_hook_idempotency(test_bot):
 
 
 @pytest.mark.asyncio
-async def test_on_ready_idempotency(test_bot):
+async def test_on_ready_idempotency(test_bot) -> None:
     """Test that on_ready() can be called multiple times but only logs once."""
     # Mock the user object using patch since it's a property
     mock_user = MagicMock()
@@ -121,7 +120,7 @@ async def test_on_ready_idempotency(test_bot):
                 [
                     call("🤖 Logged in as TestBot#1234 (ID: 12345)"),
                     call("🎉 Bot is ready to receive commands!"),
-                ]
+                ],
             )
 
         # Second call should not log again
@@ -133,7 +132,7 @@ async def test_on_ready_idempotency(test_bot):
 
 
 @pytest.mark.asyncio
-async def test_setup_failure_recovery(test_bot):
+async def test_setup_failure_recovery(test_bot) -> None:
     """Test that setup failure resets the completion flag for retry."""
     # Make setup_tts fail on first call
     test_bot.setup_tts.side_effect = [Exception("TTS setup failed"), None]
@@ -154,7 +153,7 @@ async def test_setup_failure_recovery(test_bot):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_setup_calls(test_bot):
+async def test_concurrent_setup_calls(test_bot) -> None:
     """Test that concurrent setup_hook() calls are handled correctly."""
     # Create a slow async operation to simulate race conditions
     original_load_profiles = test_bot.load_profiles
@@ -184,7 +183,7 @@ async def test_concurrent_setup_calls(test_bot):
 
 
 @pytest.mark.asyncio
-async def test_logging_output_single_trace(test_bot, caplog):
+async def test_logging_output_single_trace(test_bot, caplog) -> None:
     """Test that setup produces exactly one setup trace."""
     import logging
 
@@ -214,7 +213,7 @@ async def test_logging_output_single_trace(test_bot, caplog):
 
 
 @pytest.mark.asyncio
-async def test_initialization_order_preserved(test_bot):
+async def test_initialization_order_preserved(test_bot) -> None:
     """Test that initialization steps occur in the correct order."""
     call_order = []
 
@@ -258,7 +257,7 @@ async def test_initialization_order_preserved(test_bot):
 
 
 @pytest.mark.asyncio
-async def test_log_commands_setup_all_success():
+async def test_log_commands_setup_all_success() -> None:
     """Test Rich command setup logging with all successful operations."""
     # Create a console that records output
     console = Console(record=True, width=80)
@@ -302,7 +301,7 @@ async def test_log_commands_setup_all_success():
 
 
 @pytest.mark.asyncio
-async def test_log_commands_setup_with_failures():
+async def test_log_commands_setup_with_failures() -> None:
     """Test Rich command setup logging with some failures."""
     # Create a console that records output
     console = Console(record=True, width=80)
@@ -349,7 +348,7 @@ async def test_log_commands_setup_with_failures():
 
 
 @pytest.mark.asyncio
-async def test_load_extensions_with_rich_output(test_bot):
+async def test_load_extensions_with_rich_output(test_bot) -> None:
     """Test that load_extensions produces Rich output and handles errors correctly."""
     # Mock the console to capture output
     test_bot.console = Console(record=True, width=80)
@@ -358,7 +357,8 @@ async def test_load_extensions_with_rich_output(test_bot):
 
     def mock_import_module(name):
         if "memory_cmds" in name:
-            raise ImportError("Simulated import failure")
+            msg = "Simulated import failure"
+            raise ImportError(msg)
         # Create a mock module with setup function
         mock_module = MagicMock()
         mock_module.setup = AsyncMock()
@@ -408,7 +408,7 @@ async def test_load_extensions_with_rich_output(test_bot):
 
 
 @pytest.mark.asyncio
-async def test_load_extensions_idempotency_with_rich(test_bot):
+async def test_load_extensions_idempotency_with_rich(test_bot) -> None:
     """Test that load_extensions respects idempotency and Rich output works correctly."""
     # Mock the console to capture output
     test_bot.console = Console(record=True, width=80)
@@ -458,7 +458,7 @@ async def test_load_extensions_idempotency_with_rich(test_bot):
 
 
 @pytest.mark.asyncio
-async def test_rich_console_initialization(test_bot):
+async def test_rich_console_initialization(test_bot) -> None:
     """Test that Rich console is properly initialized in bot."""
     # Verify console exists and is the right type
     assert hasattr(test_bot, "console")

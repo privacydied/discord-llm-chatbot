@@ -1,13 +1,11 @@
-"""
-Tests for STT cache key isolation across all video providers.
+"""Tests for STT cache key isolation across all video providers.
 Ensures that different videos produce different cache keys and that
 transcripts are not cross-contaminated, regardless of URL variants or CDN overlap.
 """
 
 import hashlib
 import re
-from urllib.parse import urlparse, parse_qs
-
+from urllib.parse import parse_qs, urlparse
 
 # ---------------------------------------------------------------------------
 # Inline copies of functions under test (to avoid import issues in CI)
@@ -20,9 +18,8 @@ def _hash_resolved_url(resolved_url: str) -> str:
 
 
 def _normalize_youtube_url(url: str) -> str:
-    """
-    Normalize YouTube URLs to a canonical form.
-    Returns canonical form: youtube://video/{VIDEO_ID}
+    """Normalize YouTube URLs to a canonical form.
+    Returns canonical form: youtube://video/{VIDEO_ID}.
     """
     if not url:
         return url
@@ -86,8 +83,7 @@ def _normalize_tiktok_url(url: str) -> str:
 
 
 def _canonicalize_video_identity(original_url: str, metadata=None) -> str:
-    """
-    Canonicalize video identity for cache keying across all providers.
+    """Canonicalize video identity for cache keying across all providers.
     Uses yt-dlp metadata when available, falls back to URL normalization.
     """
     # If we have yt-dlp metadata, use extractor:id
@@ -125,9 +121,7 @@ def _compute_download_key(
     original_url=None,
     video_identity=None,
 ) -> str:
-    """
-    Compute cache key with video identity for collision resistance.
-    """
+    """Compute cache key with video identity for collision resistance."""
     length_part = str(content_length) if content_length is not None else "na"
     base_key = f"{_hash_resolved_url(resolved_url)}-{fmt_id}-{length_part}"
 
@@ -151,43 +145,43 @@ def _compute_download_key(
 class TestYouTubeUrlNormalization:
     """Test YouTube URL normalization for consistent cache keying."""
 
-    def test_normalize_watch_url(self):
+    def test_normalize_watch_url(self) -> None:
         """Standard watch URLs should normalize to video ID."""
         url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         normalized = _normalize_youtube_url(url)
         assert normalized == "youtube://video/dQw4w9WgXcQ"
 
-    def test_normalize_watch_url_with_extra_params(self):
+    def test_normalize_watch_url_with_extra_params(self) -> None:
         """Watch URLs with extra params should still extract video ID."""
         url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30&list=PLx0"
         normalized = _normalize_youtube_url(url)
         assert normalized == "youtube://video/dQw4w9WgXcQ"
 
-    def test_normalize_shorts_url(self):
+    def test_normalize_shorts_url(self) -> None:
         """Shorts URLs should normalize to video ID."""
         url = "https://www.youtube.com/shorts/abcd1234xyz"
         normalized = _normalize_youtube_url(url)
         assert normalized == "youtube://video/abcd1234xyz"
 
-    def test_normalize_youtu_be_url(self):
+    def test_normalize_youtu_be_url(self) -> None:
         """youtu.be short links should normalize to video ID."""
         url = "https://youtu.be/dQw4w9WgXcQ"
         normalized = _normalize_youtube_url(url)
         assert normalized == "youtube://video/dQw4w9WgXcQ"
 
-    def test_normalize_embed_url(self):
+    def test_normalize_embed_url(self) -> None:
         """Embed URLs should normalize to video ID."""
         url = "https://www.youtube.com/embed/dQw4w9WgXcQ"
         normalized = _normalize_youtube_url(url)
         assert normalized == "youtube://video/dQw4w9WgXcQ"
 
-    def test_normalize_live_url(self):
+    def test_normalize_live_url(self) -> None:
         """Live URLs should normalize to video ID."""
         url = "https://www.youtube.com/live/dQw4w9WgXcQ"
         normalized = _normalize_youtube_url(url)
         assert normalized == "youtube://video/dQw4w9WgXcQ"
 
-    def test_same_video_different_urls(self):
+    def test_same_video_different_urls(self) -> None:
         """Different URL formats for same video should normalize identically."""
         video_id = "dQw4w9WgXcQ"
         urls = [
@@ -200,13 +194,13 @@ class TestYouTubeUrlNormalization:
         normalized = [_normalize_youtube_url(url) for url in urls]
         assert all(n == f"youtube://video/{video_id}" for n in normalized)
 
-    def test_different_videos_different_normalized(self):
+    def test_different_videos_different_normalized(self) -> None:
         """Different videos should produce different normalized forms."""
         url1 = "https://www.youtube.com/watch?v=video1abcdef"
         url2 = "https://www.youtube.com/watch?v=video2ghijkl"
         assert _normalize_youtube_url(url1) != _normalize_youtube_url(url2)
 
-    def test_non_youtube_unchanged(self):
+    def test_non_youtube_unchanged(self) -> None:
         """Non-YouTube URLs should be returned unchanged."""
         url = "https://www.tiktok.com/@user/video/123456789"
         assert _normalize_youtube_url(url) == url
@@ -220,35 +214,35 @@ class TestYouTubeUrlNormalization:
 class TestVideoIdentityCanonicalization:
     """Test video identity canonicalization across providers."""
 
-    def test_youtube_identity_from_metadata(self):
+    def test_youtube_identity_from_metadata(self) -> None:
         """Should use extractor:id from yt-dlp metadata."""
         metadata = {"extractor_key": "Youtube", "id": "dQw4w9WgXcQ"}
         identity = _canonicalize_video_identity("https://www.youtube.com/watch?v=dQw4w9WgXcQ", metadata)
         assert identity == "youtube:dQw4w9WgXcQ"
 
-    def test_tiktok_identity_from_metadata(self):
+    def test_tiktok_identity_from_metadata(self) -> None:
         """Should use extractor:id from yt-dlp metadata."""
         metadata = {"extractor_key": "TikTok", "id": "7123456789012345678"}
         identity = _canonicalize_video_identity("https://www.tiktok.com/@user/video/7123456789012345678", metadata)
         assert identity == "tiktok:7123456789012345678"
 
-    def test_youtube_identity_fallback_to_url(self):
+    def test_youtube_identity_fallback_to_url(self) -> None:
         """Should fall back to URL normalization without metadata."""
         identity = _canonicalize_video_identity("https://www.youtube.com/shorts/dQw4w9WgXcQ")
         assert identity == "youtube:video/dQw4w9WgXcQ"
 
-    def test_tiktok_identity_fallback_to_url(self):
+    def test_tiktok_identity_fallback_to_url(self) -> None:
         """Should fall back to URL normalization without metadata."""
         identity = _canonicalize_video_identity("https://www.tiktok.com/@user/video/7123456789")
         assert identity == "tiktok:video/7123456789"
 
-    def test_generic_identity_for_unknown_domain(self):
+    def test_generic_identity_for_unknown_domain(self) -> None:
         """Unknown domains should get generic hash identity."""
         identity = _canonicalize_video_identity("https://example.com/video/abc123")
         assert identity.startswith("generic:")
         assert len(identity) > 20  # generic: + 16 char hash
 
-    def test_cross_provider_different_identities(self):
+    def test_cross_provider_different_identities(self) -> None:
         """Same numeric ID on different providers must have different identities."""
         youtube_identity = _canonicalize_video_identity("https://www.youtube.com/watch?v=123456789012")
         tiktok_identity = _canonicalize_video_identity("https://www.tiktok.com/@user/video/123456789012")
@@ -263,7 +257,7 @@ class TestVideoIdentityCanonicalization:
 class TestCacheKeyIsolation:
     """Test cache key uniqueness across different videos."""
 
-    def test_different_youtube_videos_different_keys(self):
+    def test_different_youtube_videos_different_keys(self) -> None:
         """Different YouTube videos must produce different cache keys."""
         # Simulate same resolved CDN URL (worst case scenario)
         same_resolved = "https://rr1---sn-abc.googlevideo.com/videoplayback?id=xyz"
@@ -285,7 +279,7 @@ class TestCacheKeyIsolation:
 
         assert key1 != key2, "Different YouTube videos must produce different cache keys"
 
-    def test_same_youtube_video_same_key(self):
+    def test_same_youtube_video_same_key(self) -> None:
         """Same YouTube video should produce same cache key."""
         resolved = "https://rr1---sn-abc.googlevideo.com/videoplayback?id=xyz"
         video_id = "dQw4w9WgXcQ"
@@ -308,7 +302,7 @@ class TestCacheKeyIsolation:
 
         assert key1 == key2, "Same video should produce same cache key"
 
-    def test_youtube_shorts_vs_watch_same_key(self):
+    def test_youtube_shorts_vs_watch_same_key(self) -> None:
         """YouTube shorts and watch for same video should have same key."""
         resolved = "https://rr1---sn-abc.googlevideo.com/videoplayback?id=xyz"
         video_id = "abcd1234xyz"
@@ -331,7 +325,7 @@ class TestCacheKeyIsolation:
 
         assert key_shorts == key_watch
 
-    def test_cross_provider_isolation(self):
+    def test_cross_provider_isolation(self) -> None:
         """YouTube and TikTok with same numeric ID must have different keys."""
         same_resolved = "https://cdn.example.com/video.mp4"
         numeric_id = "1234567890123"
@@ -341,7 +335,7 @@ class TestCacheKeyIsolation:
 
         assert youtube_key != tiktok_key, "Cross-provider keys must differ"
 
-    def test_all_keys_have_identity_suffix(self):
+    def test_all_keys_have_identity_suffix(self) -> None:
         """All cache keys should include video identity suffix."""
         key = _compute_download_key(
             "https://cdn.example.com/video.mp4",
@@ -352,7 +346,7 @@ class TestCacheKeyIsolation:
         )
         assert "-v" in key, "Cache key should have video identity suffix"
 
-    def test_fallback_identity_when_no_metadata(self):
+    def test_fallback_identity_when_no_metadata(self) -> None:
         """Should compute identity from URL when video_identity not provided."""
         key = _compute_download_key(
             "https://cdn.example.com/video.mp4",
@@ -362,7 +356,7 @@ class TestCacheKeyIsolation:
         )
         assert "-v" in key, "Should have identity suffix even without explicit identity"
 
-    def test_generic_url_still_gets_identity(self):
+    def test_generic_url_still_gets_identity(self) -> None:
         """Generic URLs should still get identity suffix for isolation."""
         key = _compute_download_key(
             "https://cdn.example.com/video.mp4",
@@ -381,7 +375,7 @@ class TestCacheKeyIsolation:
 class TestTikTokCacheIsolation:
     """Regression tests to ensure TikTok fix still works with generalized code."""
 
-    def test_different_tiktoks_different_keys(self):
+    def test_different_tiktoks_different_keys(self) -> None:
         """Different TikTok URLs should produce different cache keys."""
         same_resolved = "https://cdn.tiktok.com/video/abc123.mp4"
 
@@ -390,7 +384,7 @@ class TestTikTokCacheIsolation:
 
         assert key1 != key2
 
-    def test_same_tiktok_same_key(self):
+    def test_same_tiktok_same_key(self) -> None:
         """Same TikTok video should produce same cache key."""
         resolved = "https://cdn.tiktok.com/video/abc123.mp4"
         identity = "tiktok:7123456789012345678"
@@ -400,7 +394,7 @@ class TestTikTokCacheIsolation:
 
         assert key1 == key2
 
-    def test_tiktok_player_and_canonical_same_identity(self):
+    def test_tiktok_player_and_canonical_same_identity(self) -> None:
         """Player URL and canonical URL for same video should have same identity."""
         player_url = "https://www.tiktok.com/player/v1/7578893205815495958"
         canonical_url = "https://www.tiktok.com/@user/video/7578893205815495958"
@@ -419,20 +413,20 @@ class TestTikTokCacheIsolation:
 class TestEdgeCases:
     """Test edge cases and error handling."""
 
-    def test_empty_url(self):
+    def test_empty_url(self) -> None:
         """Empty URL should not crash."""
         assert _normalize_youtube_url("") == ""
         assert _normalize_tiktok_url("") == ""
         assert _canonicalize_video_identity("") == ""
 
-    def test_malformed_url(self):
+    def test_malformed_url(self) -> None:
         """Malformed URLs should be handled gracefully."""
         url = "not-a-valid-url"
         # Should not crash, may return original or fallback
         identity = _canonicalize_video_identity(url)
         assert identity.startswith("generic:")
 
-    def test_short_video_id_ignored(self):
+    def test_short_video_id_ignored(self) -> None:
         """Very short video IDs should be rejected."""
         # YouTube IDs are typically 11 chars, minimum 6
         url = "https://www.youtube.com/watch?v=ab"
@@ -440,7 +434,7 @@ class TestEdgeCases:
         # Should return original URL since ID too short
         assert normalized == url
 
-    def test_hash_consistency(self):
+    def test_hash_consistency(self) -> None:
         """Same input should always produce same hash."""
         url = "https://www.youtube.com/watch?v=consistent123"
         hash1 = _hash_resolved_url(url)

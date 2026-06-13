@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
-"""
-IPA Vocabulary Loader with ONNX validation and greedy encoder.
+"""IPA Vocabulary Loader with ONNX validation and greedy encoder.
 Uses the hardcoded official Kokoro mapping from ipa_vocab_kokoro_v1.py.
 """
 
 from __future__ import annotations
-from typing import NamedTuple, Optional
+
 import logging
+from typing import NamedTuple
 
 try:
     from onnxruntime import InferenceSession
@@ -15,9 +14,9 @@ except ImportError:
     InferenceSession = object
 
 from bot.tts.ipa_vocab_kokoro_v1 import (
-    PHONEME_TO_ID,
     EXPECTED_VOCAB_SIZE,
     IS_PLACEHOLDER,
+    PHONEME_TO_ID,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
 class UnsupportedIPASymbolError(ValueError):
     """Raised when IPA contains symbols not in the official vocabulary."""
 
-    def __init__(self, unsupported_symbols: list[str]):
+    def __init__(self, unsupported_symbols: list[str]) -> None:
         self.unsupported_symbols = unsupported_symbols
         super().__init__(f"Unsupported IPA symbols: {unsupported_symbols}")
 
@@ -39,7 +38,7 @@ class Vocab(NamedTuple):
     rows: int
 
 
-def _get_embedding_rows(session: Optional[InferenceSession]) -> int:
+def _get_embedding_rows(session: InferenceSession | None) -> int:
     """Get embedding rows from ONNX session metadata or inputs."""
     # Try to find vocab size in model metadata first
     if session is not None and hasattr(session, "get_modelmeta"):
@@ -59,9 +58,8 @@ def _get_embedding_rows(session: Optional[InferenceSession]) -> int:
     return len(PHONEME_TO_ID)
 
 
-def load_vocab(session: Optional[InferenceSession]) -> Vocab:
-    """
-    Load hardcoded official Kokoro IPA vocabulary with ONNX validation.
+def load_vocab(session: InferenceSession | None) -> Vocab:
+    """Load hardcoded official Kokoro IPA vocabulary with ONNX validation.
 
     Args:
         session: Optional ONNX inference session for validation. If None,
@@ -72,9 +70,11 @@ def load_vocab(session: Optional[InferenceSession]) -> Vocab:
 
     Raises:
         RuntimeError: If vocabulary doesn't match model
+
     """
     if IS_PLACEHOLDER or not PHONEME_TO_ID:
-        raise RuntimeError("Official Kokoro IPA vocabulary is unavailable")
+        msg = "Official Kokoro IPA vocabulary is unavailable"
+        raise RuntimeError(msg)
 
     # Use hardcoded mapping - no external file hunting
     p2i = dict(PHONEME_TO_ID)
@@ -82,17 +82,20 @@ def load_vocab(session: Optional[InferenceSession]) -> Vocab:
 
     # Validate expected size if specified
     if EXPECTED_VOCAB_SIZE is not None and len(p2i) != EXPECTED_VOCAB_SIZE:
-        raise RuntimeError(f"Embedded IPA vocab size ({len(p2i)}) != EXPECTED_VOCAB_SIZE ({EXPECTED_VOCAB_SIZE}).")
+        msg = f"Embedded IPA vocab size ({len(p2i)}) != EXPECTED_VOCAB_SIZE ({EXPECTED_VOCAB_SIZE})."
+        raise RuntimeError(msg)
 
     # Hard fail if vocab doesn't match model - prevents gibberish
     if len(p2i) != rows:
-        raise RuntimeError(f"Kokoro IPA vocab size ({len(p2i)}) != model embedding rows ({rows}).")
+        msg = f"Kokoro IPA vocab size ({len(p2i)}) != model embedding rows ({rows})."
+        raise RuntimeError(msg)
 
     # Build reverse mapping
     id_to_phoneme = [""] * (max(p2i.values()) + 1)
     for phoneme, id_val in p2i.items():
         if id_val < 0:
-            raise RuntimeError(f"Negative id for symbol {phoneme}: {id_val}")
+            msg = f"Negative id for symbol {phoneme}: {id_val}"
+            raise RuntimeError(msg)
         if id_val >= len(id_to_phoneme):
             # Extend array if needed
             id_to_phoneme.extend([""] * (id_val - len(id_to_phoneme) + 1))
@@ -119,14 +122,14 @@ GUARDED_REWRITES = (
 
 
 def normalize_ipa(ipa: str) -> str:
-    """
-    Normalize IPA string to match model vocabulary.
+    """Normalize IPA string to match model vocabulary.
 
     Args:
         ipa: Input IPA string
 
     Returns:
         str: Normalized IPA string
+
     """
     from .ipa_vocab_kokoro_v1 import PHONEME_TO_ID
 
@@ -145,8 +148,7 @@ def normalize_ipa(ipa: str) -> str:
         if source in ipa:
             ipa = ipa.replace(source, replacement)
 
-    ipa = _strip_unknowns(ipa, allowed=allowed)
-    return ipa
+    return _strip_unknowns(ipa, allowed=allowed)
 
 
 def _strip_unknowns(ipa: str, allowed: set) -> str:
@@ -170,8 +172,7 @@ def _strip_unknowns(ipa: str, allowed: set) -> str:
 
 
 def encode_ipa(ipa: str, session: InferenceSession) -> list[int]:
-    """
-    Encode IPA string to token IDs using greedy longest-match.
+    """Encode IPA string to token IDs using greedy longest-match.
 
     Args:
         ipa: IPA phoneme string
@@ -182,6 +183,7 @@ def encode_ipa(ipa: str, session: InferenceSession) -> list[int]:
 
     Raises:
         UnsupportedIPASymbolError: If any symbol cannot be encoded
+
     """
     vocab = load_vocab(session)
     s = normalize_ipa(ipa)

@@ -1,12 +1,10 @@
-"""
-Result aggregation for multimodal processing.
+"""Result aggregation for multimodal processing.
 Combines per-item results into a single coherent response for the text flow.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
 
-from .modality import InputModality, InputItem
+from .modality import InputItem, InputModality
 from .utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -24,15 +22,15 @@ class ProcessedResult:
     item_name: str
     result_text: str
     success: bool
-    duration: Optional[float] = None
+    duration: float | None = None
     attempts: int = 1
 
 
 class ResultAggregator:
     """Aggregates multiple item processing results into a single coherent response."""
 
-    def __init__(self):
-        self.results: List[ProcessedResult] = []
+    def __init__(self) -> None:
+        self.results: list[ProcessedResult] = []
 
     def add_result(
         self,
@@ -41,7 +39,7 @@ class ResultAggregator:
         modality: InputModality,
         result_text: str,
         success: bool = True,
-        duration: Optional[float] = None,
+        duration: float | None = None,
         attempts: int = 1,
     ) -> None:
         """Add a processing result for an item."""
@@ -61,8 +59,7 @@ class ResultAggregator:
         logger.debug(f"Added result {item_index}: {modality.name} - {item_name} ({'success' if success else 'failed'})")
 
     def get_aggregated_prompt(self, original_text: str = "") -> str:
-        """
-        Generate a single aggregated prompt for the text flow.
+        """Generate a single aggregated prompt for the text flow.
 
         FAILED items (success=False) are NOT included in the prompt output.
         If all items failed and there is no original text, returns empty string.
@@ -80,6 +77,7 @@ class ResultAggregator:
         Returns:
             Single aggregated prompt containing only successful item results,
             or empty string if nothing usable was produced.
+
         """
         if not self.results:
             return original_text
@@ -180,8 +178,8 @@ class ResultAggregator:
                     },
                 },
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Failed to log aggregation breadcrumb: {exc}")
 
         include_ack_prompt = not has_text_sources and has_visual_media and not has_document and not has_stt_text
 
@@ -208,11 +206,10 @@ class ResultAggregator:
 
         if total_items == 1:
             parts.append("I processed 1 input from your message:")
+        elif failed_items == 0:
+            parts.append(f"I processed {total_items} inputs from your message:")
         else:
-            if failed_items == 0:
-                parts.append(f"I processed {total_items} inputs from your message:")
-            else:
-                parts.append(f"I processed {total_items} inputs from your message ({successful_items} successful, {failed_items} failed):")
+            parts.append(f"I processed {total_items} inputs from your message ({successful_items} successful, {failed_items} failed):")
 
         parts.append("")  # Empty line
 
@@ -291,23 +288,21 @@ class ResultAggregator:
         """Get a human-readable display name for an item."""
         if item.source_type == "attachment":
             return item.payload.filename
-        elif item.source_type == "url":
+        if item.source_type == "url":
             # Extract meaningful part of URL
             url = item.payload
             if "/" in url:
                 # Try to get filename or last path segment
                 parts = url.rstrip("/").split("/")
                 for part in reversed(parts):
-                    if part and "." in part:  # Likely a filename
+                    if (part and "." in part) or (part and len(part) > 3):  # Likely a filename
                         return part
-                    elif part and len(part) > 3:  # Meaningful path segment
-                        return part
-                return parts[-1] if parts[-1] else url
+                return parts[-1] or url
             return url
-        elif item.source_type == "embed":
+        if item.source_type == "embed":
             if hasattr(item.payload, "title") and item.payload.title:
                 return item.payload.title
-            elif hasattr(item.payload, "url") and item.payload.url:
+            if hasattr(item.payload, "url") and item.payload.url:
                 return self._get_item_display_name(InputItem("url", item.payload.url, 0))
             return "embed"
 

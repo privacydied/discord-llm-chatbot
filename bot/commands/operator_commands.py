@@ -1,22 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Dict, Optional
+from datetime import UTC, datetime
 
 import discord
 from discord.ext import commands
 
-from ..capability_card import build_help_embed
-from ..server_features import (
-    FEATURE_DEFAULTS,
-    feature_status_emoji,
-    feature_status_label,
-    get_server_feature_toggles,
-    normalize_feature_name,
-    set_server_feature_toggle,
-)
-from ..stt import stt_manager
-from ..utils.logging import get_logger
+from bot.capability_card import build_help_embed
+from bot.server_features import FEATURE_DEFAULTS, feature_status_emoji, feature_status_label, get_server_feature_toggles, normalize_feature_name, set_server_feature_toggle
+from bot.stt import stt_manager
+from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -28,7 +20,7 @@ class OperatorCommands(commands.Cog):
         self.bot = bot
         self._boot_time = getattr(bot, "_boot_time", None)
         if self._boot_time is None:
-            self._boot_time = datetime.now(timezone.utc)
+            self._boot_time = datetime.now(UTC)
 
     @commands.command(name="help", aliases=["capabilities", "capability"])
     async def help_command(self, ctx: commands.Context) -> None:
@@ -169,12 +161,12 @@ class OperatorCommands(commands.Cog):
 
     def _format_uptime(self) -> str:
         boot_time = self._boot_time
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if isinstance(boot_time, (int, float)):
             seconds = max(0, int(now.timestamp() - float(boot_time)))
         elif isinstance(boot_time, datetime):
             if boot_time.tzinfo is None:
-                boot_time = boot_time.replace(tzinfo=timezone.utc)
+                boot_time = boot_time.replace(tzinfo=UTC)
             seconds = max(0, int((now - boot_time).total_seconds()))
         else:
             return "unknown"
@@ -206,7 +198,7 @@ class OperatorCommands(commands.Cog):
             return f"openrouter ({model})"
         return f"{backend_name} ({model})"
 
-    def _get_vision_status(self, toggles: Dict[str, bool]) -> str:
+    def _get_vision_status(self, toggles: dict[str, bool]) -> str:
         """Return Vision / image-gen status line from existing orchestrator state."""
         enabled = toggles.get("vision", True)
         orchestrator = getattr(self.bot, "_vision_orchestrator", None)
@@ -232,7 +224,7 @@ class OperatorCommands(commands.Cog):
             parts.append("key=missing")
         return "; ".join(parts)
 
-    def _get_memory_service_status(self, toggles: Dict[str, bool]) -> str:
+    def _get_memory_service_status(self, toggles: dict[str, bool]) -> str:
         """Return memory service status from the existing service state."""
         enabled = toggles.get("memory", True)
         svc = getattr(self.bot, "_memory_service", None) or getattr(self.bot, "memory_service", None)
@@ -241,7 +233,7 @@ class OperatorCommands(commands.Cog):
 
         # Get existing stats from the memory service
         try:
-            status = getattr(svc, "get_status", lambda: {})() or {}
+            status = getattr(svc, "get_status", dict)() or {}
         except Exception:
             status = {}
 
@@ -254,7 +246,7 @@ class OperatorCommands(commands.Cog):
     def _get_degraded_mode_line(self) -> str:
         """Return degraded mode info from the existing metrics system, or None."""
         try:
-            from bot.metrics import is_degraded_mode, get_degraded_reasons
+            from bot.metrics import get_degraded_reasons, is_degraded_mode
         except ImportError:
             return None
 
@@ -267,19 +259,19 @@ class OperatorCommands(commands.Cog):
             return f"⚠️ yes — {reason_text}" if reason_text else "⚠️ yes"
         return "⚠️ yes"
 
-    def _get_rag_status(self, guild_id: Optional[int], toggles: Dict[str, bool]) -> str:
+    def _get_rag_status(self, guild_id: int | None, toggles: dict[str, bool]) -> str:
         global_enabled = bool((getattr(self.bot, "config", {}) or {}).get("rag_enabled", True))
         guild_enabled = toggles.get("rag", True) if guild_id is not None else True
         effective = global_enabled and guild_enabled
         try:
-            from ..rag import hybrid_search as rag_hybrid_search
+            from bot.rag import hybrid_search as rag_hybrid_search
 
             initialized = getattr(rag_hybrid_search, "_hybrid_search", None) is not None
         except Exception:
             initialized = False
         return f"{feature_status_emoji(effective)} {feature_status_label(effective)} (initialized={initialized})"
 
-    def _get_stt_status(self, toggles: Dict[str, bool]) -> str:
+    def _get_stt_status(self, toggles: dict[str, bool]) -> str:
         enabled = toggles.get("stt", True)
         available = getattr(stt_manager, "available", False)
         default_spec = getattr(stt_manager, "default_spec", None)
@@ -287,7 +279,7 @@ class OperatorCommands(commands.Cog):
         model_text = f"model={spec_text}" if spec_text else "model=unknown"
         return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; {model_text}; loaded={available}"
 
-    def _get_tts_status(self, toggles: Dict[str, bool]) -> str:
+    def _get_tts_status(self, toggles: dict[str, bool]) -> str:
         enabled = toggles.get("tts", True)
         tts_manager = getattr(self.bot, "tts_manager", None)
         if tts_manager is None:
@@ -307,7 +299,7 @@ class OperatorCommands(commands.Cog):
         warmup_status = engine_status.get("warmup_status", "unknown")
         return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; engine={engine}; loaded={available}; warmup={warmup_status}; {cache_text}"
 
-    def _get_ollama_status(self, toggles: Dict[str, bool]) -> str:
+    def _get_ollama_status(self, toggles: dict[str, bool]) -> str:
         """Return Ollama provider status (if configured)."""
         import os
 
@@ -323,11 +315,11 @@ class OperatorCommands(commands.Cog):
         available = ollama_backend is not None
         return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; host={ollama_host}; available={available}"
 
-    def _get_playwright_status(self, toggles: Dict[str, bool]) -> str:
+    def _get_playwright_status(self, toggles: dict[str, bool]) -> str:
         """Return Playwright / web-extraction status including health probe info."""
         try:
-            from ..utils.playwright_helpers import _pw_server_url, get_playwright_health
-            from ..web_extraction_service import ENABLE_TIER_B
+            from bot.utils.playwright_helpers import _pw_server_url, get_playwright_health
+            from bot.web_extraction_service import ENABLE_TIER_B
 
             configured = _pw_server_url() is not None
             health = get_playwright_health()
@@ -371,13 +363,13 @@ class OperatorCommands(commands.Cog):
         """Return a concise storage summary: mem_db, chroma, and cache sizes."""
         # Try diagnostics module first
         try:
-            from ..maintenance.diagnostics import get_storage_status as _gs
+            from bot.maintenance.diagnostics import get_storage_status as _gs
 
             result = _gs()
             if isinstance(result, str) and len(result) < 300:
                 return result
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Diagnostics storage status unavailable: {e}")
 
         parts: list[str] = []
         # In-memory DB size (if present on bot)
@@ -399,7 +391,8 @@ class OperatorCommands(commands.Cog):
                             parts.append(f"entries={entry_count}")
                 if isinstance(mem_db, dict) and not parts:
                     parts.append(f"mem_db={len(mem_db)} entries")
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to get mem_db status: {e}")
                 parts.append("mem_db=?")
         else:
             parts.append("mem_db=none")
@@ -418,12 +411,13 @@ class OperatorCommands(commands.Cog):
                         try:
                             if p.is_file():
                                 total += p.stat().st_size
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug(f"Failed to stat file {p}: {e}")
                     parts.append(f"chroma={total / (1024 * 1024):.1f}MB")
                 else:
                     parts.append("chroma=in-memory")
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to get chroma status: {e}")
                 parts.append("chroma=?")
         else:
             parts.append("chroma=none")
@@ -439,7 +433,8 @@ class OperatorCommands(commands.Cog):
                     parts.append(f"cache={cache_mb}MB/{cache_files}f")
                 else:
                     parts.append("cache=empty")
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to get cache status: {e}")
                 parts.append("cache=?")
 
         result = " | ".join(parts)
@@ -484,17 +479,17 @@ class OperatorCommands(commands.Cog):
                     cached = True
                     found_at = cdir
                     break
-                for root, dirs, files in os.walk(cdir):
-                    if safe_name.lower() in root.lower() or model_name.lower() in root.lower():
-                        if any(f in files for f in ("model.safetensors", "pytorch_model.bin", "config.json")):
-                            cached = True
-                            found_at = root
-                            break
+                for root, _dirs, files in os.walk(cdir):
+                    if (safe_name.lower() in root.lower() or model_name.lower() in root.lower()) and any(f in files for f in ("model.safetensors", "pytorch_model.bin", "config.json")):
+                        cached = True
+                        found_at = root
+                        break
                     if cached:
                         break
                 if cached:
                     break
-            except Exception:
+            except (OSError, PermissionError) as e:
+                logger.debug(f"Failed to check cache dir {cdir}: {e}")
                 continue
 
         if cached:

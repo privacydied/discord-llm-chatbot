@@ -1,15 +1,16 @@
 """Tests for STT chunk ordering and deduplication."""
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from bot.hear import (
-    _join_segments,
-    _segments_to_dict,
     SpanRecorder,
-    TranscriptResult,
     STTJob,
     STTRAMGuard,
+    TranscriptResult,
+    _join_segments,
+    _segments_to_dict,
 )
 
 
@@ -23,16 +24,16 @@ def _text(result) -> str:
 class TestJoinSegments:
     """Tests for _join_segments helper."""
 
-    def test_empty_segments(self):
+    def test_empty_segments(self) -> None:
         """Empty segments should return empty string."""
         assert _text(_join_segments([])) == ""
 
-    def test_single_segment(self):
+    def test_single_segment(self) -> None:
         """Single segment preserved as-is."""
         segments = [{"text": "hello world"}]
         assert _text(_join_segments(segments)) == "hello world"
 
-    def test_multiple_segments_in_order(self):
+    def test_multiple_segments_in_order(self) -> None:
         """Multiple segments joined in order with single space."""
         segments = [
             {"text": "hello"},
@@ -41,7 +42,7 @@ class TestJoinSegments:
         ]
         assert _text(_join_segments(segments)) == "hello world test"
 
-    def test_consecutive_duplicates_removed(self):
+    def test_consecutive_duplicates_removed(self) -> None:
         """Consecutive duplicate text (from overlapping windows) should be deduplicated."""
         segments = [
             {"text": "hello"},
@@ -50,7 +51,7 @@ class TestJoinSegments:
         ]
         assert _text(_join_segments(segments)) == "hello world"
 
-    def test_non_consecutive_duplicates_preserved(self):
+    def test_non_consecutive_duplicates_preserved(self) -> None:
         """Non-consecutive duplicates (legitimate repeats) should be preserved."""
         segments = [
             {"text": "hello"},
@@ -59,7 +60,7 @@ class TestJoinSegments:
         ]
         assert _text(_join_segments(segments)) == "hello world hello"
 
-    def test_overlapping_chunk_boundary(self):
+    def test_overlapping_chunk_boundary(self) -> None:
         """Simulate overlapping chunk window creating duplicate at boundary."""
         segments = [
             {"text": "first chunk ends here"},
@@ -68,7 +69,7 @@ class TestJoinSegments:
         ]
         assert _text(_join_segments(segments)) == "first chunk ends here boundary second chunk continues"
 
-    def test_join_normalizes_whitespace(self):
+    def test_join_normalizes_whitespace(self) -> None:
         """Join should normalize whitespace."""
         segments = [
             {"text": " hello "},
@@ -79,7 +80,7 @@ class TestJoinSegments:
         # Extra spaces normalized and no leading/trailing space
         assert text == text.strip()
 
-    def test_empty_text_filtered(self):
+    def test_empty_text_filtered(self) -> None:
         """Empty text segments filtered out."""
         segments = [
             {"text": "hello"},
@@ -92,7 +93,7 @@ class TestJoinSegments:
 class TestSegmentsToDict:
     """Tests for _segments_to_dict conversion."""
 
-    def test_segments_converted_correctly(self):
+    def test_segments_converted_correctly(self) -> None:
         """Test that segments are converted with correct offsets."""
         # Mock segment objects
         seg1 = MagicMock()
@@ -123,7 +124,7 @@ class TestChunkProcessingOrder:
     """Tests for chunk processing order-safety."""
 
     @pytest.mark.asyncio
-    async def test_chunk_records_indexed_correctly(self):
+    async def test_chunk_records_indexed_correctly(self) -> None:
         """Test that chunks have stable indices assigned sequentially."""
         # This test verifies the chunk_records structure from _transcribe_with_model
         # chunks should have 'idx', 'start', 'end', 'segments' keys
@@ -146,7 +147,7 @@ class TestChunkProcessingOrder:
 class TestTranscriptAssembly:
     """Tests for transcript assembly from chunk records."""
 
-    def test_assemble_from_ordered_chunk_records(self):
+    def test_assemble_from_ordered_chunk_records(self) -> None:
         """Test assembling transcript from ordered chunk records (expected order)."""
         # Simulate chunk_records from processing
         segments1 = [{"text": "hello world"}, {"text": "this is"}]
@@ -160,7 +161,7 @@ class TestTranscriptAssembly:
         # "this is" appears consecutively at boundary, should be deduped
         assert _text(result) == "hello world this is a test"
 
-    def test_out_of_order_chunks_by_id(self):
+    def test_out_of_order_chunks_by_id(self) -> None:
         """Test that we can reconstruct from chunk_records by idx if needed."""
         # If chunks arrived out of order, we should sort by idx
         chunk_records = [
@@ -188,7 +189,7 @@ class TestTranscriptAssembly:
 class TestSTTJobTranscriptRegistration:
     """Tests for STTJob transcript registration."""
 
-    def test_job_registers_transcript_correctly(self):
+    def test_job_registers_transcript_correctly(self) -> None:
         """Test that STTJob correctly registers transcript results."""
         spans = MagicMock(spec=SpanRecorder)
         spans.spans = {}
@@ -224,7 +225,7 @@ class TestSTTJobTranscriptRegistration:
         assert job.dur_done_s == 4.0
         assert job.transcript is transcript
 
-    def test_job_registers_aborted_transcript(self):
+    def test_job_registers_aborted_transcript(self) -> None:
         """Test that STTJob handles aborted transcripts."""
         spans = MagicMock(spec=SpanRecorder)
         ram_guard = MagicMock(spec=STTRAMGuard)
@@ -259,7 +260,7 @@ class TestSTTJobTranscriptRegistration:
 class TestDeterministicJoinWithWhitespace:
     """Tests for whitespace normalization in join."""
 
-    def test_join_normalizes_whitespace(self):
+    def test_join_normalizes_whitespace(self) -> None:
         """Verify whitespace normalization in final join."""
         segments = [
             {"text": "hello   world"},  # internal multiple spaces

@@ -3,7 +3,7 @@
 from bot.media_capability import MediaCapabilityDetector
 
 
-def test_instagram_alias_hosts_are_media_capable_domains(tmp_path, monkeypatch):
+def test_instagram_alias_hosts_are_media_capable_domains(tmp_path, monkeypatch) -> None:
     """Instagram mirror/proxy hosts should pass the existing media-capable allowlist."""
     monkeypatch.setattr("bot.media_capability.CACHE_DIR", tmp_path / "probes")
     detector = MediaCapabilityDetector()

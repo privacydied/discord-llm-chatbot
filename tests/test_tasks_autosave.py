@@ -1,11 +1,12 @@
-import pytest
 from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 import bot.tasks as task_module
 
 
 @pytest.mark.asyncio
-async def test_persist_profiles_nonblocking_uses_to_thread(monkeypatch):
+async def test_persist_profiles_nonblocking_uses_to_thread(monkeypatch) -> None:
     called = {}
 
     def fake_sync():
@@ -27,7 +28,7 @@ async def test_persist_profiles_nonblocking_uses_to_thread(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_setup_memory_save_task_awaits_nonblocking_persist(monkeypatch):
+async def test_setup_memory_save_task_awaits_nonblocking_persist(monkeypatch) -> None:
     persist_mock = AsyncMock(return_value=(True, True))
 
     monkeypatch.setattr(
@@ -44,7 +45,7 @@ async def test_setup_memory_save_task_awaits_nonblocking_persist(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_task_manager_profile_autosave_awaits_nonblocking_persist(monkeypatch):
+async def test_task_manager_profile_autosave_awaits_nonblocking_persist(monkeypatch) -> None:
     persist_mock = AsyncMock(return_value=(True, True))
 
     monkeypatch.setattr(

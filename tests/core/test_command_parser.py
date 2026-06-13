@@ -1,7 +1,7 @@
-import pytest
 from unittest.mock import MagicMock
 
 import discord
+import pytest
 
 from bot.command_parser import parse_command
 from bot.types import Command, ParsedCommand
@@ -21,7 +21,7 @@ def mock_bot():
 # --- DM Scenarios ---
 
 
-def test_parse_dm_known_command(mock_bot):
+def test_parse_dm_known_command(mock_bot) -> None:
     """Verify parsing a known command in a DM."""
     msg = MagicMock(spec=discord.Message)
     msg.content = "!say Hello World"
@@ -30,7 +30,7 @@ def test_parse_dm_known_command(mock_bot):
     assert result == ParsedCommand(command=Command.SAY, cleaned_content="Hello World")
 
 
-def test_parse_dm_chat_message(mock_bot):
+def test_parse_dm_chat_message(mock_bot) -> None:
     """Verify parsing a non-command message in a DM."""
     msg = MagicMock(spec=discord.Message)
     msg.content = "just a regular message"
@@ -42,7 +42,7 @@ def test_parse_dm_chat_message(mock_bot):
 # --- Guild Scenarios ---
 
 
-def test_parse_guild_command_with_mention(mock_bot):
+def test_parse_guild_command_with_mention(mock_bot) -> None:
     """Verify parsing a command with a mention in a guild."""
     msg = MagicMock(spec=discord.Message)
     msg.content = f"<@!{mock_bot.user.id}> !ping"
@@ -51,7 +51,7 @@ def test_parse_guild_command_with_mention(mock_bot):
     assert result == ParsedCommand(command=Command.PING, cleaned_content="")
 
 
-def test_parse_guild_chat_with_mention(mock_bot):
+def test_parse_guild_chat_with_mention(mock_bot) -> None:
     """Verify parsing a chat message with a mention in a guild."""
     msg = MagicMock(spec=discord.Message)
     msg.content = f"<@{mock_bot.user.id}> how are you?"
@@ -60,7 +60,7 @@ def test_parse_guild_chat_with_mention(mock_bot):
     assert result == ParsedCommand(command=Command.CHAT, cleaned_content="how are you?")
 
 
-def test_parse_guild_message_no_mention(mock_bot):
+def test_parse_guild_message_no_mention(mock_bot) -> None:
     """Verify that messages in guilds without a mention are ignored."""
     msg = MagicMock(spec=discord.Message)
     msg.content = "!ping"
@@ -74,7 +74,7 @@ def test_parse_guild_message_no_mention(mock_bot):
 # --- Edge Cases ---
 
 
-def test_parse_empty_message(mock_bot):
+def test_parse_empty_message(mock_bot) -> None:
     """Verify that an empty message is ignored."""
     msg = MagicMock(spec=discord.Message)
     msg.content = ""
@@ -83,7 +83,7 @@ def test_parse_empty_message(mock_bot):
     assert result is None
 
 
-def test_parse_mention_only(mock_bot):
+def test_parse_mention_only(mock_bot) -> None:
     """Verify that a message with only a mention is ignored."""
     msg = MagicMock(spec=discord.Message)
     msg.content = f"<@{mock_bot.user.id}>"

@@ -1,5 +1,4 @@
-"""
-Budget and deadline management system for router optimization. [PA][REH]
+"""Budget and deadline management system for router optimization. [PA][REH].
 
 This module provides adaptive timeout management with soft/hard deadlines:
 - Soft budgets trigger route switches (try alternative methods)
@@ -20,12 +19,15 @@ from __future__ import annotations
 
 import asyncio
 import time
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Callable, Awaitable, TypeVar
-from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from .utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 logger = get_logger(__name__)
 
@@ -33,7 +35,7 @@ T = TypeVar("T")
 
 
 class BudgetFamily(Enum):
-    """Budget families with different timeout characteristics. [CMV]"""
+    """Budget families with different timeout characteristics. [CMV]."""
 
     TWEET_SYNDICATION = "tweet_syndication"  # 3.5s soft, 5s hard
     TWEET_WEB_TIER_A = "tweet_web_tier_a"  # 2.5s soft, 4s hard
@@ -54,7 +56,7 @@ class BudgetFamily(Enum):
 
 @dataclass
 class BudgetConfig:
-    """Configuration for a specific budget family. [CMV]"""
+    """Configuration for a specific budget family. [CMV]."""
 
     soft_budget_ms: float  # Route switch threshold
     hard_deadline_ms: float  # Cancellation threshold
@@ -66,7 +68,7 @@ class BudgetConfig:
 
 @dataclass
 class BudgetExecution:
-    """Tracks execution of a budget-controlled operation. [CA]"""
+    """Tracks execution of a budget-controlled operation. [CA]."""
 
     family: BudgetFamily
     operation_id: str
@@ -75,9 +77,9 @@ class BudgetExecution:
     hard_deadline_ms: float
     route_switched: bool = False
     cancelled: bool = False
-    completed_at: Optional[float] = None
+    completed_at: float | None = None
     result: Any = None
-    error: Optional[Exception] = None
+    error: Exception | None = None
 
     @property
     def elapsed_ms(self) -> float:
@@ -98,7 +100,7 @@ class BudgetExecution:
 
 @dataclass
 class BudgetMetrics:
-    """Metrics for budget tracking and optimization. [PA]"""
+    """Metrics for budget tracking and optimization. [PA]."""
 
     total_operations: int = 0
     completed_operations: int = 0
@@ -111,7 +113,7 @@ class BudgetMetrics:
     p99_latency_ms: float = 0.0
     avg_latency_ms: float = 0.0
     success_rate: float = 1.0
-    recent_latencies: List[float] = field(default_factory=list)
+    recent_latencies: list[float] = field(default_factory=list)
 
     def add_latency_sample(self, latency_ms: float, max_samples: int = 100) -> None:
         """Add latency sample and update percentiles."""
@@ -138,9 +140,9 @@ class BudgetMetrics:
 
 
 class SoftBudgetExceeded(Exception):
-    """Exception raised when soft budget is exceeded (route switch). [REH]"""
+    """Exception raised when soft budget is exceeded (route switch). [REH]."""
 
-    def __init__(self, family: BudgetFamily, elapsed_ms: float, budget_ms: float):
+    def __init__(self, family: BudgetFamily, elapsed_ms: float, budget_ms: float) -> None:
         self.family = family
         self.elapsed_ms = elapsed_ms
         self.budget_ms = budget_ms
@@ -148,9 +150,9 @@ class SoftBudgetExceeded(Exception):
 
 
 class HardDeadlineExceeded(Exception):
-    """Exception raised when hard deadline is exceeded (cancellation). [REH]"""
+    """Exception raised when hard deadline is exceeded (cancellation). [REH]."""
 
-    def __init__(self, family: BudgetFamily, elapsed_ms: float, deadline_ms: float):
+    def __init__(self, family: BudgetFamily, elapsed_ms: float, deadline_ms: float) -> None:
         self.family = family
         self.elapsed_ms = elapsed_ms
         self.deadline_ms = deadline_ms
@@ -158,9 +160,9 @@ class HardDeadlineExceeded(Exception):
 
 
 class BudgetManager:
-    """Manages budgets and deadlines with adaptive optimization. [PA][REH]"""
+    """Manages budgets and deadlines with adaptive optimization. [PA][REH]."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         """Initialize budget manager with configuration."""
         self.config = config or {}
 
@@ -241,15 +243,15 @@ class BudgetManager:
         }
 
         # Metrics tracking
-        self.metrics: Dict[BudgetFamily, BudgetMetrics] = {family: BudgetMetrics() for family in BudgetFamily}
+        self.metrics: dict[BudgetFamily, BudgetMetrics] = {family: BudgetMetrics() for family in BudgetFamily}
 
         # Active executions
-        self.active_executions: Dict[str, BudgetExecution] = {}
+        self.active_executions: dict[str, BudgetExecution] = {}
 
         logger.info("⏱️ BudgetManager initialized with adaptive timeout management")
 
     def _calculate_adaptive_soft_budget(self, family: BudgetFamily) -> float:
-        """Calculate adaptive soft budget based on p95 performance. [PA]"""
+        """Calculate adaptive soft budget based on p95 performance. [PA]."""
         config = self.budget_configs[family]
         metrics = self.metrics[family]
 
@@ -257,13 +259,12 @@ class BudgetManager:
             return config.soft_budget_ms
 
         # Adaptive budget: max(baseline, 1.2×p95) within clamps
-        adaptive_budget = max(config.baseline_ms, min(config.max_clamp_ms, metrics.p95_latency_ms * 1.2))
+        return max(config.baseline_ms, min(config.max_clamp_ms, metrics.p95_latency_ms * 1.2))
 
-        return adaptive_budget
 
     @asynccontextmanager
     async def execute_with_budget(self, family: BudgetFamily, operation_id: str, check_interval_ms: float = 100.0):
-        """Context manager for budget-controlled execution. [CA][REH]"""
+        """Context manager for budget-controlled execution. [CA][REH]."""
         # Calculate current budgets
         soft_budget_ms = self._calculate_adaptive_soft_budget(family)
         hard_deadline_ms = self.budget_configs[family].hard_deadline_ms
@@ -333,7 +334,7 @@ class BudgetManager:
             self.metrics[family].hard_cancellations += 1
             self.metrics[family].hard_deadline_violations += 1
 
-            logger.error(
+            logger.exception(
                 f"❌ {family.value} hard deadline exceeded, cancelling: {e}",
                 extra={
                     "event": "budget.hard_exceeded",
@@ -349,22 +350,20 @@ class BudgetManager:
 
         except Exception as e:
             execution.error = e
-            logger.error(f"❌ {family.value} failed: {e}")
+            logger.exception(f"❌ {family.value} failed: {e}")
             raise
 
         finally:
             # Clean up
             monitor_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await monitor_task
-            except asyncio.CancelledError:
-                pass
 
             if operation_id in self.active_executions:
                 del self.active_executions[operation_id]
 
     async def _monitor_budget(self, execution: BudgetExecution, check_interval_ms: float) -> None:
-        """Monitor execution against budget and deadline. [REH]"""
+        """Monitor execution against budget and deadline. [REH]."""
         check_interval_s = check_interval_ms / 1000.0
 
         try:
@@ -399,9 +398,9 @@ class BudgetManager:
         family: BudgetFamily,
         operation_id: str,
         coro: Awaitable[T],
-        on_soft_exceeded: Optional[Callable[[], Awaitable[T]]] = None,
+        on_soft_exceeded: Callable[[], Awaitable[T]] | None = None,
     ) -> T:
-        """Run coroutine with budget control and optional route switching. [PA][REH]"""
+        """Run coroutine with budget control and optional route switching. [PA][REH]."""
         async with self.execute_with_budget(family, operation_id) as execution:
             try:
                 # Run the main operation
@@ -418,34 +417,34 @@ class BudgetManager:
                         execution.result = result
                         return result
                     except Exception as fallback_error:
-                        logger.error(f"❌ {family.value} route switch also failed: {fallback_error}")
-                        raise fallback_error
+                        logger.exception(f"❌ {family.value} route switch also failed: {fallback_error}")
+                        raise
                 else:
                     # No route switching available, re-raise
                     raise
 
-    def get_metrics(self, family: Optional[BudgetFamily] = None) -> Dict[BudgetFamily, BudgetMetrics]:
-        """Get metrics for specific family or all families. [PA]"""
+    def get_metrics(self, family: BudgetFamily | None = None) -> dict[BudgetFamily, BudgetMetrics]:
+        """Get metrics for specific family or all families. [PA]."""
         if family is not None:
             return {family: self.metrics[family]}
         return self.metrics.copy()
 
-    def get_active_executions(self) -> Dict[str, BudgetExecution]:
-        """Get currently active executions. [PA]"""
+    def get_active_executions(self) -> dict[str, BudgetExecution]:
+        """Get currently active executions. [PA]."""
         return self.active_executions.copy()
 
     def update_budget_config(self, family: BudgetFamily, config: BudgetConfig) -> None:
-        """Update budget configuration for a family. [CMV]"""
+        """Update budget configuration for a family. [CMV]."""
         self.budget_configs[family] = config
         logger.info(f"🔧 Updated budget config for {family.value}")
 
 
 # Global singleton instance
-_budget_manager_instance: Optional[BudgetManager] = None
+_budget_manager_instance: BudgetManager | None = None
 
 
-def get_budget_manager(config: Optional[Dict[str, Any]] = None) -> BudgetManager:
-    """Get or create the global budget manager instance. [CA]"""
+def get_budget_manager(config: dict[str, Any] | None = None) -> BudgetManager:
+    """Get or create the global budget manager instance. [CA]."""
     global _budget_manager_instance
 
     if _budget_manager_instance is None:

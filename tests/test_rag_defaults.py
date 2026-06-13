@@ -1,7 +1,7 @@
 from importlib import reload
 
 
-def test_rag_background_indexing_default_true(monkeypatch):
+def test_rag_background_indexing_default_true(monkeypatch) -> None:
     # Ensure the environment is clean for RAG flags
     for key in [
         "RAG_BACKGROUND_INDEXING",

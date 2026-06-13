@@ -1,5 +1,4 @@
-"""
-Unit tests for syndication content extraction.
+"""Unit tests for syndication content extraction.
 Tests for extract_text_and_images_from_syndication function.
 """
 
@@ -12,7 +11,7 @@ from bot.syndication.extract import (
 class TestSyndicationExtract:
     """Test cases for syndication content extraction."""
 
-    def test_extract_photos_multiple(self):
+    def test_extract_photos_multiple(self) -> None:
         """extract_photos_multiple: Extract multiple photos with name=orig upgrade."""
         syndication_json = {
             "text": "Check out these photos!",
@@ -31,7 +30,7 @@ class TestSyndicationExtract:
         assert "https://pbs.twimg.com/media/DEF456?format=png&name=orig" in result["image_urls"]
         assert "https://pbs.twimg.com/media/GHI789?name=orig" in result["image_urls"]
 
-    def test_extract_fallback_card(self):
+    def test_extract_fallback_card(self) -> None:
         """extract_fallback_card: Use card image when no photos present."""
         syndication_json = {
             "text": "No photos, just a card",
@@ -45,7 +44,7 @@ class TestSyndicationExtract:
         assert len(result["image_urls"]) == 1
         assert result["image_urls"][0] == "https://pbs.twimg.com/card_img/ABC123?name=orig"
 
-    def test_extract_fallback_card_string_format(self):
+    def test_extract_fallback_card_string_format(self) -> None:
         """Handle card image as direct string URL."""
         syndication_json = {
             "text": "Card as string",
@@ -59,7 +58,7 @@ class TestSyndicationExtract:
         assert len(result["image_urls"]) == 1
         assert result["image_urls"][0] == "https://pbs.twimg.com/card_img/ABC123?name=orig"
 
-    def test_extract_quoted_only_when_none(self):
+    def test_extract_quoted_only_when_none(self) -> None:
         """extract_quoted_only_when_none: Use quoted tweet photos only when main has none."""
         # Case 1: Main has photos, ignore quoted
         syndication_json_main_photos = {
@@ -82,7 +81,7 @@ class TestSyndicationExtract:
                 "photos": [
                     {"url": "https://pbs.twimg.com/media/QUOTED456?name=small"},
                     {"media_url_https": "https://pbs.twimg.com/media/QUOTED789?name=large"},
-                ]
+                ],
             },
         }
 
@@ -92,7 +91,7 @@ class TestSyndicationExtract:
         assert "https://pbs.twimg.com/media/QUOTED456?name=orig" in result["image_urls"]
         assert "https://pbs.twimg.com/media/QUOTED789?name=orig" in result["image_urls"]
 
-    def test_extract_deduplication(self):
+    def test_extract_deduplication(self) -> None:
         """Ensure duplicate URLs are removed while preserving order."""
         syndication_json = {
             "text": "Duplicate images",
@@ -114,7 +113,7 @@ class TestSyndicationExtract:
         assert result["image_urls"][0] == "https://pbs.twimg.com/media/ABC123?name=orig"
         assert result["image_urls"][1] == "https://pbs.twimg.com/media/DEF456?name=orig"
 
-    def test_extract_text_fallbacks(self):
+    def test_extract_text_fallbacks(self) -> None:
         """Test text extraction with fallbacks (full_text vs text)."""
         # Test full_text priority
         syndication_json_full = {
@@ -138,7 +137,7 @@ class TestSyndicationExtract:
         result = extract_text_and_images_from_syndication(syndication_json_empty)
         assert result["text"] == ""
 
-    def test_extract_text_uses_article_when_tco_pointer_only(self):
+    def test_extract_text_uses_article_when_tco_pointer_only(self) -> None:
         syndication_json = {
             "text": "https://t.co/Zq03pbrEgu",
             "article": {
@@ -149,7 +148,7 @@ class TestSyndicationExtract:
                     "blocks": [
                         {"text": "Cellular energy production and metabolism."},
                         {"text": "Hormonal signaling under chronic stress."},
-                    ]
+                    ],
                 },
             },
             "photos": [],
@@ -162,7 +161,7 @@ class TestSyndicationExtract:
         assert "Cellular energy production and metabolism." in result["text"]
         assert "https://t.co/" not in result["text"]
 
-    def test_extract_missing_photo_urls(self):
+    def test_extract_missing_photo_urls(self) -> None:
         """Handle photos with missing or empty URLs gracefully."""
         syndication_json = {
             "text": "Some photos missing URLs",
@@ -182,7 +181,7 @@ class TestSyndicationExtract:
         assert "https://pbs.twimg.com/media/GOOD123?name=orig" in result["image_urls"]
         assert "https://pbs.twimg.com/media/GOOD456?name=orig" in result["image_urls"]
 
-    def test_extract_non_pbs_urls_passthrough(self):
+    def test_extract_non_pbs_urls_passthrough(self) -> None:
         """Non-pbs URLs should pass through unchanged."""
         syndication_json = {
             "text": "Mixed URLs",
@@ -200,7 +199,7 @@ class TestSyndicationExtract:
         assert "https://example.com/image.jpg" in result["image_urls"]  # Unchanged
         assert "https://cdn.twitter.com/media/other.png" in result["image_urls"]  # Unchanged
 
-    def test_extract_metrics_integration(self):
+    def test_extract_metrics_integration(self) -> None:
         """Test that metrics integration doesn't break extraction."""
         syndication_json = {
             "text": "Test metrics",
@@ -216,7 +215,7 @@ class TestSyndicationExtract:
         assert len(result["image_urls"]) == 2
         assert result["text"] == "Test metrics"
 
-    def test_extract_metrics_failure_resilience(self):
+    def test_extract_metrics_failure_resilience(self) -> None:
         """Ensure extraction continues even if metrics fail."""
         syndication_json = {
             "text": "Test resilience",
@@ -230,7 +229,7 @@ class TestSyndicationExtract:
         assert len(result["image_urls"]) == 1
         assert result["image_urls"][0] == "https://pbs.twimg.com/media/ABC123?name=orig"
 
-    def test_syndication_has_video_detects_mixed_media(self):
+    def test_syndication_has_video_detects_mixed_media(self) -> None:
         syndication_json = {
             "text": "mixed",
             "photos": [{"url": "https://pbs.twimg.com/media/IMG123?name=small"}],
@@ -249,18 +248,18 @@ class TestSyndicationExtract:
 
         assert syndication_has_video(syndication_json) is True
 
-    def test_syndication_has_video_detects_nested_quoted_and_retweeted(self):
+    def test_syndication_has_video_detects_nested_quoted_and_retweeted(self) -> None:
         quoted = {
             "quoted_status": {
                 "media": [{"type": "animated_gif"}],
-            }
+            },
         }
         retweeted = {"retweeted_status": {"extended_entities": {"media": [{"type": "video", "video_info": {"duration_ms": 5000}}]}}}
 
         assert syndication_has_video(quoted) is True
         assert syndication_has_video(retweeted) is True
 
-    def test_syndication_has_video_false_for_photos_only(self):
+    def test_syndication_has_video_false_for_photos_only(self) -> None:
         syndication_json = {
             "text": "photos only",
             "photos": [{"url": "https://pbs.twimg.com/media/PHOTO123?name=small"}],
@@ -269,8 +268,8 @@ class TestSyndicationExtract:
                     {
                         "type": "photo",
                         "media_url_https": "https://pbs.twimg.com/media/PHOTO123",
-                    }
-                ]
+                    },
+                ],
             },
         }
 

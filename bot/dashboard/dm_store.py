@@ -9,9 +9,9 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from bot.utils.logging import get_logger, redact_sensitive_values
 
@@ -21,7 +21,7 @@ _MAX_PREVIEW_CHARS = 150
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 def _make_preview(content: str, max_chars: int = _MAX_PREVIEW_CHARS) -> str:
@@ -107,9 +107,9 @@ class DMStore:
     async def upsert_user(
         self,
         user_id: int,
-        username: Optional[str] = None,
-        global_name: Optional[str] = None,
-        display_name: Optional[str] = None,
+        username: str | None = None,
+        global_name: str | None = None,
+        display_name: str | None = None,
         is_bot: bool = False,
     ) -> None:
         await self.initialize()
@@ -126,9 +126,9 @@ class DMStore:
     def _upsert_user_sync(
         self,
         user_id: str,
-        username: Optional[str],
-        global_name: Optional[str],
-        display_name: Optional[str],
+        username: str | None,
+        global_name: str | None,
+        display_name: str | None,
         is_bot: bool,
         last_seen: str,
     ) -> None:
@@ -159,12 +159,12 @@ class DMStore:
         author_id: int,
         content: str = "",
         clean_content: str = "",
-        created_at: Optional[str] = None,
+        created_at: str | None = None,
         is_bot_author: bool = False,
-        reply_to_message_id: Optional[int] = None,
+        reply_to_message_id: int | None = None,
         has_attachments: bool = False,
         has_embeds: bool = False,
-        jump_url: Optional[str] = None,
+        jump_url: str | None = None,
     ) -> None:
         await self.initialize()
         direction = "outbound" if is_bot_author else "inbound"
@@ -196,10 +196,10 @@ class DMStore:
         content_preview: str,
         created_at: str,
         direction: str,
-        reply_to_message_id: Optional[str],
+        reply_to_message_id: str | None,
         has_attachments: int,
         has_embeds: int,
-        jump_url: Optional[str],
+        jump_url: str | None,
     ) -> None:
         with self._lock:
             conn = self._connect()
@@ -258,7 +258,7 @@ class DMStore:
                     "last_message_at": row["last_message_at"],
                     "last_preview": row["last_preview"],
                     "last_direction": row["last_direction"],
-                }
+                },
             )
 
         return {
@@ -338,7 +338,7 @@ class DMStore:
                     "has_attachments": bool(row["has_attachments"]),
                     "has_embeds": bool(row["has_embeds"]),
                     "jump_url": row["jump_url"],
-                }
+                },
             )
 
         return {
@@ -375,7 +375,7 @@ class DMStore:
     async def cleanup_retention(self) -> int:
         """Soft-delete messages older than retention period."""
         await self.initialize()
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=self._retention_days)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        cutoff = (datetime.now(UTC) - timedelta(days=self._retention_days)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         return await asyncio.to_thread(self._cleanup_sync, cutoff)
 
     def _cleanup_sync(self, cutoff: str) -> int:

@@ -1,19 +1,17 @@
-"""
-Unit tests for vision pricing calculations and cost normalization [CA][REH][IV]
-"""
+"""Unit tests for vision pricing calculations and cost normalization [CA][REH][IV]."""
 
-import unittest
-from unittest.mock import Mock, MagicMock
-import sys
 import importlib
+import sys
+import unittest
 from decimal import Decimal
+from unittest.mock import MagicMock, Mock
 
 # Mock the problematic modules to avoid import errors [REH]
 sys.modules["aiofiles"] = MagicMock()
 sys.modules["bot.vision.job_store"] = MagicMock()
 sys.modules["bot.vision.orchestrator"] = MagicMock()
 
-Money = getattr(importlib.import_module("bot.types.money"), "Money")
+Money = importlib.import_module("bot.types.money").Money
 
 
 # Mock VisionProvider and VisionTask enums for testing [IV]
@@ -38,10 +36,10 @@ class MockVisionTask:
 
 
 class TestPricingCalculations(unittest.TestCase):
-    """Test pricing calculations and cost normalization"""
+    """Test pricing calculations and cost normalization."""
 
-    def setUp(self):
-        """Setup test fixtures"""
+    def setUp(self) -> None:
+        """Setup test fixtures."""
         # Mock pricing data
         self.mock_pricing_data = {
             "version": "1.0",
@@ -103,16 +101,15 @@ class TestPricingCalculations(unittest.TestCase):
             if provider_name == "novita" and task_name == "text_to_image":
                 base_cost = Money("0.006")
                 return base_cost * num_images * Decimal("1.1") * Decimal("1.2")
-            elif provider_name == "together_ai" and task_name == "text_to_image":
+            if provider_name == "together_ai" and task_name == "text_to_image":
                 base_cost = Money("0.007")
                 return base_cost * num_images * Decimal("1.0") * Decimal("1.2")
-            else:
-                return Money("0.02") * Decimal("1.2")
+            return Money("0.02") * Decimal("1.2")
 
         self.pricing_loader.estimate_cost = mock_estimate_cost
 
-    def test_novita_t2i_basic_cost(self):
-        """Test basic Novita T2I cost calculation"""
+    def test_novita_t2i_basic_cost(self) -> None:
+        """Test basic Novita T2I cost calculation."""
         cost = self.pricing_loader.estimate_cost(
             provider=MockVisionProvider.NOVITA,
             task=MockVisionTask.TEXT_TO_IMAGE,
@@ -126,8 +123,8 @@ class TestPricingCalculations(unittest.TestCase):
         expected = Money("0.006") * Decimal("1.1") * Decimal("1.2")
         self.assertAlmostEqual(float(cost), float(expected), places=6)
 
-    def test_novita_t2i_multi_image(self):
-        """Test Novita T2I cost with multiple images"""
+    def test_novita_t2i_multi_image(self) -> None:
+        """Test Novita T2I cost with multiple images."""
         cost = self.pricing_loader.estimate_cost(
             provider=MockVisionProvider.NOVITA,
             task=MockVisionTask.TEXT_TO_IMAGE,
@@ -140,8 +137,8 @@ class TestPricingCalculations(unittest.TestCase):
         expected = Money("0.006") * 3 * Decimal("1.1") * Decimal("1.2")
         self.assertAlmostEqual(float(cost), float(expected), places=6)
 
-    def test_novita_t2i_size_multiplier(self):
-        """Test Novita T2I cost with size multiplier (simplified)"""
+    def test_novita_t2i_size_multiplier(self) -> None:
+        """Test Novita T2I cost with size multiplier (simplified)."""
         cost = self.pricing_loader.estimate_cost(
             provider=MockVisionProvider.NOVITA,
             task=MockVisionTask.TEXT_TO_IMAGE,
@@ -154,8 +151,8 @@ class TestPricingCalculations(unittest.TestCase):
         expected = Money("0.006") * Decimal("1.1") * Decimal("1.2")
         self.assertAlmostEqual(float(cost), float(expected), places=6)
 
-    def test_novita_t2i_model_multiplier(self):
-        """Test Novita T2I cost with model multiplier (simplified)"""
+    def test_novita_t2i_model_multiplier(self) -> None:
+        """Test Novita T2I cost with model multiplier (simplified)."""
         cost = self.pricing_loader.estimate_cost(
             provider=MockVisionProvider.NOVITA,
             task=MockVisionTask.TEXT_TO_IMAGE,
@@ -169,8 +166,8 @@ class TestPricingCalculations(unittest.TestCase):
         expected = Money("0.006") * Decimal("1.1") * Decimal("1.2")
         self.assertAlmostEqual(float(cost), float(expected), places=6)
 
-    def test_together_t2i_basic_cost(self):
-        """Test basic Together AI T2I cost calculation"""
+    def test_together_t2i_basic_cost(self) -> None:
+        """Test basic Together AI T2I cost calculation."""
         cost = self.pricing_loader.estimate_cost(
             provider=MockVisionProvider.TOGETHER_AI,
             task=MockVisionTask.TEXT_TO_IMAGE,
@@ -184,8 +181,8 @@ class TestPricingCalculations(unittest.TestCase):
         expected = Money("0.007") * Decimal("1.0") * Decimal("1.2")
         self.assertAlmostEqual(float(cost), float(expected), places=6)
 
-    def test_unknown_provider_fallback(self):
-        """Test fallback for unknown provider"""
+    def test_unknown_provider_fallback(self) -> None:
+        """Test fallback for unknown provider."""
         # Create mock unknown provider
         unknown_provider = Mock()
         unknown_provider.value = "unknown_provider"
@@ -202,8 +199,8 @@ class TestPricingCalculations(unittest.TestCase):
         expected = Money("0.02") * Decimal("1.2")
         self.assertAlmostEqual(float(cost), float(expected), places=6)
 
-    def test_unknown_task_fallback(self):
-        """Test fallback for unknown task"""
+    def test_unknown_task_fallback(self) -> None:
+        """Test fallback for unknown task."""
         # Create mock unknown task
         unknown_task = Mock()
         unknown_task.value = "unknown_task"
@@ -220,8 +217,8 @@ class TestPricingCalculations(unittest.TestCase):
         expected = Money("0.02") * Decimal("1.2")
         self.assertAlmostEqual(float(cost), float(expected), places=6)
 
-    def test_environment_override_simulation(self):
-        """Test environment variable override simulation"""
+    def test_environment_override_simulation(self) -> None:
+        """Test environment variable override simulation."""
 
         # Simulate env override by modifying mock behavior
         def mock_estimate_with_override(
@@ -254,8 +251,8 @@ class TestPricingCalculations(unittest.TestCase):
         expected = Money("0.005") * 2
         self.assertAlmostEqual(float(cost), float(expected), places=6)
 
-    def test_cost_realistic_range(self):
-        """Test that costs are in realistic range (~$0.006 per image)"""
+    def test_cost_realistic_range(self) -> None:
+        """Test that costs are in realistic range (~$0.006 per image)."""
         cost = self.pricing_loader.estimate_cost(
             provider=MockVisionProvider.NOVITA,
             task=MockVisionTask.TEXT_TO_IMAGE,
@@ -265,18 +262,18 @@ class TestPricingCalculations(unittest.TestCase):
         )
 
         # Should be between $0.005 and $0.015 for single 1024x1024 image
-        self.assertGreaterEqual(float(cost), 0.005)
-        self.assertLessEqual(float(cost), 0.015)
+        assert float(cost) >= 0.005
+        assert float(cost) <= 0.015
 
         # Should not be the old bogus $4.21 value
         self.assertNotAlmostEqual(float(cost), 4.21, places=2)
 
 
 class TestGatewayActualCostCalculation(unittest.TestCase):
-    """Test VisionGateway actual cost calculation"""
+    """Test VisionGateway actual cost calculation."""
 
-    def setUp(self):
-        """Setup test fixtures"""
+    def setUp(self) -> None:
+        """Setup test fixtures."""
         # Mock pricing table
         self.mock_pricing_table = Mock()
         self.mock_pricing_table.estimate_cost.return_value = Money("0.006")
@@ -314,8 +311,8 @@ class TestGatewayActualCostCalculation(unittest.TestCase):
 
         self.gateway._calculate_actual_cost = mock_calculate_actual_cost
 
-    def test_calculate_actual_cost_basic(self):
-        """Test basic actual cost calculation"""
+    def test_calculate_actual_cost_basic(self) -> None:
+        """Test basic actual cost calculation."""
         # Mock job metadata
         mock_request = Mock()
         mock_request.task = "text_to_image"
@@ -336,13 +333,13 @@ class TestGatewayActualCostCalculation(unittest.TestCase):
         actual_cost = self.gateway._calculate_actual_cost(job_meta, mock_result)
 
         # Should return pricing table estimate
-        self.assertEqual(actual_cost, Money("0.006"))
+        assert actual_cost == Money("0.006")
 
         # Should have called pricing table with correct parameters
         self.mock_pricing_table.estimate_cost.assert_called_once()
 
-    def test_calculate_actual_cost_fallback(self):
-        """Test actual cost calculation fallback when request missing"""
+    def test_calculate_actual_cost_fallback(self) -> None:
+        """Test actual cost calculation fallback when request missing."""
         job_meta = {}  # No request
         mock_result = Mock()
         mock_result.provider_used = "novita"
@@ -350,10 +347,10 @@ class TestGatewayActualCostCalculation(unittest.TestCase):
         actual_cost = self.gateway._calculate_actual_cost(job_meta, mock_result)
 
         # Should return fallback cost
-        self.assertEqual(actual_cost, Money("0.006"))
+        assert actual_cost == Money("0.006")
 
-    def test_calculate_actual_cost_exception_handling(self):
-        """Test actual cost calculation handles exceptions gracefully"""
+    def test_calculate_actual_cost_exception_handling(self) -> None:
+        """Test actual cost calculation handles exceptions gracefully."""
         # Mock pricing table to raise exception
         self.mock_pricing_table.estimate_cost.side_effect = Exception("Pricing error")
 
@@ -365,7 +362,7 @@ class TestGatewayActualCostCalculation(unittest.TestCase):
         actual_cost = self.gateway._calculate_actual_cost(job_meta, mock_result)
 
         # Should return fallback cost
-        self.assertEqual(actual_cost, Money("0.006"))
+        assert actual_cost == Money("0.006")
 
 
 if __name__ == "__main__":

@@ -9,18 +9,18 @@ from bot.shutdown import GracefulShutdown
 
 
 @pytest.mark.asyncio
-async def test_save_all_data_runs_profile_flush_off_event_loop(monkeypatch):
+async def test_save_all_data_runs_profile_flush_off_event_loop(monkeypatch) -> None:
     bot = MagicMock()
     bot.is_closed.return_value = False
     shutdown = GracefulShutdown(bot)
 
     calls = []
 
-    def fake_save_all_profiles():
+    def fake_save_all_profiles() -> bool:
         calls.append("user")
         return True
 
-    def fake_save_all_server_profiles():
+    def fake_save_all_server_profiles() -> bool:
         calls.append("server")
         return True
 

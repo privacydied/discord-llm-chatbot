@@ -15,7 +15,7 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -28,10 +28,9 @@ from bot.memory.identity import is_self_recall_intent, resolve_memory_subject_us
 from bot.memory.persistent_store import MemoryRecord
 from bot.memory.service import CuratedMemoryService
 
-
 # ---- helpers ----------------------------------------------------------------
 
-_NOW = datetime.now(timezone.utc).isoformat()
+_NOW = datetime.now(UTC).isoformat()
 
 
 def _make_record(
@@ -82,7 +81,7 @@ def _fake_semantic_store(records: dict | None = None):
     mock.delete_many = AsyncMock()
     mock.deleted_many = []
 
-    async def fake_upsert(memory_id: str, document: str, metadata: dict):
+    async def fake_upsert(memory_id: str, document: str, metadata: dict) -> str:
         mock.upserts.append((memory_id, document, metadata))
         records[memory_id] = {
             "memory_id": memory_id,
@@ -105,7 +104,7 @@ def _fake_semantic_store(records: dict | None = None):
                     "document": payload.get("document", ""),
                     "metadata": meta,
                     "semantic_score": 0.92,
-                }
+                },
             )
         return results[:top_k]
 
@@ -118,7 +117,7 @@ def _fake_persistent_store():
     store.initialize = AsyncMock()
     store._records: dict[str, MemoryRecord] = {}
 
-    async def fake_upsert(rec: MemoryRecord):
+    async def fake_upsert(rec: MemoryRecord) -> None:
         store._records[rec.memory_id] = rec
 
     async def fake_get(mid: str):
@@ -135,7 +134,7 @@ def _fake_persistent_store():
     async def fake_fetch(ids: list[str]):
         return [store._records[i] for i in ids if i in store._records]
 
-    async def fake_soft_delete(mid: str):
+    async def fake_soft_delete(mid: str) -> bool:
         rec = store._records.get(mid)
         if rec is None:
             return False
@@ -175,7 +174,7 @@ def _build_service(store, semantic):
 # ---- Part A: resolve_memory_subject_user_id --------------------------------
 
 
-def test_resolve_memory_subject_is_author_id():
+def test_resolve_memory_subject_is_author_id() -> None:
     """'me/myself' always resolves to message.author.id."""
     msg = MagicMock()
     msg.author.id = 99887
@@ -183,7 +182,7 @@ def test_resolve_memory_subject_is_author_id():
     assert result == "99887"
 
 
-def test_resolve_does_not_use_mentioned():
+def test_resolve_does_not_use_mentioned() -> None:
     msg = MagicMock()
     msg.author.id = 111
     msg.mentions = [MagicMock(id=222)]
@@ -191,7 +190,7 @@ def test_resolve_does_not_use_mentioned():
     assert result == "111"
 
 
-def test_self_recall_intent_patterns():
+def test_self_recall_intent_patterns() -> None:
     assert is_self_recall_intent("tell me about myself")
     assert is_self_recall_intent("what do you know about me")
     assert is_self_recall_intent("what are my memories")
@@ -284,12 +283,12 @@ class TestOwnerScopeAndSafeDisclosure:
                         "importance": 0.9,
                     },
                 },
-            }
+            },
         )
         return _build_service(store, semantic)
 
     @pytest.mark.asyncio
-    async def test_user_a_sees_only_own_memories(self, svc):
+    async def test_user_a_sees_only_own_memories(self, svc) -> None:
         block = await svc.build_prompt_block(
             user_id="111",
             guild_id="guild-1",
@@ -303,7 +302,7 @@ class TestOwnerScopeAndSafeDisclosure:
         assert "dog named Rex" not in block
 
     @pytest.mark.asyncio
-    async def test_user_b_sees_only_own_memories(self, svc):
+    async def test_user_b_sees_only_own_memories(self, svc) -> None:
         block = await svc.build_prompt_block(
             user_id="222",
             guild_id="guild-1",
@@ -317,7 +316,7 @@ class TestOwnerScopeAndSafeDisclosure:
         assert "dark mode" not in block
 
     @pytest.mark.asyncio
-    async def test_empty_user_gets_empty_block(self, svc):
+    async def test_empty_user_gets_empty_block(self, svc) -> None:
         block = await svc.build_prompt_block(
             user_id="999",
             guild_id="guild-1",
@@ -368,12 +367,12 @@ class TestSensitiveMemoryDisclosure:
                         "importance": 0.9,
                     },
                 },
-            }
+            },
         )
         return _build_service(store, semantic)
 
     @pytest.mark.asyncio
-    async def test_sensitive_memory_withheld_in_normal_chat(self, svc_with_sensitive):
+    async def test_sensitive_memory_withheld_in_normal_chat(self, svc_with_sensitive) -> None:
         block = await svc_with_sensitive.build_prompt_block(
             user_id="111",
             guild_id="guild-1",
@@ -387,7 +386,7 @@ class TestSensitiveMemoryDisclosure:
         assert "dark mode" in block
 
     @pytest.mark.asyncio
-    async def test_sensitive_memory_visible_with_allow_sensitive(self, svc_with_sensitive):
+    async def test_sensitive_memory_visible_with_allow_sensitive(self, svc_with_sensitive) -> None:
         block = await svc_with_sensitive.build_prompt_block(
             user_id="111",
             guild_id="guild-1",
@@ -401,7 +400,7 @@ class TestSensitiveMemoryDisclosure:
         assert "dark mode" in block
 
     @pytest.mark.asyncio
-    async def test_all_sensitive_returns_safe_ack_message(self, svc_with_sensitive):
+    async def test_all_sensitive_returns_safe_ack_message(self, svc_with_sensitive) -> None:
         # Remove safe record temporarily
         del svc_with_sensitive.store._records["mem-safe"]
         block = await svc_with_sensitive.build_prompt_block(
@@ -455,12 +454,12 @@ class TestOrphanMemories:
                         "importance": 0.9,
                     },
                 },
-            }
+            },
         )
         return _build_service(store, semantic)
 
     @pytest.mark.asyncio
-    async def test_orphan_not_returned_to_any_user(self, svc_with_orphan):
+    async def test_orphan_not_returned_to_any_user(self, svc_with_orphan) -> None:
         for uid in ["111", "222", "333"]:
             block = await svc_with_orphan.build_prompt_block(
                 user_id=uid,
@@ -473,7 +472,7 @@ class TestOrphanMemories:
             assert "Legacy memory" not in block
 
     @pytest.mark.asyncio
-    async def test_owned_memories_still_returned(self, svc_with_orphan):
+    async def test_owned_memories_still_returned(self, svc_with_orphan) -> None:
         block = await svc_with_orphan.build_prompt_block(
             user_id="111",
             guild_id="guild-1",
@@ -495,7 +494,7 @@ class TestInferredMemorySensitiveBlocking:
     def curator(self):
         return CuratedMemoryCurator()
 
-    def test_sexual_content_blocked(self, curator):
+    def test_sexual_content_blocked(self, curator) -> None:
         texts = [
             "I watch porn every night",
             "I have an onlyfans account",
@@ -506,11 +505,11 @@ class TestInferredMemorySensitiveBlocking:
             result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should be blocked: {t!r}"
 
-    def test_body_size_claims_blocked(self, curator):
+    def test_body_size_claims_blocked(self, curator) -> None:
         result = curator.curate_inferred_candidate(user_id="111", text="I am overweight and my weight is 200kg", guild_id="g1")
         assert result is None
 
-    def test_drug_references_blocked(self, curator):
+    def test_drug_references_blocked(self, curator) -> None:
         for t in [
             "I smoke weed every day",
             "I took cocaine at the party",
@@ -520,7 +519,7 @@ class TestInferredMemorySensitiveBlocking:
             result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should block drugs: {t!r}"
 
-    def test_medical_claims_blocked(self, curator):
+    def test_medical_claims_blocked(self, curator) -> None:
         for t in [
             "I have depression and take medication",
             "I was diagnosed with anxiety last year",
@@ -530,7 +529,7 @@ class TestInferredMemorySensitiveBlocking:
             result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should block medical: {t!r}"
 
-    def test_protected_identity_blocked(self, curator):
+    def test_protected_identity_blocked(self, curator) -> None:
         for t in [
             "I am gay and proud",
             "My religion is catholic",
@@ -540,12 +539,12 @@ class TestInferredMemorySensitiveBlocking:
             result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should block identity: {t!r}"
 
-    def test_slurs_blocked(self, curator):
+    def test_slurs_blocked(self, curator) -> None:
         for t in ["that guy is a faggot", "retard moment"]:
             result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should block slurs: {t!r}"
 
-    def test_third_party_anecdote_blocked(self, curator):
+    def test_third_party_anecdote_blocked(self, curator) -> None:
         for t in [
             "my friend got arrested last night",
             "someone said the movie was terrible",
@@ -554,7 +553,7 @@ class TestInferredMemorySensitiveBlocking:
             result = curator.curate_inferred_candidate(user_id="111", text=t, guild_id="g1")
             assert result is None, f"Should block third party: {t!r}"
 
-    def test_safe_preference_accepted(self, curator):
+    def test_safe_preference_accepted(self, curator) -> None:
         result = curator.curate_inferred_candidate(
             user_id="111",
             text="I prefer short replies and dark mode",
@@ -575,7 +574,7 @@ class TestExplicitMemoryAddStillWorks:
         return _build_service(store, semantic)
 
     @pytest.mark.asyncio
-    async def test_explicit_add_stores_for_owner(self, svc):
+    async def test_explicit_add_stores_for_owner(self, svc) -> None:
         rec = await svc.add_explicit_memory(
             user_id="111",
             text="I prefer dark mode",
@@ -590,7 +589,7 @@ class TestExplicitMemoryAddStillWorks:
         assert stored.user_id == "111"
 
     @pytest.mark.asyncio
-    async def test_explicit_add_sensitive_text_saved_but_hidden(self, svc):
+    async def test_explicit_add_sensitive_text_saved_but_hidden(self, svc) -> None:
         # Sensitive content IS stored (owner-scoped) but gated at prompt injection.
         rec = await svc.add_explicit_memory(
             user_id="111",
@@ -642,21 +641,21 @@ class TestDeleteMemoryOwnership:
         return _build_service(store, semantic)
 
     @pytest.mark.asyncio
-    async def test_delete_succeeds_for_owner(self, svc):
+    async def test_delete_succeeds_for_owner(self, svc) -> None:
         result = await svc.delete_memory("mem-a1", owner_id="111")
         assert result is True
         stored = await svc.store.get_memory("mem-a1")
         assert stored.deleted_at is not None
 
     @pytest.mark.asyncio
-    async def test_delete_blocked_for_non_owner(self, svc):
+    async def test_delete_blocked_for_non_owner(self, svc) -> None:
         result = await svc.delete_memory("mem-a1", owner_id="222")
         assert result is False
         stored = await svc.store.get_memory("mem-a1")
         assert stored.deleted_at is None
 
     @pytest.mark.asyncio
-    async def test_delete_without_owner_id_admin_works(self, svc):
+    async def test_delete_without_owner_id_admin_works(self, svc) -> None:
         result = await svc.delete_memory("mem-a1")  # no owner_id = admin
         assert result is True
 
@@ -667,35 +666,35 @@ class TestDeleteMemoryOwnership:
 class TestPublicSafeHelper:
     """Safe disclosure filter correctness."""
 
-    def test_safe_memories_pass(self):
+    def test_safe_memories_pass(self) -> None:
         assert is_public_safe("Prefers dark mode UI")
         assert is_public_safe("Likes to play chess on weekends")
         assert is_public_safe("Uses Python for scripting")
         assert is_public_safe("Has a dog named Rex")
 
-    def test_sexual_content_fails(self):
+    def test_sexual_content_fails(self) -> None:
         assert not is_public_safe("I watch porn regularly")
         assert not is_public_safe("I have an onlyfans with 1000 followers")
         assert not is_public_safe("I like to be naked at home")
 
-    def test_drug_content_fails(self):
+    def test_drug_content_fails(self) -> None:
         assert not is_public_safe("I smoke weed every evening")
         assert not is_public_safe("I took cocaine at the concert")
         assert not is_public_safe("I use xanax for anxiety")
 
-    def test_medical_content_fails(self):
+    def test_medical_content_fails(self) -> None:
         assert not is_public_safe("I have depression")
         assert not is_public_safe("I was diagnosed with bipolar disorder")
         assert not is_public_safe("I take medication every day")
 
-    def test_identity_content_fails(self):
+    def test_identity_content_fails(self) -> None:
         assert not is_public_safe("I am gay")
         assert not is_public_safe("My religion is catholic")
         assert not is_public_safe("I am transgender")
 
-    def test_slur_content_fails(self):
+    def test_slur_content_fails(self) -> None:
         assert not is_public_safe("he is a retard")
 
-    def test_third_party_anecdote_fails(self):
+    def test_third_party_anecdote_fails(self) -> None:
         assert not is_public_safe("my friend got arrested")
         assert not is_public_safe("someone said the world is flat")

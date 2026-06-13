@@ -6,14 +6,15 @@ Screenshots are explicitly command-gated (e.g., !ss).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
+
+from bot.see import see_infer
+from bot.utils.logging import get_logger
 
 from .base import RouteContext, RouteHandler
-from ..see import see_infer
-from ..utils.logging import get_logger
 
 if TYPE_CHECKING:
-    pass
+    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
@@ -47,7 +48,7 @@ class ScreenshotHandler(RouteHandler):
                 await progress_cb("validate", 1)
 
             # Lazy-import to avoid circular deps
-            from ..utils.external_api import external_screenshot
+            from bot.utils.external_api import external_screenshot
 
             # Preparation phase
             if progress_cb:
@@ -79,10 +80,9 @@ class ScreenshotHandler(RouteHandler):
                     if progress_cb:
                         await progress_cb("done", 6)
                     return f"Screenshot content from {url}: {analysis}"
-                else:
-                    if progress_cb:
-                        await progress_cb("done", 6)
-                    return f"Captured screenshot from {url}, but vision analysis returned no content."
+                if progress_cb:
+                    await progress_cb("done", 6)
+                return f"Captured screenshot from {url}, but vision analysis returned no content."
 
             except Exception as vl_err:
                 logger.error(
@@ -106,7 +106,7 @@ screenshot_handler: ScreenshotHandler = ScreenshotHandler()
 
 async def handle_screenshot_url(
     item: Any,
-    progress_cb: Optional[Callable[[str, int], Any]] = None,
+    progress_cb: Callable[[str, int], Any] | None = None,
 ) -> str:
     """Compatibility function for router delegation.
 

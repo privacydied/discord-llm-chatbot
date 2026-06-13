@@ -3,16 +3,16 @@ import pytest
 pytestmark = pytest.mark.skip(reason="Requires TTS tokenizer infrastructure")
 
 
-def test_en_skips_tokenizer(monkeypatch):
+def test_en_skips_tokenizer(monkeypatch) -> None:
     from bot.tts.engines.kokoro import KokoroEngine
 
     created = {}
 
     class KDStub:
-        def __init__(self, *a, **k):
+        def __init__(self, *a, **k) -> None:
             created["use_tokenizer"] = k.get("use_tokenizer", True)
 
-        def create(self, **k):
+        def create(self, **k) -> str:
             created.update(k)
             return "/tmp/fake.wav"
 

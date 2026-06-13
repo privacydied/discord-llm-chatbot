@@ -1,10 +1,12 @@
+from typing import Never
+
 import pytest
 
 from bot.router import Router, XApiClient
 
 
 class DummyBot:
-    def __init__(self):
+    def __init__(self) -> None:
         self.config = {
             "X_API_ENABLED": True,
             "X_API_BEARER_TOKEN": "test",
@@ -15,7 +17,7 @@ class DummyBot:
 
 
 @pytest.mark.asyncio
-async def test_resolve_x_base_text_prefers_api(monkeypatch):
+async def test_resolve_x_base_text_prefers_api(monkeypatch) -> None:
     router = Router(DummyBot())
     monkeypatch.setattr(XApiClient, "extract_tweet_id", staticmethod(lambda _u: "1"))
 
@@ -26,8 +28,9 @@ async def test_resolve_x_base_text_prefers_api(monkeypatch):
     async def _get_client(_self):
         return _DummyX()
 
-    async def _get_syn(_self, _tweet_id):
-        raise AssertionError("syndication should not be used when API succeeds")
+    async def _get_syn(_self, _tweet_id) -> Never:
+        msg = "syndication should not be used when API succeeds"
+        raise AssertionError(msg)
 
     monkeypatch.setattr(Router, "_get_x_api_client", _get_client)
     monkeypatch.setattr(Router, "_get_tweet_via_syndication", _get_syn)
@@ -38,13 +41,14 @@ async def test_resolve_x_base_text_prefers_api(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_resolve_x_base_text_falls_back_to_syndication(monkeypatch):
+async def test_resolve_x_base_text_falls_back_to_syndication(monkeypatch) -> None:
     router = Router(DummyBot())
     monkeypatch.setattr(XApiClient, "extract_tweet_id", staticmethod(lambda _u: "1"))
 
     class _DummyX:
-        async def get_tweet_by_id(self, _tweet_id):
-            raise RuntimeError("api down")
+        async def get_tweet_by_id(self, _tweet_id) -> Never:
+            msg = "api down"
+            raise RuntimeError(msg)
 
     async def _get_client(_self):
         return _DummyX()
@@ -61,7 +65,7 @@ async def test_resolve_x_base_text_falls_back_to_syndication(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_resolve_x_base_text_returns_none_without_tweet_id(monkeypatch):
+async def test_resolve_x_base_text_returns_none_without_tweet_id(monkeypatch) -> None:
     router = Router(DummyBot())
     monkeypatch.setattr(XApiClient, "extract_tweet_id", staticmethod(lambda _u: None))
 
@@ -70,15 +74,16 @@ async def test_resolve_x_base_text_returns_none_without_tweet_id(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_resolve_x_base_text_respects_syndication_disabled(monkeypatch):
+async def test_resolve_x_base_text_respects_syndication_disabled(monkeypatch) -> None:
     bot = DummyBot()
     bot.config["X_SYNDICATION_ENABLED"] = False
     router = Router(bot)
     monkeypatch.setattr(XApiClient, "extract_tweet_id", staticmethod(lambda _u: "1"))
 
     class _DummyX:
-        async def get_tweet_by_id(self, _tweet_id):
-            raise RuntimeError("api down")
+        async def get_tweet_by_id(self, _tweet_id) -> Never:
+            msg = "api down"
+            raise RuntimeError(msg)
 
     async def _get_client(_self):
         return _DummyX()

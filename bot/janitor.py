@@ -1,5 +1,4 @@
-"""
-Periodic cache and log janitor for long-running bot instances. [CA][REH][PA]
+"""Periodic cache and log janitor for long-running bot instances. [CA][REH][PA].
 
 Runs every 60 minutes to:
 - Rotate and compress logs
@@ -16,15 +15,16 @@ Guardrails:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import gzip
 import logging
 import random
 import shutil
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,8 @@ class DirectoryPolicy:
     """Policy for a single directory."""
 
     path: Path
-    age_ttl_hours: Optional[float] = None  # Delete files older than this
-    size_cap_mb: Optional[int] = None  # Keep total under this size
+    age_ttl_hours: float | None = None  # Delete files older than this
+    size_cap_mb: int | None = None  # Keep total under this size
     max_files_per_run: int = 500  # Batch limit to keep runs short
 
 
@@ -61,22 +61,20 @@ JANITOR_JITTER_MINUTES = 5
 
 
 def get_directory_size_bytes(path: Path) -> int:
-    """Calculate total size of all files in directory (recursive). [PA]"""
+    """Calculate total size of all files in directory (recursive). [PA]."""
     total = 0
     try:
         for item in path.rglob("*"):
             if item.is_file():
-                try:
+                with contextlib.suppress(OSError, PermissionError):
                     total += item.stat().st_size
-                except (OSError, PermissionError):
-                    pass
     except (OSError, PermissionError):
         pass
     return total
 
 
-def get_files_by_mtime(path: Path, pattern: str = "*") -> List[Tuple[Path, float]]:
-    """Get all files matching pattern with their mtime, sorted oldest first. [CA]"""
+def get_files_by_mtime(path: Path, pattern: str = "*") -> list[tuple[Path, float]]:
+    """Get all files matching pattern with their mtime, sorted oldest first. [CA]."""
     files = []
     try:
         for item in path.rglob(pattern):
@@ -94,7 +92,7 @@ def get_files_by_mtime(path: Path, pattern: str = "*") -> List[Tuple[Path, float
 
 
 def is_recent_file(file_path: Path, hold_off_minutes: float) -> bool:
-    """Check if file was modified recently (within hold-off window). [REH]"""
+    """Check if file was modified recently (within hold-off window). [REH]."""
     try:
         mtime = file_path.stat().st_mtime
         age_minutes = (time.time() - mtime) / 60.0
@@ -108,23 +106,21 @@ def is_recent_file(file_path: Path, hold_off_minutes: float) -> bool:
 
 
 def compress_file_to_gz(file_path: Path) -> bool:
-    """Compress file to .gz and delete original. Returns True on success. [CA][REH]"""
+    """Compress file to .gz and delete original. Returns True on success. [CA][REH]."""
     try:
         gz_path = Path(str(file_path) + ".gz")
         if gz_path.exists():
             # Already compressed
             return False
 
-        with open(file_path, "rb") as f_in:
-            with gzip.open(gz_path, "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
+        with open(file_path, "rb") as f_in, gzip.open(gz_path, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
 
         # Verify the compressed file exists before deleting original
         if gz_path.exists():
             file_path.unlink()
             return True
-        else:
-            return False
+        return False
     except Exception as e:
         logger.debug(f"Failed to compress {file_path}: {e}")
         return False
@@ -133,14 +129,14 @@ def compress_file_to_gz(file_path: Path) -> bool:
 # ===== CACHE PRUNING =====
 
 
-def prune_by_age(policy: DirectoryPolicy, hold_off_minutes: float, active_file: Optional[Path] = None) -> Tuple[int, int]:
-    """
-    Delete files older than TTL. Returns (files_deleted, bytes_freed). [CA][REH]
+def prune_by_age(policy: DirectoryPolicy, hold_off_minutes: float, active_file: Path | None = None) -> tuple[int, int]:
+    """Delete files older than TTL. Returns (files_deleted, bytes_freed). [CA][REH].
 
     Args:
         policy: Directory policy with age_ttl_hours
         hold_off_minutes: Skip files modified within this window
         active_file: Never delete this file (e.g., current log)
+
     """
     if not policy.path.exists() or policy.age_ttl_hours is None:
         return 0, 0
@@ -187,14 +183,14 @@ def prune_by_age(policy: DirectoryPolicy, hold_off_minutes: float, active_file: 
     return files_deleted, bytes_freed
 
 
-def prune_by_size(policy: DirectoryPolicy, hold_off_minutes: float, active_file: Optional[Path] = None) -> Tuple[int, int]:
-    """
-    Delete oldest files until under size cap. Returns (files_deleted, bytes_freed). [CA][REH]
+def prune_by_size(policy: DirectoryPolicy, hold_off_minutes: float, active_file: Path | None = None) -> tuple[int, int]:
+    """Delete oldest files until under size cap. Returns (files_deleted, bytes_freed). [CA][REH].
 
     Args:
         policy: Directory policy with size_cap_mb
         hold_off_minutes: Skip files modified within this window
         active_file: Never delete this file
+
     """
     if not policy.path.exists() or policy.size_cap_mb is None:
         return 0, 0
@@ -212,7 +208,7 @@ def prune_by_size(policy: DirectoryPolicy, hold_off_minutes: float, active_file:
     try:
         files = get_files_by_mtime(policy.path)
 
-        for file_path, mtime in files:
+        for file_path, _mtime in files:
             # Safety checks
             if files_deleted >= policy.max_files_per_run:
                 break
@@ -246,8 +242,7 @@ def prune_by_size(policy: DirectoryPolicy, hold_off_minutes: float, active_file:
 
 
 def compress_old_logs(log_dir: Path, compress_age_hours: float) -> int:
-    """
-    Compress log files older than compress_age_hours. Returns count compressed. [CA]
+    """Compress log files older than compress_age_hours. Returns count compressed. [CA].
 
     Only compresses files matching *.log or *.jsonl that aren't already .gz
     """
@@ -289,10 +284,8 @@ def compress_old_logs(log_dir: Path, compress_age_hours: float) -> int:
     return compressed_count
 
 
-def prune_old_compressed_logs(log_dir: Path, retention_days: int, total_cap_mb: int) -> Tuple[int, int]:
-    """
-    Prune compressed logs by age and total size. Returns (files_deleted, bytes_freed). [CA][REH]
-    """
+def prune_old_compressed_logs(log_dir: Path, retention_days: int, total_cap_mb: int) -> tuple[int, int]:
+    """Prune compressed logs by age and total size. Returns (files_deleted, bytes_freed). [CA][REH]."""
     if not log_dir.exists():
         return 0, 0
 
@@ -348,16 +341,16 @@ def prune_old_compressed_logs(log_dir: Path, retention_days: int, total_cap_mb: 
 
 
 class Janitor:
-    """Main janitor orchestrator. [CA][REH][PA]"""
+    """Main janitor orchestrator. [CA][REH][PA]."""
 
-    def __init__(self):
-        self._task: Optional[asyncio.Task] = None
+    def __init__(self) -> None:
+        self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
         self._running = False
-        self._policies: Dict[str, DirectoryPolicy] = {}
+        self._policies: dict[str, DirectoryPolicy] = {}
 
     def _load_policies_from_config(self) -> None:
-        """Load directory policies from existing config paths. [CA]"""
+        """Load directory policies from existing config paths. [CA]."""
         from .config import load_config
         from .tts.eng_g2p_local import get_kokoro_tempdir
 
@@ -414,14 +407,14 @@ class Janitor:
         }
 
         # Ensure directories exist
-        for name, policy in self._policies.items():
+        for policy in self._policies.values():
             try:
                 policy.path.mkdir(parents=True, exist_ok=True)
             except (OSError, PermissionError):
                 logger.debug(f"Could not create directory {policy.path}")
 
     async def _run_once(self) -> None:
-        """Run a single janitor cycle. [CA][REH]"""
+        """Run a single janitor cycle. [CA][REH]."""
         start_time = time.monotonic()
 
         try:
@@ -431,7 +424,7 @@ class Janitor:
                     "subsys": "janitor",
                     "event": "janitor.run",
                     "detail": {
-                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "ts": datetime.now(UTC).isoformat(),
                         "interval_min": JANITOR_INTERVAL_MINUTES,
                     },
                 },
@@ -452,7 +445,7 @@ class Janitor:
 
             # Calculate duration
             duration_ms = (time.monotonic() - start_time) * 1000
-            next_run_min = JANITOR_INTERVAL_MINUTES + random.uniform(-JANITOR_JITTER_MINUTES, JANITOR_JITTER_MINUTES)
+            next_run_min = JANITOR_INTERVAL_MINUTES + random.uniform(-JANITOR_JITTER_MINUTES, JANITOR_JITTER_MINUTES)  # nosec B311
 
             logger.info(
                 "janitor.run done",
@@ -478,7 +471,7 @@ class Janitor:
             )
 
     async def _process_logs(self) -> None:
-        """Process log directory: compress and prune. [CA]"""
+        """Process log directory: compress and prune. [CA]."""
         policy = self._policies.get("logs")
         if not policy or not policy.path.exists():
             return
@@ -521,7 +514,7 @@ class Janitor:
             )
 
     async def _process_directory(self, name: str, policy: DirectoryPolicy) -> None:
-        """Process a single cache directory. [CA][REH]"""
+        """Process a single cache directory. [CA][REH]."""
         if not policy.path.exists():
             return
 
@@ -571,14 +564,14 @@ class Janitor:
             )
 
     async def _run_loop(self) -> None:
-        """Main janitor loop with jittered intervals. [REH][PA]"""
+        """Main janitor loop with jittered intervals. [REH][PA]."""
         try:
             while self._running:
                 # Run janitor cycle
                 await self._run_once()
 
                 # Calculate next run time with jitter
-                jitter = random.uniform(-JANITOR_JITTER_MINUTES, JANITOR_JITTER_MINUTES)
+                jitter = random.uniform(-JANITOR_JITTER_MINUTES, JANITOR_JITTER_MINUTES)  # nosec B311
                 sleep_minutes = JANITOR_INTERVAL_MINUTES + jitter
                 sleep_seconds = sleep_minutes * 60
 
@@ -603,7 +596,7 @@ class Janitor:
             )
 
     async def start(self) -> None:
-        """Start the janitor task. [CA]"""
+        """Start the janitor task. [CA]."""
         async with self._lock:
             if self._running:
                 logger.warning("Janitor already running")
@@ -627,7 +620,7 @@ class Janitor:
             )
 
     async def stop(self) -> None:
-        """Stop the janitor task. [CA]"""
+        """Stop the janitor task. [CA]."""
         async with self._lock:
             if not self._running:
                 return
@@ -636,10 +629,8 @@ class Janitor:
 
             if self._task and not self._task.done():
                 self._task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._task
-                except asyncio.CancelledError:
-                    pass
 
             logger.info(
                 "Janitor stopped",
@@ -647,7 +638,7 @@ class Janitor:
             )
 
     async def restart(self) -> None:
-        """Restart the janitor (for hot-reload). [CA]"""
+        """Restart the janitor (for hot-reload). [CA]."""
         logger.info(
             "Janitor restarting",
             extra={"subsys": "janitor", "event": "janitor.restart"},
@@ -657,11 +648,11 @@ class Janitor:
 
 
 # Global janitor instance
-_janitor: Optional[Janitor] = None
+_janitor: Janitor | None = None
 
 
 async def start_janitor() -> None:
-    """Start the global janitor instance. [CA]"""
+    """Start the global janitor instance. [CA]."""
     global _janitor
 
     if _janitor is None:
@@ -671,7 +662,7 @@ async def start_janitor() -> None:
 
 
 async def stop_janitor() -> None:
-    """Stop the global janitor instance. [CA]"""
+    """Stop the global janitor instance. [CA]."""
     global _janitor
 
     if _janitor is not None:
@@ -679,16 +670,15 @@ async def stop_janitor() -> None:
 
 
 async def restart_janitor() -> None:
-    """Restart the global janitor instance (for hot-reload). [CA]"""
+    """Restart the global janitor instance (for hot-reload). [CA]."""
     global _janitor
 
     if _janitor is not None:
         await _janitor.restart()
 
 
-async def manual_clean() -> Dict[str, Any]:
-    """
-    Manually trigger janitor cleaning (for admin commands). [CA]
+async def manual_clean() -> dict[str, Any]:
+    """Manually trigger janitor cleaning (for admin commands). [CA].
 
     Returns a summary dict with stats for user feedback.
     """
