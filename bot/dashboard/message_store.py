@@ -481,7 +481,7 @@ class MessageStore:
             conn = self._connect()
             try:
                 count_expr = "message_count + 1" if increment_count else "excluded.message_count"
-                conn.execute(
+                conn.execute(  # nosec B608 - parameterized query with safe values
                     """INSERT INTO dm_threads (
                         dm_channel_id, user_id, username, display_name, avatar_url,
                         last_message_id, last_message_at, message_count
@@ -493,10 +493,9 @@ class MessageStore:
                         avatar_url=COALESCE(excluded.avatar_url, dm_threads.avatar_url),
                         last_message_id=COALESCE(excluded.last_message_id, dm_threads.last_message_id),
                         last_message_at=excluded.last_message_at,
-                        message_count="""
+                        message_count="""  # nosec B608
                     + count_expr
-                    + """
-                    """,
+                    + """ """,
                     (
                         dm_channel_id,
                         user_id,

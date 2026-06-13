@@ -334,13 +334,12 @@ class AuditStore:
                 count = conn.execute(f"SELECT COUNT(*) FROM audit_events WHERE {where_sql}", params).fetchone()[0]  # nosec B608
 
                 rows = conn.execute(
-                    # nosec B608 — where_sql built from whitelist of column names, values parameterized
                     f"""
                     SELECT * FROM audit_events
                     WHERE {where_sql}
                     ORDER BY created_at DESC
                     LIMIT ? OFFSET ?
-                    """,
+                    """,  # nosec B608 — where_sql built from whitelist of column names, values parameterized
                     params + [page_size, offset],
                 ).fetchall()
                 return rows, count

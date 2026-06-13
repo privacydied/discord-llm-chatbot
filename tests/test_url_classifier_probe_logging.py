@@ -108,7 +108,22 @@ async def test_web_fetch_url_content_applies_browser_like_headers(monkeypatch) -
         async def get(self, url: str):
             return _Resp()
 
+    # Mock httpx.AsyncClient
     monkeypatch.setattr(web.httpx, "AsyncClient", lambda *a, **kw: _Client(*a, **kw))
+
+    # Mock URL safety validation to allow example.com
+    async def _mock_validate_url_with_dns(url: str):
+        return None
+
+    async def _mock_validate_redirect_response(response):
+        return None
+
+    def _mock_is_private_hostname(hostname: str) -> bool:
+        return False
+
+    monkeypatch.setattr("bot.url_safety.validate_url_with_dns", _mock_validate_url_with_dns)
+    monkeypatch.setattr("bot.url_safety.validate_redirect_response", _mock_validate_redirect_response)
+    monkeypatch.setattr("bot.utils.external_api._is_private_hostname", _mock_is_private_hostname)
 
     payload = await web.fetch_url_content("https://example.com")
 
