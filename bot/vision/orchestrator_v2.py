@@ -511,6 +511,6 @@ try:
     from .orchestrator import VisionOrchestrator as _VisionOrchestratorCanonical
 
     VisionOrchestratorV2 = _VisionOrchestratorCanonical  # type: ignore
-except Exception:
+except Exception as exc:
     # If canonical import fails (during partial installs/tests), do nothing.
-    pass
+    logger.debug(f"canonical orchestrator import failed: {exc}")

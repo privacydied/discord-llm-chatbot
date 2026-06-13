@@ -110,7 +110,8 @@ class VisionOrchestrator:
                         modes = caps.get("modes", []) if isinstance(caps, dict) else []
                         if VisionTask and hasattr(VisionTask, "TEXT_TO_IMAGE") and (VisionTask.TEXT_TO_IMAGE in modes):
                             available_providers.append(provider_name)
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug(f"provider capability check failed: {exc}")
                         continue
 
             # Determine readiness reason
@@ -305,8 +306,8 @@ class VisionOrchestrator:
                 from .types import VisionTask as _VT
 
                 request.task in getattr(_VT, "__members__", {}) and False  # placeholder
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"VisionTask import check failed: {exc}")
             # Explicitly decide using names to avoid import issues
             task_name = getattr(request.task, "name", str(request.task))
             duration_val = getattr(request, "duration_seconds", 4.0) or 4.0 if task_name in ("TEXT_TO_VIDEO", "IMAGE_TO_VIDEO", "VIDEO_GENERATION") else 4.0

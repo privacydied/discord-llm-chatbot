@@ -345,9 +345,9 @@ class VisionJobStore:
                         log_entry["actual_cost"] = ac.to_json_value()
                     elif ac is not None:
                         log_entry["actual_cost"] = Money(ac).to_json_value()
-                except Exception:
+                except Exception as exc:
                     # Skip actual_cost if it cannot be normalized
-                    pass
+                    logger.debug(f"actual_cost normalization failed: {exc}")
 
             await self._append_ledger_entry(log_entry)
 
@@ -369,8 +369,8 @@ class VisionJobStore:
                     try:
                         fd = f.fileno()  # type: ignore[attr-defined]
                         os.fsync(fd)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"fsync failed: {exc}")
         except Exception as e:
             self.logger.debug(f"Ledger append failed: {e}")
 
@@ -403,7 +403,8 @@ class VisionJobStore:
                         job_data = json.loads(await f.read())
                         state = job_data.get("state", "unknown")
                         state_counts[state] = state_counts.get(state, 0) + 1
-                except Exception:
+                except Exception as exc:
+                    logger.debug(f"job file read failed: {exc}")
                     continue
 
             return {

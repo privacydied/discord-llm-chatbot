@@ -228,28 +228,28 @@ class VisionIntentRouter:
             if "width" in size:
                 try:
                     params["width"] = int(size["width"])  # type: ignore[arg-type]
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"width parse failed: {exc}")
             if "height" in size:
                 try:
                     params["height"] = int(size["height"])  # type: ignore[arg-type]
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"height parse failed: {exc}")
         elif isinstance(size, str):
             m = re.search(r"(\d+)\s*[x×]\s*(\d+)", size)
             if m:
                 try:
                     params["width"] = int(m.group(1))
                     params["height"] = int(m.group(2))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"size string parse failed: {exc}")
 
         # batch → batch_size
         if "batch" in params and "batch_size" not in params:
             try:
                 params["batch_size"] = int(params["batch"])  # type: ignore[arg-type]
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"batch parse failed: {exc}")
 
         # negative → negative_prompt
         if "negative" in params and "negative_prompt" not in params:
@@ -260,9 +260,9 @@ class VisionIntentRouter:
         if provider_val is not None and "preferred_provider" not in params:
             try:
                 params["preferred_provider"] = VisionProvider(provider_val)
-            except Exception:
+            except Exception as exc:
                 # Leave unset if not a valid provider
-                pass
+                logger.debug(f"provider enum parse failed: {exc}")
 
         # Always include prompt and inferred task
         params["prompt"] = content

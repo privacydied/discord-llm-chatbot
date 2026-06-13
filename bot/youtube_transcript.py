@@ -416,8 +416,8 @@ def _parse_json_object(stdout: str) -> dict[str, Any] | None:
         data = json.loads(body)
         if isinstance(data, dict):
             return data
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"json parse failed: {exc}")
 
     for line in reversed(body.splitlines()):
         row = line.strip()
@@ -425,7 +425,8 @@ def _parse_json_object(stdout: str) -> dict[str, Any] | None:
             continue
         try:
             data = json.loads(row)
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"json line parse failed: {exc}")
             continue
         if isinstance(data, dict):
             return data

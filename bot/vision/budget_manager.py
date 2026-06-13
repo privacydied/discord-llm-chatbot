@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from enum import Enum
@@ -564,7 +565,7 @@ try:
     BudgetResult = _V2_BudgetResult  # type: ignore
     UserBudget = _V2_UserBudget  # type: ignore
     TransactionRecord = _V2_TransactionRecord  # type: ignore
-except Exception:
+except Exception as exc:
     # If the internal implementation is unavailable for any reason,
     # retain legacy behavior to prevent crashes.
-    pass
+    logging.getLogger(__name__).debug(f"V2 budget manager import failed: {exc}")

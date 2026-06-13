@@ -333,9 +333,9 @@ class WebExtractionService:
                                     if norm:
                                         text_candidates.append(norm)
                                         break
-                    except Exception:
+                    except Exception as exc:
                         # best-effort only
-                        pass
+                        logger.debug(f"tweet text extraction failed: {exc}")
         else:
             # Generic site extraction via meta
             og_desc = soup.find("meta", attrs={"property": "og:description"})

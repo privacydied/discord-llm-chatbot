@@ -540,9 +540,9 @@ class NovitaPlugin(ProviderPlugin):
                 if "height" in norm:
                     h = min(max_h, (max(256, int(norm["height"])) // 8) * 8)
                     norm["height"] = h
-        except Exception:
+        except Exception as exc:
             # Best-effort; leave as-is if parsing fails
-            pass
+            logger.debug(f"Novita size normalization failed: {exc}")
 
         # Strict allowlist
         norm = {k: v for k, v in norm.items() if k in allowed}
@@ -1009,8 +1009,8 @@ class OpenRouterPlugin(ProviderPlugin):
                                 if re.match(r"^[A-Za-z0-9+/=]+$", content[:100]):
                                     urls.append(f"data:image/png;base64,{content}")
                                     logger.debug("Detected raw base64 in message.content string")
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.debug(f"base64 validation failed: {exc}")
 
                 # Deduplicate while preserving order
                 seen = set()
@@ -1887,8 +1887,8 @@ class UnifiedVisionAdapter:
             try:
                 preferred_name = preferred_provider.value.lower()
                 provider_order = [preferred_name, *list(provider_order)]
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"preferred provider ordering failed: {exc}")
 
         if self.default_provider == "openrouter":
             with contextlib.suppress(Exception):

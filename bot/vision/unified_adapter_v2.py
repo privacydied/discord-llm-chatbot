@@ -480,6 +480,6 @@ try:
     from .unified_adapter import UnifiedVisionAdapter as _UnifiedVisionAdapterCanonical
 
     UnifiedVisionAdapter = _UnifiedVisionAdapterCanonical  # type: ignore
-except Exception:
+except Exception as exc:
     # If canonical import fails (during partial installs/tests), do nothing.
-    pass
+    logger.debug(f"canonical unified adapter import failed: {exc}")

@@ -110,8 +110,8 @@ class VoiceMessagePublisher:
                         ra = resp.headers.get("Retry-After")
                         if ra is not None:
                             err.retry_after_seconds = float(ra)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"Retry-After parse failed: {exc}")
                     raise err
                 return await resp.json()
 
@@ -146,8 +146,8 @@ class VoiceMessagePublisher:
                         ra = resp.headers.get("Retry-After")
                         if ra is not None:
                             err.retry_after_seconds = float(ra)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"Retry-After parse failed: {exc}")
                     raise err
                 return
 
@@ -199,8 +199,8 @@ class VoiceMessagePublisher:
                         ra = resp.headers.get("Retry-After")
                         if ra is not None:
                             err.retry_after_seconds = float(ra)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"Retry-After parse failed: {exc}")
                     raise err
                 return await resp.json()
 
@@ -234,9 +234,9 @@ class VoiceMessagePublisher:
                 self._attachments_timeout_s = att_to
                 self._upload_timeout_s = upl_to
                 self._message_post_timeout_s = msg_to
-        except Exception:
+        except Exception as exc:
             # Keep defaults on parse errors
-            pass
+            self.logger.debug(f"timeout config parse failed: {exc}")
         if not cfg.get("VOICE_ENABLE_NATIVE", False):
             self.logger.debug("voice.native.disabled")
             return VoicePublishResult(message=None, ogg_path=None, ok=False)
@@ -274,8 +274,8 @@ class VoiceMessagePublisher:
                     with open(audio_p, "rb") as f:
                         magic = f.read(4)
                         is_ogg = magic == b"OggS"
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.debug(f"magic bytes check failed: {exc}")
 
             if is_ogg:
                 # Already OGG/Opus - use directly, probe duration via ffprobe

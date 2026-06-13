@@ -108,16 +108,16 @@ class XApiClient:
             m = _X_URL_PATH_ID_RE.search(parsed.path or "")
             if m:
                 return m.group(1)
-        except Exception:
+        except Exception as exc:
             # Fall through to raw regex search
-            pass
+            logger.debug(f"tweet ID URL parse failed: {exc}")
 
         try:
             m2 = _X_URL_PATH_ID_RE.search(value)
             if m2:
                 return m2.group(1)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"tweet ID raw regex failed: {exc}")
         return None
 
     def _build_headers(self, bearer_token: str | None) -> dict[str, str]:
@@ -240,8 +240,8 @@ class XApiClient:
             try:
                 if retry_after_secs and retry_after_secs > 0:
                     err.retry_after_seconds = float(retry_after_secs)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"retry_after parse failed: {exc}")
             # Allow retries via decorator
             raise err
         if 500 <= status <= 599:
