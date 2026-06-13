@@ -86,8 +86,8 @@ async def download_robust_image(image_ref, local_path: str, max_size_mb: int = 2
                         import os
 
                         os.unlink(local_path)  # Clean up partial file
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug(f"partial file cleanup failed: {exc}")
 
             except TimeoutError:
                 logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: timeout")
@@ -176,8 +176,8 @@ async def download_file(url: str, save_path: Path, session: aiohttp.ClientSessio
             from bot.metrics import METRICS  # type: ignore
 
             METRICS.counter("x.syndication.image_fetch_timeout").inc(1)
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug(f"metrics timeout counter failed: {exc}")
         logging.exception(f"Timeout downloading {url}")
         return False
     except Exception as e:

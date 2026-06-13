@@ -51,8 +51,8 @@ def _get_embedding_rows(session: InferenceSession | None) -> int:
                             return int(value)
                         except ValueError:
                             pass
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"vocab size extraction from metadata failed: {exc}")
 
     # Fallback: assume size from embedded mapping
     return len(PHONEME_TO_ID)

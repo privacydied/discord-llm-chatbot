@@ -4,11 +4,14 @@ This package contains modules for TTS functionality, including
 TTSManager, engine implementations, and tokenizer utilities.
 """
 
+import logging
 import os
 from pathlib import Path
 
 from .errors import SynthesisError
 from .stub import generate_stub_wav
+
+logger = logging.getLogger(__name__)
 
 
 async def generate_tts(text: str, user_id: str) -> Path:
@@ -54,9 +57,9 @@ async def cleanup_tts() -> None:
     for p in d.glob("*.wav"):
         try:
             p.unlink()
-        except Exception:
+        except Exception as exc:
             # Best-effort cleanup for tests
-            pass
+            logger.debug(f"temp wav cleanup failed: {exc}")
 
 
 # Minimal placeholder class to support tests that patch `bot.tts.TTS`.

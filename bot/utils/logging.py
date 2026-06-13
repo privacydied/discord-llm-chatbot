@@ -135,8 +135,8 @@ def init_logging() -> None:
         third_party_level = os.getenv("THIRD_PARTY_LOG_LEVEL", "WARNING").upper()
         for name in ("openai", "httpx", "aiohttp", "urllib3"):
             logging.getLogger(name).setLevel(third_party_level)
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug(f"third-party log level set failed: {exc}")
 
     logging.getLogger(__name__).info("✔ Logging initialized (dual-sink)", extra={"subsys": "logging"})
 
@@ -148,8 +148,8 @@ def get_logger(name: str) -> logging.Logger:
 def shutdown_logging_and_exit(exit_code: int) -> NoReturn:
     try:
         logging.getLogger(__name__).info("Shutting down", extra={"subsys": "logging"})
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).debug(f"shutdown log failed: {exc}")
     finally:
         try:
             cleanup_rich_handlers()
@@ -166,10 +166,10 @@ def cleanup_rich_handlers() -> None:
                 try:
                     h.rich_tracebacks = False
                     h.close()
-                except Exception:
-                    pass
-    except Exception:
-        pass
+                except Exception as exc:
+                    logging.getLogger(__name__).debug(f"RichHandler cleanup failed: {exc}")
+    except Exception as exc:
+        logging.getLogger(__name__).debug(f"RichHandler cleanup outer failed: {exc}")
 
 
 class SensitiveDataFilter(logging.Filter):

@@ -41,6 +41,6 @@ def ensure_reduce_op_alias() -> None:
         # Rebind without reading dist.reduce_op first; getattr would re-trigger the warning.
         dist.reduce_op = reduce_enum
         logger.debug("torch.compat.reduce_op_rebound")
-    except Exception:
+    except Exception as exc:
         # Safety-first: avoid failing import-time logic because of torch internals.
-        pass
+        logger.debug(f"reduce_op rebind failed: {exc}")

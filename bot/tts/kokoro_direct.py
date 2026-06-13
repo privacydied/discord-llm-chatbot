@@ -150,32 +150,32 @@ class KokoroDirect:
         try:
             if tok is not None and hasattr(tok, "encode"):
                 methods.add(TokenizationMethod.PHONEME_ENCODE)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"phoeneme_encode check failed: {exc}")
         try:
             if tok is not None and hasattr(tok, "phoneme_to_id"):
                 methods.add(TokenizationMethod.PHONEME_TO_ID)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"phoneme_to_id check failed: {exc}")
 
         # External phonemizers
         try:
             if shutil.which("espeak") or shutil.which("espeak-ng"):
                 methods.add(TokenizationMethod.ESPEAK)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"espeak check failed: {exc}")
         try:
             if importlib.util.find_spec("phonemizer") is not None:
                 methods.add(TokenizationMethod.PHONEMIZER)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"phonemizer check failed: {exc}")
 
         # Optional Misaki (Japanese). Only include if present.
         try:
             if importlib.util.find_spec("misaki") is not None:
                 methods.add(TokenizationMethod.MISAKI)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"misaki check failed: {exc}")
 
         self.available_tokenization_methods = methods
         return methods
@@ -471,14 +471,14 @@ class KokoroDirect:
         """
         try:
             self._init_session()
-        except Exception:
+        except Exception as exc:
             # Leave sess/onnx_session as-is; tests may patch these
-            pass
+            logger.debug(f"_init_session failed: {exc}")
         try:
             self._load_voices()
-        except Exception:
+        except Exception as exc:
             # Voices are optional in some test paths
-            pass
+            logger.debug(f"_load_voices failed: {exc}")
 
     def _synthesize_from_ipa(
         self,
@@ -715,9 +715,9 @@ class KokoroDirect:
                 self._voices_data = {k: data[k] for k in data.files}
                 self.voices = list(self._voices_data.keys())
                 self.default_voice = self.voices[0] if self.voices else None
-        except Exception:
+        except Exception as exc:
             # Optional; tests inject voices manually
-            pass
+            logger.debug(f"voice load failed: {exc}")
 
     def _to_style_vector(self, emb: _np().ndarray) -> _np().ndarray:
         vec = emb

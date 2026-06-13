@@ -576,8 +576,8 @@ class VideoIngestionManager:
 
                 # For short URLs like /t/ZP8UxRTSU, the path is the key
                 return f"tiktok://{path}"
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"tiktok URL normalization failed: {exc}")
         return url
 
     @staticmethod
@@ -601,8 +601,8 @@ class VideoIngestionManager:
                 # /player/ or /player/v1/ URLs are embed URLs
                 if path.startswith("/player"):
                     return True
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"tiktok player URL check failed: {exc}")
         return False
 
     @staticmethod
@@ -642,8 +642,8 @@ class VideoIngestionManager:
                         video_id = path[len(prefix) :].split("/")[0].split("?")[0]
                         if video_id and len(video_id) >= 6:
                             return f"youtube://video/{video_id}"
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"youtube URL normalization failed: {exc}")
         return url
 
     @staticmethod
@@ -656,7 +656,8 @@ class VideoIngestionManager:
             parsed = urlparse(url)
             host = parsed.netloc.lower()
             return _DOMAIN_EXTRACTOR_MAP.get(host)
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"extractor lookup failed: {exc}")
             return None
 
     @staticmethod
@@ -904,8 +905,8 @@ class VideoIngestionManager:
             try:
                 path.rename(target)
                 path = target
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"suffix rename failed: {exc}")
         return path
 
     async def fetch_and_prepare_url_audio(self, url: str, force_refresh: bool = False) -> DownloadedAudio:
@@ -928,8 +929,8 @@ class VideoIngestionManager:
                     budget_s = max(15.0, float(budget_limit_cfg))
                     metadata_timeout = min(metadata_timeout, max(5.0, budget_s * 0.25))
                     download_timeout = min(download_timeout, max(15.0, budget_s - 5.0))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"budget timeout calc failed: {exc}")
 
             vx_direct_media_url = await self._resolve_vxinstagram_direct_media_url(url, min(metadata_timeout, 10.0))
             if vx_direct_media_url:

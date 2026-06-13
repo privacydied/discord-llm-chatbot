@@ -316,8 +316,8 @@ class KokoroONNXEngine(BaseEngine):
             _p = _P(wav_path)
             if _p.exists():
                 _p.unlink()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"wav cleanup failed: {exc}")
 
         self._synthesis_initialized = True
         return audio_bytes
@@ -348,8 +348,8 @@ class KokoroONNXEngine(BaseEngine):
             lex_text, changed = apply_lexicon(text, self.language)
             if changed:
                 text = lex_text
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"lexicon apply failed: {exc}")
 
         # Ensure engine is loaded for registry path since tests may construct without calling load()
         if self.engine is None:
@@ -386,7 +386,8 @@ class KokoroONNXEngine(BaseEngine):
                         result = inv()
                     except TypeError:
                         continue
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug(f"generate_audio attempt failed: {exc}")
                         continue
                     if inspect.isawaitable(result):
                         logger.debug(
@@ -438,8 +439,8 @@ class KokoroONNXEngine(BaseEngine):
                     # Treat presence of obvious unknown markers as invalid phonemes
                     if any(ch in s for ch in ("?", "❓", "�")):
                         invalid_marker = True
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"phoneme validation failed: {exc}")
 
                 empty_or_blank = (not phonemes) or (isinstance(phonemes, str) and not phonemes.strip())
                 if not (empty_or_blank or invalid_marker):
@@ -570,8 +571,9 @@ class KokoroONNXEngine(BaseEngine):
                     for vk in voice_keys:
                         for tk in text_keys:
                             patterns.append(lambda vk=vk, tk=tk: meth(**{vk: self.voice, tk: text}))
-            except Exception:
+            except Exception as exc:
                 # If building patterns fails, skip this method gracefully
+                logger.debug(f"pattern building failed for {name}: {exc}")
                 continue
 
             for invoker in patterns:
@@ -580,8 +582,9 @@ class KokoroONNXEngine(BaseEngine):
                 except TypeError:
                     # Signature mismatch for this pattern, try next
                     continue
-                except Exception:
+                except Exception as exc:
                     # Unexpected failure in this pattern, try next one
+                    logger.debug(f"pattern invocation failed for {name}: {exc}")
                     continue
 
                 if inspect.isawaitable(call_result):
@@ -610,8 +613,8 @@ class KokoroONNXEngine(BaseEngine):
         try:
             callables = [a for a in dir(self.engine) if callable(getattr(self.engine, a, None)) and not a.startswith("__")]
             logger.debug(f"Kokoro engine callable methods: {callables}")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"callable introspection failed: {exc}")
 
         direct_candidates = ["generate_waveform", "create"]
         try:
