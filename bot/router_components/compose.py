@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -9,6 +10,8 @@ from bot.evidence import EvidenceBundle
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+logger = logging.getLogger(__name__)
 
 
 def format_x_tweet_with_transcription(
@@ -29,8 +32,8 @@ def format_x_tweet_with_transcription(
             if ptid:
                 bundle.primary_tweet_id = ptid
                 bundle.selected_tweet_id = ptid
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"primary tweet id extraction failed: {exc}")
 
     # Caption population: prefer tweet_data text; fallback to base_text heuristic [IV]
     try:
@@ -47,7 +50,8 @@ def format_x_tweet_with_transcription(
                 )
                 if m:
                     caption = (m.group("body") or "").strip()
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"caption regex extraction failed: {exc}")
                 caption = ""
         if not caption and base_text:
             try:
@@ -61,12 +65,13 @@ def format_x_tweet_with_transcription(
                         continue
                     caption = ln
                     break
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"caption line extraction failed: {exc}")
                 caption = (base_text or "").strip()
         if caption:
             bundle.caption_text = caption
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"caption population failed: {exc}")
 
     # Quoted/retweet text when provided [IV]
     try:
@@ -82,8 +87,8 @@ def format_x_tweet_with_transcription(
                     rt = (r.get("full_text") or r.get("text") or "").strip()
                     if rt:
                         bundle.quoted_text = rt
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"quoted/retweet extraction failed: {exc}")
 
     # STT transcript with low-speech guard [REH]
     try:
@@ -103,7 +108,8 @@ def format_x_tweet_with_transcription(
         else:
             bundle.media_transcript = ""
             bundle.stt_no_speech = True
-    except Exception:
+    except Exception as exc:
+        logger.debug(f"STT transcript handling failed: {exc}")
         bundle.media_transcript = ""
 
     # Concatenate caption + transcript for video tweets before text flow [REH]
@@ -118,8 +124,8 @@ def format_x_tweet_with_transcription(
             )
             bundle.caption_text = ""
             bundle.media_transcript = ""
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"caption_transcript concatenation failed: {exc}")
 
     # Add STT grounding instructions to prevent "I can't process audio" responses [REH]
     # This ensures the model knows STT succeeded and uses the transcript

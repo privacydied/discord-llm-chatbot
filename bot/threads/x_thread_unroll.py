@@ -233,9 +233,9 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: str | None) ->
                         "_dom_index": 0,
                     },
                 )
-        except Exception:
+        except Exception as exc:
             # swallow and continue with empty blocks
-            pass
+            logger.debug(f"tweet block parsing failed: {exc}")
 
     for idx, art in enumerate(articles):
         try:
@@ -351,8 +351,8 @@ def _format_joined_text(author: str, items: list[TweetItem]) -> str:
             if ts:
                 dt = datetime.fromisoformat(ts)
                 ts = dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"timestamp normalization failed: {exc}")
         header = f"[{i}/{n}] @{author} – {ts}" if ts else f"[{i}/{n}] @{author}"
         parts.append(header)
         parts.append(it.text_plain)
@@ -515,9 +515,9 @@ async def unroll_author_thread(
             if blocks_try:
                 html = html_try
                 break
-    except Exception:
+    except Exception as exc:
         # Non-fatal; proceed to Playwright path
-        pass
+        logger.debug(f"http probe failed: {exc}")
 
     # Phase 2: Playwright; fallback to mirrors if login wall
     if html is None:
@@ -806,8 +806,8 @@ async def _unroll_via_mirror_json(
                             if m:
                                 nxt = m.group(1)
                                 break
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"next tweet ID extraction failed: {exc}")
         current_id = nxt
 
     if not items:

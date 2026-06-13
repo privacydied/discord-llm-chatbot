@@ -387,8 +387,8 @@ class MultimodalSTTFallbackProvider:
                     if sample_rate > 0:
                         # rough estimate assuming 1 channel, 16-bit
                         duration_s = raw_bytes / (sample_rate * 2)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"audio duration estimation failed: {exc}")
 
         if duration_s is not None and duration_s > self._max_audio_duration_s:
             logger.warning(

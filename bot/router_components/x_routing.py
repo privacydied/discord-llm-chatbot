@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import re
 from html import unescape
 from typing import TYPE_CHECKING, Any
@@ -12,6 +13,8 @@ from bot.x_api_client import XApiClient
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable
+
+logger = logging.getLogger(__name__)
 
 
 def parse_twitter_status_id(url: str) -> str | None:
@@ -30,8 +33,8 @@ def extract_primary_tweet_id(url: str) -> str | None:
         candidate = parsed_primary_tweet_id(parsed)
         if candidate:
             return candidate
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"candidate extraction failed: {exc}")
 
     return parse_twitter_status_id(raw_url)
 
@@ -149,8 +152,8 @@ def collect_x_candidate_urls(item: Any) -> list[str]:
     try:
         source_type = x_candidate_source_type(item)
         urls.extend(collect_candidate_urls_for_item_source(item, source_type))
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"candidate URL collection failed: {exc}")
     return filtered_candidate_urls(urls)
 
 
@@ -3010,8 +3013,8 @@ def collect_raw_urls_fail_open(*, items: list[str], texts: Iterable[str]) -> Non
     try:
         url_re = raw_url_extract_regex()
         collect_raw_urls_into_items(items, texts, url_re=url_re)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"raw URL collection failed: {exc}")
 
 
 def collect_raw_urls_into_items(

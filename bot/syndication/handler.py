@@ -76,8 +76,8 @@ async def handle_twitter_syndication_to_vl(
             )
             if had_card and source != "card":
                 log.info("SYND_MEDIA_PICK | ignored_card_due_to_native=true")
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug(f"SYND_MEDIA_PICK logging failed: {exc}")
 
     if not image_urls:
         # No images - return text-only or fallback

@@ -112,7 +112,8 @@ def extract_text_and_images_from_syndication(tw: dict[str, Any]) -> dict[str, An
                     raw = m.get("thumbnail_url") or m.get("poster") or m.get("media_url_https") or m.get("url")
                 if raw:
                     urls.append(upgrade_pbs_to_orig(raw))
-            except Exception:
+            except Exception as exc:
+                log.debug(f"media entry processing failed: {exc}")
                 continue
         return urls
 
@@ -214,8 +215,8 @@ def extract_text_and_images_from_syndication(tw: dict[str, Any]) -> dict[str, An
 
         METRICS.counter("x.syndication.photos_extracted").inc(len(tw.get("photos") or []))
         METRICS.counter("x.syndication.photos_highres").inc(len(image_urls))
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug(f"metrics recording failed: {exc}")
 
     log.debug(
         "Syndication extract: text_len=%d chosen=%d source=%s",
@@ -248,8 +249,8 @@ def syndication_has_video(tw: dict[str, Any]) -> bool:
         try:
             keys = sorted(node.keys())
             log.info("syndication_has_video: %s.keys=%s", node_name, keys)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug(f"node keys logging failed: {exc}")
 
     def _node_has_video(node_name: str, node: dict[str, Any]) -> bool:
         if not isinstance(node, dict) or not node:

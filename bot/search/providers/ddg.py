@@ -36,8 +36,8 @@ class DDGSearchProvider:
         try:
             logging.getLogger("ddgs").setLevel(logging.WARNING)
             logging.getLogger("duckduckgo_search").setLevel(logging.WARNING)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"ddgs log level suppression failed: {exc}")
 
     async def search(self, params: SearchQueryParams) -> SearchResults:
         """Execute a web search using ddgs with fallback to HTML parsing. [REH]."""
@@ -80,9 +80,9 @@ class DDGSearchProvider:
                                         params.max_results,
                                     ),
                                 )
-                    except Exception:
+                    except Exception as exc:
                         # Try next fallback
-                        pass
+                        logger.debug(f"ddgs package call failed: {exc}")
 
                     # Fallback to 'duckduckgo_search' package
                     mod = importlib.import_module("duckduckgo_search")

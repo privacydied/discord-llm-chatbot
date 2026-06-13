@@ -1903,8 +1903,8 @@ class Router:
                                             "detail": {"domain": host, "path": matched},
                                         },
                                     )
-                                except Exception:
-                                    pass
+                                except Exception as exc:
+                                    self.logger.debug(f"video_poster logging failed: {exc}")
                                 continue  # do not accept poster as photo
                             if u not in uniq and self._is_direct_image_url(u):
                                 uniq.append(u)
@@ -2750,8 +2750,8 @@ class Router:
                     if txt:
                         parts.append(txt)
                 return "\n".join(parts)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"docx parsing failed: {exc}")
 
         if ext_l == ".pdf" and PDF_SUPPORT and self.pdf_processor is not None:
             try:
@@ -2759,8 +2759,8 @@ class Router:
                 if isinstance(result, dict):
                     return str(result.get("text") or "")
                 return str(result or "")
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"pdf processing failed: {exc}")
 
         try:
             with open(path, encoding="utf-8", errors="ignore") as f:
@@ -3049,8 +3049,8 @@ class Router:
                         },
                     )
                     return None
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"gate.skip bot/self check failed: {exc}")
 
             # Concurrency-safe dedupe [REH]
             try:
@@ -3084,8 +3084,8 @@ class Router:
                             self._processed_recent_ts.pop(old_id, None)
                         self._processed_recent.append(msg_id)
                         self._processed_recent_ts[msg_id] = now
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.debug(f"dedupe mark failed: {exc}")
 
             # Ingest started marker (single-shot)
             with suppress(Exception):
@@ -3415,8 +3415,8 @@ class Router:
                                     "msg_id": message.id,
                                 },
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            self.logger.debug(f"x.detect logging failed: {exc}")
 
                         url_for_stt = (resolved or {}).get("url") or base_context_url
                         final_kind = kind
@@ -3464,8 +3464,8 @@ class Router:
                                     url_for_stt = f"{url_for_stt}#ptid={ptid2}&uh={uhash2}"
                                     if frontend_selected:
                                         url_for_stt = f"{url_for_stt}&fe={frontend_selected}"
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                self.logger.debug(f"media.selected breadcrumb failed: {exc}")
                             dur = (resolved or {}).get("duration")
                             host = None
                             try:
@@ -3532,8 +3532,8 @@ class Router:
                                             "msg_id": message.id,
                                         },
                                     )
-                                except Exception:
-                                    pass
+                                except Exception as exc:
+                                    self.logger.debug(f"stt.start logging failed: {exc}")
                                 stt_t0 = time.perf_counter()
                                 stt_res = await self._run_stt_job(
                                     asyncio.wait_for(
@@ -3558,8 +3558,8 @@ class Router:
                                             "msg_id": message.id,
                                         },
                                     )
-                                except Exception:
-                                    pass
+                                except Exception as exc:
+                                    self.logger.debug(f"stt.ok logging failed: {exc}")
                                 self.logger.info(f"🎯 Route: stt_from_x_video | msg_id={message.id}")
                                 with suppress(Exception):
                                     self.logger.info(
@@ -3605,8 +3605,8 @@ class Router:
                                         reason = "timeout"
                                     elif "whisper" in es:
                                         reason = "whisper_error"
-                                except Exception:
-                                    pass
+                                except Exception as exc:
+                                    self.logger.debug(f"error classification failed: {exc}")
                                 with suppress(Exception):
                                     self.logger.info(
                                         "x.video.url_fail",
@@ -3650,8 +3650,8 @@ class Router:
                                         "msg_id": message.id,
                                     },
                                 )
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                self.logger.debug(f"x.photos.ok logging failed: {exc}")
                             with suppress(Exception):
                                 self.logger.info(
                                     "route_selected",
@@ -3806,8 +3806,8 @@ class Router:
                         stale = [k for k in list(meta_dict.keys()) if k not in active_ids]
                         for k in stale:
                             meta_dict.pop(k, None)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"periodic cleanup failed: {exc}")
 
     def compute_streaming_eligibility(self, message: Message) -> dict[str, Any]:
         """Preflight: determine if streaming status cards should be enabled for this message.
@@ -3999,15 +3999,15 @@ class Router:
                     try:
                         mod_label = getattr(modality, "name", "input").lower()
                         await message.reply(f"⚠️ Processing timed out for {mod_label}. Please try again.")
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"timeout reply failed: {exc}")
                     handler_res = None
                 except Exception as exc:
                     try:
                         mod_label = getattr(modality, "name", "input").lower()
                         await message.reply(f"⚠️ An error occurred while processing {mod_label}: {exc}")
-                    except Exception:
-                        pass
+                    except Exception as exc2:
+                        self.logger.debug(f"error reply failed: {exc2}")
                     handler_res = None
 
                 if handler_res:
@@ -4022,8 +4022,8 @@ class Router:
                     base_text = re.sub(mention_pattern, "", base_text)
                 if base_text:
                     results.append(base_text)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"text extraction failed: {exc}")
 
             flow_fn = getattr(self, "_flow_process_text", None)
             invoke_flow = getattr(self, "_invoke_text_flow", None)
@@ -4041,9 +4041,9 @@ class Router:
         # Treat plain text attachments as prompt extensions, not standalone items
         try:
             items = [it for it in (items or []) if not (getattr(it, "source_type", None) == "attachment" and is_text_attachment(getattr(it, "payload", None)))]
-        except Exception:
+        except Exception as exc:
             # Non-fatal: fallback to original items list on any error
-            pass
+            self.logger.debug(f"text attachment filter failed: {exc}")
 
         ref_message: Message | None = None
 
@@ -4100,8 +4100,8 @@ class Router:
                         if added:
                             with suppress(Exception):
                                 self.logger.info(f"📎 Reply link capture | from_msg={ref_message.id} urls_added={added}")
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"reply link harvest failed: {exc}")
 
                     # 2) Harvest non-image attachments from referenced message (e.g., video, pdf)
                     try:
@@ -4126,11 +4126,11 @@ class Router:
                         if added_atts:
                             with suppress(Exception):
                                 self.logger.info(f"📎 Reply attachment capture | from_msg={ref_message.id} attachments_added={added_atts}")
-                    except Exception:
-                        pass
-        except Exception:
+                    except Exception as exc:
+                        self.logger.debug(f"reply attachment harvest failed: {exc}")
+        except Exception as exc:
             # Non-fatal; continue without reply link harvest
-            pass
+            self.logger.debug(f"reply link/attachment harvest failed: {exc}")
 
         # Additionally harvest URLs from the referenced message to support reply→video flows [CA][REH]
         # Note: This block lives inside the image-harvest section for historical reasons, but URL harvest
@@ -4152,9 +4152,9 @@ class Router:
                     if added_urls:
                         with suppress(Exception):
                             self.logger.info(f"📎 Reply URL harvest | from_msg={ref_msg.id} urls_added={added_urls}")
-        except Exception:
+        except Exception as exc:
             # Do not fail dispatch on URL harvest errors
-            pass
+            self.logger.debug(f"reply URL harvest failed: {exc}")
 
         # Safety net: Unconditional URL harvest for reply messages (not gated by VISION_REPLY_IMAGE_HARVEST)
         # Ensures reply→video (YouTube/TikTok/X) routes always collect the URL even when image harvest is disabled. [REH]
@@ -4168,7 +4168,8 @@ class Router:
                     # 2) URLs present in the parent's embeds (e.g., tweets/YouTube share)
                     try:
                         ref_embeds = list(getattr(ref_msg, "embeds", []) or [])
-                    except Exception:
+                    except Exception as exc:
+                        self.logger.debug(f"embed extraction failed: {exc}")
                         ref_embeds = []
                     append_embed_related_urls(found_urls, ref_embeds)
 
@@ -4183,8 +4184,8 @@ class Router:
                         if added_urls:
                             with suppress(Exception):
                                 self.logger.info(f"📎 Reply URL harvest (unconditional) | from_msg={getattr(ref_msg, 'id', 'na')} urls_added={added_urls} now_items={len(items)}")
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug(f"unconditional reply URL harvest failed: {exc}")
 
         # Process original text content (remove URLs that will be processed separately)
         original_text = message.content
@@ -4212,8 +4213,8 @@ class Router:
             url_ct = sum(1 for it in items if getattr(it, "source_type", None) == "url")
             att_ct = sum(1 for it in items if getattr(it, "source_type", None) == "attachment")
             self.logger.info(f"mm.items.after_harvest | count={len(items)} urls={url_ct} atts={att_ct} msg_id={message.id}")
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug(f"post-harvest diagnostics failed: {exc}")
 
         # Thread-only UX fallback: if the trigger carried no meaningful text, adopt the reply target's text;
         # if the reply target is also empty (e.g., the mention itself), adopt the nearest previous human text. [REH][IV]
@@ -4221,7 +4222,8 @@ class Router:
             if _is_thread_channel(getattr(message, "channel", None)) and (not original_text or not original_text.strip()):
                 try:
                     rt, _ = await resolve_thread_reply_target(self.bot, message, self.config)
-                except Exception:
+                except Exception as exc:
+                    self.logger.debug(f"thread reply target resolution failed: {exc}")
                     rt = None
                 adopted = False
                 if rt and getattr(rt, "content", None):
@@ -4280,10 +4282,10 @@ class Router:
                                         },
                                     )
                                 break
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                    except Exception as exc:
+                        self.logger.debug(f"thread history scan failed: {exc}")
+        except Exception as exc:
+            self.logger.debug(f"thread text fallback failed: {exc}")
 
         # Reply-case UX fallback (non-thread): mention + reply with minimal text → adopt parent text. [REH][IV]
         try:
@@ -4293,7 +4295,8 @@ class Router:
                     minimal = True
                     try:
                         minimal = not bool(re.search(r"[A-Za-z0-9]", original_text or ""))
-                    except Exception:
+                    except Exception as exc:
+                        self.logger.debug(f"minimal text check failed: {exc}")
                         minimal = not bool(original_text and original_text.strip())
                     if minimal:
                         ref = getattr(message, "reference", None)
@@ -4301,14 +4304,16 @@ class Router:
                         if ref_msg is None and getattr(ref, "message_id", None):
                             try:
                                 ref_msg = await message.channel.fetch_message(ref.message_id)
-                            except Exception:
+                            except Exception as exc:
+                                self.logger.debug(f"reference message fetch failed: {exc}")
                                 ref_msg = None
                         if ref_msg and getattr(ref_msg, "content", None):
                             rt_raw = str(ref_msg.content or "")
                             try:
                                 # Strip mentions and URLs for better signal.
                                 rt_clean = strip_discord_mentions_and_urls(rt_raw)
-                            except Exception:
+                            except Exception as exc:
+                                self.logger.debug(f"strip mentions/urls failed: {exc}")
                                 rt_clean = (ref_msg.content or "").strip()
                             try:
                                 if rt_clean and re.search(r"[A-Za-z0-9]", rt_clean):
@@ -4336,10 +4341,10 @@ class Router:
                                                 },
                                             },
                                         )
-                            except Exception:
-                                pass
-        except Exception:
-            pass
+                            except Exception as exc:
+                                self.logger.debug(f"adopt_ok logging failed: {exc}")
+        except Exception as exc:
+            self.logger.debug(f"reply text fallback failed: {exc}")
 
         # Ingest .txt attachments from the triggering message into the text prompt (first match only)
         try:
@@ -4368,14 +4373,14 @@ class Router:
                         if len(txt_atts) > 1:
                             extra = len(txt_atts) - 1
                             self.logger.info(f"attachments.txt_ignored extra={extra}")
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"txt attachment logging failed: {exc}")
                 else:
                     with suppress(Exception):
                         self.logger.info("attachments.txt_reject reason=invalid_or_oversize")
-        except Exception:
+        except Exception as exc:
             # Never break routing on attachment ingestion failure
-            pass
+            self.logger.debug(f"txt attachment ingestion failed: {exc}")
 
         # --- Routing precedence gates (feature-flagged) ---
         # 0) Safety: re-run prioritized vision precheck here to catch any triggers/intents that
@@ -4447,8 +4452,8 @@ class Router:
                 has_x_url = True
                 if self._is_twitter_status_url(raw_u):
                     x_status_urls_from_items.add(self._normalize_x_url(raw_u))
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug(f"twitter URL scan failed: {exc}")
 
         x_media_kind = "none"
         if x_info_for_gate:
@@ -4477,9 +4482,9 @@ class Router:
                         suppressed += 1
                         self._metric_inc("routing.twitter.thumb_suppressed", None)
                         continue
-                except Exception:
+                except Exception as exc:
                     # On parse errors, keep the item
-                    pass
+                    self.logger.debug(f"twitter thumbnail check failed: {exc}")
                 filtered_items.append(item)
 
             combined_count = len(filtered_items)
@@ -4557,8 +4562,8 @@ class Router:
                         "msg_id": getattr(message, "id", None),
                     },
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"text_default logging failed: {exc}")
 
             response_action = await self._invoke_text_flow(original_text, message, context_str)
             if response_action and response_action.has_payload:
@@ -4704,9 +4709,9 @@ class Router:
                         )
                         retry_modality = "media"
                         selected_budget = MEDIA_PER_ITEM_BUDGET
-            except Exception:
+            except Exception as exc:
                 # Never break dispatch due to budgeting heuristics
-                pass
+                self.logger.debug(f"budget heuristic failed: {exc}")
 
             # Extraction-only modalities (URL scraping, document ingest, STT) do not
             # benefit from the model-provider fallback ladder. DispatchEmptyError from
@@ -4941,8 +4946,8 @@ class Router:
             if m:
                 ext = m.group(1).lower()
                 suffix = f".{ext if ext != 'jpeg' else 'jpg'}"
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug(f"extension inference failed: {exc}")
         tmp_path = None
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
@@ -5014,8 +5019,8 @@ class Router:
             try:
                 if tmp_path and os.path.exists(tmp_path):
                     os.unlink(tmp_path)
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"temp file cleanup failed: {exc}")
 
     async def _handle_video_url(self, item: InputItem, message: Message | None = None) -> str:
         """Handle video URL input items (YouTube, TikTok, etc.).
@@ -5092,8 +5097,8 @@ class Router:
                                 stt_target_url = f"{stt_target_url}#ptid={primary_selected}&uh={uhash}"
                                 if frontend_selected:
                                     stt_target_url = f"{stt_target_url}&fe={frontend_selected}"
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            self.logger.debug(f"X media breadcrumb failed: {exc}")
                     else:
                         # Poster hint or misclassification: fall back to original URL so downstream can degrade gracefully
                         stt_target_url = url
@@ -5172,14 +5177,15 @@ class Router:
                                     status_id=status_id,
                                     image_urls=imgs,
                                 )
-                            except Exception:
+                            except Exception as exc:
                                 # Fallback: single-image VL without caption
+                                self.logger.debug(f"route_probed_twitter_images_with_caption failed: {exc}")
                                 try:
                                     desc = await self._vl_describe_image_from_url(imgs[0])
                                     return desc or "⚠️ Unable to analyze the images from this tweet."
-                                except Exception:
+                                except Exception as exc:
                                     # Fall through to general handler on VL error
-                                    pass
+                                    self.logger.debug(f"vl_describe_image_from_url failed: {exc}")
                     except Exception as e:
                         self.logger.debug(f"x.syndication.probe.failed | {e}")
                 self.logger.info(f"🐦 No video in Twitter URL; routing to syndication/API path: {url}")
@@ -5203,8 +5209,8 @@ class Router:
                     )
                     if formatted:
                         return formatted
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.debug(f"format_x_with_resolved_base_text_if_available failed: {exc}")
             # Fallback to existing user-friendly message for non-Twitter or when caption unavailable
             self.logger.info(f"ℹ️ Video inference: {ie}")
             return f"⚠️ {ie!s}"
@@ -5504,8 +5510,8 @@ class Router:
                                     "detail": (detail or {}) | {"ms": dt_ms},
                                 },
                             )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"{tag}.ok logging failed: {exc}")
                     return res, None
                 except TimeoutError:
                     try:
@@ -5517,8 +5523,8 @@ class Router:
                                 "detail": (detail or {}) | {"ms": dt_ms, "timeout_s": timeout_s},
                             },
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"{tag}.timeout logging failed: {exc}")
                     return None, "timeout"
                 except Exception as e:
                     try:
@@ -5530,8 +5536,8 @@ class Router:
                                 "detail": (detail or {}) | {"ms": dt_ms, "error": str(e)},
                             },
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"{tag}.fail logging failed: {exc}")
                     return None, "error"
 
             # Optional: Twitter/X author self-reply thread unroll (feature-gated) [PA][REH]
@@ -5638,8 +5644,8 @@ class Router:
                                     },
                                 },
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            self.logger.debug(f"x.syndication.metadata logging failed: {exc}")
 
                         # Media-first branching: use robust extractor rather than only 'photos' [CA][REH]
                         photos = syn.get("photos") or []
@@ -5755,8 +5761,8 @@ class Router:
                                     },
                                 },
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            self.logger.debug(f"x.syndication.image_only logging failed: {exc}")
 
                         if is_image_only and bool(cfg.get("TWITTER_IMAGE_ONLY_ENABLE", True)):
                             # Preserve existing specialized path when native photos are present [CA]
@@ -6615,14 +6621,15 @@ class Router:
                 ref_msg = getattr(ref, "resolved", None)
                 if ref_msg is None and getattr(ref, "message_id", None):
                     ref_msg = await message.channel.fetch_message(ref.message_id)
-            except Exception:
+            except Exception as exc:
+                self.logger.debug(f"reference message fetch failed: {exc}")
                 ref_msg = None
 
             try:
                 if ref_msg:
                     has_img_attachments = has_img_attachments or any((getattr(a, "content_type", "") or "").startswith("image/") for a in (getattr(ref_msg, "attachments", None) or []))
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"ref attachment check failed: {exc}")
 
             has_twitter_url = False
             try:
@@ -6630,7 +6637,7 @@ class Router:
                 if ref_msg:
                     url_candidates += re.findall(r"https?://\S+", getattr(ref_msg, "content", "") or "")
                 has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
-            except Exception:
+            except Exception as exc:
                 has_twitter_url = False
 
             if has_img_attachments or has_twitter_url:
@@ -6865,7 +6872,8 @@ class Router:
                     has_img_attachments = has_img_attachments or any((getattr(a, "content_type", "") or "").startswith("image/") for a in (getattr(ref_msg, "attachments", None) or []))
             has_any_url = bool(url_candidates)
             has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
-        except Exception:
+        except Exception as exc:
+            self.logger.debug(f"vision guard URL check failed: {exc}")
             has_any_url = False
             has_twitter_url = False
         if has_img_attachments or has_any_url or has_twitter_url:
@@ -6873,8 +6881,8 @@ class Router:
             try:
                 route = "attachments" if has_img_attachments else ("x_syndication" if has_twitter_url else "links")
                 self._metric_inc("vision.route.vl_only_bypass_t2i", {"route": route})
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"vision guard metric failed: {exc}")
             # Minimal breadcrumb for verification
             with suppress(Exception):
                 self.logger.info(
@@ -7027,8 +7035,8 @@ class Router:
                     try:
                         if tmp_path:
                             os.unlink(tmp_path)
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"temp cleanup failed: {exc}")
                     return None, "all_downloads_failed"
                 downloaded_path = tmp_path
             except Exception as e:
@@ -7036,8 +7044,8 @@ class Router:
                 try:
                     if tmp_path:
                         os.unlink(tmp_path)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.debug(f"temp cleanup failed: {exc}")
                 return None, "download_exception"
 
             # Run VL adapter to get raw notes
@@ -7092,8 +7100,8 @@ class Router:
                 try:
                     if downloaded_path:
                         os.unlink(downloaded_path)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.debug(f"temp cleanup failed: {exc}")
         except Exception as e:
             self.logger.debug(f"perception: unexpected failure | {e}")
             return None, "unexpected"
@@ -7317,9 +7325,9 @@ class Router:
                             vl_section = f"Perception notes:\n{perception_notes.strip()}"
                         vl_section = vl_section.strip() or "Visual analysis available, but failed to synthesize."
                         return BotAction(content=vl_section)
-                    except Exception:
+                    except Exception as exc:
                         # Last resort: return the first response anyway
-                        pass
+                        self.logger.debug(f"vl_section synthesis failed: {exc}")
 
                 return BotAction(content=response_text)
             except Exception as e:
@@ -7331,8 +7339,8 @@ class Router:
             try:
                 perception_block = f"Perception (from the image the user replied to):\n{perception_notes.strip()}"
                 enhanced_context = f"{enhanced_context}\n\n{perception_block}" if enhanced_context else perception_block
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"perception block construction failed: {exc}")
         # Basic fallback: apply the same visual-analysis anchoring when present
         anchored_system_fallback = self._build_visual_anchored_system_prompt(content_str, fallback=True, perception_notes=perception_notes)
 
@@ -7706,14 +7714,15 @@ class Router:
                                         ".ogg",
                                         ".m4a",
                                         ".flac",
-                                    ),
+                                    )
                                 )
                                 and a.id != getattr(attachment, "id", None)
                             )
                         ),
                         None,
                     )
-                except Exception:
+                except Exception as exc:
+                    self.logger.debug(f"alternative attachment search failed: {exc}")
                     alt = None
                 if alt is not None:
                     attachment = alt
@@ -7722,8 +7731,8 @@ class Router:
                 else:
                     # Nothing else to process; leave text ingestion to the normal path.
                     return BotAction(content="I didn't receive a file to process.")
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug(f"attachment type check failed: {exc}")
 
         # Process image attachments
         if (content_type and content_type.startswith("image/")) or any(filename.endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")):
@@ -8395,8 +8404,8 @@ class Router:
             self.logger.error(f"❌ Vision job monitoring failed: {e}", exc_info=True)
             try:
                 await progress_msg.edit(content=f"❌ **Monitoring Error**\nJob ID: `{job.job_id[:8]}`\nLost connection to job status. Please check back later.")
-            except Exception:
-                pass  # Don't fail if message edit fails
+            except Exception as exc:
+                self.logger.debug(f"progress message edit failed: {exc}")  # Don't fail if message edit fails
             return BotAction(content="Job monitoring failed", error=True)
 
     async def _handle_reply_image_analysis(
@@ -8432,8 +8441,8 @@ class Router:
                 try:
                     ref_message = await message.channel.fetch_message(message.reference.message_id)
                     image_refs.extend(collect_image_urls_from_message(ref_message) or [])
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.debug(f"reference image collect failed: {exc}")
             image_refs.extend(collect_image_urls_from_message(message) or [])
 
             if not image_refs:
@@ -8666,8 +8675,8 @@ class Router:
 
             try:
                 await working_msg.edit(embed=embed)
-            except Exception:
-                pass  # Don't fail if edit fails
+            except Exception as exc:
+                self.logger.debug(f"error embed edit failed: {exc}")  # Don't fail if edit fails
 
             return BotAction(
                 content="❌ Vision analysis failed. Please try again or re-upload the image.",
@@ -8887,13 +8896,16 @@ class Router:
                                 if pth and os.path.exists(pth):
                                     size = os.path.getsize(pth)
                                     upload_meta.append((f.filename, size))
+                                else:
+                                    upload_meta.append((f.filename, None))
                             else:
                                 upload_meta.append((f.filename, None))
-                        except Exception:
+                        except Exception as exc:
+                            self.logger.debug(f"file size check failed: {exc}")
                             upload_meta.append((getattr(f, "filename", "unknown"), None))
                     self.logger.info("📤 Upload starting | files=" + ", ".join([f"{name} ({size} bytes)" if size is not None else name for name, size in upload_meta]))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.debug(f"upload meta logging failed: {exc}")
                 try:
                     await original_msg.channel.send(files=files_to_upload)
                     self.logger.info(f"📤 Successfully uploaded {len(files_to_upload)} files for job {job.job_id[:8]}")
@@ -9004,8 +9016,8 @@ class Router:
                 has_any_url = bool(re.search(r"https?://\S+", raw_text))
                 if has_attachments or has_any_url:
                     return None
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug(f"early bail-out check failed: {exc}")
 
         # Determine if this is a DM or guild
         is_dm = False

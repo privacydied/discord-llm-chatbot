@@ -53,8 +53,8 @@ def _preload_cpu_threads() -> None:
         import torch
 
         torch.set_num_threads(_CPU_THREADS)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"torch thread setting failed: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +113,8 @@ def _device_for_runtime() -> str:
 
         if torch.cuda.is_available():
             return "cuda"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"CUDA detection failed: {exc}")
     return "cpu"
 
 

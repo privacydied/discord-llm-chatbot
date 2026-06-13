@@ -1428,8 +1428,8 @@ class LLMBot(commands.Bot):
                         "content_len": len(content or ""),
                     },
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"dispatch.chunked logging failed: {exc}")
 
         # Discord has a 2000 character limit: attach overflow as file for operators while
         # still sending the full content via multi-part messages when needed.
@@ -1523,8 +1523,8 @@ class LLMBot(commands.Bot):
                                     },
                                 },
                             )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"scope/reply_target logging failed: {exc}")
 
                     with suppress(Exception):
                         self.logger.info(
@@ -1604,8 +1604,8 @@ class LLMBot(commands.Bot):
                             mention_prefix = getattr(recipient, "mention", None)
                             if mention_prefix and not (content or "").lstrip().startswith(str(mention_prefix)):
                                 content = f"{mention_prefix} {content}" if content else f"{mention_prefix}"
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"explicit_mention prefix failed: {exc}")
 
                     # Minimal logging for recipient and ping strategy
                     try:
@@ -1630,8 +1630,8 @@ class LLMBot(commands.Bot):
                                 "detail": {"mode": ping_mode},
                             },
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        self.logger.debug(f"recipient/ping logging failed: {exc}")
 
                     if target_message and not files and not must_retarget:
                         # Edit the existing streaming message in-place
@@ -1814,8 +1814,8 @@ class LLMBot(commands.Bot):
                         },
                     },
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug(f"scope/reply_target logging failed: {exc}")
 
         with suppress(Exception):
             self.logger.info(
@@ -1887,8 +1887,8 @@ class LLMBot(commands.Bot):
                     "detail": {"mode": ping_mode},
                 },
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            self.logger.debug(f"recipient/ping logging failed: {exc}")
 
         try:
             if ping_mode == "reply_ping":
@@ -1927,8 +1927,8 @@ class LLMBot(commands.Bot):
             try:
                 if is_first_part and mention_prefix and not (chunk_content or "").lstrip().startswith(str(mention_prefix)):
                     chunk_content = f"{mention_prefix} {chunk_content}" if chunk_content else f"{mention_prefix}"
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"explicit_mention chunk prefix failed: {exc}")
 
             part_embeds = action.embeds if is_first_part else []
             part_files = files if (is_first_part and files) else None
@@ -1949,8 +1949,8 @@ class LLMBot(commands.Bot):
                         "parts": total_parts,
                     },
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                self.logger.debug(f"dispatch.attempt logging failed: {exc}")
 
             # Resolve channel for sending.
             send_channel = ch or message.channel
@@ -2242,8 +2242,8 @@ class LLMBot(commands.Bot):
                     f"❌ Error executing command: {str(e)[:100]}...",
                     mention_author=True,
                 )
-            except Exception:
-                pass  # Don't let error handling errors crash the bot
+            except Exception as exc:
+                self.logger.debug(f"Error reply failed: {exc}")
 
     async def on_message(self, message: discord.Message) -> None:
         """Delegate early filtering to MessageProcessor, then handle
@@ -2751,9 +2751,8 @@ class LLMBot(commands.Bot):
                         self.logger.warning("VisionOrchestrator close timed out")
                     except Exception as e:
                         self.logger.warning(f"VisionOrchestrator close error: {e}")
-            except Exception:
-                # Non-fatal shutdown path
-                pass
+            except Exception as exc:
+                self.logger.debug(f"VisionOrchestrator shutdown error: {exc}")
 
             # Close TTS manager
             if self.tts_manager:
