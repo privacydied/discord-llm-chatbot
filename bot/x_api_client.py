@@ -209,7 +209,8 @@ class XApiClient:
         detail = None
         try:
             detail = resp.json()
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"Response JSON parse failed: {exc}")
             detail = {"text": resp.text[:2000]}
         extra = {"detail": {"status": status, "has_token": self._has_token, "body": detail}}
 
@@ -229,7 +230,8 @@ class XApiClient:
             if retry_after:
                 try:
                     retry_after_secs = float(retry_after)
-                except Exception:
+                except Exception as exc:
+                    logger.debug(f"Retry-After parse failed: {exc}")
                     retry_after_secs = None
             logger.warning(
                 "X API rate limited",

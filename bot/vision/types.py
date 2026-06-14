@@ -6,6 +6,7 @@ type-safe patterns for provider-agnostic vision generation.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -15,6 +16,8 @@ from typing import Any, Literal
 
 # Money type for budgeting [CMV]
 from .money import Money
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_vision_provider(value) -> VisionProvider | None:
@@ -30,10 +33,12 @@ def _parse_vision_provider(value) -> VisionProvider | None:
             return VisionProvider(token)
         # Fallback: coerce to string
         return VisionProvider(str(value).strip().lower())
-    except Exception:
+    except Exception as exc:
+        logger.debug(f"VisionProvider parse failed: {exc}")
         try:
             return VisionProvider("novita")
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"VisionProvider default failed: {exc}")
             return None
 
 
@@ -241,8 +246,9 @@ class VisionRequest:
                     data["estimated_cost"] = None
                 else:
                     data["estimated_cost"] = Money(ec)
-        except Exception:
+        except Exception as exc:
             # Tolerant: drop on parse failure
+            logger.debug(f"Estimated cost parse failed: {exc}")
             data["estimated_cost"] = None
 
         # Convert task string back to enum
@@ -451,7 +457,8 @@ class VisionJob:
                         response_data["actual_cost"] = None
                     else:
                         response_data["actual_cost"] = Money(ac)
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"Actual cost parse failed: {exc}")
                 response_data["actual_cost"] = None
             response = VisionResponse(**response_data)
 

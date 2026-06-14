@@ -346,8 +346,9 @@ class VoiceMessagePublisher:
                     },
                 )
                 return VoicePublishResult(message=created_msg, ogg_path=ogg_p, ok=True)
-            except Exception:
+            except Exception as exc:
                 # If we cannot fetch, still consider it success if we got a valid JSON back
+                self.logger.debug(f"native voice fetch failed: {exc}")
                 self.logger.info(
                     "voice.native.ok.fetch_failed",
                     extra={
@@ -369,7 +370,8 @@ class VoiceMessagePublisher:
                     if int(data.get("code", 0)) == VOICE_MSG_FORBIDDEN_CODE and isinstance(channel_id, int):
                         self._block(channel_id)
                         blocked = True
-                except Exception:
+                except Exception as exc:
+                    self.logger.debug(f"Error code parse failed: {exc}")
                     # Fallback string check
                     if str(VOICE_MSG_FORBIDDEN_CODE) in msg_text and isinstance(channel_id, int):
                         self._block(channel_id)

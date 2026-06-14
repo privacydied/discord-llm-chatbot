@@ -236,7 +236,8 @@ class UnifiedVisionAdapter:
                         logger.info(f"provider.select | task={request.task.value} selected=none reason=no_pricing provider={provider_name}")
                         selection_reason = "no_pricing"
                         continue
-                except Exception:
+                except Exception as exc:
+                    logger.debug(f"Pricing estimate failed for {provider_name}: {exc}")
                     logger.info(f"provider.select | task={request.task.value} selected=none reason=no_pricing provider={provider_name}")
                     selection_reason = "no_pricing"
                     continue

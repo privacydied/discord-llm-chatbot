@@ -223,10 +223,11 @@ class VisionBudgetManager:
             finally:
                 os.close(dir_fd)
 
-        except Exception:
+        except Exception as exc:
             # Clean up temp file on error
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
+            logger.debug(f"Atomic JSON write failed: {exc}")
             raise
 
     def _append_jsonl(self, file_path: Path, record: Any) -> None:

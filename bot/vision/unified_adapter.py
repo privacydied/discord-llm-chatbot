@@ -508,21 +508,24 @@ class NovitaPlugin(ProviderPlugin):
         if "steps" in norm:
             try:
                 norm["steps"] = max(1, min(int(norm["steps"]), 100))
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"Steps normalization failed: {exc}")
                 norm.pop("steps", None)
 
         # guidance_scale clamp
         if "guidance_scale" in norm:
             try:
                 norm["guidance_scale"] = max(1.0, min(float(norm["guidance_scale"]), 20.0))
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"Guidance scale normalization failed: {exc}")
                 norm.pop("guidance_scale", None)
 
         # seed coercion
         if "seed" in norm:
             try:
                 norm["seed"] = int(norm["seed"])
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"Seed normalization failed: {exc}")
                 norm.pop("seed", None)
 
         # Size rounding depending on endpoint format
@@ -836,7 +839,8 @@ class OpenRouterPlugin(ProviderPlugin):
         try:
             m = (model or "").lower()
             return m.startswith("google/") or "gemini" in m
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"Gemini model check failed: {exc}")
             return False
 
     def _aspect_ratio_for_dims(self, width: int, height: int) -> str:
@@ -858,7 +862,8 @@ class OpenRouterPlugin(ProviderPlugin):
             r = w / h
             best = min(ratios, key=lambda x: abs(x[0] - r))
             return best[1]
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"Aspect ratio calc failed: {exc}")
             return "1:1"
 
     async def submit(self, request: NormalizedRequest) -> str:
@@ -1470,7 +1475,8 @@ class UnifiedVisionAdapter:
             else:
                 key = self.config.get("VISION_API_KEY", "")
             return isinstance(key, str) and len(key.strip()) > 10
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"Credential check failed for {provider_name}: {exc}")
             return False
 
     def _is_provider_healthy(self, provider_name: str) -> bool:
@@ -1499,7 +1505,8 @@ class UnifiedVisionAdapter:
             )
             # Ensure Money type
             return money_est if isinstance(money_est, Money) else Money(money_est)
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"Cost estimate failed for {provider_name}: {exc}")
             return None
 
     def _build_model_aliases(self) -> dict[str, ModelSelection]:
@@ -1837,7 +1844,8 @@ class UnifiedVisionAdapter:
         if preferred_provider_obj is not None:
             try:
                 preferred_name = preferred_provider_obj.value.lower()
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"Preferred provider value extraction failed: {exc}")
                 preferred_name = str(preferred_provider_obj).strip().lower()
 
             if self.allowed_providers and preferred_name not in self.allowed_providers:

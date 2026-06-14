@@ -203,7 +203,8 @@ class WebExtractionService:
     async def _tier_b_playwright(self, url: str) -> ExtractionResult | None:
         try:
             from playwright.async_api import async_playwright
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"Playwright import failed: {exc}")
             return None
         timeout_ms = int(TIER_B_TIMEOUT_S * 1000)
 
@@ -230,9 +231,12 @@ class WebExtractionService:
                                 await route.continue_()
                             else:
                                 await route.abort()
-                        except Exception:
-                            with contextlib.suppress(Exception):
+                        except Exception as exc:
+                            logger.debug(f"Route handler failed: {exc}")
+                            try:
                                 await route.abort()
+                            except Exception as exc2:
+                                logger.debug(f"Route abort failed: {exc2}")
 
                     await page.route("**/*", _route_handler)
                     await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)

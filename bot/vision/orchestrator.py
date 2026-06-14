@@ -101,7 +101,8 @@ class VisionOrchestrator:
             adapter = getattr(self.gateway, "adapter", None)
             try:
                 from .types import VisionTask  # local import to avoid cycles
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"VisionTask import failed: {exc}")
                 VisionTask = None
             if adapter and getattr(adapter, "providers", None):
                 for provider_name, plugin in adapter.providers.items():
@@ -341,7 +342,8 @@ class VisionOrchestrator:
             if x is None:
                 return Money("0.006")
             return Money(x)
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"Money conversion failed: {exc}")
             return Money("0.006")
 
     async def _execute_job(self, job: VisionJob) -> None:

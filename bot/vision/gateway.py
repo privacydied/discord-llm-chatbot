@@ -404,7 +404,8 @@ class VisionGateway:
                             return None, None
                         data = base64.b64decode(b64)
                         return data, mime
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug(f"Data URL decode failed: {exc}")
                         return None, None
 
                 for idx, url in enumerate(assets_urls):
