@@ -8709,7 +8709,8 @@ class Router:
                         try:
                             text = data.decode(encoding)
                             break
-                        except Exception:
+                        except Exception as exc:
+                            self.logger.debug(f"prompt decode failed ({encoding}): {exc}")
                             continue
 
                     if text:

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
+
+logger = logging.getLogger(__name__)
 
 _URL_STRICT_PATTERN = r"https?://[^\s<>\"'\[\]{}|\\^`]+"
 _URL_LOOSE_PATTERN = r"https?://\S+"
@@ -146,7 +149,8 @@ def existing_url_payloads(items: Sequence[Any], *, strip_payload: bool = False) 
                 continue
             raw = str(getattr(it, "payload", ""))
             urls.add(raw.strip() if strip_payload else raw)
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"URL collection failed: {exc}")
             continue
     return urls
 
@@ -165,7 +169,8 @@ def append_unique_url_items(
     for u in urls or []:
         try:
             key = str(u).strip() if strip_key else str(u)
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"key generation failed: {exc}")
             key = ""
         if not key or key in seen:
             continue
@@ -192,5 +197,6 @@ def append_embed_related_urls(found_urls: list[str], embeds: Iterable[Any]) -> N
                 au = getattr(a, "url", None)
                 if au and au not in found_urls:
                     found_urls.append(au)
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"embed URL extraction failed: {exc}")
             continue
