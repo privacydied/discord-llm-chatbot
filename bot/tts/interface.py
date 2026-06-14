@@ -151,7 +151,8 @@ class TTSManager:
             try:
                 if path.is_file():
                     total_bytes += path.stat().st_size
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"cache stat failed: {exc}")
                 continue
         return {
             "files": len([p for p in files if p.is_file()]),

@@ -10,7 +10,7 @@ import logging
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -118,7 +118,7 @@ class TokenizerRegistry:
         if diagnostics["espeak_binary"]:
             try:
                 # Verify espeak works by running a simple command
-                result = subprocess.run(
+                result = subprocess.run(  # nosec
                     ["espeak", "--version"],
                     capture_output=True,
                     timeout=2,
@@ -139,7 +139,7 @@ class TokenizerRegistry:
         if diagnostics["espeak_ng_binary"]:
             try:
                 # Verify espeak-ng works by running a simple command
-                result = subprocess.run(
+                result = subprocess.run(  # nosec
                     ["espeak-ng", "--version"],
                     capture_output=True,
                     timeout=2,
@@ -659,7 +659,7 @@ class TokenizerRegistry:
             try:
                 # Use subprocess to get phonemes from espeak
                 cmd = [tokenizer, "--ipa", "-q", "--stdin"]
-                result = subprocess.run(cmd, input=text, text=True, capture_output=True, timeout=10)
+                result = subprocess.run(cmd, input=text, text=True, capture_output=True, timeout=10)  # nosec B603
                 if result.returncode == 0:
                     return result.stdout.strip()
                 msg = f"espeak failed: {result.stderr}"

@@ -6,11 +6,14 @@ to decode text bytes with size checks and light sanitization.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import discord
+
+logger = logging.getLogger(__name__)
 
 
 async def read_attachment_text(att: discord.Attachment, limit_bytes: int = 262_144) -> str | None:
@@ -34,7 +37,8 @@ async def read_attachment_text(att: discord.Attachment, limit_bytes: int = 262_1
             try:
                 text = data.decode(encoding)
                 break
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"decoding failed ({encoding}): {exc}")
                 continue
         if not text:
             return None

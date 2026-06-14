@@ -327,7 +327,8 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: str | None) ->
                     "_dom_index": idx,
                 },
             )
-        except Exception:
+        except Exception as exc:
+            logger.debug(f"tweet block parsing failed: {exc}")
             continue
 
     # Deduplicate by tweet_id preserving DOM order
@@ -541,7 +542,8 @@ async def unroll_author_thread(
                 html = await _fetch_html_with_playwright(mirror, min(timeout_s, 10.0))
                 if html:
                     break
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"mirror fetch failed: {exc}")
                 continue
 
     if not html:

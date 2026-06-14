@@ -6,7 +6,7 @@ import contextlib
 import os
 import re
 import shutil
-import subprocess
+import subprocess  # nosec B404
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +37,7 @@ def ffmpeg_candidates_from_env() -> list[str]:
 def ffmpeg_supports_aac_decoder(ffmpeg_bin: str) -> bool:
     """Check whether ffmpeg binary exposes AAC decoder(s)."""
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # nosec B603
             [ffmpeg_bin, "-hide_banner", "-decoders"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

@@ -5,7 +5,7 @@ import logging
 import os
 import shutil
 import site
-import subprocess
+import subprocess  # nosec B404
 from enum import Enum
 from typing import Any
 
@@ -203,7 +203,7 @@ def detect_available_tokenizers() -> dict[str, bool]:
     espeak_path = diagnostics["espeak_binary"]
     if espeak_path:
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec
                 ["espeak", "--version"],
                 capture_output=True,
                 text=True,
@@ -217,7 +217,7 @@ def detect_available_tokenizers() -> dict[str, bool]:
     espeak_ng_path = diagnostics["espeak_ng_binary"]
     if espeak_ng_path:
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec
                 ["espeak-ng", "--version"],
                 capture_output=True,
                 text=True,

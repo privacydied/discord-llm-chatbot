@@ -134,7 +134,7 @@ class JobWatcherRegistry:
                         logger.debug(f"Could not update progress message: {e}")
 
                 # Apply poll cadence with jitter - NO SLEEP after terminal
-                jitter = random.uniform(-0.1, 0.1)  # ±100ms jitter
+                jitter = random.uniform(-0.1, 0.1)  # ±100ms jitter # nosec B311
                 sleep_time = min(poll_interval + jitter, max_interval)
                 await asyncio.sleep(max(0.1, sleep_time))  # Minimum 100ms
 

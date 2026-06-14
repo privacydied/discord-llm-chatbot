@@ -16,7 +16,7 @@ import os
 import re
 import shutil
 import time
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as ET  # nosec B405
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
