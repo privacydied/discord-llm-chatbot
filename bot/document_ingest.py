@@ -30,7 +30,6 @@ async def ingest_document_attachment(
 
     Returns:
         Dict with keys: text, metadata, error (if any)
-
     """
     filename = getattr(attachment, "filename", "unknown")
     ext = Path(filename).suffix.lower()
@@ -184,7 +183,7 @@ async def _ingest_docx(tmp_path: Path, filename: str) -> dict[str, Any]:
             "metadata": {},
             "error": f"DOCX processing not available: {e}",
         }
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, OSError, UnicodeDecodeError) as e:
         logger.error(f"DOCX ingestion failed: {e}", exc_info=True)
         return {
             "text": "",
@@ -231,8 +230,7 @@ async def _ingest_markdown(tmp_path: Path, filename: str) -> dict[str, Any]:
             "metadata": metadata,
             "error": None,
         }
-
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, OSError, UnicodeDecodeError) as e:
         logger.warning(f"Markdown parsing failed, trying text fallback: {e}")
         return await _ingest_as_text(tmp_path, filename)
 
@@ -281,16 +279,11 @@ async def ingest_document_from_url(url: str) -> dict[str, Any]:
 
     Returns:
         Dict with keys: text, metadata, error (if any)
-
     """
     from .url_classifier import _extract_filename_from_url, download_url_to_temp
 
     filename = _extract_filename_from_url(url) or "document"
     ext = Path(filename).suffix.lower()
-
-    # Ensure we have a valid extension for temp file
-    if not ext:
-        ext = ".tmp"
 
     logger.info(
         f"doc.url.parse kind={ext} url={url[:80]}",

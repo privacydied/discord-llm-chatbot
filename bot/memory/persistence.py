@@ -153,7 +153,7 @@ def _create_backup(src: Path, dst: Path, max_retries: int = 3) -> bool:
                         return False
             shutil.copy2(src, dst)
             return True
-        except Exception as e:
+        except (OSError, shutil.Error, PermissionError) as e:
             logger.warning(f"Backup attempt {attempt + 1} failed for {src}: {e}")
 
     logger.error(f"Failed to create backup for {src} after {max_retries} attempts")

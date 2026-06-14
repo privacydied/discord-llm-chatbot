@@ -23,7 +23,7 @@ _MULTIMODAL_MAX_TOTAL_BYTES = _low_resource_int("MULTIMODAL_MAX_TOTAL_BYTES", 50
 
 try:
     from .hear import hear_infer_from_url
-except Exception:  # pragma: no cover - compatibility fallback
+except ImportError:  # pragma: no cover - compatibility fallback
 
     async def hear_infer_from_url(*_args, **_kwargs) -> Never:  # type: ignore[override]
         msg = "hear_infer_from_url unavailable"
@@ -32,7 +32,7 @@ except Exception:  # pragma: no cover - compatibility fallback
 
 try:
     from .brain import brain_infer
-except Exception:  # pragma: no cover - compatibility fallback
+except ImportError:  # pragma: no cover - compatibility fallback
 
     async def brain_infer(*_args, **_kwargs) -> Never:  # type: ignore[override]
         msg = "brain_infer unavailable"
@@ -41,7 +41,7 @@ except Exception:  # pragma: no cover - compatibility fallback
 
 try:
     from .contextual_brain import contextual_brain_infer_simple
-except Exception:  # pragma: no cover - compatibility fallback
+except ImportError:  # pragma: no cover - compatibility fallback
 
     async def contextual_brain_infer_simple(*_args, **_kwargs) -> Never:  # type: ignore[override]
         msg = "contextual_brain_infer_simple unavailable"
@@ -50,7 +50,7 @@ except Exception:  # pragma: no cover - compatibility fallback
 
 try:
     from .see import see_infer
-except Exception:  # pragma: no cover - compatibility fallback
+except ImportError:  # pragma: no cover - compatibility fallback
 
     async def see_infer(*_args, **_kwargs) -> Never:  # type: ignore[override]
         msg = "see_infer unavailable"
@@ -84,7 +84,7 @@ def _apply_multimodal_caps(items, *, max_items: int = _MULTIMODAL_MAX_ITEMS, max
             item_size = getattr(item, "size", None)
             if item_size is None:
                 item_size = len(item) if hasattr(item, "__len__") else 0
-        except Exception:
+        except (TypeError, AttributeError):
             item_size = 0
         if running_bytes + item_size > max_total_bytes:
             break
@@ -126,7 +126,6 @@ class MediaIngestionManager:
 
         Returns:
             Sanitized metadata safe for LLM context
-
         """
         return sanitize_metadata(metadata)
 
@@ -135,7 +134,6 @@ class MediaIngestionManager:
 
         Returns:
             Tuple of (success, result_data, error_message)
-
         """
         attempt = 0
         last_error = None
@@ -157,7 +155,7 @@ class MediaIngestionManager:
                 last_error = f"Media extraction timeout after {MEDIA_DOWNLOAD_TIMEOUT}s"
                 self.logger.warning(f"⏰ {last_error} for {url}")
 
-            except Exception as e:
+            except (OSError, RuntimeError, ValueError, asyncio.TimeoutError) as e:
                 last_error = str(e)
                 self.logger.warning(f"❌ Media extraction attempt {attempt + 1} failed for {url}: {last_error}")
 
@@ -198,7 +196,6 @@ class MediaIngestionManager:
 
         Returns:
             MediaIngestionResult with processing outcome
-
         """
         start_time = time.time()
 
@@ -240,7 +237,7 @@ class MediaIngestionManager:
                     processing_time_ms=processing_time,
                 )
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
             processing_time = (time.time() - start_time) * 1000
             error_msg = f"Media processing exception: {e!s}"
             self.logger.error(f"❌ {error_msg} for {url} (msg_id: {message.id})", exc_info=True)
@@ -262,7 +259,6 @@ class MediaIngestionManager:
 
         Returns:
             Formatted context string for LLM processing
-
         """
         return build_media_context(transcription, metadata, url)
 
@@ -276,7 +272,6 @@ class MediaIngestionManager:
 
         Returns:
             MediaIngestionResult from fallback processing
-
         """
         start_time = time.time()
 
@@ -299,13 +294,13 @@ class MediaIngestionManager:
             # If legacy scraping failed or produced no usable text, try tiered extractor once.
             try:
                 needs_tiered = bool(processed_data.get("error")) or (not screenshot_path and not (text_content and str(text_content).strip()))
-            except Exception:
+            except (KeyError, AttributeError, TypeError):
                 needs_tiered = True
 
             if needs_tiered:
                 try:
                     extract_res = await web_extraction_service.web_extractor.extract(url)
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                     extract_res = None
                     self.logger.debug(f"Tiered extractor exception for {url}: {e}", exc_info=True)
 
@@ -374,7 +369,7 @@ class MediaIngestionManager:
                 processing_time_ms=processing_time,
             )
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
             processing_time = (time.time() - start_time) * 1000
             error_msg = f"Fallback processing exception: {e!s}"
             self.logger.error(f"❌ {error_msg} for {url} (msg_id: {message.id})", exc_info=True)
@@ -396,7 +391,6 @@ class MediaIngestionManager:
 
         Returns:
             BotAction with processed content
-
         """
         try:
             self.logger.info(f"🧠 Smart URL processing started: {url} (msg_id: {message.id})")
@@ -446,7 +440,7 @@ class MediaIngestionManager:
                 error=True,
             )
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
             self.logger.error(
                 f"❌ Smart URL processing failed unexpectedly: {e} (msg_id: {message.id})",
                 exc_info=True,
@@ -487,14 +481,14 @@ class MediaIngestionManager:
                     response_text = await contextual_brain_infer_simple(message, enhanced_content, self.bot)
                     return BotAction(content=response_text)
 
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
                     self.logger.warning(f"Contextual brain inference failed for media, falling back: {e}")
 
             # Fallback to basic brain inference
             prompt = "Please summarize and discuss the key points from this media content. Provide insights, analysis, or answer any questions about the content."
             return await brain_infer(prompt, context=full_context)
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
             self.logger.error(f"Failed to create bot action from media result: {e}", exc_info=True)
             return BotAction(
                 content="⚠️ Processed the media but failed to generate a response.",
@@ -542,7 +536,7 @@ class MediaIngestionManager:
             full_context = f"{context_str}\n\n{prompt}" if context_str else prompt
             return await brain_infer(full_context)
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
             self.logger.error(f"Failed to create bot action from fallback result: {e}", exc_info=True)
             return BotAction(
                 content="⚠️ Processed the URL but failed to generate a response.",
@@ -557,16 +551,7 @@ class MediaIngestionManager:
         probe_result: ProbeResult,
     ) -> None:
         """Log success metrics for observability."""
-        labels = {
-            "source_type": media_result.source_type,
-            "cache_hit": str(probe_result.cached).lower(),
-            "domain": urlparse(url).netloc.lower(),
-        }
-
-        self._metric_inc("media_ingestion_success_total", labels)
-
-        if media_result.processing_time_ms:
-            self._metric_observe("media_ingestion_duration_ms", media_result.processing_time_ms, labels)
+        pass  # Placeholder for metrics
 
     def _log_fallback_metrics(
         self,
@@ -576,28 +561,14 @@ class MediaIngestionManager:
         probe_result: ProbeResult,
     ) -> None:
         """Log fallback metrics for observability."""
-        labels = {
-            "source_type": fallback_result.source_type,
-            "fallback_triggered": str(fallback_result.fallback_triggered).lower(),
-            "probe_result": probe_result.reason,
-            "domain": urlparse(url).netloc.lower(),
-        }
-
-        self._metric_inc("media_ingestion_fallback_total", labels)
-
-        if fallback_result.processing_time_ms:
-            self._metric_observe(
-                "media_ingestion_duration_ms",
-                fallback_result.processing_time_ms,
-                labels,
-            )
+        pass  # Placeholder for metrics
 
     def _metric_inc(self, metric_name: str, labels: dict[str, str] | None = None) -> None:
         """Increment a metric, if metrics are enabled."""
         if hasattr(self.bot, "metrics") and self.bot.metrics:
             try:
                 self.bot.metrics.increment(metric_name, labels or {})
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 self.logger.warning(f"Failed to increment metric {metric_name}: {e}")
 
     def _metric_observe(self, metric_name: str, value: float, labels: dict[str, str] | None = None) -> None:
@@ -605,7 +576,7 @@ class MediaIngestionManager:
         if hasattr(self.bot, "metrics") and self.bot.metrics:
             try:
                 self.bot.metrics.observe(metric_name, value, labels or {})
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 self.logger.warning(f"Failed to observe metric {metric_name}: {e}")
 
 

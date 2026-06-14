@@ -98,7 +98,7 @@ class PrometheusMetrics:
                 self._http_server_started = True
                 self.port = actual_port if port == 0 else port
                 logger.info(f"✅ Prometheus HTTP server started on port {self.port}")
-            except Exception as e:
+            except (OSError, RuntimeError, ValueError) as e:
                 logger.warning(f"⚠️  Failed to start Prometheus HTTP server: {e}")
         else:
             logger.info("📊 Prometheus metrics initialized without HTTP server")

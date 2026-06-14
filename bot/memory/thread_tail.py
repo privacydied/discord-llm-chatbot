@@ -24,7 +24,7 @@ def _is_thread_channel(ch: discord.abc.GuildChannel | discord.Thread | Any) -> b
             discord.ChannelType.private_thread,
             discord.ChannelType.news_thread,
         )
-    except Exception:
+    except (AttributeError, TypeError):
         return False
 
 
@@ -42,7 +42,7 @@ def _sanitize_mentions(text: str, guild: discord.Guild | None) -> str:
                 mem = guild.get_member(uid)
                 if mem:
                     name = mem.display_name
-        except Exception:
+        except (AttributeError, TypeError):
             name = None
         return f"@{name or uid}"
 
@@ -50,7 +50,7 @@ def _sanitize_mentions(text: str, guild: discord.Guild | None) -> str:
         s = re.sub(r"<@!?(\d+)>", repl, text)
         s = s.strip()
         return re.sub(r"\n{3,}", "\n\n", s)
-    except Exception:
+    except (re.error, AttributeError, TypeError):
         return text.strip()
 
 
@@ -63,7 +63,7 @@ def _format_joined_text(items: list[PackagedItem]) -> str:
             if ts:
                 dt = datetime.fromisoformat(ts)
                 ts = dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
-        except Exception as e:
+        except (ValueError, AttributeError, TypeError) as e:
             logger.debug(f"Failed to parse timestamp {ts}: {e}")
         header = f"[{i}/{n}] {it.author_name} – {ts}" if ts else f"[{i}/{n}] {it.author_name}"
         parts.append(header)
@@ -93,7 +93,7 @@ async def resolve_thread_reply_target(bot: discord.Client, message: discord.Mess
         try:
             async for m in ch.history(limit=3, before=message):
                 msgs.append(m)
-        except Exception:
+        except (asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError, TypeError):
             msgs = []
 
         if not msgs:
@@ -103,7 +103,7 @@ async def resolve_thread_reply_target(bot: discord.Client, message: discord.Mess
         # Determine if newest is ours
         try:
             is_bot_newest = bool(getattr(newest.author, "bot", False)) and int(getattr(newest.author, "id", 0)) == int(getattr(bot.user, "id", 0))
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             is_bot_newest = False
 
         if is_bot_newest and len(msgs) >= 2:
@@ -125,7 +125,7 @@ async def resolve_thread_reply_target(bot: discord.Client, message: discord.Mess
             if not bool(getattr(m.author, "bot", False)):
                 return m, "latest_human_window"
         return None, "no_humans"
-    except Exception:
+    except (AttributeError, TypeError, ValueError, asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException):
         return message, "fallback_current"
 
 
@@ -141,14 +141,14 @@ async def resolve_implicit_anchor(bot: discord.Client, message: discord.Message,
         # Look-back limits (small, cheap)
         try:
             k = int(cfg.get("THREAD_CONTEXT_TAIL_COUNT", 5))
-        except Exception:
+        except (ValueError, TypeError):
             k = 5
         lookback = max(3, min(10, k + 2))
 
         # Optional recency guard using MEM_MAX_AGE_MIN
         try:
             max_age_min = int(cfg.get("MEM_MAX_AGE_MIN", 240))
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             logger.debug(f"Failed to parse MEM_MAX_AGE_MIN: {e}")
             max_age_min = 240
         now = datetime.now(UTC)
@@ -157,12 +157,12 @@ async def resolve_implicit_anchor(bot: discord.Client, message: discord.Message,
             try:
                 if (now - (m.created_at or now)).total_seconds() > max_age_min * 60:
                     continue
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError) as e:
                 logger.debug(f"Failed to check message age: {e}")
             if not bool(getattr(m.author, "bot", False)):
                 return m, "nearest_human"
         return None, "no_recent_human"
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
         logger.debug(f"resolve_thread_reply_target failed: {e}")
         return None, "exception"
 
@@ -183,7 +183,7 @@ async def collect_implicit_anchor_context(
 
         try:
             k = int(cfg.get("THREAD_CONTEXT_TAIL_COUNT", 5))
-        except Exception:
+        except (ValueError, TypeError):
             k = 5
         k = max(0, min(k, 40))
 
@@ -197,7 +197,7 @@ async def collect_implicit_anchor_context(
                 tail.append(m)
                 if len(tail) >= k:
                     break
-        except Exception:
+        except (asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError, TypeError):
             tail = []
 
         tail = list(reversed(tail))
@@ -260,7 +260,7 @@ async def collect_implicit_anchor_context(
             )
 
         return joined_text, block
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
         with contextlib.suppress(Exception):
             logger.info(
                 "anchor_none",
@@ -294,7 +294,7 @@ async def collect_thread_tail_context(
 
         try:
             k = int(cfg.get("THREAD_CONTEXT_TAIL_COUNT", 5))
-        except Exception:
+        except (ValueError, TypeError):
             k = 5
         k = max(0, min(k, 40))  # cap to a reasonable bound
 
@@ -314,7 +314,7 @@ async def collect_thread_tail_context(
                 tail.append(m)
                 if len(tail) >= k:
                     break
-        except Exception:
+        except (asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError, TypeError):
             # Fallback: nothing collected
             tail = []
 
@@ -382,7 +382,7 @@ async def collect_thread_tail_context(
             )
 
         return joined_text, block
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
         with contextlib.suppress(Exception):
             logger.info(
                 "tail_fallback",

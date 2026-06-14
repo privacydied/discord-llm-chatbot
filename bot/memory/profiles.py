@@ -259,7 +259,7 @@ def save_profile(profile: dict, force: bool = False, caller_id: str | None = Non
                     from bot.config import load_config
 
                     max_memories = int(load_config().get("MAX_USER_MEMORY", 20))
-            except Exception:
+            except (ValueError, TypeError):
                 max_memories = 20
 
             if isinstance(profile.get("memories"), list) and len(profile["memories"]) > max_memories:
@@ -436,7 +436,7 @@ def save_server_profile(guild_id, force: bool = False) -> bool:
                 from bot.config import load_config
 
                 max_memories = int(load_config().get("MAX_SERVER_MEMORY", 100))
-        except Exception:
+        except (ValueError, TypeError):
             max_memories = 100
 
         if isinstance(working_profile.get("memories"), list) and len(working_profile["memories"]) > max_memories:

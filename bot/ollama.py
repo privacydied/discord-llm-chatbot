@@ -398,7 +398,7 @@ async def generate_response(
             except FileNotFoundError:
                 msg = f"Prompt file not found: {prompt_file_path}"
                 raise OllamaAPIError(msg)
-            except Exception as e:
+            except (OSError, PermissionError, UnicodeDecodeError) as e:
                 msg = f"Error reading prompt file {prompt_file_path}: {e}"
                 raise OllamaAPIError(msg)
 

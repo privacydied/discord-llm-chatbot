@@ -140,7 +140,7 @@ def collect_input_items(message: Message) -> list[InputItem]:
                 if _host_match(embed_url) and any(_host_match(u) for u in urls):
                     logger.info("🧹 Skipping video preview embed; corresponding video URL present in message")
                     continue
-        except Exception as _e:
+        except (AttributeError, TypeError, ValueError) as _e:
             # Non-fatal: proceed to include the embed if dedupe check fails [REH]
             logger.debug(f"Embed dedupe check failed: {_e}")
 
@@ -351,7 +351,7 @@ async def _map_url_to_modality(url: str) -> InputModality:
         host = (p.netloc or "").lower()
         path = p.path or "/"
         path_lower = path.lower()
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         host = ""
         path = "/"
         path_lower = "/"

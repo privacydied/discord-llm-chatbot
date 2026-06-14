@@ -21,13 +21,13 @@ logger = get_logger(__name__)
 
 
 def _load_int_config(key: str, default: int) -> int:
-    """Load an integer config value respecting LOW_RESOURCE_MODE."""
+    """Load an integer config value that respects LOW_RESOURCE_MODE via load_config()."""
     try:
         cfg = _load_config()
         val = cfg.get(key)
         if val is not None:
             return int(val)
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, AttributeError, OSError) as e:
         logger.debug(f"Failed to load int config {key}: {e}")
     return default
 
@@ -39,7 +39,7 @@ def _load_bool_config(key: str, default: bool) -> bool:
         val = cfg.get(key)
         if val is not None:
             return bool(val)
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, AttributeError, OSError) as e:
         logger.debug(f"Failed to load bool config {key}: {e}")
     return default
 
@@ -167,7 +167,7 @@ class EnhancedContextManager:
         """Decrypt message content."""
         try:
             return self.cipher.decrypt(encrypted_content.encode()).decode()
-        except Exception as e:
+        except (ValueError, TypeError, RuntimeError) as e:
             logger.debug(f"Decryption failed, assuming unencrypted: {e}")
             return encrypted_content  # Assume it's unencrypted
 
@@ -388,7 +388,7 @@ class EnhancedContextManager:
                     try:
                         user = self.bot.get_user(int(entry.user_id))
                         username = user.display_name if user else f"User({entry.user_id})"
-                    except Exception:
+                    except (ValueError, AttributeError, TypeError):
                         username = f"User({entry.user_id})"
 
                     line = f"[{username}]: {content}"

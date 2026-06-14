@@ -678,7 +678,7 @@ class CuratedMemoryCurator:
     def _metadata_json(metadata: dict[str, Any]) -> str:
         try:
             return json.dumps(metadata, ensure_ascii=False, separators=(",", ":"))
-        except Exception:
+        except (TypeError, ValueError, OSError):
             return "{}"
 
     # ---------------- structured decision logging ----------------

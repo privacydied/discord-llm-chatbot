@@ -94,8 +94,7 @@ def get_metrics() -> Metrics:
             extra={"subsys": "metrics"},
         )
         return NullMetrics()
-
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         # Runtime initialization failure (port bind, etc.)
         reason = f"Prometheus init failed: {e}"
         _degraded_mode = True

@@ -180,7 +180,7 @@ class CuratedMemoryService:
         await self.store.soft_delete_memory(memory_id)
         try:
             await self.semantic_store.delete(memory_id)
-        except Exception:
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
             logger.warning("Chroma delete failed for memory %s", memory_id, exc_info=True)
         return True
 
@@ -191,7 +191,7 @@ class CuratedMemoryService:
         if ids:
             try:
                 await self.semantic_store.delete_many(ids)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
                 logger.warning("Chroma wipe failed for user %s", user_id, exc_info=True)
         return len(ids)
 
@@ -257,7 +257,7 @@ class CuratedMemoryService:
         for scope_name, where, boost in scope_filters:
             try:
                 results = await self.semantic_store.query(query, top_k=top_k, where=where)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
                 logger.debug("Semantic query failed for scope %s", scope_name, exc_info=True)
                 continue
             for item in results:
@@ -504,7 +504,7 @@ class CuratedMemoryService:
                 top_k=3,
                 where={"user_id": candidate.user_id},
             )
-        except Exception:
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
             # If semantic search fails, allow insertion.
             return candidate
 

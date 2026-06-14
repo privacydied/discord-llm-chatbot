@@ -1,4 +1,7 @@
-from __future__ import annotations
+"""Mention context utilities for Discord message processing.
+
+Handles anchor resolution, thread/reply context collection, and text sanitization.
+"""
 
 import asyncio
 import contextlib
@@ -6,19 +9,22 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import discord
 
-from bot.utils.logging import get_logger
+from ..utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from .bot import Bot
 
 logger = get_logger(__name__)
 
 
-# Cases
-THREAD_CASE = "THREAD"
-REPLY_CASE = "REPLY"
-LONE_CASE = "LONE"
+# Case classification constants
+THREAD_CASE = "thread"
+REPLY_CASE = "reply"
+LONE_CASE = "lone"
 
 
 @dataclass
@@ -45,7 +51,8 @@ class MentionContextBlock:
     truncated: bool
 
 
-def _is_thread_channel(ch: discord.abc.GuildChannel | discord.Thread | Any) -> bool:
+def _is_thread_channel(ch: discord.abc.Messageable) -> bool:
+    """Return True if channel is a thread type (including Forum post threads)."""
     try:
         # Forum posts are Threads; include all thread channel types
         if isinstance(ch, discord.Thread):
@@ -56,7 +63,7 @@ def _is_thread_channel(ch: discord.abc.GuildChannel | discord.Thread | Any) -> b
             discord.ChannelType.private_thread,
             discord.ChannelType.news_thread,
         )
-    except Exception:
+    except (AttributeError, TypeError):
         return False
 
 
@@ -71,18 +78,24 @@ def classify_message_case(message: discord.Message) -> str:
         if getattr(message, "reference", None) is not None:
             return REPLY_CASE
         return LONE_CASE
-    except Exception:
+    except (AttributeError, TypeError):
         return LONE_CASE
 
 
-async def _fetch_message_safely(channel: discord.abc.Messageable, mid: int, timeout_s: float) -> discord.Message | None:
+async def _fetch_message_safely(
+    channel: discord.abc.Messageable, mid: int, timeout_s: float
+) -> discord.Message | None:
     try:
         return await asyncio.wait_for(channel.fetch_message(mid), timeout=timeout_s)
-    except Exception:
+    except (asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException):
         return None
 
 
-async def resolve_anchor(message: discord.Message, case: str, timeout_s: float) -> discord.Message | None:
+async def resolve_anchor(
+    message: discord.Message,
+    case: str,
+    timeout_s: float,
+) -> discord.Message | None:
     if case == LONE_CASE:
         return None
 
@@ -97,7 +110,7 @@ async def resolve_anchor(message: discord.Message, case: str, timeout_s: float) 
                 return None
 
             return await asyncio.wait_for(_first(), timeout=timeout_s)
-        except Exception:
+        except (asyncio.TimeoutError, asyncio.CancelledError, discord.NotFound, discord.Forbidden, discord.HTTPException):
             return None
 
     # REPLY_CASE
@@ -129,12 +142,12 @@ async def resolve_anchor(message: discord.Message, case: str, timeout_s: float) 
                 break
             cur = p2
         return cur or parent
-    except Exception:
+    except (asyncio.TimeoutError, asyncio.CancelledError, discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError, TypeError):
         # Best-effort fallback: use parent if any
         try:
             ref = getattr(message, "reference", None)
             return getattr(ref, "resolved", None)
-        except Exception:
+        except (AttributeError, TypeError):
             return None
 
 
@@ -150,7 +163,7 @@ def _sanitize_mentions(text: str, guild: discord.Guild | None) -> str:
                 mem = guild.get_member(uid)
                 if mem:
                     name = mem.display_name
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             name = None
         if not name:
             try:
@@ -160,7 +173,7 @@ def _sanitize_mentions(text: str, guild: discord.Guild | None) -> str:
                 u = dutils.get(guild.members, id=uid) if guild else None
                 if u:
                     name = getattr(u, "display_name", None)
-            except Exception:
+            except (AttributeError, TypeError):
                 name = None
         return f"@{name or uid}"
 
@@ -169,7 +182,7 @@ def _sanitize_mentions(text: str, guild: discord.Guild | None) -> str:
         # Normalize whitespace: strip, collapse many newlines
         s = s.strip()
         return re.sub(r"\n{3,}", "\n\n", s)
-    except Exception:
+    except (re.error, AttributeError, TypeError):
         return text.strip()
 
 
@@ -183,9 +196,9 @@ def _format_joined_text(items: list[PackagedItem]) -> str:
             if ts:
                 dt = datetime.fromisoformat(ts)
                 ts = dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
-        except Exception as e:
+        except (ValueError, AttributeError, TypeError) as e:
             logger.debug(f"Failed to parse timestamp {ts}: {e}")
-        header = f"[{i}/{n}] {it.author_name} – {ts}" if ts else f"[{i}/{n}] {it.author_name}"
+        header = f"[{i}/{n}] {it.author_name} \u2013 {ts}" if ts else f"[{i}/{n}] {it.author_name}"
         parts.append(header)
         parts.append(it.text_plain)
         parts.append("")
@@ -195,7 +208,7 @@ def _format_joined_text(items: list[PackagedItem]) -> str:
 def _include_message(msg: discord.Message, bot_user_id: int) -> bool:
     try:
         return not (getattr(msg.author, "bot", False) and int(getattr(msg.author, "id", 0)) != int(bot_user_id))
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError) as e:
         logger.debug(f"Failed to check message inclusion: {e}")
         return True
 
@@ -203,7 +216,7 @@ def _include_message(msg: discord.Message, bot_user_id: int) -> bool:
 def _within_age(msg: discord.Message, max_age_min: int, now: datetime) -> bool:
     try:
         return (now - (msg.created_at or now)) <= timedelta(minutes=max_age_min)
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError) as e:
         logger.debug(f"Failed to check message age: {e}")
         return True
 
@@ -224,15 +237,14 @@ async def _collect_thread_context(
     total_chars = 0
     truncated = False
 
+    async def _walk():
+        async for m in message.channel.history(limit=max_msgs * 3, oldest_first=True):
+            yield m
+
+    walker = _walk()
+    # Guard the iteration with a soft time limit by chunking
+    start_time = time.monotonic()
     try:
-
-        async def _walk():
-            async for m in message.channel.history(limit=max_msgs * 3, oldest_first=True):
-                yield m
-
-        walker = _walk()
-        # Guard the iteration with a soft time limit by chunking
-        start_time = time.monotonic()
         async for m in walker:
             if time.monotonic() - start_time > max(timeout_s * 2, 5):
                 # Safety guard: don't overrun
@@ -252,7 +264,7 @@ async def _collect_thread_context(
                 break
             collected.append(m)
             total_chars += len(txt)
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         # On any error, return empty to trigger fallback
         return [], False
 
@@ -287,67 +299,55 @@ async def _collect_reply_chain(
     timeout_s: float,
 ) -> tuple[list[discord.Message], bool]:
     """Collect a bounded tail of the reply chain nearest to the triggering message.
-    Returns (messages in chronological order, truncated).
+    Returns (messages, truncated) where messages are in chronological order (oldest first).
     """
-    if not anchor:
-        return [], False
-
     now = _now_utc()
+    collected: list[discord.Message] = []
+    total_chars = 0
     truncated = False
 
-    # Reconstruct linear chain from root→…→parent→current (no channel-wide scan)
     try:
-        parents: list[discord.Message] = []
+        parent = anchor
+        if parent is None:
+            ref = getattr(message, "reference", None)
+            if ref:
+                resolved = getattr(ref, "resolved", None)
+                if isinstance(resolved, discord.Message):
+                    parent = resolved
+                else:
+                    ref_id = getattr(ref, "message_id", None)
+                    if ref_id:
+                        parent = await _fetch_message_safely(message.channel, ref_id, timeout_s)
+
+        if parent is not None:
+            collected.append(parent)
+            total_chars += len(parent.content or "")
+
         cur = message
-        seen: set[int] = set()
         while getattr(cur, "reference", None) is not None:
-            ref_id = getattr(cur.reference, "message_id", None)
-            if ref_id is None or ref_id in seen:
-                break
-            seen.add(ref_id)
-            parent = await _fetch_message_safely(message.channel, ref_id, timeout_s)
-            if not parent:
-                break
-            parents.append(parent)  # newest parent first
-            cur = parent
-        # Oldest→newest parents
-        chain: list[discord.Message] = list(reversed(parents))
-        # Append current trigger at the end
-        chain.append(message)
-    except Exception:
-        # Best-effort fallback: just include anchor and current
-        chain = [anchor, message]
-
-    # Filter by visibility and age, but always allow the anchor
-    try:
-        filtered: list[discord.Message] = []
-        anc_id = getattr(anchor, "id", None)
-        for m in chain:
-            if not _include_message(m, int(getattr(bot.user, "id", 0) or 0)):
-                continue
-            if not _within_age(m, max_age_min, now) and getattr(m, "id", None) != anc_id:
-                continue
-            filtered.append(m)
-    except Exception:
-        filtered = chain
-
-    # Apply tail window and char budget nearest to the trigger (end of list)
-    kept_rev: list[discord.Message] = []
-    total_chars = 0
-    try:
-        for m in reversed(filtered):  # newest→oldest
-            txt = m.content or ""
-            if len(kept_rev) >= max_msgs or (total_chars + len(txt)) > max_chars:
+            if len(collected) >= max_msgs:
                 truncated = True
                 break
-            kept_rev.append(m)
-            total_chars += len(txt)
-    except Exception:
-        # If anything fails, return at least the current message
-        kept_rev = [message]
+            ref = cur.reference
+            rid = getattr(ref, "message_id", None)
+            if rid is None:
+                break
+            next_msg = await _fetch_message_safely(message.channel, rid, timeout_s)
+            if not next_msg:
+                break
+            if not _include_message(next_msg, int(getattr(bot.user, "id", 0) or 0)):
+                break
+            if not _within_age(next_msg, max_age_min, now):
+                break
+            collected.append(next_msg)
+            total_chars += len(next_msg.content or "")
+            cur = next_msg
+    except (AttributeError, TypeError, ValueError, asyncio.TimeoutError, asyncio.CancelledError, discord.NotFound, discord.Forbidden, discord.HTTPException):
+        # Best-effort fallback
+        pass
 
-    kept = list(reversed(kept_rev))  # oldest→newest for packaging
-    return kept, truncated
+    collected.reverse()  # Reverse to chronological order
+    return collected, truncated
 
 
 def _package(
@@ -416,7 +416,7 @@ async def maybe_build_mention_context(
     # Only trigger on @mention
     try:
         mentioned = bot.user in (getattr(message, "mentions", None) or [])
-    except Exception:
+    except (AttributeError, TypeError):
         mentioned = False
     if not mentioned:
         return None
@@ -425,7 +425,7 @@ async def maybe_build_mention_context(
     try:
         # Tail size K for reply/thread context collection
         tail_k = int(cfg.get("THREAD_CONTEXT_TAIL_COUNT", 5))
-    except Exception:
+    except (ValueError, TypeError):
         tail_k = 5
     # Global caps (chars/timeouts)
     try:
@@ -433,7 +433,7 @@ async def maybe_build_mention_context(
         max_age_min = int(cfg.get("MEM_MAX_AGE_MIN", 240))
         timeout_s = float(cfg.get("MEM_FETCH_TIMEOUT_S", 5))
         subsys = str(cfg.get("MEM_LOG_SUBSYS", "mem.ctx"))
-    except Exception:
+    except (ValueError, TypeError):
         max_chars, max_age_min, timeout_s, subsys = 8000, 240, 5.0, "mem.ctx"
     # Enforce sane bounds
     tail_k = max(0, min(tail_k, 40))
@@ -444,7 +444,7 @@ async def maybe_build_mention_context(
     # Anchor resolution
     try:
         anchor = await resolve_anchor(message, case, timeout_s)
-    except Exception as e:
+    except (asyncio.TimeoutError, asyncio.CancelledError, discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError, TypeError) as e:
         with contextlib.suppress(Exception):
             logger.info(
                 "collect_fallback",
@@ -502,7 +502,7 @@ async def maybe_build_mention_context(
                 },
             )
         return None
-    except Exception as e:
+    except (asyncio.TimeoutError, asyncio.CancelledError, discord.NotFound, discord.Forbidden, discord.HTTPException, AttributeError, TypeError, ValueError) as e:
         with contextlib.suppress(Exception):
             logger.info(
                 "collect_fallback",
@@ -558,7 +558,62 @@ async def maybe_build_mention_context(
                     "detail": {"reason": "cap_hit", "msgs": block.count},
                 },
             )
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError) as e:
         logger.debug(f"Failed to log truncation breadcrumb: {e}")
 
     return block.joined_text, block
+
+
+async def build_mention_context(
+    bot: discord.Client,
+    message: discord.Message,
+    *,
+    max_msgs: int = 50,
+    max_chars: int = 12000,
+    max_age_min: int = 60,
+    timeout_s: float = 3.0,
+) -> str:
+    """Build a sanitized context string for a mention-triggered response.
+
+    Includes thread/reply history with caps on messages, chars, and age.
+    """
+    case = classify_message_case(message)
+
+    if case == THREAD_CASE:
+        anchor = await resolve_anchor(message, case, timeout_s)
+        collected, truncated = await _collect_thread_context(
+            bot,
+            message,
+            anchor,
+            max_msgs=max_msgs,
+            max_chars=max_chars,
+            max_age_min=max_age_min,
+            timeout_s=timeout_s,
+        )
+    elif case == REPLY_CASE:
+        anchor = await resolve_anchor(message, case, timeout_s)
+        collected, truncated = await _collect_reply_chain(
+            bot,
+            message,
+            anchor,
+            max_msgs=max_msgs,
+            max_chars=max_chars,
+            max_age_min=max_age_min,
+            timeout_s=timeout_s,
+        )
+    else:  # LONE_CASE
+        collected = [message]
+        truncated = False
+
+    # Package into typed items
+    items: list[PackagedItem] = []
+    for m in collected:
+        author_name = m.author.display_name if m.author else "Unknown"
+        text = m.content or ""
+        ts = m.created_at.isoformat() if m.created_at else ""
+        items.append(PackagedItem(author_name=author_name, text_plain=text, created_at_iso=ts))
+
+    joined = _format_joined_text(items)
+    if truncated:
+        joined += "\n\n[Context truncated due to length/age limits]"
+    return _sanitize_mentions(joined, message.guild)

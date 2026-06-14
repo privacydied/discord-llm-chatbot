@@ -21,7 +21,7 @@ def _load_int_config(key: str, default: int) -> int:
         val = cfg.get(key)
         if val is not None:
             return int(val)
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, AttributeError, OSError) as e:
         logger.debug(f"Failed to load int config {key}: {e}")
     return default
 
@@ -33,7 +33,7 @@ def _load_bool_config(key: str, default: bool) -> bool:
         val = cfg.get(key)
         if val is not None:
             return bool(val)
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, AttributeError, OSError) as e:
         logger.debug(f"Failed to load bool config {key}: {e}")
     return default
 
@@ -139,7 +139,7 @@ class ContextManager:
                             mode,
                             self.filepath,
                         )
-            except Exception as e:
+            except (OSError, ValueError, AttributeError, TypeError) as e:
                 # Never fail route on permission checks
                 logger.debug(f"Permission check failed: {e}")
         except OSError as e:

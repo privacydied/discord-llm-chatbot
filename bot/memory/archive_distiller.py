@@ -168,7 +168,7 @@ class MemoryArchiveDistiller:
             task.cancel()
             try:
                 await asyncio.gather(task, return_exceptions=True)
-            except Exception:
+            except (asyncio.CancelledError, RuntimeError):
                 logger.debug("Memory distiller task cancellation raised", exc_info=True)
 
     async def _loop(self) -> None:
@@ -177,7 +177,7 @@ class MemoryArchiveDistiller:
                 await self.run_once()
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
                 logger.exception(
                     "Memory distiller loop failed",
                     extra={"subsys": "memory", "event": "memory_distiller_loop_failed"},
@@ -239,7 +239,7 @@ class MemoryArchiveDistiller:
                     summary["scanned_count"] += window_size
                     try:
                         distilled = self._distill_window(window.messages)
-                    except Exception as exc:
+                    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
                         logger.warning(
                             "Skipping bad archive window during distillation",
                             extra={
@@ -318,13 +318,13 @@ class MemoryArchiveDistiller:
         if self.archive_service is not None:
             try:
                 backlog = await self.archive_service.store.count_distiller_backlog(guild_id=guild_id)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
                 logger.debug("Failed to calculate distiller backlog", exc_info=True)
         latest_run = None
         if self.archive_service is not None:
             try:
                 latest_run = await self.archive_service.store.latest_distiller_run()
-            except Exception:
+            except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
                 logger.debug("Failed to fetch latest distiller run", exc_info=True)
         return {
             "enabled": self.enabled,
