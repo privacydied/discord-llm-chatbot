@@ -1338,15 +1338,15 @@ def text_to_ipa(text: str) -> str:
             ipa_word = _word_to_ipa(token, cmudict_dict)
             ipa_parts.append(ipa_word)
             word_count += 1
-        elif token in ".,!?;:":
+        elif token in ".,!?;:":  # nosec B105
             # Map punctuation to pause tokens - critical for prosody! [CA]
-            if token in ".!?":
+            if token in ".!?":  # nosec B105
                 ipa_parts.append(".")  # Sentence boundary
                 punct_count += 1
-            elif token in ",;:":
+            elif token in ",;:":  # nosec B105
                 ipa_parts.append(",")  # Phrase boundary
                 punct_count += 1
-        elif token == "...":
+        elif token == "...":  # nosec B105
             ipa_parts.append(".")  # Ellipsis -> period
             punct_count += 1
         # Drop other punctuation that doesn't map to IPA

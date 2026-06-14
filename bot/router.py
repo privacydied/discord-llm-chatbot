@@ -7367,9 +7367,9 @@ class Router:
                 return None
             # Accept common synonyms (image, images, video, videos)
             token_l = token.lower()
-            if token_l == "text":
+            if token_l == "text":  # nosec B105
                 return SearchCategory.TEXT
-            if token_l == "news":
+            if token_l == "news":  # nosec B105
                 return SearchCategory.NEWS
             if token_l in ("image", "images"):  # allow singular
                 return SearchCategory.IMAGES

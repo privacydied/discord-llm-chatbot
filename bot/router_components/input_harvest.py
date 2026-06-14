@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 _URL_STRICT_PATTERN = r"https?://[^\s<>\"'\[\]{}|\\^`]+"
 _URL_LOOSE_PATTERN = r"https?://\S+"
-_DISCORD_MENTION_TOKEN_PATTERN = r"<[@#][^>]+>"
+_DISCORD_MENTION_TOKEN_PATTERN = r"<[@#][^>]+>"  # nosec B105
 
 
 def is_text_attachment(attachment: Any) -> bool:
