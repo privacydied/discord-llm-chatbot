@@ -13,8 +13,8 @@ from typing import Any
 
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
+from bot.exceptions import ProviderError
 from bot.utils.logging import get_logger
-
 from .phase_constants import PhaseConstants as PC
 from .phase_timing import PipelineTracker, get_timing_manager
 
@@ -274,7 +274,7 @@ class OptimizedOpenRouterClient:
         # Check circuit breaker state [REH]
         if not circuit_breaker.should_attempt_request():
             msg = f"Circuit breaker OPEN for model {model}"
-            raise Exception(msg)
+            raise ProviderError(msg)
 
         await self._ensure_session()
         model_config = self._get_model_config(model)
@@ -317,7 +317,7 @@ class OptimizedOpenRouterClient:
                 circuit_breaker.record_failure()
                 self.pool_stats["requests_failed"] += 1
                 msg = f"HTTP {response.status}: {error_text}"
-                raise Exception(msg)
+                raise ProviderError(msg)
 
         except Exception:
             circuit_breaker.record_failure()

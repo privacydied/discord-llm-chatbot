@@ -154,7 +154,7 @@ class AdminAlertCommands(commands.Cog):
                 await target_channel.send(content)
                 guilds_success += 1
                 self.logger.debug(f"alert:sent guild_id={guild.id} channel_id={target_channel.id}")
-            except Exception as e:
+            except (discord.HTTPException, discord.Forbidden, discord.NotFound) as e:
                 guilds_failed += 1
                 self.logger.warning(f"alert:failed guild_id={guild.id} channel_id={target_channel.id} error={e}")
 
@@ -190,7 +190,7 @@ class AdminAlertCommands(commands.Cog):
         if session.composer_message_id == reaction.message.id and not session.composer_ready:
             try:
                 await reaction.remove(user)
-            except Exception:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden):
                 self.logger.debug("Failed to remove reaction", exc_info=True)
             return
 
@@ -268,7 +268,7 @@ class AdminAlertCommands(commands.Cog):
                     session.channel_message_id = None
                     try:
                         await reaction.message.clear_reactions()
-                    except Exception:
+                    except (discord.HTTPException, discord.NotFound, discord.Forbidden):
                         self.logger.debug("Failed to clear reactions", exc_info=True)
                     sorted_guilds = session.guilds_list or []
                     await self._show_guild_selection(user, session, guild_map, sorted_guilds)
@@ -450,7 +450,7 @@ class AdminAlertCommands(commands.Cog):
             self.logger.exception(f"Error handling DM message: {e}")
             try:
                 await message.channel.send("Error processing your input. Please try again.")
-            except Exception:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden):
                 self.logger.debug("Failed to send error message to user", exc_info=True)
 
     def _extract_indices(self, text: str) -> list[int]:

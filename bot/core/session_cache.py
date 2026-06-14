@@ -52,7 +52,7 @@ class CacheEntry:
             import sys
 
             return sys.getsizeof(data)
-        except Exception:
+        except (TypeError, AttributeError, ValueError):
             # Fallback estimation
             if isinstance(data, str):
                 return len(data) * 2  # Unicode chars

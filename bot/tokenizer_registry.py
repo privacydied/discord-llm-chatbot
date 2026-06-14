@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from .exceptions import TokenizerError
 from .tts.errors import MissingTokeniserError
 
 logger = logging.getLogger(__name__)
@@ -653,7 +654,7 @@ class TokenizerRegistry:
                 return phonemize(text, language="en-us", backend="espeak", strip=True)
             except ImportError:
                 msg = "phonemizer not available"
-                raise Exception(msg)
+                raise TokenizerError(msg)
 
         elif tokenizer in ("espeak", "espeak-ng"):
             try:
@@ -663,10 +664,10 @@ class TokenizerRegistry:
                 if result.returncode == 0:
                     return result.stdout.strip()
                 msg = f"espeak failed: {result.stderr}"
-                raise Exception(msg)
+                raise TokenizerError(msg)
             except (subprocess.SubprocessError, FileNotFoundError):
                 msg = f"{tokenizer} not available"
-                raise Exception(msg)
+                raise TokenizerError(msg)
 
         elif tokenizer == "g2p_en":
             try:
@@ -677,7 +678,7 @@ class TokenizerRegistry:
                 return " ".join(phonemes)
             except ImportError:
                 msg = "g2p_en not available"
-                raise Exception(msg)
+                raise TokenizerError(msg)
 
         elif tokenizer == "misaki":
             try:
@@ -691,11 +692,11 @@ class TokenizerRegistry:
                 return result
             except ImportError:
                 msg = "misaki not available"
-                raise Exception(msg)
+                raise TokenizerError(msg)
 
         else:
             msg = f"Unsupported tokenizer: {tokenizer}"
-            raise Exception(msg)
+            raise TokenizerError(msg)
 
 
 # Minimal ARPAbet -> IPA (covers core English; extend as needed)

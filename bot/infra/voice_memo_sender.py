@@ -52,7 +52,7 @@ async def _probe_duration_async(path: Path) -> float | None:
         dur = float(data.get("format", {}).get("duration", 0.0))
         # Match reference rounding behavior
         return float(round(dur))
-    except Exception:
+    except (json.JSONDecodeError, OSError, ValueError, KeyError, TypeError):
         return None
 
 
@@ -128,7 +128,7 @@ async def wav_bytes_to_voice_memo_async(
                     upload_info = upload_data["attachments"][0]
                     upload_url = upload_info["upload_url"]
                     uploaded_filename = upload_info.get("upload_filename") or upload_info.get("uploaded_filename")
-                except Exception as e:
+                except (KeyError, IndexError, TypeError) as e:
                     msg = f"Invalid upload response format: {e}"
                     raise VoiceMemoError(msg)
 

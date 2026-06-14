@@ -97,7 +97,7 @@ def validate_environment() -> tuple[bool, str | None]:
             try:
                 dir_path.mkdir(parents=True, exist_ok=True)
                 logger.info(f"Created missing directory: {dir_path}")
-            except Exception as e:
+            except (OSError, PermissionError) as e:
                 return False, f"Failed to create required directory {dir_path}: {e}"
 
     # Validate TTS environment if enhanced utils are available
@@ -142,7 +142,7 @@ def get_environment_info() -> dict[str, Any]:
         try:
             tts_paths = get_env_paths()
             info["tts_paths"] = {k: str(v) for k, v in tts_paths.items()}
-        except Exception as e:
+        except (ImportError, AttributeError, TypeError, ValueError) as e:
             info["tts_paths"] = {"error": str(e)}
 
     return info

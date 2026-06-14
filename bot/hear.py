@@ -192,7 +192,7 @@ try:
     STT_MAX_RAM_MB = int(_stt_max_ram_raw) if _stt_max_ram_raw else None
     if STT_MAX_RAM_MB is not None and STT_MAX_RAM_MB <= 0:
         STT_MAX_RAM_MB = None
-except Exception as e:
+except (ValueError, TypeError) as e:
     logger.debug(f"Failed to parse STT_MAX_RAM_MB: {e}")
 
 # Backward-compatible cache symbols retained for tests and monkeypatching.
@@ -336,7 +336,7 @@ class STTJob:
         self._ps_process = psutil.Process()
         try:
             self._rss_snapshot = self._ps_process.memory_info().rss
-        except Exception:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
             self._rss_snapshot = 0
         self._rss_cleanup_before = self._rss_snapshot
         self._rss_cleanup_after = self._rss_snapshot
@@ -426,7 +426,7 @@ class STTJob:
         self._cleanup_done = True
         try:
             self._rss_cleanup_before = self._ps_process.memory_info().rss
-        except Exception:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
             self._rss_cleanup_before = 0
 
         stream = self.pre.stream if self.pre else None
@@ -434,7 +434,7 @@ class STTJob:
         if stream is not None:
             try:
                 await stream.finalize(success=success)
-            except Exception:
+            except (AttributeError, TypeError, RuntimeError, OSError):
                 logger.debug("⚠️ Failed to finalize stream after job", exc_info=True)
 
         removed_temp: Path | None = None
@@ -445,7 +445,7 @@ class STTJob:
                 removed_temp = Path(temp_name)
             except FileNotFoundError:
                 pass
-            except Exception:
+            except (OSError, PermissionError, AttributeError):
                 logger.debug("⚠️ Failed to remove temp attachment", exc_info=True)
             self.temp_handle = None
         if self.temp_path is not None and (removed_temp is None or self.temp_path != removed_temp):
@@ -453,7 +453,7 @@ class STTJob:
                 os.unlink(self.temp_path)
             except FileNotFoundError:
                 pass
-            except Exception:
+            except (OSError, PermissionError):
                 logger.debug("⚠️ Failed to remove temp path %s", self.temp_path, exc_info=True)
             self.temp_path = None
         else:
@@ -468,12 +468,12 @@ class STTJob:
         try:
             libc = ctypes.CDLL("libc.so.6")
             libc.malloc_trim(0)
-        except Exception as e:
-            logger.debug(f"malloc_trim failed: {e}")
+        except (OSError, AttributeError):
+            logger.debug("malloc_trim failed")
 
         try:
             self._rss_cleanup_after = self._ps_process.memory_info().rss
-        except Exception:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
             self._rss_cleanup_after = self._rss_cleanup_before
         freed_bytes = max(0, self._rss_cleanup_before - self._rss_cleanup_after)
         freed_mb = freed_bytes / (1024 * 1024)
@@ -575,7 +575,7 @@ class BasePCMStream:
                 pass
             with contextlib.suppress(Exception):
                 self._queue.put_nowait(None)
-        except Exception as e:
+        except (AttributeError, TypeError, RuntimeError) as e:
             logger.debug(f"Audio stream cleanup failed: {e}")
 
     async def iter_frames(self) -> AsyncIterator[bytes]:
@@ -693,7 +693,7 @@ class FFMpegPCMStream(BasePCMStream):
                 self._proc.kill()
             except ProcessLookupError:
                 pass
-            except Exception:
+            except (ProcessLookupError, OSError, PermissionError):
                 logger.debug("⚠️ Failed to kill ffmpeg during abort", exc_info=True)
 
     async def _monitor(self) -> None:
@@ -704,13 +704,13 @@ class FFMpegPCMStream(BasePCMStream):
             await self.abort()
         except asyncio.CancelledError:
             raise
-        except BaseException as exc:
+        except (asyncio.TimeoutError, OSError, RuntimeError, ValueError) as exc:
             self._error = exc
         finally:
             if self._stderr_task is not None:
                 try:
                     stderr = await self._stderr_task
-                except Exception:
+                except (asyncio.CancelledError, RuntimeError, OSError):
                     stderr = b""
             else:
                 stderr = b""
@@ -836,7 +836,7 @@ def _load_pcm_cache(cache_key: str) -> tuple[Path, dict[str, Any]] | None:
         with meta_path.open("r", encoding="utf-8") as fh:
             meta = json.load(fh)
         return pcm_path, meta
-    except Exception as exc:
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
         logger.warning(
             "⚠️ Failed to load preprocessed cache metadata %s: %s",
             meta_path,
@@ -855,7 +855,7 @@ def _store_pcm_cache_from_temp(
     pcm_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         shutil.move(str(temp_path), pcm_path)
-    except Exception as exc:
+    except (OSError, shutil.Error) as exc:
         logger.warning(
             "⚠️ Failed to move PCM cache temp=%s dest=%s err=%s",
             temp_path,
@@ -864,7 +864,7 @@ def _store_pcm_cache_from_temp(
         )
         try:
             shutil.copy2(str(temp_path), pcm_path)
-        except Exception as copy_exc:
+        except (OSError, shutil.Error) as copy_exc:
             logger.warning(
                 "⚠️ Failed to copy PCM cache temp=%s dest=%s err=%s",
                 temp_path,
@@ -890,7 +890,7 @@ def _store_pcm_cache_from_temp(
             cache_key[:12],
             total_samples,
         )
-    except Exception as exc:
+    except (OSError, json.JSONEncodeError, TypeError) as exc:
         logger.warning("⚠️ Failed to write PCM cache metadata %s: %s", meta_path, exc)
 
 
@@ -953,7 +953,7 @@ def _load_transcript_cache(cache_key: str) -> TranscriptResult | None:
     try:
         with path.open("r", encoding="utf-8") as fh:
             data = json.load(fh)
-    except Exception as exc:
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
         logger.warning("⚠️ Failed to load transcript cache %s: %s", path, exc)
         return None
 
@@ -973,7 +973,7 @@ def _load_transcript_cache(cache_key: str) -> TranscriptResult | None:
             cache_hit=True,
             first_chunk_runtime=float(data.get("first_chunk_runtime", 0.0)),
         )
-    except Exception as exc:
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         logger.warning("⚠️ Invalid transcript cache %s: %s", path, exc)
         return None
 
@@ -995,7 +995,7 @@ def _store_transcript_cache(cache_key: str, result: TranscriptResult) -> None:
     try:
         with path.open("w", encoding="utf-8") as fh:
             json.dump(payload, fh)
-    except Exception as exc:
+    except (OSError, json.JSONEncodeError, TypeError) as exc:
         logger.warning("⚠️ Failed to store transcript cache %s: %s", path, exc)
 
 
@@ -1103,7 +1103,7 @@ async def _extract_audio_to_wav_forced(
     """
     try:
         ffmpeg_bin = _resolve_ffmpeg_bin()
-    except Exception:
+    except (FileNotFoundError, ValueError, InferenceError):
         logger.warning("ffmpeg not found for forced extraction")
         return False
 
@@ -1156,7 +1156,7 @@ async def _extract_audio_to_wav_forced(
         with contextlib.suppress(Exception):
             proc.kill()
         return False
-    except Exception as exc:
+    except (OSError, RuntimeError, ValueError, asyncio.TimeoutError) as exc:
         logger.warning(
             "pre.extract_forced_error src=%s error=%s",
             source_path.name,
@@ -1675,13 +1675,13 @@ async def _run_whisper(
         except Exception:
             try:
                 await pre.stream.finalize(success=False)
-            except Exception:
+            except (AttributeError, TypeError, RuntimeError, OSError):
                 logger.debug("⚠️ Failed to finalize stream after error", exc_info=True)
             raise
 
         try:
             await pre.stream.finalize(success=not transcript.aborted)
-        except Exception as exc:
+        except (InferenceError, AttributeError, TypeError, RuntimeError, OSError) as exc:
             if isinstance(exc, InferenceError) and "Audio preprocessing timed out" in str(exc):
                 logger.debug("⚠️ Stream finalization failed: %s", exc)
             else:
@@ -1800,7 +1800,7 @@ async def _transcribe_with_model(
             await asyncio.sleep(max(0.0, MEMORY_CONFIRM_DELAY - elapsed))
         try:
             rss_second = process.memory_info().rss / (1024 * 1024)
-        except Exception:
+        except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
             rss_second = rss_mb
 
         if rss_second >= MEMORY_ABORT_THRESHOLD_MB:
@@ -1949,7 +1949,7 @@ async def _transcribe_with_model(
                 ram_guard.check("whisper-chunk")
                 try:
                     rss_mb = process.memory_info().rss / (1024 * 1024)
-                except Exception:
+                except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
                     rss_mb = 0.0
                 if rss_mb > 0.0 and await _should_abort_for_memory(rss_mb):
                     frames.clear()
@@ -2027,7 +2027,7 @@ async def _transcribe_with_model(
                     ram_guard.check("whisper-chunk")
                     try:
                         rss_mb = process.memory_info().rss / (1024 * 1024)
-                    except Exception:
+                    except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
                         rss_mb = 0.0
                     if rss_mb > 0.0 and await _should_abort_for_memory(rss_mb):
                         frames.clear()
@@ -2062,7 +2062,7 @@ async def _transcribe_with_model(
     if aborted_reason:
         try:
             await pre.stream.abort()
-        except Exception:
+        except (AttributeError, TypeError, RuntimeError, OSError):
             logger.debug("⚠️ Stream abort failed", exc_info=True)
     if aborted_reason:
         spans.end("whisper", ok=False, reason=aborted_reason)
@@ -2265,7 +2265,7 @@ async def _resolve_via_summarize(url: str) -> dict[str, Any] | None:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-    except Exception as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         logger.debug("stt.summarize.spawn_failed err=%s", exc)
         return None
 

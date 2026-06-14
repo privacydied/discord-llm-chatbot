@@ -68,14 +68,14 @@ def classify_attachment(attachment: discord.Attachment) -> ClassifiedAttachment:
             try:
                 if callable(val):
                     return bool(val())
-            except Exception:
+            except (TypeError, AttributeError):
                 return False
             return bool(val)
 
         voice_attr = getattr(attachment, "voice_message", None)
         voice_method = getattr(attachment, "is_voice_message", None)
         is_voice_message = _resolve_flag(voice_attr) or _resolve_flag(voice_method)
-    except Exception as e:
+    except (AttributeError, TypeError) as e:
         logger.warning(f"Error extracting attachment metadata: {e}")
         filename = ""
         content_type = ""

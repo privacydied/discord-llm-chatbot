@@ -9,7 +9,6 @@ This module is intentionally small and fail-open:
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import html as html_lib
 import json
 import os

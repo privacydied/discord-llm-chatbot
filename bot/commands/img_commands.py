@@ -51,7 +51,7 @@ class ImgCommands(commands.Cog):
             filename = (att.filename or "").lower()
             ext = Path(filename).suffix
             ctype = (att.content_type or "").lower()
-        except Exception:
+        except (AttributeError, TypeError):
             filename, ext, ctype = "", "", ""
 
         allowed_exts = {".txt", ".md", ".rtf", ".json", ".yaml", ".yml"}
@@ -92,7 +92,7 @@ class ImgCommands(commands.Cog):
             text = text.replace("\x00", "")
             text = re.sub(r"\s+", " ", text).strip()
             return text or None
-        except Exception as e:
+        except (AttributeError, TypeError, UnicodeDecodeError) as e:
             self.logger.debug(f"Failed to read attachment {att.filename}: {e}")
             return None
 
@@ -174,7 +174,7 @@ class ImgCommands(commands.Cog):
             final_prompt = inline
             try:
                 self.logger.info(f"IMG.prompt_source=inline len={len(inline)} content='{inline[:50]}...' msg_id={ctx.message.id}")
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError) as e:
                 self.logger.debug(f"Failed to log inline prompt: {e}")
         else:
             # No inline prompt: collect attachments from current and referenced message
@@ -199,7 +199,7 @@ class ImgCommands(commands.Cog):
                         ref_msg = await ctx.channel.fetch_message(ref.message_id)
                 if ref_msg and getattr(ref_msg, "attachments", None):
                     attachments.extend(ref_msg.attachments)
-            except Exception as e:
+            except (AttributeError, TypeError, discord.HTTPException, discord.NotFound) as e:
                 self.logger.debug(f"IMG: Error processing reply attachments: {e}")
             # Log attachments count breadcrumb
             try:
@@ -208,7 +208,7 @@ class ImgCommands(commands.Cog):
                 self.logger.info(f"IMG.attachments current={current_count} reply_has={reply_has} total={total} msg_id={ctx.message.id}")
                 for i, att in enumerate(attachments):
                     self.logger.info(f"IMG: Attachment {i}: {att.filename} ({att.size} bytes, type: {att.content_type})")
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError) as e:
                 self.logger.debug(f"Failed to log attachments: {e}")
 
             max_bytes = IMG_ATTACHMENT_MAX_BYTES
@@ -243,11 +243,11 @@ class ImgCommands(commands.Cog):
                         parsed_params = params or {}
                         try:
                             self.logger.info(f"IMG.prompt_source=attachment file={cand.filename} size={getattr(cand, 'size', 0)} prompt='{p[:50]}...' msg_id={ctx.message.id}")
-                        except Exception as e:
+                        except (AttributeError, TypeError, ValueError) as e:
                             self.logger.debug(f"Failed to log attachment prompt source: {e}")
                         found = True
                         break
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, UnicodeDecodeError) as e:
                     # Continue to next candidate on read/parse failure
                     self.logger.exception(f"IMG: Exception reading {cand.filename}: {e}")
                     continue

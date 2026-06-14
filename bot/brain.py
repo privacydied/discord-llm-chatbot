@@ -2,6 +2,7 @@
 
 
 import contextlib
+import re
 
 from .action import BotAction
 from .ai_backend import generate_response
@@ -24,7 +25,8 @@ async def brain_infer(prompt: str, context: str = "", system_prompt: str | None 
             # Apply sanitization before measuring length (removes CoT/leakage) [SFT]
             try:
                 safe_text = sanitize_model_output(raw_text)
-            except Exception:
+            except (re.error, AttributeError, TypeError) as exc:
+                logger.debug(f"sanitize_model_output failed: {exc}")
                 safe_text = raw_text
 
             if safe_text and safe_text.strip():
@@ -48,9 +50,10 @@ async def brain_infer(prompt: str, context: str = "", system_prompt: str | None 
                     },
                 )
                 return BotAction(content=fallback)
-            except Exception:
+            except (TypeError, AttributeError, ValueError) as exc:
+                logger.debug(f"fallback build failed: {exc}")
                 # Last-resort minimal fallback
-                return BotAction(content="I didn’t get a usable reply. Could you rephrase or add more detail?")
+                return BotAction(content="I didn't get a usable reply. Could you rephrase or add more detail?")
         else:
             logger.error(f"Unexpected response format: {response}")
             msg = "Unexpected response format from AI backend"

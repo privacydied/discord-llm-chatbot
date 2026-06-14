@@ -89,7 +89,7 @@ def _read_dotenv_values(path: Path) -> dict[str, str]:
     """Read dotenv key/value pairs without mutating process env."""
     try:
         return {str(key): str(value) for key, value in dotenv_values(path).items() if key and value is not None}
-    except Exception:
+    except (OSError, ValueError, TypeError):
         return {}
 
 
@@ -129,7 +129,7 @@ def _file_digest(p: Path) -> str | None:
     try:
         data = p.read_bytes()
         return hashlib.sha256(data).hexdigest()
-    except Exception:
+    except (OSError, IOError):
         return None
 
 
@@ -138,7 +138,7 @@ async def _file_digest_async(p: Path) -> str | None:
     try:
         data = await asyncio.to_thread(p.read_bytes)
         return (await asyncio.to_thread(hashlib.sha256, data)).hexdigest()
-    except Exception:
+    except (OSError, IOError):
         return None
 
 
@@ -389,7 +389,7 @@ def reload_env(env_path: Path | None = None) -> dict[str, Any]:
                         },
                     },
                 )
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError) as e:
                 logger.debug(f"Failed to log config reload diff breadcrumb: {e}")
 
             # Log changes with sensitive values redacted
@@ -431,7 +431,7 @@ def reload_env(env_path: Path | None = None) -> dict[str, Any]:
                         },
                     },
                 )
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError) as e:
                 logger.debug(f"Failed to log config reload committed breadcrumb: {e}")
 
             # Notify callbacks
@@ -458,7 +458,7 @@ def reload_env(env_path: Path | None = None) -> dict[str, Any]:
                         },
                     },
                 )
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 logger.warning(f"⚠️ Failed to refresh retry ladders on config reload: {e}")
 
             # Restart janitor to pick up new config
@@ -474,7 +474,7 @@ def reload_env(env_path: Path | None = None) -> dict[str, Any]:
                         )
                     else:
                         loop.run_until_complete(restart_janitor())
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                     logger.warning(f"⚠️ Failed to restart janitor on config reload: {e}")
 
             return {
@@ -566,7 +566,7 @@ async def _file_watcher_loop() -> None:
 
         _fw_cfg = _fw_load_config()
         debounce_delay = _fw_cfg.get("CONFIG_WATCH_DEBOUNCE_S", 1.0)
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, ImportError) as e:
         logger.debug(f"Failed to load CONFIG_WATCH_DEBOUNCE_S, using fallback: {e}")
 
     status = "completed"
@@ -593,7 +593,7 @@ async def _file_watcher_loop() -> None:
                             reload_env(p)
                             last_reload_time = current_time
                         last_digests[p] = dig
-                    except Exception as _e:
+                    except (OSError, AttributeError, TypeError, ValueError) as _e:
                         # Continue checking other paths
                         last_digests[p] = last_digests.get(p)
 
@@ -660,7 +660,7 @@ async def start_file_watcher() -> None:
                 _file_watcher_task.result()
             except asyncio.CancelledError:
                 logger.info("Previous file watcher task had been cancelled")
-            except Exception:
+            except Exception:  # noqa: BLE001 - intentionally broad to catch any task exception
                 logger.info(
                     "Previous file watcher task ended with error",
                     exc_info=True,
@@ -676,7 +676,7 @@ async def start_file_watcher() -> None:
                     "detail": {"candidates": candidates, "preferred": preferred},
                 },
             )
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             logger.debug(f"Failed to log config watcher paths: {e}")
 
         _file_watcher_task = asyncio.create_task(_file_watcher_loop(), name="config_file_watcher")

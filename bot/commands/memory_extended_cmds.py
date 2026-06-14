@@ -50,13 +50,13 @@ class ExtendedMemoryCommands(commands.Cog):
 
                 try:
                     chroma_status = "ready" if service.semantic_store._collection else "initializing"
-                except Exception:
+                except AttributeError:
                     chroma_status = "unknown"
                 embed.add_field(name="Vector Store", value=chroma_status, inline=True)
 
                 try:
                     store_status = "connected" if service.store._conn else "disconnected"
-                except Exception:
+                except AttributeError:
                     store_status = "unknown"
                 embed.add_field(name="SQLite Store", value=store_status, inline=True)
             else:
@@ -175,7 +175,7 @@ class ExtendedMemoryCommands(commands.Cog):
 
             try:
                 await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
-            except Exception:
+            except asyncio.TimeoutError:
                 await ctx.send("⏱️ Delete cancelled (timed out).")
                 return
 

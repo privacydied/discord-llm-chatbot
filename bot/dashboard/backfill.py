@@ -439,7 +439,7 @@ class BackfillService:
         if channel is None:
             try:
                 channel = await self._bot.fetch_channel(channel_id)
-            except Exception as e:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden) as e:
                 await self._fail_job(job_id, f"Channel not found: {e}")
                 return {"job_id": job_id, "status": BACKFILL_STATUS_FAILED, "error": str(e)}
 
@@ -450,7 +450,7 @@ class BackfillService:
 
         try:
             perms = channel.permissions_for(channel.guild.me) if channel.guild else None
-        except Exception:
+        except (AttributeError, TypeError):
             perms = None
 
         if perms is not None and not perms.read_message_history:
@@ -468,7 +468,7 @@ class BackfillService:
                 inserted = await self._store_message(msg, guild_id)
                 if inserted:
                     messages_inserted += 1
-        except Exception as e:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden, TypeError) as e:
             await self._fail_job(job_id, str(e))
             return {
                 "job_id": job_id,
@@ -521,7 +521,7 @@ class BackfillService:
                     text_channels.append(ch)
                 else:
                     logger.debug("Skipping channel %s (no read permission)", ch.id)
-            except Exception as e:
+            except (AttributeError, TypeError) as e:
                 logger.debug(f"Failed to check permissions for channel {ch.id}: {e}")
             if len(text_channels) >= max_channels:
                 break
@@ -548,7 +548,7 @@ class BackfillService:
                     inserted = await self._store_message(msg, guild_id)
                     if inserted:
                         total_messages_inserted += 1
-            except Exception as e:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden, TypeError) as e:
                 channels_skipped += 1
                 logger.warning("Failed to backfill channel %s in guild %s: %s", ch.id, guild_id, e)
                 # Continue with next channel
@@ -597,13 +597,13 @@ class BackfillService:
         if user is None:
             try:
                 user = await self._bot.fetch_user(user_id_or_channel_id)
-            except Exception as e:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden) as e:
                 await self._fail_job(job_id, f"User not found: {e}")
                 return {"job_id": job_id, "status": BACKFILL_STATUS_FAILED, "error": str(e)}
 
         try:
             dm_channel = user.dm_channel or await user.create_dm()
-        except Exception as e:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden) as e:
             await self._fail_job(job_id, f"Cannot create DM channel: {e}")
             return {"job_id": job_id, "status": BACKFILL_STATUS_FAILED, "error": str(e)}
 
@@ -630,7 +630,7 @@ class BackfillService:
                         last_message_at=msg.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ") if msg.created_at else None,
                         increment_count=True,
                     )
-        except Exception as e:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden, TypeError) as e:
             await self._fail_job(job_id, str(e))
             return {
                 "job_id": job_id,
@@ -772,7 +772,7 @@ class BackfillService:
                 embeds=embeds,
                 metadata={"jump_url": msg.jump_url} if msg.jump_url else None,
             )
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
             logger.warning("Failed to store message %s: %s", msg.id, e)
             return False
 
@@ -797,10 +797,8 @@ class BackfillService:
                 target_user_id=target_user_id,
                 metadata=metadata,
             )
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.debug("Failed to record audit event %s: %s", event_type, e)
-
-    async def initialize(self) -> None:
         """Initialize the job store and reset any stale running jobs."""
         await self._job_store.initialize()
         stale = await self._job_store.reset_stale_jobs()

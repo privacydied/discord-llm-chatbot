@@ -3,7 +3,6 @@
 This module provides commands to control TTS settings and behavior.
 """
 
-import contextlib
 import inspect
 import io
 import logging
@@ -19,7 +18,7 @@ from bot.tts.state import tts_state
 
 try:
     from bot.voice.publisher import VoiceMessagePublisher  # type: ignore
-except Exception:
+except ImportError:
     # Keep tests import-light if optional deps like 'utils' aren't on path
     VoiceMessagePublisher = None  # type: ignore
 
@@ -152,7 +151,7 @@ class TTSCommands(commands.Cog):
                 # Some MagicMocks raise when awaited; re-call without awaiting
                 try:
                     return func(*args, **kwargs)
-                except Exception:
+                except TypeError:
                     raise e
 
         # 1) Attachment fast-path → delegate to router with one-time TTS
@@ -165,7 +164,7 @@ class TTSCommands(commands.Cog):
         try:
             atts = getattr(ctx.message, "attachments", None)
             has_attachments = isinstance(atts, list) and len(atts) > 0
-        except Exception:
+        except (AttributeError, TypeError):
             has_attachments = False
         if has_attachments:
             logging.debug(
@@ -287,7 +286,7 @@ class TTSCommands(commands.Cog):
                         mime_type = "audio/wav"
             except SynthesisError:
                 raise
-            except Exception:
+            except (AttributeError, TypeError, ValueError, RuntimeError):
                 # Fallback to legacy direct calls if process not available or failed
                 try:
                     gen_res = await maybe_call(
@@ -302,7 +301,7 @@ class TTSCommands(commands.Cog):
                         mime_type = "audio/ogg"
                 except SynthesisError:
                     raise
-                except Exception:
+                except (AttributeError, TypeError, ValueError, RuntimeError):
                     try:
                         audio_bytes = await maybe_call(self.bot.tts_manager.synthesize, text)
                         mime_type = "audio/wav"
@@ -342,7 +341,7 @@ class TTSCommands(commands.Cog):
                             "user_id": user_id,
                         },
                     )
-                except Exception as e:
+                except (discord.HTTPException, discord.NotFound, discord.Forbidden, AttributeError, TypeError) as e:
                     logging.warning(
                         f"Native voice message publish failed: {e}",
                         exc_info=True,
@@ -531,14 +530,14 @@ class TTSCommands(commands.Cog):
                 message = f"❌ An error occurred while generating TTS: {reason}"
             try:
                 await maybe_call(ctx.send, message)
-            except Exception as e:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden) as e:
                 logger.debug(f"Failed to send TTS error message: {e}")
             return
         except Exception as e:
             logging.error(f"Error in say command: {e}", exc_info=True)
             try:
                 await maybe_call(ctx.send, f"❌ An error occurred while generating TTS: {e!s}")
-            except Exception as send_e:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden) as send_e:
                 logger.debug(f"Failed to send TTS exception message: {send_e}")
             return
 

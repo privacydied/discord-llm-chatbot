@@ -42,7 +42,7 @@ from .command_parser import COMMAND_MAP, parse_command
 from .document_ingest import ingest_document_attachment, ingest_document_from_url
 from .enhanced_retry import ProviderConfig, get_retry_manager
 from .evidence import EvidenceBundle
-from .exceptions import APIError, DispatchEmptyError
+from .exceptions import APIError, DispatchEmptyError, VisionDownloadError
 from .hear import hear_infer, hear_infer_from_url
 from .http_client import RequestConfig, get_http_client
 from .memory import build_memory_prompt_block
@@ -936,7 +936,7 @@ class Router:
             except Exception as exc:
                 logger.debug(f"Failed to log visual anchor: {exc}")
             return anchored
-        except Exception as exc:
+        except Exception:
             return None
 
     async def _get_x_api_client(self) -> XApiClient | None:
@@ -6637,7 +6637,7 @@ class Router:
                 if ref_msg:
                     url_candidates += re.findall(r"https?://\S+", getattr(ref_msg, "content", "") or "")
                 has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
-            except Exception as exc:
+            except Exception:
                 has_twitter_url = False
 
             if has_img_attachments or has_twitter_url:
@@ -8488,7 +8488,7 @@ class Router:
 
                 if not vision_result or getattr(vision_result, "error", None):
                     msg = "Vision analysis returned no results"
-                    raise Exception(msg)
+                    raise VisionDownloadError(msg)
 
                 raw_text = str(vision_result.content).strip()
 
@@ -8585,7 +8585,7 @@ class Router:
                 success = await download_file(image_url, tmp_path)
                 if not success:
                     msg = f"Failed to download image from {image_url}"
-                    raise Exception(msg)
+                    raise VisionDownloadError(msg)
 
                 # Use existing see_infer for VL analysis
                 vision_result = await see_infer(image_path=tmp_path, prompt=prompt)
@@ -8636,7 +8636,7 @@ class Router:
                     )
 
                 msg = "Vision analysis returned no results"
-                raise Exception(msg)
+                raise VisionDownloadError(msg)
 
             finally:
                 # Cleanup temp file

@@ -101,7 +101,7 @@ class DashboardServer:
             stale = await self._backfill_store.reset_stale_jobs()
             if stale:
                 logger.info("Reset %d stale backfill jobs on shutdown", stale)
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning("Backfill cleanup on shutdown failed: %s", e)
 
         if self._runner:
@@ -127,26 +127,26 @@ class DashboardServer:
                     audit_deleted = await self._audit_store.cleanup_retention()
                     if audit_deleted:
                         logger.info("Audit retention cleanup: %d records removed", audit_deleted)
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                     logger.warning("Audit retention cleanup failed: %s", e)
 
                 try:
                     dm_deleted = await self._dm_store.cleanup_retention()
                     if dm_deleted:
                         logger.info("DM retention cleanup: %d records removed", dm_deleted)
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                     logger.warning("DM retention cleanup failed: %s", e)
 
                 try:
                     msg_deleted = await self._message_store.cleanup_retention()
                     if msg_deleted:
                         logger.info("Message store retention cleanup: %d records removed", msg_deleted)
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                     logger.warning("Message store retention cleanup failed: %s", e)
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 logger.warning("Dashboard cleanup loop error: %s", e)
 
     @property

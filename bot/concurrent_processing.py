@@ -79,7 +79,7 @@ def _normalize_url_for_dedup(url: str) -> str:
         filtered = [(k, v) for k, v in qs_list if k.lower() not in {"utm_source", "utm_medium", "utm_campaign", "fbclid", "gclid"}]
         new_qs = urlencode(filtered)
         return urlunparse((p.scheme, netloc, p.path, "", new_qs, ""))
-    except Exception:
+    except (ValueError, AttributeError):
         # Fallback: strip whitespace only
         return url.strip()
 
@@ -153,7 +153,7 @@ async def _process_item_with_budget(
             attempts=1,
         )
 
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError) as e:
         duration = time.time() - start_time
         logger.warning(f"process_item.error | mod={modality.name} error={e}")
         return ProcessedResult(
@@ -218,7 +218,7 @@ async def _process_item_with_coalescing(
             duration=duration,
             attempts=1,
         )
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError) as e:
         duration = __import__("time").time() - start_time
         return ProcessedResult(
             item=item,

@@ -1,7 +1,6 @@
 """Admin alert manager — session lifecycle, reaction queue, discovery, and broadcasting."""
 
 import asyncio
-import contextlib
 import time
 from typing import Any
 
@@ -61,7 +60,7 @@ class AdminAlertManager:
                     await op["message"].remove_reaction(op["emoji"], op["user"])
                 if queue:
                     await asyncio.sleep(0.25)
-            except Exception as e:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden) as e:
                 self.logger.warning(f"Reaction queue operation failed: {e}")
 
         if message_id in self.reaction_queues and not self.reaction_queues[message_id]:
@@ -73,7 +72,7 @@ class AdminAlertManager:
             if not admin_ids_str:
                 return set()
             return {int(s.strip()) for s in admin_ids_str.split(",") if s.strip()}
-        except Exception as e:
+        except (ValueError, AttributeError, TypeError) as e:
             self.logger.exception(f"Failed to parse admin user IDs: {e}")
             return set()
 
@@ -90,27 +89,27 @@ class AdminAlertManager:
                         authorized.add(int(owner_id))
                     except (ValueError, TypeError) as e:
                         self.logger.debug(f"Invalid owner ID {owner_id}: {e}")
-        except Exception as e:
+        except (ValueError, AttributeError, TypeError) as e:
             self.logger.debug(f"Failed to parse OWNER_IDS: {e}")
         return authorized
 
     def refresh_config(self) -> None:
         try:
             self.config = load_config()
-        except Exception as e:
+        except (FileNotFoundError, ValueError, TypeError, OSError) as e:
             self.logger.debug(f"Failed to reload config: {e}")
             return
         try:
             self.enabled = self.config.get("ALERT_ENABLE", "false").lower() == "true"
-        except Exception as e:
+        except (AttributeError, TypeError) as e:
             self.logger.debug(f"Failed to parse ALERT_ENABLE: {e}")
         try:
             self.admin_user_ids = self._build_authorized_user_ids()
-        except Exception as e:
+        except (ValueError, AttributeError, TypeError) as e:
             self.logger.debug(f"Failed to build authorized user IDs: {e}")
         try:
             self.session_timeout = int(self.config.get("ALERT_SESSION_TIMEOUT_S", "1800"))
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             self.logger.debug(f"Failed to parse ALERT_SESSION_TIMEOUT_S: {e}")
 
     def is_admin_user(self, user_id: int) -> bool:

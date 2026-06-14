@@ -83,7 +83,7 @@ async def main(bot_ref: dict[str, LLMBot] | None = None) -> NoReturn:
 
     try:
         setup_signal_handlers(bot)
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         logger.warning(f"Failed to setup signal handlers: {e}", exc_info=True)
 
     # Set up background tasks and file watcher before starting bot
@@ -127,7 +127,7 @@ def run_bot() -> None:
         asyncio.run(main_with_cleanup())
     except KeyboardInterrupt:
         shutdown_logging_and_exit(0)
-    except Exception:
+    except BaseException:
         import traceback
 
         traceback.print_exc()

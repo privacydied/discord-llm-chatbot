@@ -20,7 +20,7 @@ def _load_int_config(key: str, default: int) -> int:
         val = cfg.get(key)
         if val is not None:
             return int(val)
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError) as e:
         logger.debug(f"Failed to load int config {key}: {e}")
     return default
 
@@ -29,7 +29,7 @@ def _get_config_value(key: str, default: Any) -> Any:
     """Read a config value fresh on each call (avoids stale module-level cache)."""
     try:
         return load_config().get(key, default)
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError) as e:
         logger.debug(f"Failed to load config {key}: {e}")
         return default
 

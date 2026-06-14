@@ -21,6 +21,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.config import load_config
+from bot.exceptions import VisionDownloadError
 from bot.utils.logging import get_logger
 from bot.vision.orchestrator import VisionOrchestrator
 from bot.vision.types import VisionError, VisionProvider, VisionRequest, VisionTask
@@ -593,7 +594,7 @@ class VisionCommands(commands.Cog):
                     f.write(data)
             else:
                 msg = f"Failed to download attachment: HTTP {resp.status}"
-                raise Exception(msg)
+                raise VisionDownloadError(msg)
 
         return temp_path
 
@@ -656,7 +657,7 @@ class VisionCommands(commands.Cog):
         except discord.NotFound:
             # Original message was deleted, stop monitoring
             pass
-        except Exception as e:
+        except (discord.HTTPException, discord.Forbidden) as e:
             self.logger.debug(f"Could not update progress: {e}")
 
     async def _send_completion_message(self, interaction: discord.Interaction, job) -> None:

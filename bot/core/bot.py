@@ -134,7 +134,7 @@ class LLMBot(commands.Bot):
         if "intents" not in kwargs:
             try:
                 intents = discord.Intents.none()
-            except Exception:
+            except (AttributeError, TypeError):
                 intents = None
             kwargs["intents"] = intents
 
@@ -143,7 +143,7 @@ class LLMBot(commands.Bot):
         owner_ids = self.config.get("OWNER_IDS", [])
         try:
             self.owner_ids = {int(owner_id) for owner_id in owner_ids}
-        except Exception:
+        except (ValueError, TypeError):
             self.owner_ids = set()
         self.logger = get_logger(__name__)
         self.metrics = NullMetrics()
@@ -195,7 +195,7 @@ class LLMBot(commands.Bot):
                 exc = t.exception()
             except asyncio.CancelledError:
                 return  # cancellation is normal
-            except Exception:
+            except asyncio.InvalidStateError:
                 return  # task did not raise
             if exc is not None:
                 task_name = t.get_name() if hasattr(t, "get_name") else "unnamed"
@@ -266,7 +266,7 @@ class LLMBot(commands.Bot):
 
             self._public_output_safety_installed = True
             self.logger.info("✅ Public output send/edit safety hooks installed")
-        except Exception as exc:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as exc:
             self.logger.warning(
                 f"⚠️ Failed to install public output safety hooks: {exc}",
                 exc_info=True,
@@ -389,7 +389,7 @@ class LLMBot(commands.Bot):
                 )
             yield
             return
-        except Exception as exc:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden, asyncio.TimeoutError) as exc:
             self._typing_suppressed_until[channel_key] = now + 60.0
             with suppress(Exception):
                 self.logger.warning(
@@ -418,7 +418,7 @@ class LLMBot(commands.Bot):
         content = (getattr(message, "content", "") or "").strip()
         try:
             prefixes = await self.get_prefix(message)
-        except Exception:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden, AttributeError):
             prefixes = self.command_prefix
         if prefixes is None:
             prefix_list: list[str] = []
@@ -448,7 +448,7 @@ class LLMBot(commands.Bot):
 
             ensure_reduce_op_alias()
             self.logger.debug("torch compat shim applied")
-        except Exception as e:
+        except (ImportError, AttributeError, RuntimeError) as e:
             self.logger.debug(f"torch compat shim not available (fail-open): {e}")
 
         # Prevent duplicate initialization [DRY][REH]
@@ -485,7 +485,7 @@ class LLMBot(commands.Bot):
 
                     self.metrics = NoopMetrics()
                     self.logger.info("📊 Prometheus disabled via config, using NoopMetrics")
-            except Exception:
+            except (ImportError, AttributeError, ValueError, OSError):
                 self.logger.warning("⚠️  Prometheus metrics not available, using NullMetrics")
 
             # Proactively register gate counters to avoid 'not defined' warnings [PA][REH][CMV]
@@ -601,9 +601,9 @@ class LLMBot(commands.Bot):
                             "counters": ["gate.allowed", "gate.blocked"],
                         },
                     )
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError):
                 # Never allow metrics registration failure to impact startup
-                self.logger.debug(f"Metrics counter registration failed: {e}")
+                self.logger.debug("Metrics counter registration failed")
 
             # Load system prompts
             self.system_prompts = load_system_prompts()
@@ -644,14 +644,14 @@ class LLMBot(commands.Bot):
                                 try:
                                     if getattr(self, "tts_manager", None) and getattr(self.tts_manager, "_executor", None):
                                         self.tts_manager._executor.shutdown(wait=False)
-                                except Exception as e:
+                                except (AttributeError, TypeError, OSError) as e:
                                     self.logger.debug(f"TTS executor shutdown failed: {e}")
                                 try:
                                     from bot.tts.interface import TTSManager
 
                                     self.tts_manager = TTSManager(self)
                                     self.logger.info("TTS manager hot-reloaded")
-                                except Exception as e:
+                                except (ImportError, AttributeError, TypeError, RuntimeError) as e:
                                     self.logger.exception(f"TTS hot-reload failed: {e}")
                             # Rebind Vision configs
                             if any(k.startswith(("VISION_", "VL_")) for k in upper):
@@ -672,7 +672,7 @@ class LLMBot(commands.Bot):
                                                     else:
                                                         adapter.config = self.config
                                         self.logger.info("Vision orchestrator config rebound (hot)")
-                                    except Exception as e:
+                                    except (AttributeError, TypeError, ValueError) as e:
                                         self.logger.debug(f"Vision hot-rebind failed: {e}")
                                 try:
                                     retry_mgr = get_retry_manager()
@@ -685,7 +685,7 @@ class LLMBot(commands.Bot):
                                         head,
                                         order_repr,
                                     )
-                                except Exception as rebound_exc:
+                                except (AttributeError, TypeError, ImportError) as rebound_exc:
                                     self.logger.debug(f"Vision ladder rebound failed: {rebound_exc}")
                             # Restart shared HTTP client on HTTP/PROXY/TIMEOUT/RETRY changes
                             if any(k.startswith(("HTTP_", "PROXY_", "RETRY_")) or k.endswith("_TIMEOUT") for k in upper):
@@ -712,12 +712,12 @@ class LLMBot(commands.Bot):
                                                     "detail": {"timeout": 10.0},
                                                 },
                                             )
-                                        except Exception as e:
+                                        except (OSError, RuntimeError) as e:
                                             self.logger.debug(f"HTTP client cleanup timeout: {e}")
 
                                     task = asyncio.create_task(_cleanup_with_timeout())
                                     self._track_background_task(task)
-                                except Exception as e:
+                                except (AttributeError, TypeError, RuntimeError) as e:
                                     self.logger.debug(f"HTTP client restart failed: {e}")
                             # Hot-reload dashboard config
                             if any(k.startswith("DASHBOARD_") for k in upper):
@@ -737,7 +737,7 @@ class LLMBot(commands.Bot):
                                             )
                                     else:
                                         self.logger.debug("Dashboard hot-reload skipped: server not running")
-                                except Exception as e:
+                                except (AttributeError, TypeError, ImportError, RuntimeError) as e:
                                     self.logger.debug(f"Dashboard hot-reload failed: {e}")
                             # Breadcrumb
                             self.logger.info(
@@ -747,15 +747,15 @@ class LLMBot(commands.Bot):
                                     "detail": {"keys": len(new_cfg or {})},
                                 },
                             )
-                        except Exception as e:
+                        except (AttributeError, TypeError, ValueError) as e:
                             self.logger.exception(f"Reload callback failed: {e}")
-                    except Exception as e:
+                    except (AttributeError, TypeError, ValueError) as e:
                         self.logger.exception(f"Config reload apply failed: {e}")
 
                 add_reload_callback(_on_config_reload)
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError):
                 # Non-fatal — manual reload command still works
-                self.logger.debug(f"Config reload callback registration failed: {e}")
+                self.logger.debug("Config reload callback registration failed")
 
             # Load user and server profiles
             await self.load_profiles()
@@ -826,7 +826,7 @@ class LLMBot(commands.Bot):
             # Best-effort curated memory ingestion must never block the hot path.
             try:
                 is_command = await self._message_is_command(message)
-            except Exception:
+            except (AttributeError, TypeError, discord.HTTPException, discord.NotFound, discord.Forbidden):
                 is_command = False
             if not is_command and getattr(message, "content", "").strip():
                 with suppress(Exception):
@@ -864,7 +864,7 @@ class LLMBot(commands.Bot):
                             stream_ctx = await self._start_streaming_status(message)
                         else:
                             self.logger.debug(f"stream:skipped | msg:{message.id} reason:{eligible.get('reason')} domains:{eligible.get('domains')} modality:{eligible.get('modality')}")
-                    except Exception as e:
+                    except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                         self.logger.debug(f"stream:start_failed | {e}")
 
                 action = await self.router.dispatch_message(message)
@@ -877,7 +877,7 @@ class LLMBot(commands.Bot):
                             if stream_ctx and stream_ctx.get("message"):
                                 try:
                                     await stream_ctx["message"].delete()
-                                except Exception:
+                                except (discord.HTTPException, discord.NotFound, discord.Forbidden):
                                     # Fallback to editing the status message
                                     with suppress(Exception):
                                         await stream_ctx["message"].edit(
@@ -1105,8 +1105,7 @@ class LLMBot(commands.Bot):
                 if "youtu" in content:
                     return VIDEO_URLS
                 return GENERAL_URLS
-
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             self.logger.debug(f"stream:plan_infer_failed | {e}")
         return None
 
@@ -1146,7 +1145,7 @@ class LLMBot(commands.Bot):
                     content="",
                     embeds=[self._build_stream_embed(final_label, style=style, done=True)],
                 )
-        except Exception as e:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden) as e:
             self.logger.debug(f"stream:stop_failed | {e}")
 
     async def _streaming_updater(
@@ -1172,7 +1171,7 @@ class LLMBot(commands.Bot):
         except asyncio.CancelledError:
             # Normal cancellation path when finalizing
             return
-        except Exception as e:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden, asyncio.TimeoutError) as e:
             # Swallow updater errors; streaming is best-effort
             self.logger.debug(f"stream:update_failed | {e}")
 
@@ -1282,7 +1281,7 @@ class LLMBot(commands.Bot):
                     status = {}
                     try:
                         status = self.tts_manager.get_status() if self.tts_manager else {}
-                    except Exception:
+                    except (AttributeError, TypeError):
                         status = {}
                     reason = status.get("degraded_reason") or str(exc)
                     self.logger.error(
@@ -1309,7 +1308,7 @@ class LLMBot(commands.Bot):
                     suffix = _Path(action.audio_path).suffix or ".wav"
                     safe_suffix = suffix if len(suffix) <= 6 else ".wav"
                     filename = f"voice_message{safe_suffix}"
-                except Exception:
+                except (AttributeError, ValueError, TypeError):
                     filename = "voice_message.wav"
                 files = [discord.File(action.audio_path, filename=filename)]
             else:
@@ -1428,7 +1427,7 @@ class LLMBot(commands.Bot):
                         "content_len": len(content or ""),
                     },
                 )
-            except Exception as exc:
+            except (AttributeError, TypeError, ValueError) as exc:
                 self.logger.debug(f"dispatch.chunked logging failed: {exc}")
 
         # Discord has a 2000 character limit: attach overflow as file for operators while
@@ -1492,7 +1491,7 @@ class LLMBot(commands.Bot):
                             else:
                                 reply_target = message
                                 scope_case = "plain"
-                        except Exception:
+                        except (AttributeError, TypeError, discord.HTTPException, discord.NotFound):
                             reply_target = message
                             scope_case = "reply"
 
@@ -1523,7 +1522,7 @@ class LLMBot(commands.Bot):
                                     },
                                 },
                             )
-                    except Exception as exc:
+                    except (AttributeError, TypeError, ValueError) as exc:
                         self.logger.debug(f"scope/reply_target logging failed: {exc}")
 
                     with suppress(Exception):
@@ -1555,7 +1554,7 @@ class LLMBot(commands.Bot):
                             # Fallback: latest human speaker in-scope; minimally choose triggering human author
                             recipient = message.author if not getattr(message.author, "bot", False) else None
                             recipient_reason = "fallback_human" if recipient else "no_human"
-                    except Exception:
+                    except (AttributeError, TypeError):
                         recipient = None
                         recipient_reason = "no_human"
 
@@ -1573,7 +1572,7 @@ class LLMBot(commands.Bot):
                                 explicit_mention = True
                         else:
                             ping_mode = "none"
-                    except Exception:
+                    except (AttributeError, TypeError):
                         ping_mode = "none"
                         explicit_mention = False
 
@@ -1595,7 +1594,7 @@ class LLMBot(commands.Bot):
                                 roles=False,
                                 replied_user=False,
                             )
-                    except Exception:
+                    except (discord.HTTPException, discord.NotFound, discord.Forbidden, AttributeError):
                         allowed_mentions = None
 
                     # Optionally prefix explicit mention (single path); do not double-ping
@@ -1604,7 +1603,7 @@ class LLMBot(commands.Bot):
                             mention_prefix = getattr(recipient, "mention", None)
                             if mention_prefix and not (content or "").lstrip().startswith(str(mention_prefix)):
                                 content = f"{mention_prefix} {content}" if content else f"{mention_prefix}"
-                    except Exception as exc:
+                    except (AttributeError, TypeError) as exc:
                         self.logger.debug(f"explicit_mention prefix failed: {exc}")
 
                     # Minimal logging for recipient and ping strategy
@@ -1630,7 +1629,7 @@ class LLMBot(commands.Bot):
                                 "detail": {"mode": ping_mode},
                             },
                         )
-                    except Exception as exc:
+                    except (AttributeError, TypeError, ValueError) as exc:
                         self.logger.debug(f"recipient/ping logging failed: {exc}")
 
                     if target_message and not files and not must_retarget:
@@ -1786,7 +1785,7 @@ class LLMBot(commands.Bot):
                 else:
                     reply_target = message
                     scope_case = "plain"
-            except Exception:
+            except (AttributeError, TypeError, discord.HTTPException, discord.NotFound):
                 reply_target = message
                 scope_case = "reply"
 
@@ -1814,7 +1813,7 @@ class LLMBot(commands.Bot):
                         },
                     },
                 )
-        except Exception as exc:
+        except (AttributeError, TypeError, ValueError) as exc:
             self.logger.debug(f"scope/reply_target logging failed: {exc}")
 
         with suppress(Exception):
@@ -1846,7 +1845,7 @@ class LLMBot(commands.Bot):
             if recipient is not None and (getattr(recipient, "bot", False) or getattr(recipient, "id", None) == getattr(self.user, "id", None)):
                 recipient = message.author if not getattr(message.author, "bot", False) else None
                 recipient_reason = "fallback_human" if recipient else "no_human"
-        except Exception:
+        except (AttributeError, TypeError):
             recipient = None
             recipient_reason = "no_human"
 
@@ -1861,7 +1860,7 @@ class LLMBot(commands.Bot):
                     explicit_mention = True
             else:
                 ping_mode = "none"
-        except Exception:
+        except (AttributeError, TypeError):
             ping_mode = "none"
             explicit_mention = False
 
@@ -1887,7 +1886,7 @@ class LLMBot(commands.Bot):
                     "detail": {"mode": ping_mode},
                 },
             )
-        except Exception as exc:
+        except (AttributeError, TypeError, ValueError) as exc:
             self.logger.debug(f"recipient/ping logging failed: {exc}")
 
         try:
@@ -1905,7 +1904,7 @@ class LLMBot(commands.Bot):
             else:
                 allowed_first = discord.AllowedMentions(everyone=False, users=[], roles=False, replied_user=False)
                 allowed_followups = allowed_first
-        except Exception:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden, AttributeError):
             allowed_first = None
             allowed_followups = None
 
@@ -1913,7 +1912,7 @@ class LLMBot(commands.Bot):
         try:
             if explicit_mention and recipient is not None:
                 mention_prefix = getattr(recipient, "mention", None)
-        except Exception:
+        except (AttributeError, TypeError):
             mention_prefix = None
 
         total_parts = len(chunks)
@@ -1927,7 +1926,7 @@ class LLMBot(commands.Bot):
             try:
                 if is_first_part and mention_prefix and not (chunk_content or "").lstrip().startswith(str(mention_prefix)):
                     chunk_content = f"{mention_prefix} {chunk_content}" if chunk_content else f"{mention_prefix}"
-            except Exception as exc:
+            except (AttributeError, TypeError, ValueError) as exc:
                 self.logger.debug(f"explicit_mention chunk prefix failed: {exc}")
 
             part_embeds = action.embeds if is_first_part else []
@@ -1949,7 +1948,7 @@ class LLMBot(commands.Bot):
                         "parts": total_parts,
                     },
                 )
-            except Exception as exc:
+            except (AttributeError, TypeError, ValueError) as exc:
                 self.logger.debug(f"dispatch.attempt logging failed: {exc}")
 
             # Resolve channel for sending.
@@ -2033,7 +2032,7 @@ class LLMBot(commands.Bot):
             if content is None:
                 return []
             text = str(content)
-        except Exception:
+        except (TypeError, ValueError):
             text = content or ""
 
         if not text:
@@ -2092,11 +2091,7 @@ class LLMBot(commands.Bot):
             # Prefer boundaries that keep us outside of fenced code blocks when possible.
             for candidate in sorted(uniq_candidates, reverse=True):
                 segment = text[start : start + candidate]
-                try:
-                    if segment.count("```") % 2 == 0:
-                        best_break = candidate
-                        break
-                except Exception:
+                if segment.count("```") % 2 == 0:
                     best_break = candidate
                     break
 
@@ -2154,7 +2149,7 @@ class LLMBot(commands.Bot):
                 return any(prefix and message.content.startswith(prefix) for prefix in prefixes)
             if prefixes:
                 return message.content.startswith(prefixes)
-        except Exception as e:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden, AttributeError) as e:
             self.logger.debug(f"command_prefix_check_failed | {e}")
         return False
 
@@ -2211,7 +2206,7 @@ class LLMBot(commands.Bot):
         except (TimeoutError, asyncio.CancelledError):
             # Expected - task was cancelled or timed out
             pass
-        except Exception as e:
+        except (RuntimeError, OSError) as e:
             self.logger.warning(f"Error during task cancellation: {e}")
 
         # Clean up tracking
@@ -2242,7 +2237,7 @@ class LLMBot(commands.Bot):
                     f"❌ Error executing command: {str(e)[:100]}...",
                     mention_author=True,
                 )
-            except Exception as exc:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden) as exc:
                 self.logger.debug(f"Error reply failed: {exc}")
 
     async def on_message(self, message: discord.Message) -> None:
@@ -2270,7 +2265,7 @@ class LLMBot(commands.Bot):
                         is_command_msg = any(prefix and message.content.startswith(prefix) for prefix in prefixes)
                     elif prefixes:
                         is_command_msg = message.content.startswith(prefixes)
-                except Exception as e:
+                except (discord.HTTPException, discord.NotFound, discord.Forbidden, AttributeError) as e:
                     self.logger.debug(f"prefix_check_failed | {e}")
 
                 if not is_command_msg:
@@ -2290,7 +2285,7 @@ class LLMBot(commands.Bot):
                                 },
                             )
                         return
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             self.logger.warning(f"Gate check failed for msg_id:{message.id}: {e}")
 
         await self._is_ready.wait()  # Wait until the bot is ready
@@ -2544,8 +2539,7 @@ class LLMBot(commands.Bot):
                 self.logger.info("✅ RAG system initialized with eager vector loading")
             else:
                 self.logger.info("⏱️  RAG lazy loading enabled - deferring initialization until first use")
-
-        except Exception as e:
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             # RAG initialization failure should not crash the bot
             self.logger.warning(f"⚠️  RAG system initialization failed (bot will continue without RAG): {e}")
             if self.config.get("debug", False):
@@ -2669,7 +2663,7 @@ class LLMBot(commands.Bot):
                     # Force close by setting internal state
                     if hasattr(self, "_closed"):
                         self._closed = True
-                except Exception as e:
+                except (RuntimeError, OSError) as e:
                     self.logger.warning(f"Error closing Discord connection: {e}")
 
             # Cancel user message processors via MessageProcessor
@@ -2694,7 +2688,7 @@ class LLMBot(commands.Bot):
                     else:
                         # Unknown type, try to cancel anyway
                         self.memory_save_task.cancel()
-                except Exception as e:
+                except (RuntimeError, OSError, asyncio.CancelledError) as e:
                     self.logger.warning(f"Error cancelling memory save task: {e}")
 
             # Cancel tracked background tasks
@@ -2715,19 +2709,19 @@ class LLMBot(commands.Bot):
             # Stop memory distiller service
             try:
                 await stop_memory_distiller()
-            except Exception as e:
+            except (RuntimeError, OSError, AttributeError) as e:
                 self.logger.warning(f"Error stopping memory distiller service: {e}")
 
             # Stop curated memory service
             try:
                 await stop_memory_service()
-            except Exception as e:
+            except (RuntimeError, OSError, AttributeError) as e:
                 self.logger.warning(f"Error stopping curated memory service: {e}")
 
             # Stop server archive service
             try:
                 await stop_server_archive_service()
-            except Exception as e:
+            except (RuntimeError, OSError, AttributeError) as e:
                 self.logger.warning(f"Error stopping server archive service: {e}")
 
             # Stop dashboard server
@@ -2735,7 +2729,7 @@ class LLMBot(commands.Bot):
                 dashboard = getattr(self, "_dashboard_server", None)
                 if dashboard:
                     await dashboard.stop()
-            except Exception as e:
+            except (RuntimeError, OSError, AttributeError) as e:
                 self.logger.warning(f"Error stopping dashboard server: {e}")
 
             # Close Vision Orchestrator (if initialized either on bot or via router fallback)
@@ -2749,9 +2743,9 @@ class LLMBot(commands.Bot):
                         self.logger.info("VisionOrchestrator: closed")
                     except TimeoutError:
                         self.logger.warning("VisionOrchestrator close timed out")
-                    except Exception as e:
+                    except (RuntimeError, OSError, AttributeError) as e:
                         self.logger.warning(f"VisionOrchestrator close error: {e}")
-            except Exception as exc:
+            except (RuntimeError, OSError, AttributeError) as exc:
                 self.logger.debug(f"VisionOrchestrator shutdown error: {exc}")
 
             # Close TTS manager
@@ -2778,7 +2772,7 @@ class LLMBot(commands.Bot):
                     await asyncio.wait_for(ollama_client.close(), timeout=2.0)
                 else:
                     self.logger.debug("No global ollama client to close (module not loaded or disabled)")
-            except Exception as e:
+            except (RuntimeError, OSError, AttributeError) as e:
                 self.logger.debug(f"Error closing global ollama client: {e}")
 
             # Close aiohttp sessions
@@ -2855,7 +2849,7 @@ class LLMBot(commands.Bot):
                             self.logger.debug(f"Closing {module_name} HTTP sessions")
                             await module.close()
                             await asyncio.sleep(0.05)
-                except Exception as e:
+                except (RuntimeError, OSError, AttributeError) as e:
                     self.logger.debug(f"Error closing {module_name} sessions: {e}")
 
             # Find and close any remaining aiohttp sessions using garbage collection
@@ -2878,7 +2872,7 @@ class LLMBot(commands.Bot):
                     try:
                         await session.close()
                         await asyncio.sleep(0.01)
-                    except Exception as e:
+                    except (RuntimeError, OSError, AttributeError) as e:
                         self.logger.debug(f"Error closing remaining session: {e}")
 
             # Final garbage collection
@@ -2888,6 +2882,5 @@ class LLMBot(commands.Bot):
             await asyncio.sleep(0.3)
 
             self.logger.debug("All aiohttp sessions closed")
-
-        except Exception as e:
+        except (RuntimeError, OSError, AttributeError) as e:
             self.logger.warning(f"Error closing aiohttp sessions: {e}")

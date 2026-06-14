@@ -140,8 +140,7 @@ class EventLoopMonitor:
             raw_lag = actual_duration_ms - expected_duration_ms
             return max(0, raw_lag - baseline)
 
-
-        except Exception as e:
+        except (asyncio.CancelledError, asyncio.TimeoutError, AttributeError, TypeError, RuntimeError) as e:
             self.logger.warning(
                 f"Failed to measure event loop lag: {e}",
                 extra={"subsys": "resource_monitor"},
@@ -257,7 +256,7 @@ class ResourceMonitor:
             # Event loop lag measurement
             snapshot.event_loop_lag_ms = await self.event_loop_monitor.measure_lag_averaged(3)
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
             self.logger.warning(
                 f"Error collecting resource snapshot: {e}",
                 extra={"subsys": "resource_monitor"},
@@ -354,7 +353,7 @@ class ResourceMonitor:
             metrics.observe("bot_process_open_files", snapshot.open_files)
             metrics.observe("bot_process_thread_count", snapshot.thread_count)
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             self.logger.debug(
                 f"Failed to emit resource metrics: {e}",
                 extra={"subsys": "resource_monitor"},

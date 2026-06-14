@@ -163,7 +163,7 @@ class SharedHttpClient:
         if self.http2_enabled:
             try:
                 import h2  # type: ignore  # noqa: F401
-            except Exception:
+            except ImportError:
                 self.http2_enabled = False
                 logger.info("🌐 HTTP/2 not available (h2 missing); falling back to HTTP/1.1")
 
@@ -340,7 +340,7 @@ class SharedHttpClient:
                         logger.info("🌐 HTTP/2 unavailable at runtime; switched to HTTP/1.1 and retrying")
                         # Try again immediately without backoff for this specific condition
                         continue
-                    except Exception as e:
+                    except (OSError, RuntimeError, ValueError) as e:
                         # If recreation fails, fall through to normal retry/backoff
                         logger.debug(f"Failed to recreate HTTP/1.1 client: {e}")
 

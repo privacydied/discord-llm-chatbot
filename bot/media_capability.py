@@ -81,7 +81,7 @@ class MediaCapabilityDetector:
                 with open(self.cache_file) as f:
                     self._cache = json.load(f)
                 logger.debug(f"Loaded {len(self._cache)} cached probe results")
-        except Exception as e:
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
             logger.warning(f"Failed to load probe cache: {e}")
             self._cache = {}
 
@@ -90,7 +90,7 @@ class MediaCapabilityDetector:
         try:
             with open(self.cache_file, "w") as f:
                 json.dump(self._cache, f, indent=2)
-        except Exception as e:
+        except (OSError, TypeError, ValueError) as e:
             logger.warning(f"Failed to save probe cache: {e}")
 
     def _get_cache_key(self, url: str) -> str:
@@ -115,7 +115,7 @@ class MediaCapabilityDetector:
             domain = domain.removeprefix("www.")
 
             return domain in MEDIA_CAPABLE_DOMAINS
-        except Exception:
+        except (ValueError, AttributeError, TypeError):
             return False
 
     async def _probe_url_lightweight(self, url: str) -> tuple[bool, str]:
@@ -195,7 +195,7 @@ class MediaCapabilityDetector:
         except FileNotFoundError:
             logger.exception("yt-dlp not found - media capability detection disabled")
             return False, "yt-dlp not available"
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.debug(f"Probe exception for {url}: {e}")
             return False, f"probe error: {str(e)[:50]}"
 
@@ -257,7 +257,7 @@ class MediaCapabilityDetector:
                         cached=False,
                         probe_duration_ms=duration_ms,
                     )
-        except Exception as exc:
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError, KeyError, TypeError) as exc:
             # Fall back to normal probe on parsing issues
             logger.debug(f"Failed to read cached probe: {exc}")
 

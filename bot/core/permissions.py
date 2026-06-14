@@ -92,7 +92,7 @@ async def _resolve_bot_owner_ids(bot) -> set[int]:
         config = load_config()
         for oid in _get_configured_admin_ids(config):
             ids.add(oid)
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, OSError) as e:
         logger.debug(f"Failed to load configured admin IDs from config: {e}")
 
     return ids
@@ -133,7 +133,7 @@ async def is_admin_user(
         config_ids = _get_configured_admin_ids()
         if user_id in config_ids:
             return True
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, OSError) as e:
         logger.debug(f"Failed to check configured admin IDs: {e}")
 
     # Guild administrator check (Members only)

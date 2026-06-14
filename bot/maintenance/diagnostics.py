@@ -23,7 +23,7 @@ async def _dir_size(path: str) -> int:
         return 0
     try:
         return await asyncio.to_thread(_dir_size_sync, path)
-    except Exception:
+    except (OSError, RuntimeError):
         return 0
 
 
@@ -139,7 +139,7 @@ async def get_storage_status() -> str:
                 lines.append(f"WARNING: volume {used_pct:.0f}% full (critical)")
             elif used_pct >= 80:
                 lines.append(f"CAUTION: volume {used_pct:.0f}% full")
-    except Exception as exc:
+    except (OSError, AttributeError, TypeError) as exc:
         logger.debug(f"Failed to check disk usage: {exc}")
 
     return "\n".join(lines)

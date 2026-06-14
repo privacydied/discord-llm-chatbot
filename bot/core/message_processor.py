@@ -60,11 +60,11 @@ class MessageProcessor:
         author = getattr(message, "author", None)
         try:
             author_is_bot = bool(getattr(author, "bot", False)) if author else False
-        except Exception:
+        except (AttributeError, TypeError):
             author_is_bot = True
         try:
             author_is_self = bool(author and getattr(author, "id", None) == getattr(getattr(self.bot, "user", None), "id", None))
-        except Exception:
+        except (AttributeError, TypeError):
             author_is_self = False
         if author_is_bot or author_is_self:
             return None
@@ -165,7 +165,7 @@ class MessageProcessor:
                 active_session = cog.alert_manager.get_session(message.author.id)
                 if active_session is not None:
                     await self._handle_alert_dm(message, cog)
-        except Exception as e:
+        except (AttributeError, TypeError) as e:
             logger.debug(f"Alert suppression gate failed: {e}")
 
     async def _handle_alert_dm(self, message: discord.Message, cog) -> None:
@@ -207,7 +207,8 @@ class MessageProcessor:
             ctx = typing_factory()
             await ctx.__aenter__()
             entered = True
-        except Exception:  # Catch ALL exceptions (network, DNS, HTTP) to suppress typing
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden, asyncio.TimeoutError, ConnectionError):
+            # Catch transient exceptions (network, DNS, HTTP) to suppress typing
             self._typing_suppressed_until[channel_key] = now + 300.0
             yield
             return

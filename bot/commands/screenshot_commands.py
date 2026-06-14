@@ -147,7 +147,7 @@ class ScreenshotCommands(commands.Cog):
                 last_edit = now
                 try:
                     await processing_msg.edit(embed=make_embed(stage_num, stages))
-                except Exception as edit_err:
+                except (discord.HTTPException, discord.NotFound) as edit_err:
                     logger.debug(f"Streaming edit skipped: {edit_err}")
 
             # Progress callback for router

@@ -68,7 +68,7 @@ class SearchCommands(commands.Cog):
             safe_str = str(self.cfg.get("SEARCH_SAFE", "moderate")).lower()
             try:
                 safesearch = SafeSearch(safe_str)
-            except Exception:
+            except ValueError:
                 safesearch = SafeSearch.MODERATE
 
             timeout_ms = int(self.cfg.get("DDG_TIMEOUT_MS", 5000)) if provider_name == "ddg" else int(self.cfg.get("CUSTOM_SEARCH_TIMEOUT_MS", 8000))

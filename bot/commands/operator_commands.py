@@ -187,7 +187,7 @@ class OperatorCommands(commands.Cog):
             process = psutil.Process()
             rss_mb = process.memory_info().rss / (1024 * 1024)
             return f"{rss_mb:.1f} MB"
-        except Exception:
+        except (ImportError, AttributeError, PermissionError, OSError):
             return "unavailable"
 
     def _get_backend_name(self) -> str:
@@ -234,7 +234,8 @@ class OperatorCommands(commands.Cog):
         # Get existing stats from the memory service
         try:
             status = getattr(svc, "get_status", dict)() or {}
-        except Exception:
+        except (AttributeError, TypeError) as e:
+            logger.debug(f"get_status failed: {e}")
             status = {}
 
         memory_count = status.get("memory_count", "?")
@@ -267,7 +268,7 @@ class OperatorCommands(commands.Cog):
             from bot.rag import hybrid_search as rag_hybrid_search
 
             initialized = getattr(rag_hybrid_search, "_hybrid_search", None) is not None
-        except Exception:
+        except (ImportError, AttributeError):
             initialized = False
         return f"{feature_status_emoji(effective)} {feature_status_label(effective)} (initialized={initialized})"
 
@@ -287,7 +288,8 @@ class OperatorCommands(commands.Cog):
         engine_status = {}
         try:
             engine_status = tts_manager.get_status() or {}
-        except Exception:
+        except (AttributeError, TypeError) as e:
+            logger.debug(f"tts_manager.get_status failed: {e}")
             engine_status = {}
         cache_len = len(getattr(tts_manager, "_file_cache", {}) or {})
         cache_max = getattr(tts_manager, "_cache_max", None)
@@ -341,7 +343,8 @@ class OperatorCommands(commands.Cog):
                 health_parts.append(f"fails={cons_fails}")
             health_str = "; ".join(health_parts) if health_parts else "health=n/a"
             return f"{feature_status_emoji(enabled)} {feature_status_label(enabled)}; configured={configured}; available={tier_b_available}; {health_str}"
-        except Exception:
+        except (AttributeError, TypeError, ValueError) as e:
+            logger.debug(f"_get_health_status failed: {e}")
             return "unknown"
 
     def _get_queue_status(self) -> str:
@@ -352,7 +355,7 @@ class OperatorCommands(commands.Cog):
         for q in user_queues.values():
             try:
                 size = q.qsize()
-            except Exception:
+            except (AttributeError, TypeError):
                 size = 0
             queued_messages += size
             queue_sizes.append(size)
@@ -368,7 +371,7 @@ class OperatorCommands(commands.Cog):
             result = _gs()
             if isinstance(result, str) and len(result) < 300:
                 return result
-        except Exception as e:
+        except (ImportError, AttributeError, TypeError, ValueError) as e:
             logger.debug(f"Diagnostics storage status unavailable: {e}")
 
         parts: list[str] = []
@@ -391,7 +394,7 @@ class OperatorCommands(commands.Cog):
                             parts.append(f"entries={entry_count}")
                 if isinstance(mem_db, dict) and not parts:
                     parts.append(f"mem_db={len(mem_db)} entries")
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError) as e:
                 logger.debug(f"Failed to get mem_db status: {e}")
                 parts.append("mem_db=?")
         else:
@@ -411,12 +414,12 @@ class OperatorCommands(commands.Cog):
                         try:
                             if p.is_file():
                                 total += p.stat().st_size
-                        except Exception as e:
+                        except (OSError, PermissionError) as e:
                             logger.debug(f"Failed to stat file {p}: {e}")
                     parts.append(f"chroma={total / (1024 * 1024):.1f}MB")
                 else:
                     parts.append("chroma=in-memory")
-            except Exception as e:
+            except (AttributeError, TypeError, OSError, PermissionError) as e:
                 logger.debug(f"Failed to get chroma status: {e}")
                 parts.append("chroma=?")
         else:
@@ -433,7 +436,7 @@ class OperatorCommands(commands.Cog):
                     parts.append(f"cache={cache_mb}MB/{cache_files}f")
                 else:
                     parts.append("cache=empty")
-            except Exception as e:
+            except (AttributeError, TypeError) as e:
                 logger.debug(f"Failed to get cache status: {e}")
                 parts.append("cache=?")
 

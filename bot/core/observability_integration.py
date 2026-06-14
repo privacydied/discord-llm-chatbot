@@ -386,7 +386,7 @@ class ObservabilityManager:
                 },
             )
 
-        except Exception:
+        except (AttributeError, TypeError, ValueError, ImportError):
             # Fallback to simple logging if Rich is unavailable
             self.logger.info(
                 f"🎉 Startup completed in {duration:.2f}s: {summary}",
@@ -414,7 +414,7 @@ class ObservabilityManager:
 
             return health_summary
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             self.logger.error(
                 f"Failed to get comprehensive health status: {e}",
                 exc_info=True,
@@ -476,7 +476,7 @@ class ObservabilityManager:
         try:
             prompts = load_system_prompts()
             self.logger.info(f"✅ Loaded {len(prompts)} system prompts", extra={"subsys": "startup"})
-        except Exception as e:
+        except (ImportError, AttributeError, TypeError, ValueError, OSError) as e:
             msg = f"Failed to load system prompts: {e}"
             raise RuntimeError(msg)
 

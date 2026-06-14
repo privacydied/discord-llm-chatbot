@@ -61,7 +61,7 @@ class ArchiveCommands(commands.Cog):
             return "unknown"
         try:
             return datetime.fromisoformat(iso_value).astimezone().strftime("%Y-%m-%d %H:%M")
-        except Exception:
+        except (ValueError, AttributeError):
             return iso_value
 
     @commands.guild_only()

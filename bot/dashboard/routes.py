@@ -96,7 +96,7 @@ async def _record_dm_view_audit(request: web.Request, target_channel_id: int) ->
             target_channel_id=target_channel_id,
         )
         return True
-    except Exception:
+    except (AttributeError, TypeError, ValueError, RuntimeError):
         return False
 
 
@@ -225,7 +225,7 @@ class DashboardRoutes:
                 bot_username = bot.user.display_name or bot.user.name or "unknown"
                 bot_discriminator = bot.user.discriminator if hasattr(bot.user, "discriminator") and bot.user.discriminator and bot.user.discriminator != "0" else None
                 bot_user_id = str(bot.user.id)
-            except Exception as e:
+            except (AttributeError, TypeError) as e:
                 logger.debug(f"Failed to get bot user info: {e}")
 
         # Collect recent errors from audit log
@@ -239,7 +239,7 @@ class DashboardRoutes:
                     result="failed",
                 )
                 recent_errors = error_result.get("events", [])
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 logger.debug(f"Failed to query audit store for errors: {e}")
 
         # Check Playwright status
@@ -351,9 +351,9 @@ class DashboardRoutes:
                         categories[category_id]["channels"].append(channel_data)
                     else:
                         uncategorized.append(channel_data)
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError) as e:
                     logger.debug(f"Failed to process channel {ch.id}: {e}")
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             logger.debug(f"Failed to get guild structure: {e}")
 
         # Sort categories by position
@@ -430,9 +430,9 @@ class DashboardRoutes:
                             "member_count": getattr(ch, "members", None) and len(ch.members),
                         },
                     )
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError) as e:
                     logger.debug(f"Failed to process DM channel {ch.id}: {e}")
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             logger.debug(f"Failed to get DM channels: {e}")
 
         # Sort by position
@@ -503,11 +503,15 @@ class DashboardRoutes:
                                     }
                             else:
                                 logger.debug("get_channel_messages: no read_message_history permission for channel %s", channel_id)
-                        except Exception as e:
+                        except (AttributeError, TypeError, discord.HTTPException, discord.Forbidden) as e:
                             logger.debug("get_channel_messages: auto-backfill failed for channel %s: %s", channel_id, e)
                     else:
                         # DM channel — try live DM fetch
-                        live = await self._services.live_dm_messages(channel_id=channel_id, limit=50)
+                        try:
+                            live = await self._services.live_dm_messages(channel_id=channel_id, limit=50)
+                        except (AttributeError, TypeError, discord.HTTPException, discord.Forbidden) as e:
+                            logger.debug("get_channel_messages: auto-backfill failed for channel %s: %s", channel_id, e)
+                            live = {"messages": []}
                         if live.get("messages"):
                             result = await message_store.get_channel_messages(
                                 channel_id=channel_id,
@@ -557,7 +561,7 @@ class DashboardRoutes:
                     max_page_size=MAX_PAGE_SIZE,
                 )
                 return _json_response(result)
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 logger.debug(f"MessageStore list_threads failed, falling back to dm_store: {e}")
 
         dm_store: DMStore = request.app.get("dm_store")
@@ -681,9 +685,9 @@ class DashboardRoutes:
                                         )
                                         return_audit = await _record_dm_view_audit(request, user_id_or_channel_id)
                                         return _json_response(result)
-                        except Exception as e:
+                        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                             logger.debug(f"MessageStore get_thread_messages failed: {e}")
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError):
                 logger.debug(f"MessageStore path failed, falling back to dm_store: {e}")
 
         # Fall back to DMStore
@@ -780,7 +784,7 @@ class DashboardRoutes:
 
         try:
             body = await request.json()
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, ImportError):
             return _json_response({"error": "invalid json body"}, 400)
 
         content = body.get("content", "").strip()
@@ -824,7 +828,7 @@ class DashboardRoutes:
 
         try:
             body = await request.json()
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, ImportError):
             return _json_response({"error": "invalid json body"}, 400)
 
         content = body.get("content", "").strip()
@@ -861,7 +865,7 @@ class DashboardRoutes:
 
         try:
             body = await request.json()
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, ImportError):
             return _json_response({"error": "invalid json body"}, 400)
 
         content = body.get("content", "").strip()
@@ -912,7 +916,7 @@ class DashboardRoutes:
                     source_ip=_get_client_ip(request),
                     user_agent=_get_user_agent(request),
                 )
-            except Exception as exc:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as exc:
                 result = {"success": False, "error": str(exc), "status": "error"}
 
         status_code = 200 if result.get("success") else 400
@@ -930,7 +934,7 @@ class DashboardRoutes:
 
         try:
             body = await request.json()
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, ImportError):
             return _json_response({"error": "invalid json body"}, 400)
 
         content = body.get("content", "").strip()
@@ -947,7 +951,7 @@ class DashboardRoutes:
                     stored = await message_store.get_message_by_discord_id(message_id)
                     if stored and stored.get("channel_id"):
                         channel_id_str = stored["channel_id"]
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                     logger.debug(f"Failed to resolve channel_id from message store: {e}")
 
         if not channel_id_str:
@@ -985,7 +989,7 @@ class DashboardRoutes:
 
         try:
             body = await request.json()
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, ImportError):
             return _json_response({"error": "invalid json body"}, 400)
 
         content = body.get("content", "").strip()
@@ -1020,7 +1024,7 @@ class DashboardRoutes:
 
         try:
             body = await request.json()
-        except Exception:
+        except (RuntimeError, ValueError, TypeError, ImportError):
             return _json_response({"error": "invalid json body"}, 400)
 
         content = body.get("content", "").strip()
@@ -1094,7 +1098,7 @@ class DashboardRoutes:
                         metadata={"messages_seen": result.get("messages_seen", 0), "messages_inserted": result.get("messages_inserted", 0), "error": result.get("error")},
                     )
             return _json_response(result, status=status_code)
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, discord.HTTPException) as e:
             logger.warning("Backfill channel failed: %s", e)
             return _json_response({"error": str(e), "status": "error"}, 500)
 
@@ -1137,7 +1141,7 @@ class DashboardRoutes:
             )
             status_code = 200 if result.get("status") != "failed" else 400
             return _json_response(result, status=status_code)
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, discord.HTTPException) as e:
             logger.warning("Backfill guild failed: %s", e)
             return _json_response({"error": str(e), "status": "error"}, 500)
 
@@ -1179,7 +1183,7 @@ class DashboardRoutes:
             )
             status_code = 200 if result.get("status") != "failed" else 400
             return _json_response(result, status=status_code)
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, discord.HTTPException) as e:
             logger.warning("Backfill DM failed: %s", e)
             return _json_response({"error": str(e), "status": "error"}, 500)
 
@@ -1221,7 +1225,7 @@ class DashboardRoutes:
             if success:
                 return _json_response({"success": True, "job_id": job_id})
             return _json_response({"error": "Job not found or cannot be cancelled"}, 400)
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             return _json_response({"error": str(e)}, 500)
 
     # ------------------------------------------------------------------
@@ -1282,7 +1286,7 @@ class DashboardRoutes:
                 if event.get("audit_id") == event_id:
                     return _json_response(event)
             return _json_response({"error": "event not found"}, 404)
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             return _json_response({"error": str(e)}, 500)
 
     # ------------------------------------------------------------------

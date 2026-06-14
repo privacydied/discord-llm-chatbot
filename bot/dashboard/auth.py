@@ -163,7 +163,7 @@ def csrf_required(handler: Callable) -> Callable:
             try:
                 form = await request.post()
                 csrf_token = form.get(CSRF_FIELD, "")
-            except Exception as e:
+            except (RuntimeError, ValueError, TypeError) as e:
                 logger.debug(f"Failed to parse form data for CSRF token: {e}")
 
         if csrf_token != session.get("csrf_token"):
@@ -183,7 +183,7 @@ async def login_handler(request: web.Request) -> web.Response:
     # Check body for auth_token
     try:
         body = await request.json()
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, ImportError) as e:
         logger.debug(f"Failed to parse JSON body: {e}")
         body = {}
 

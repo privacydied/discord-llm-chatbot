@@ -375,7 +375,7 @@ class CommandErrorHandler:
         """Send ultra-simple fallback message if embed creation fails."""
         try:
             await ctx.send("❌ An error occurred. Please try again.", delete_after=10)
-        except Exception:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden):
             # If even this fails, log it but don't crash
             self.logger.critical("Failed to send fallback error message")
 

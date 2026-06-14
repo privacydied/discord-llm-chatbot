@@ -30,7 +30,7 @@ def _attachment_is_image(att) -> bool:
 
         _, ext = os.path.splitext(name.lower())
         return ext in IMAGE_EXTS
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return False
 
 

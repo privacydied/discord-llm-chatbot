@@ -27,7 +27,7 @@ def _get_playwright_chromium_path() -> Path | None:
                 if executable_path.exists():
                     return executable_path
         return None
-    except Exception:
+    except (OSError, AttributeError, PermissionError):
         return None
 
 
@@ -47,7 +47,7 @@ def _validate_remote_playwright_url(raw_url: str, logger) -> None:
     # (must be updated in lockstep with requirements.txt).
     try:
         client_ver = _meta.version("playwright")
-    except Exception:
+    except importlib.metadata.PackageNotFoundError:
         client_ver = "(unknown)"
     expected_server_ver = "1.59"  # must track requirements.txt
     if not client_ver.startswith(expected_server_ver.split(".", maxsplit=1)[0] + "."):

@@ -81,7 +81,7 @@ def _safe_unlink(path: Path) -> None:
     try:
         if path and path.exists():
             os.unlink(path)
-    except Exception as e:
+    except (OSError, PermissionError) as e:
         logger.debug(f"Failed to unlink temp file {path}: {e}")
 
 

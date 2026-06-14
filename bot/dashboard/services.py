@@ -159,7 +159,7 @@ class DashboardServices:
             try:
                 audit_result = await self._audit_store.query(page=1, page_size=1)
                 audit_count = audit_result.get("total", 0)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, RuntimeError):
                 audit_count = 0
 
             # Message store count
@@ -168,7 +168,7 @@ class DashboardServices:
                 if self._message_store:
                     result = await self._message_store.search_messages(query="", page=1, page_size=1)
                     archived_count = result.get("total", 0)
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 logger.debug(f"Failed to get archived message count: {e}")
 
             # DM count
@@ -177,7 +177,7 @@ class DashboardServices:
                 if self._dm_store:
                     dm_result = await self._dm_store.list_threads(page=1, page_size=1)
                     dm_count = dm_result.get("total", 0)
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 logger.debug(f"Failed to get DM count: {e}")
 
             # Feature flags
@@ -216,7 +216,7 @@ class DashboardServices:
                 "feature_flags": feature_flags,
                 "loaded_at": _iso_now(),
             }
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning("Dashboard summary collection failed: %s", e)
             return {"status": "error", "error": str(e)}
 
@@ -273,7 +273,7 @@ class DashboardServices:
                         if perms.administrator:
                             features.append("admin")
                         perm_summary = ",".join(features) if features else "none"
-                    except Exception as e:
+                    except (AttributeError, TypeError, ValueError, discord.Forbidden) as e:
                         logger.debug(f"Failed to get permissions for guild {g.id}: {e}")
 
                 guilds.append(
@@ -292,7 +292,7 @@ class DashboardServices:
                         "banner_url": str(g.banner.url) if g.banner else None,
                     },
                 )
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
                 logger.warning("Failed to collect guild info for %s: %s", g.id, e)
 
         return {
@@ -356,7 +356,7 @@ class DashboardServices:
             if user is None:
                 try:
                     user = await asyncio.wait_for(bot.fetch_user(target_user_id), timeout=10.0)
-                except Exception as e:
+                except (discord.NotFound, discord.HTTPException, discord.Forbidden, asyncio.TimeoutError) as e:
                     error_msg = f"User not found: {e}"
                     await self._audit_store.record(
                         event_type=EVENT_DASHBOARD_SEND_FAILURE,
@@ -412,7 +412,7 @@ class DashboardServices:
                             reply_to_message_id=msg.reference.message_id if msg.reference and msg.reference.message_id else None,
                             metadata={"jump_url": msg.jump_url} if msg.jump_url else None,
                         )
-                    except Exception as e:
+                    except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
                         logger.debug("Failed to archive sent DM in MessageStore: %s", e)
 
                 await self._audit_store.record(
@@ -441,7 +441,7 @@ class DashboardServices:
                 )
                 return {"success": False, "error": "Cannot DM this user (blocked or privacy settings)", "status": "forbidden"}
 
-            except Exception as e:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden, AttributeError, TypeError, ValueError) as e:
                 await self._audit_store.record(
                     event_type=EVENT_DASHBOARD_SEND_FAILURE,
                     result="failed",
@@ -455,7 +455,7 @@ class DashboardServices:
                 )
                 return {"success": False, "error": f"Failed to send: {e}", "status": "send_failed"}
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             return {"success": False, "error": f"Unexpected error: {e}", "status": "error"}
 
     async def send_guild_message(
@@ -523,7 +523,7 @@ class DashboardServices:
 
             try:
                 perms = channel.permissions_for(guild.me)
-            except Exception:
+            except (AttributeError, TypeError, discord.Forbidden):
                 return {"success": False, "error": "Cannot check permissions", "status": "perm_check_failed"}
 
             if not perms.send_messages:
@@ -555,7 +555,7 @@ class DashboardServices:
                             direction="outbound",
                             metadata={"jump_url": msg.jump_url} if msg.jump_url else None,
                         )
-                    except Exception as e:
+                    except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
                         logger.debug("Failed to archive guild message in MessageStore: %s", e)
 
                 await self._audit_store.record(
@@ -584,7 +584,7 @@ class DashboardServices:
                     content_preview=content[:200],
                 )
                 return {"success": False, "error": "Bot lacks permission to send", "status": "forbidden"}
-            except Exception as e:
+            except (discord.HTTPException, discord.NotFound, discord.Forbidden, AttributeError, TypeError, ValueError) as e:
                 await self._audit_store.record(
                     event_type=EVENT_DASHBOARD_SEND_FAILURE,
                     result="failed",
@@ -599,7 +599,7 @@ class DashboardServices:
                 )
                 return {"success": False, "error": f"Failed to send: {e}", "status": "send_failed"}
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             return {"success": False, "error": f"Unexpected error: {e}", "status": "error"}
 
     async def reply_dm(
@@ -624,7 +624,7 @@ class DashboardServices:
                     if private_ch.id == channel_id:
                         channel = private_ch
                         break
-            except Exception as e:
+            except (AttributeError, TypeError) as e:
                 logger.debug(f"Failed to iterate private channels: {e}")
 
         if channel is None or not hasattr(channel, "recipient"):
@@ -707,7 +707,7 @@ class DashboardServices:
 
             try:
                 perms = channel.permissions_for(guild.me)
-            except Exception:
+            except (AttributeError, TypeError, discord.Forbidden):
                 return {"success": False, "error": "Cannot check permissions", "status": "perm_check_failed"}
 
             if not perms.send_messages:
@@ -747,7 +747,7 @@ class DashboardServices:
                         reply_to_message_id=message_id,
                         metadata={"jump_url": msg.jump_url} if msg.jump_url else None,
                     )
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
                     logger.debug("Failed to archive reply in MessageStore: %s", e)
 
             await self._audit_store.record(
@@ -776,7 +776,7 @@ class DashboardServices:
                 content_preview=content[:200],
             )
             return {"success": False, "error": "Bot lacks permission to send", "status": "forbidden"}
-        except Exception as e:
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden, AttributeError, TypeError, ValueError) as e:
             await self._audit_store.record(
                 event_type=EVENT_DASHBOARD_REPLY_FAILURE,
                 result="failed",
@@ -814,7 +814,7 @@ class DashboardServices:
                     perms = channel.permissions_for(guild.me)
                     if not perms.read_message_history:
                         return {"messages": [], "error": "no read_message_history permission"}
-                except Exception as e:
+                except (AttributeError, TypeError, discord.Forbidden) as e:
                     logger.debug(f"Failed to check permissions for channel {channel.id}: {e}")
 
             messages = []
@@ -825,7 +825,7 @@ class DashboardServices:
                 history = await asyncio.wait_for(_fetch_history_coro(), timeout=15.0)
             except discord.Forbidden:
                 return {"messages": [], "error": "forbidden"}
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
                 return {"messages": [], "error": str(e)}
 
             # Process in reverse (oldest first for display, but we store in order)
@@ -895,11 +895,11 @@ class DashboardServices:
                             embeds=embeds,
                             metadata={"jump_url": msg.jump_url} if msg.jump_url else None,
                         )
-                    except Exception as e:
+                    except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
                         logger.debug("Failed to archive live message: %s", e)
 
             return {"messages": messages, "count": len(messages)}
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, discord.HTTPException) as e:
             logger.warning("live_channel_messages failed: %s", e)
             return {"messages": [], "error": str(e)}
 
@@ -930,7 +930,7 @@ class DashboardServices:
                     return [m async for m in channel.history(limit=limit, oldest_first=False)]
 
                 history = await asyncio.wait_for(_fetch_history_coro(), timeout=15.0)
-            except Exception as e:
+            except (discord.Forbidden, discord.HTTPException, asyncio.TimeoutError, AttributeError, TypeError) as e:
                 return {"messages": [], "error": str(e)}
 
             for msg in reversed(history):
@@ -992,7 +992,7 @@ class DashboardServices:
                             reply_to_message_id=msg.reference.message_id if msg.reference else None,
                             jump_url=msg.jump_url,
                         )
-                    except Exception as e:
+                    except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
                         logger.debug("Failed to archive live DM: %s", e)
 
                     if self._message_store:
@@ -1024,11 +1024,11 @@ class DashboardServices:
                                 last_message_id=msg.id,
                                 last_message_at=msg.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                             )
-                        except Exception as e:
+                        except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
                             logger.debug("Failed to archive live DM in MessageStore: %s", e)
 
             return {"messages": messages, "count": len(messages)}
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError, discord.HTTPException) as e:
             logger.warning("live_dm_messages failed: %s", e)
             return {"messages": [], "error": str(e)}
 
@@ -1115,10 +1115,10 @@ class DashboardServices:
                         last_message_at=message.created_at.strftime("%Y-%m-%dT%H:%M:%S.%fZ") if message.created_at else None,
                         increment_count=True,
                     )
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
                     logger.debug("Failed to archive DM in MessageStore: %s", e)
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning("Failed to archive DM message: %s", e)
 
     async def record_guild_message(self, message) -> None:
@@ -1189,7 +1189,7 @@ class DashboardServices:
                 embeds=embeds,
                 metadata={"jump_url": message.jump_url} if message.jump_url else None,
             )
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, discord.HTTPException) as e:
             logger.debug("Failed to archive guild message: %s", e)
 
 

@@ -775,7 +775,7 @@ def load_config() -> dict[str, Any]:
         _ve = _parse_bool_str(_ve_raw, True)
         _t2i = _parse_bool_str(_t2i_raw, True)
         logger.info(f"VISION_FLAGS raw={{VISION_ENABLED:{_ve_raw}, VISION_T2I_ENABLED:{_t2i_raw}}} parsed={{vision_enabled:{_ve}, t2i:{_t2i}}} source={{vision_enabled:{ve_src}, t2i:{t2i_src}}}")
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError) as e:
         logger.debug(f"Failed to log VISION_FLAGS: {e}")
 
     # Cache the config for performance (avoid repeated env var lookups)
@@ -806,7 +806,7 @@ def load_config_candidate(env_path: Path) -> dict[str, Any]:
     # Read the candidate .env file directly
     try:
         candidate_env = {str(key): str(value) for key, value in dotenv_values(env_path).items() if key and value is not None}
-    except Exception:
+    except (OSError, ValueError, TypeError):
         candidate_env = {}
 
     # Build config using ONLY the candidate env values (NO fallback to os.environ)

@@ -147,6 +147,18 @@ class CommandError(BotError):
     """Raised for command parsing / execution failures."""
 
 
+class VisionDownloadError(BotError):
+    """Raised when downloading an image/video for vision analysis fails."""
+
+
+class ProviderError(BotError):
+    """Raised for errors from an LLM/Vision provider (circuit breaker, HTTP errors)."""
+
+
+class TokenizerError(BotError):
+    """Raised when a tokenizer/phonemizer backend is unavailable or fails."""
+
+
 # ------------------------------------------------------------------ #
 #  Re-export: VisionError from bot.vision.types                       #
 #  --------------------------------------------------------------- #

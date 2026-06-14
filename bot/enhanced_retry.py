@@ -143,13 +143,13 @@ class EnhancedRetryManager:
             if timeouts_env:
                 try:
                     timeouts = [float(t.strip()) for t in timeouts_env.split(",") if t.strip()]
-                except Exception:
+                except (ValueError, AttributeError):
                     timeouts = []
             attempts: list[int] = []
             if max_attempts_env:
                 try:
                     attempts = [max(1, int(t.strip())) for t in max_attempts_env.split(",") if t.strip()]
-                except Exception:
+                except (ValueError, AttributeError):
                     attempts = []
             # Allow env overrides to inherit tuned defaults (timeout, attempts, backoff)
             # when the provider+model pair matches an entry in the default ladder. This
@@ -252,7 +252,7 @@ class EnhancedRetryManager:
         if ollama_host:
             try:
                 ollama_timeout = float(config.get("OLLAMA_TIMEOUT") or os.getenv("OLLAMA_TIMEOUT", "60.0"))
-            except Exception:
+            except (ValueError, TypeError):
                 ollama_timeout = 60.0
             default_text.append(ProviderConfig("ollama", ollama_model, timeout=ollama_timeout, max_attempts=1))
         # Media tasks (e.g., video/audio downloads) are not LLM calls; they often need longer timeouts
@@ -274,7 +274,7 @@ class EnhancedRetryManager:
                     media_timeout = max(30.0, budget_val - 5.0)
                 else:
                     media_timeout = 100.0
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             media_timeout = 100.0
 
         default_media = [
@@ -348,7 +348,7 @@ class EnhancedRetryManager:
             t = ", ".join([f"{pc.name}|{pc.model}(t={pc.timeout}s,a={pc.max_attempts})" for pc in self.provider_configs["text"]])
             m = ", ".join([f"{pc.name}|{pc.model}(t={pc.timeout}s,a={pc.max_attempts})" for pc in self.provider_configs["media"]])
             logger.info(f"🔧 Fallback ladders loaded → vision: [{v}] | text: [{t}] | media: [{m}]")
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             logger.debug(f"Failed to log fallback ladders: {e}")
 
     def _apply_vl_override(self, vision_from_env: bool = False) -> None:
@@ -359,7 +359,7 @@ class EnhancedRetryManager:
             return
         try:
             override_entries = get_vl_model_ladder()
-        except Exception:
+        except (ImportError, AttributeError, TypeError, ValueError):
             override_entries = []
 
         if not override_entries:
@@ -464,7 +464,7 @@ class EnhancedRetryManager:
             # Long cooldowns (e.g., dead 404 models) remain protected.
             try:
                 probe_window_s = float(os.getenv("CIRCUIT_PROBE_WINDOW_S", "0.5"))
-            except Exception:
+            except (ValueError, TypeError):
                 probe_window_s = 0.5
             if probe_window_s > 0 and remaining <= probe_window_s:
                 breaker.status = ProviderStatus.DEGRADED
@@ -638,7 +638,7 @@ class EnhancedRetryManager:
                     try:
                         if not getattr(e, "provider_key", None):
                             e.provider_key = provider_key
-                    except Exception as e2:
+                    except (AttributeError, TypeError) as e2:
                         logger.debug(f"Failed to set provider_key on exception: {e2}")
                     # Normalize timeouts to a descriptive message [REH]
                     try:
@@ -648,10 +648,10 @@ class EnhancedRetryManager:
                             try:
                                 te.provider_key = provider_key
                                 te.timeout_seconds = attempt_timeout
-                            except Exception as e2:
+                            except (AttributeError, TypeError) as e2:
                                 logger.debug(f"Failed to set timeout attributes: {e2}")
                             e = te
-                    except Exception as e2:
+                    except (AttributeError, TypeError) as e2:
                         logger.debug(f"Timeout normalization failed: {e2}")
                     # Treat OpenRouter 404 / no-endpoints as permanent provider unavailability [REH]
                     msg_lower = f"{type(e).__name__}: {e}".lower()
@@ -663,7 +663,7 @@ class EnhancedRetryManager:
                         breaker.status = ProviderStatus.CIRCUIT_OPEN
                         try:
                             dead_model_cooldown = float(os.getenv("OPENROUTER_DEAD_MODEL_COOLDOWN_S", "1800"))
-                        except Exception:
+                        except (ValueError, TypeError):
                             dead_model_cooldown = 1800.0
                         breaker.cooldown_duration = max(float(breaker.cooldown_duration or 0.0), 60.0, dead_model_cooldown)
                         break
@@ -722,7 +722,7 @@ class EnhancedRetryManager:
                                     delay = ra  # Follow server hint exactly; budget check below
                                     use_retry_after = True
                                     extra_note = f" (Retry-After={ra:.2f}s)"
-                        except Exception:
+                        except (ValueError, TypeError):
                             use_retry_after = False
 
                         # Only apply jitter to backoff-based delays (not Retry-After)

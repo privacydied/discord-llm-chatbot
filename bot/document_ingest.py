@@ -111,7 +111,7 @@ async def ingest_document_attachment(
         try:
             if tmp_path.exists():
                 tmp_path.unlink()
-        except Exception as e:
+        except (OSError, PermissionError) as e:
             logger.debug(f"Failed to cleanup temp file {tmp_path}: {e}")
 
 
@@ -213,9 +213,8 @@ async def _ingest_rtf(tmp_path: Path, filename: str) -> dict[str, Any]:
             "metadata": metadata,
             "error": None,
         }
-
-    except Exception as e:
-        logger.warning(f"RTF parsing failed, trying text fallback: {e}")
+    except (AttributeError, TypeError, ValueError, OSError, UnicodeDecodeError) as e:
+        logger.warning(f"Markdown parsing failed, trying text fallback: {e}")
         return await _ingest_as_text(tmp_path, filename)
 
 
@@ -247,7 +246,7 @@ async def _ingest_as_text(tmp_path: Path, filename: str) -> dict[str, Any]:
         # Fall back to latin-1
         try:
             content = tmp_path.read_text(encoding="latin-1")
-        except Exception as e:
+        except (UnicodeDecodeError, OSError, ValueError) as e:
             return {
                 "text": "",
                 "metadata": {},
@@ -392,5 +391,5 @@ async def ingest_document_from_url(url: str) -> dict[str, Any]:
         try:
             if tmp_path and tmp_path.exists():
                 tmp_path.unlink()
-        except Exception as e:
+        except (OSError, PermissionError) as e:
             logger.debug(f"Failed to cleanup temp file {tmp_path}: {e}")

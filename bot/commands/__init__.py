@@ -22,7 +22,7 @@ def register_command(name: str, func: Callable[..., Any], **kwargs) -> None:
         raise ValueError(msg)
     if not callable(func):
         msg = "Command handler must be callable"
-        raise ValueError(msg)
+        raise TypeError(msg)
 
     # Sanitize command name
     name = name.strip().lower()
@@ -46,7 +46,7 @@ def register_command(name: str, func: Callable[..., Any], **kwargs) -> None:
     aliases = kwargs.get("aliases", [])
     if not isinstance(aliases, list):
         msg = "Aliases must be a list"
-        raise ValueError(msg)
+        raise TypeError(msg)
 
     validated_aliases = []
     for alias in aliases:

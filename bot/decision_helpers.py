@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 try:  # pragma: no cover - fallback when optional deps missing
     from bot.utils.logging import get_logger
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     import logging
 
     def get_logger(name: str) -> logging.Logger:  # type: ignore
@@ -54,7 +54,7 @@ def resolve_scope(trigger: object) -> ScopeResult:
             scope_id = str(getattr(getattr(trigger, "reference", None), "message_id", None))
         else:
             scope_id = str(getattr(trigger, "id", None))
-    except Exception:
+    except (AttributeError, TypeError):
         scope_id = str(getattr(trigger, "id", None))
 
     logger.info(

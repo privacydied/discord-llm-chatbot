@@ -185,7 +185,7 @@ class RAGCommands(commands.Cog):
                     )
 
                     embed.add_field(name="📊 Collection Stats", value=stats_text, inline=False)
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError) as e:
                     embed.add_field(
                         name="📊 Collection Stats",
                         value=f"Error getting stats: {e!s}",
@@ -228,7 +228,7 @@ class RAGCommands(commands.Cog):
                         "Valid" if is_valid else "Invalid configuration",
                     ),
                 )
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 error_msg = safe_embed_value(str(e), 50)
                 test_results.append(("❌", "Environment", f"Error: {error_msg}"))
 
@@ -237,7 +237,7 @@ class RAGCommands(commands.Cog):
                 if not self.hybrid_search:
                     self.hybrid_search = await get_hybrid_search()
                 test_results.append(("✅", "Hybrid Search", "Successfully initialized"))
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError, ImportError) as e:
                 error_msg = safe_embed_value(str(e), 50)
                 test_results.append(("❌", "Hybrid Search", f"Failed: {error_msg}"))
 
@@ -249,7 +249,7 @@ class RAGCommands(commands.Cog):
                     test_results.append(("✅", "Search Functionality", f"Found {result_count} results"))
                 else:
                     test_results.append(("⚠️", "Search Functionality", "Hybrid search not available"))
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 error_msg = safe_embed_value(str(e), 50)
                 test_results.append(("❌", "Search Functionality", f"Failed: {error_msg}"))
 
@@ -265,7 +265,7 @@ class RAGCommands(commands.Cog):
                         test_results.append(("⚠️", "Collection Access", "No collection stats"))
                 else:
                     test_results.append(("❌", "Collection Access", "Search engine not available"))
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 error_msg = safe_embed_value(str(e), 50)
                 test_results.append(("❌", "Collection Access", f"Failed: {error_msg}"))
 
@@ -563,7 +563,7 @@ class RAGCommands(commands.Cog):
                             successes += 1
                         else:
                             failures.append(item)
-                    except Exception as exc:
+                    except (AttributeError, TypeError, ValueError, RuntimeError) as exc:
                         failures.append(f"{item} ({exc})")
                     continue
 
@@ -591,7 +591,7 @@ class RAGCommands(commands.Cog):
                         successes += 1
                     else:
                         failures.append(getattr(item, "filename", "attachment"))
-                except Exception as exc:
+                except (AttributeError, TypeError, ValueError, RuntimeError) as exc:
                     failures.append(f"{getattr(item, 'filename', 'attachment')} ({exc})")
 
             if successes == 0 and failures:
@@ -647,7 +647,7 @@ class RAGCommands(commands.Cog):
                 try:
                     count = await index_text_directory(path)
                     total_indexed += count
-                except Exception as e:
+                except (OSError, ValueError, TypeError, RuntimeError) as e:
                     errors.append(f"Error indexing {path}: {e!s}")
 
             # Final status
@@ -709,7 +709,7 @@ class RAGCommands(commands.Cog):
                     description=description,
                     color=color,
                 )
-            except Exception as e:
+            except (OSError, ValueError, TypeError, RuntimeError) as e:
                 embed = discord.Embed(
                     title="❌ Reload Failed",
                     description=f"Error: {safe_embed_value(str(e))}",
@@ -718,7 +718,7 @@ class RAGCommands(commands.Cog):
 
             await message.edit(embed=embed)
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.exception(f"[RAG Commands] Reload command failed: {e}")
             await ctx.send(f"❌ **Error:** {safe_embed_value(str(e))}")
 

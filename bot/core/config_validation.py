@@ -226,8 +226,7 @@ class ConfigValidator:
             # Cross-field constraint validation
             cross_field_errors = self._validate_cross_field_constraints()
             errors.extend(cross_field_errors)
-
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             errors.append(f"Configuration validation failed unexpectedly: {e}")
 
         return len(errors) == 0, errors
@@ -289,7 +288,7 @@ class ConfigValidator:
             try:
                 if not constraint.validator(value):
                     return constraint.error_message or f"Configuration '{constraint.key}' failed custom validation"
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError) as e:
                 return f"Configuration '{constraint.key}' custom validator error: {e}"
 
         return None
@@ -349,7 +348,7 @@ class ConfigValidator:
                     "config:text_fallback_duplicates models=%s",
                     ", ".join(duplicates),
                 )
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             self.logger.debug(f"Failed to validate text fallback duplicates: {e}")
 
     def _validate_vision_fallback_ladder(self) -> None:
@@ -373,7 +372,7 @@ class ConfigValidator:
                     "config:vision_fallback_duplicates models=%s",
                     ", ".join(duplicates),
                 )
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             self.logger.debug(f"Failed to validate vision fallback duplicates: {e}")
 
     def _validate_timeout_ladder_mismatch(self) -> None:
@@ -394,7 +393,7 @@ class ConfigValidator:
                     model_count,
                     timeout_count,
                 )
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             self.logger.debug(f"Failed to validate timeout ladder mismatch: {e}")
 
     def _validate_tts_v8_experimental(self) -> None:
@@ -407,7 +406,7 @@ class ConfigValidator:
                     self.logger.warning(
                         "config:tts_backend_experimental TTS_BACKEND=kokoro-v8 is experimental and not production-ready. Set TTS_ALLOW_EXPERIMENTAL=true to acknowledge this, or use TTS_BACKEND=kokoro-onnx (recommended).",
                     )
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             self.logger.debug(f"Failed to validate tts v8 experimental: {e}")
 
 
@@ -511,12 +510,12 @@ class HealthMonitor:
                 memory_percent = process.memory_percent()
                 if memory_percent > 90.0:  # 90% memory usage threshold
                     not_ready_reasons.append(f"High memory usage: {memory_percent:.1f}%")
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, OSError) as e:
                 self.logger.debug(f"Memory check failed (non-critical): {e}")  # Non-critical check
 
             return len(not_ready_reasons) == 0, not_ready_reasons
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             self.logger.exception(f"Readiness check failed: {e}", extra={"subsys": "health"})
             return False, [f"Readiness check error: {e}"]
 
@@ -532,8 +531,7 @@ class HealthMonitor:
             self._last_event_loop_check = time.time()
 
             return lag_ms
-
-        except Exception:
+        except (asyncio.CancelledError, asyncio.TimeoutError, AttributeError, TypeError):
             return 0.0  # Fallback on error
 
     async def get_health_status(self) -> SystemHealth:
@@ -560,7 +558,7 @@ class HealthMonitor:
             try:
                 process = psutil.Process()
                 rss_mb = process.memory_info().rss / 1024 / 1024
-            except Exception:
+            except (AttributeError, TypeError, ValueError, OSError):
                 rss_mb = 0.0
 
             event_loop_lag_ms = await self.measure_event_loop_lag()

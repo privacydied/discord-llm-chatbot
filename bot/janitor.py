@@ -121,7 +121,7 @@ def compress_file_to_gz(file_path: Path) -> bool:
             file_path.unlink()
             return True
         return False
-    except Exception as e:
+    except (OSError, gzip.BadGzipFile, shutil.Error) as e:
         logger.debug(f"Failed to compress {file_path}: {e}")
         return False
 
@@ -502,8 +502,7 @@ class Janitor:
                     },
                 },
             )
-
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, OSError) as e:
             logger.warning(
                 f"janitor.warn dir=logs reason={str(e)[:100]}",
                 extra={
@@ -552,8 +551,7 @@ class Janitor:
                         },
                     },
                 )
-
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, OSError) as e:
             logger.warning(
                 f"janitor.warn dir={name} reason={str(e)[:100]}",
                 extra={

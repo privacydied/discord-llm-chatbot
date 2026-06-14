@@ -60,7 +60,7 @@ class SuppressingLogger(logging.Logger):
 def _rich_tracebacks_supported() -> bool:
     try:
         return True
-    except Exception:
+    except (ImportError, AttributeError, TypeError):
         return False
 
 

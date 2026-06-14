@@ -68,7 +68,7 @@ async def contextual_brain_infer(
             is_reply = getattr(message, "reference", None) is not None
             if extra_context and (not is_thread) and is_reply:
                 include_cross_user_eff = False
-        except Exception:
+        except (AttributeError, TypeError):
             include_cross_user_eff = include_cross_user
 
         # Determine basic case/scope for logging and locality policy
@@ -79,11 +79,11 @@ async def contextual_brain_infer(
         # Locality-first policies
         try:
             mentioned_me = bot.user in (getattr(message, "mentions", None) or [])
-        except Exception:
+        except (AttributeError, TypeError):
             mentioned_me = False
         try:
             content_has_signal = bool(re.search(r"[A-Za-z0-9]", prompt or ""))
-        except Exception:
+        except (TypeError, re.error):
             content_has_signal = bool(prompt and prompt.strip())
 
         # Skip history if:
@@ -94,7 +94,7 @@ async def contextual_brain_infer(
             try:
                 if mentioned_me and (case == "LONE") and content_has_signal:
                     skip_history = True
-            except Exception as e:
+            except (AttributeError, TypeError) as e:
                 logger.debug(f"Failed to evaluate skip_history condition: {e}")
 
         if skip_history:
@@ -103,7 +103,7 @@ async def contextual_brain_infer(
             try:
                 _entries = bot.enhanced_context_manager.get_context_for_user(message, include_cross_user=False)
                 dropped = len(_entries or [])
-            except Exception as e:
+            except (AttributeError, TypeError) as e:
                 logger.debug(f"Failed to get context for drop count: {e}")
                 dropped = 0
             # Minimal, same-schema breadcrumbs
@@ -142,7 +142,7 @@ async def contextual_brain_infer(
                             "detail": {"reason": "scope_mismatch", "dropped": dropped},
                         },
                     )
-            except Exception as e:
+            except (AttributeError, TypeError) as e:
                 logger.debug(f"Failed to log drop_stale breadcrumb: {e}")
             context_entries = []
         else:
@@ -158,7 +158,7 @@ async def contextual_brain_infer(
                 if context_str:
                     history_block = f"Conversation history:\n{context_str}"
                     logger.debug(f"✔ Context added to prompt [entries={len(context_entries)}, tokens≈{len(context_str) // 4}]")
-        except Exception as _e:
+        except (AttributeError, TypeError) as _e:
             logger.debug(f"Context history build failed: {_e}")
 
         perception_block = None
@@ -168,7 +168,7 @@ async def contextual_brain_infer(
             try:
                 logger.info(f"🧩 Injecting perception into text prompt | chars={len(perception_notes)}")
                 logger.info("Prompt preview includes: 'Perception (from the image...' section")
-            except Exception as e:
+            except (AttributeError, TypeError) as e:
                 logger.debug(f"Failed to log perception injection breadcrumb: {e}")
 
         blocks = []

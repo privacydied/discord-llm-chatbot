@@ -38,7 +38,7 @@ def _get_bot_member(guild: discord.Guild) -> discord.Member | None:
     """Get the bot's Member object for a guild. Returns None if unavailable."""
     try:
         return guild.me
-    except Exception:
+    except (AttributeError, RuntimeError):
         return None
 
 
@@ -89,7 +89,7 @@ def _safe_permissions(channel: Any) -> dict[str, bool]:
             "manage_channels": perms.manage_channels,
             "administrator": perms.administrator,
         }
-    except Exception as e:
+    except (AttributeError, TypeError, RuntimeError) as e:
         logger.debug("Failed to get permissions for channel %s: %s", getattr(channel, "id", "?"), e)
         return defaults
 
@@ -252,7 +252,7 @@ def can_send_dm(bot: DiscordBot, user_id: int) -> PermissionResult:
         # Having a DM channel object doesn't guarantee the user allows DMs
         # from bot users — Discord automatically creates DM channels for
         # mutual guild members. We'll report it as likely possible.
-    except Exception as e:
+    except (AttributeError, RuntimeError, discord.HTTPException) as e:
         logger.debug(f"Failed to access dm_channel for user {user.id}: {e}")
 
     return PermissionResult(
@@ -277,7 +277,7 @@ def _resolve_channel(bot: DiscordBot, channel_id: int) -> Any:
         channel = bot.get_channel(channel_id)
         if channel is not None:
             return channel
-    except Exception as e:
+    except (AttributeError, TypeError, discord.HTTPException) as e:
         logger.debug(f"bot.get_channel failed for {channel_id}: {e}")
 
     # DM channels are not guild channels — bot.get_channel won't find them
