@@ -86,6 +86,19 @@ class TestExtractPublicReplyText:
         assert result == "Hello.\n\nWorld."
 
 
+    def test_strips_leading_mode_normal_preamble(self) -> None:
+        """Leaked leading MODE: NORMAL preamble is stripped before send."""
+        text = "MODE: NORMAL\n\nactual answer"
+        result = extract_public_reply_text(text)
+        assert result == "actual answer"
+
+    def test_preserves_non_leading_mode_text(self) -> None:
+        """Inline MODE mentions are preserved."""
+        text = "hello\nMODE: NORMAL"
+        result = extract_public_reply_text(text)
+        assert result == text
+
+
 class TestHasReasoningLeakage:
     """Test the reasoning leakage detection function."""
 

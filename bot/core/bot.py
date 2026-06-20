@@ -1743,8 +1743,9 @@ class LLMBot(commands.Bot):
                     )
                     raise  # Re-raise other HTTP exceptions
             finally:
+                sent = getattr(self, "_last_sent_message_for_finalize", None)
                 self.logger.debug(
-                    f"dispatch:finalize | sent={(sent_message is not None)}",
+                    f"dispatch:finalize | sent={(sent is not None)}",
                     extra={**base_extra, "event": "dispatch.send.finalize"},
                 )
 

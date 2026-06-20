@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from .public_output import sanitize_embed_collection_for_public
+from .utils.output_sanitizer import strip_leading_mode_preamble as _strip_leading_mode_preamble
 
 if TYPE_CHECKING:
     from discord import Embed, File
@@ -37,7 +38,7 @@ class BotAction:
 
         logger = get_logger("bot.action.safety_net")
 
-        # First layer: check for new reasoning leak patterns
+        content = _strip_leading_mode_preamble(content)
         if has_reasoning_leakage(content):
             logger.warning("Final safety net triggered - sanitizing content with reasoning leakage")
             return extract_public_reply_text(content)

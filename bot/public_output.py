@@ -13,6 +13,7 @@ import re
 from typing import TYPE_CHECKING
 
 from .utils.logging import get_logger
+from .utils.output_sanitizer import strip_leading_mode_preamble
 
 if TYPE_CHECKING:
     import discord
@@ -274,7 +275,10 @@ def extract_public_reply_text(
         )
         return SAFE_FALLBACK_MESSAGE
 
-    # Check for reasoning patterns before any further processing
+    # Check for reasoning patterns before any further processing, after stripping
+    # any leaked leading MODE label so reasoning-pattern logging reflects the
+    # true content that will be sent.
+    cleaned = strip_leading_mode_preamble(cleaned)
     has_leak, matched_pattern = _matches_reasoning_pattern(cleaned)
 
     if has_leak:
@@ -354,7 +358,7 @@ def sanitize_public_text(text: str) -> str:
 
     original_len = len(text)
     original_stripped_len = len(text.strip())
-    cleaned = text
+    cleaned = strip_leading_mode_preamble(text)
 
     unsafe_fallback, matched_fallback = _matches_unsafe_fallback_pattern(cleaned)
     if unsafe_fallback:
