@@ -178,7 +178,7 @@ class ResultAggregator:
                     },
                 },
             )
-        except Exception as exc:
+        except (RuntimeError, OSError, ValueError, AttributeError, ImportError) as exc:
             logger.debug(f"Failed to log aggregation breadcrumb: {exc}")
 
         include_ack_prompt = not has_text_sources and has_visual_media and not has_document and not has_stt_text

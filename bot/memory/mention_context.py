@@ -16,9 +16,12 @@ import discord
 from ..utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from .bot import Bot
+    pass
 
 logger = get_logger(__name__)
+
+if TYPE_CHECKING:
+    pass
 
 
 # Case classification constants

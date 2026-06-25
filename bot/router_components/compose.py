@@ -32,7 +32,7 @@ def format_x_tweet_with_transcription(
             if ptid:
                 bundle.primary_tweet_id = ptid
                 bundle.selected_tweet_id = ptid
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, KeyError) as exc:
         logger.debug(f"primary tweet id extraction failed: {exc}")
 
     # Caption population: prefer tweet_data text; fallback to base_text heuristic [IV]
@@ -50,7 +50,7 @@ def format_x_tweet_with_transcription(
                 )
                 if m:
                     caption = (m.group("body") or "").strip()
-            except Exception as exc:
+            except (AttributeError, TypeError, ValueError, re.error) as exc:
                 logger.debug(f"caption regex extraction failed: {exc}")
                 caption = ""
         if not caption and base_text:
@@ -65,12 +65,12 @@ def format_x_tweet_with_transcription(
                         continue
                     caption = ln
                     break
-            except Exception as exc:
+            except (AttributeError, TypeError, ValueError) as exc:
                 logger.debug(f"caption line extraction failed: {exc}")
                 caption = (base_text or "").strip()
         if caption:
             bundle.caption_text = caption
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, KeyError) as exc:
         logger.debug(f"caption population failed: {exc}")
 
     # Quoted/retweet text when provided [IV]
@@ -87,7 +87,7 @@ def format_x_tweet_with_transcription(
                     rt = (r.get("full_text") or r.get("text") or "").strip()
                     if rt:
                         bundle.quoted_text = rt
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, KeyError) as exc:
         logger.debug(f"quoted/retweet extraction failed: {exc}")
 
     # STT transcript with low-speech guard [REH]
@@ -108,7 +108,7 @@ def format_x_tweet_with_transcription(
         else:
             bundle.media_transcript = ""
             bundle.stt_no_speech = True
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, KeyError, IndexError) as exc:
         logger.debug(f"STT transcript handling failed: {exc}")
         bundle.media_transcript = ""
 
@@ -124,7 +124,7 @@ def format_x_tweet_with_transcription(
             )
             bundle.caption_text = ""
             bundle.media_transcript = ""
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, KeyError) as exc:
         logger.debug(f"caption_transcript concatenation failed: {exc}")
 
     # Add STT grounding instructions to prevent "I can't process audio" responses [REH]
@@ -178,7 +178,7 @@ def format_x_tweet_result(
                     user = (user_item.get("name") or user_item.get("username") or user_item.get("screen_name") or "").strip()
                     if user:
                         break
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             user = ""
 
         if not user:
@@ -188,7 +188,7 @@ def format_x_tweet_result(
         photo_count = 0
         try:
             photo_count = sum(1 for media in media_list if isinstance(media, dict) and media.get("type") == "photo")
-        except Exception:
+        except (AttributeError, TypeError, ValueError, KeyError):
             photo_count = 0
 
         parts: list[str] = []
@@ -202,7 +202,7 @@ def format_x_tweet_result(
 
         out = "\n".join(parts).strip()
         return out or canonicalize_status_url(url)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, KeyError):
         return canonicalize_status_url(url)
 
 

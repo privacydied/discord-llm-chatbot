@@ -184,7 +184,7 @@ class DocumentParserFactory:
                 try:
                     page_count = await loop.run_in_executor(None, self._get_pdf_page_count, file_path)
                     metadata["page_count"] = page_count
-                except Exception:
+                except (ImportError, AttributeError, RuntimeError, OSError):
                     metadata["page_count"] = "unknown"
 
                 metadata["extraction_method"] = "pypdf2"
@@ -192,7 +192,7 @@ class DocumentParserFactory:
         except ImportError:
             logger.warning("PyPDF2 not available, trying OCR fallback")
             content = ""
-        except Exception as e:
+        except (ImportError, RuntimeError, OSError, ValueError, AttributeError) as e:
             logger.warning(f"PyPDF2 extraction failed: {e}, trying OCR fallback")
             content = ""
 
@@ -201,7 +201,7 @@ class DocumentParserFactory:
             try:
                 content = await self._ocr_pdf_fallback(file_path)
                 metadata["extraction_method"] = "ocr"
-            except Exception as e:
+            except (ImportError, RuntimeError, OSError, ValueError, subprocess.CalledProcessError, FileNotFoundError) as e:
                 logger.exception(f"OCR fallback failed for {file_path}: {e}")
                 msg = f"Could not extract text from PDF: {e}"
                 raise ValueError(msg)
@@ -225,13 +225,13 @@ class DocumentParserFactory:
                         page_text = page.extract_text()
                         if page_text.strip():
                             content += f"[Page {page_num + 1}]\n{page_text}\n\n"
-                    except Exception as e:
+                    except (AttributeError, RuntimeError, ValueError) as e:
                         logger.warning(f"Failed to extract text from page {page_num + 1}: {e}")
                         continue
 
             return content
 
-        except Exception as e:
+        except (ImportError, RuntimeError, OSError, ValueError, AttributeError) as e:
             logger.exception(f"PyPDF2 extraction failed: {e}")
             return ""
 
@@ -244,7 +244,7 @@ class DocumentParserFactory:
                 reader = PyPDF2.PdfReader(f)
                 return len(reader.pages)
 
-        except Exception as e:
+        except (ImportError, RuntimeError, OSError, ValueError, AttributeError) as e:
             logger.warning(f"Failed to get page count: {e}")
             return 0
 
@@ -269,7 +269,7 @@ class DocumentParserFactory:
         loop = asyncio.get_event_loop()
         try:
             images = await loop.run_in_executor(None, lambda: convert_from_path(str(file_path)))
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, ImportError, subprocess.CalledProcessError, FileNotFoundError) as e:
             logger.exception(f"Failed to convert PDF to images: {e}")
             msg = f"Could not convert PDF to images: {e}"
             raise ValueError(msg)
@@ -318,7 +318,7 @@ class DocumentParserFactory:
                 return f"[Page {page_num}]\n{page_text}\n\n"
             return ""
 
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, ImportError) as e:
             logger.warning(f"OCR failed for page {page_num}: {e}")
             return ""
 
@@ -420,7 +420,7 @@ class DocumentParserFactory:
                     decoded = chunk.decode("utf-8", errors="ignore")
                     if len(decoded) > 20 and decoded.isprintable():
                         text_content += decoded + " "
-                except Exception as exc:
+                except (UnicodeDecodeError, ValueError, AttributeError) as exc:
                     logger.debug(f"Failed to decode MOBI chunk: {exc}")
                     continue
 
@@ -438,7 +438,7 @@ class DocumentParserFactory:
 
             return content, metadata
 
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, UnicodeDecodeError, AttributeError) as e:
             msg = f"Failed to parse MOBI file {file_path}: {e}"
             raise ValueError(msg)
 

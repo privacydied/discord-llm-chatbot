@@ -830,19 +830,35 @@ class LLMBot(commands.Bot):
                 is_command = False
             if not is_command and getattr(message, "content", "").strip():
                 with suppress(Exception):
-                    self._track_background_task(
-                        asyncio.create_task(
-                            enqueue_inferred_memory(
-                                user_id=str(message.author.id),
-                                text=message.content,
-                                guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
-                                channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
-                                thread_id=str(message.channel.id) if isinstance(message.channel, discord.Thread) else None,
-                                source_message_id=str(message.id),
-                                metadata={"source": "bot_message_pipeline"},
-                            ),
-                        ),
+                    from bot.memory.gates import MemoryIngestionContext, should_auto_store_memory
+
+                    ingestion_ctx = MemoryIngestionContext(
+                        source_user_id=str(message.author.id),
+                        source_channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
+                        source_guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
+                        source_message_id=str(message.id),
+                        is_explicit_command=False,
+                        guild_only=bool(getattr(message, "guild", None)),
+                        raw_text=message.content,
                     )
+                    decision = should_auto_store_memory(
+                        {"content": message.content},
+                        context=ingestion_ctx,
+                    )
+                    if decision.allowed:
+                        self._track_background_task(
+                            asyncio.create_task(
+                                enqueue_inferred_memory(
+                                    user_id=str(message.author.id),
+                                    text=message.content,
+                                    guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
+                                    channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
+                                    thread_id=str(message.channel.id) if isinstance(message.channel, discord.Thread) else None,
+                                    source_message_id=str(message.id),
+                                    metadata={"source": "bot_message_pipeline"},
+                                ),
+                            ),
+                        )
 
             guild_info = "DM" if isinstance(message.channel, discord.DMChannel) else f"guild:{message.guild.id}"
             self.logger.info(

@@ -177,7 +177,7 @@ class MemoryArchiveDistiller:
                 await self.run_once()
             except asyncio.CancelledError:
                 raise
-            except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
                 logger.exception(
                     "Memory distiller loop failed",
                     extra={"subsys": "memory", "event": "memory_distiller_loop_failed"},

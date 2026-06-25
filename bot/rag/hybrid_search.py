@@ -633,7 +633,7 @@ class HybridRAGSearch:
             try:
                 collection_stats = await self.rag_backend.get_collection_stats()
                 stats["collection_stats"] = collection_stats
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, AttributeError) as e:
                 stats["collection_error"] = str(e)
 
         return stats
@@ -680,7 +680,7 @@ class HybridRAGSearch:
             if self._indexing_queue:
                 try:
                     await self._indexing_queue.shutdown(timeout=30.0)
-                except Exception as qe:
+                except (RuntimeError, OSError, TimeoutError, AttributeError) as qe:
                     logger.warning(f"[RAG] Error shutting down indexing queue: {qe}")
                 finally:
                     self._indexing_queue = None
@@ -696,7 +696,7 @@ class HybridRAGSearch:
             self._initialized = False
             logger.info("[RAG] ✔ Hybrid search system closed successfully")
 
-        except Exception as e:
+        except (RuntimeError, OSError, AttributeError, TimeoutError) as e:
             logger.warning(f"[RAG] Error closing hybrid search system: {e}")
 
 

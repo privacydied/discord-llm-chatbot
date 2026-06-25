@@ -237,7 +237,7 @@ class ChromaRAGBackend:
                 _cc = _chroma_load_config()
                 chroma_max = int(_cc.get("CHROMADB_MAX_RESULTS", 5))
                 effective_n = min(effective_n, chroma_max)
-            except Exception as exc:
+            except (ValueError, TypeError, OSError) as exc:
                 logger.debug(f"Failed to load CHROMADB_MAX_RESULTS: {exc}")
 
             # Perform vector search (run in thread pool)
@@ -481,7 +481,7 @@ class ChromaRAGBackend:
             model_name = getattr(self.embedding_model, "model_name", "unknown")
             try:
                 embedding_dim = await self.embedding_model.get_embedding_dimension() if self.embedding_model is not None else None
-            except Exception as dim_err:
+            except (AttributeError, RuntimeError) as dim_err:
                 logger.warning(f"[RAG] Could not get embedding dimension: {dim_err}")
                 embedding_dim = None
 
@@ -493,7 +493,7 @@ class ChromaRAGBackend:
                 "embedding_dimension": embedding_dim,
             }
 
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, TypeError) as e:
             logger.exception(f"[RAG] Failed to get collection stats: {e}")
             return {"error": str(e)}
 
@@ -543,7 +543,7 @@ class ChromaRAGBackend:
         except TimeoutError:
             logger.exception(f"[RAG] Wipe operation timed out for collection '{self.collection_name}'")
             raise
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError) as e:
             logger.exception(f"[RAG] Failed to wipe collection: {e}")
             raise
 
@@ -558,5 +558,5 @@ class ChromaRAGBackend:
                 self.client = None
                 self._initialized = False
                 logger.info("[RAG] ✔ ChromaDB backend closed successfully")
-        except Exception as e:
+        except (RuntimeError, OSError, AttributeError) as e:
             logger.warning(f"[RAG] Error closing ChromaDB backend: {e}")

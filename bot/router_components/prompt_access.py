@@ -13,5 +13,5 @@ def get_system_prompt(bot: Any, key: str, default: str | None = None) -> str | N
         if callable(getter):
             return getter(key, default)
         return default
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return default

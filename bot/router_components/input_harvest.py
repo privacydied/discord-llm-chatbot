@@ -21,7 +21,7 @@ def is_text_attachment(attachment: Any) -> bool:
     try:
         name = (getattr(attachment, "filename", "") or "").lower()
         ctype = (getattr(attachment, "content_type", "") or "").lower()
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return False
     return name.endswith(".txt") or ctype.startswith("text/")
 
@@ -30,7 +30,7 @@ def all_attachments_are_text(attachments: Any) -> bool:
     """Return True when a non-empty attachment iterable contains only text files."""
     try:
         atts = list(attachments or [])
-    except Exception:
+    except (TypeError, ValueError, AttributeError):
         return False
     return bool(atts) and all(is_text_attachment(a) for a in atts)
 
@@ -54,7 +54,7 @@ def has_meaningful_text(text: str) -> bool:
         if len(s) <= 3 and re.match(r"^[^\s]+$", s):
             return True
         return bool(s)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, re.error):
         return bool(text and str(text).strip())
 
 
@@ -93,7 +93,7 @@ def has_explicit_media_intent(text: str) -> bool:
             "summarise this post",
         )
         return any(k in s for k in keywords)
-    except Exception:
+    except (AttributeError, TypeError, ValueError, re.error):
         return False
 
 
@@ -101,7 +101,7 @@ def is_direct_image_url(url: str) -> bool:
     """Return True when URL appears to target a direct image asset."""
     try:
         u = str(url).lower()
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return False
     return bool(re.search(r"\.(jpe?g|png|webp)(?:\?|#|$)", u) or re.search(r"[?&]format=(jpe?g|png|webp)(?:&|$)", u))
 
@@ -110,7 +110,7 @@ def extract_urls_loose(text: str) -> list[str]:
     """Extract URLs using permissive whitespace-based matching."""
     try:
         return re.findall(_URL_LOOSE_PATTERN, text or "")
-    except Exception:
+    except (AttributeError, TypeError, ValueError, re.error):
         return []
 
 
@@ -118,7 +118,7 @@ def extract_urls_strict(text: str) -> list[str]:
     """Extract URLs using stricter boundary matching."""
     try:
         return re.findall(_URL_STRICT_PATTERN, text or "")
-    except Exception:
+    except (AttributeError, TypeError, ValueError, re.error):
         return []
 
 
@@ -126,7 +126,7 @@ def strip_urls(text: str) -> str:
     """Remove strict URL matches from text."""
     try:
         return re.sub(_URL_STRICT_PATTERN, "", text or "").strip()
-    except Exception:
+    except (AttributeError, TypeError, ValueError, re.error):
         return (text or "").strip()
 
 
@@ -136,7 +136,7 @@ def strip_discord_mentions_and_urls(text: str) -> str:
         out = re.sub(_DISCORD_MENTION_TOKEN_PATTERN, "", text or "")
         out = re.sub(_URL_LOOSE_PATTERN, "", out)
         return out.strip()
-    except Exception:
+    except (AttributeError, TypeError, ValueError, re.error):
         return (text or "").strip()
 
 
@@ -149,7 +149,7 @@ def existing_url_payloads(items: Sequence[Any], *, strip_payload: bool = False) 
                 continue
             raw = str(getattr(it, "payload", ""))
             urls.add(raw.strip() if strip_payload else raw)
-        except Exception as exc:
+        except (AttributeError, TypeError, ValueError) as exc:
             logger.debug(f"URL collection failed: {exc}")
             continue
     return urls
@@ -169,7 +169,7 @@ def append_unique_url_items(
     for u in urls or []:
         try:
             key = str(u).strip() if strip_key else str(u)
-        except Exception as exc:
+        except (AttributeError, TypeError, ValueError) as exc:
             logger.debug(f"key generation failed: {exc}")
             key = ""
         if not key or key in seen:

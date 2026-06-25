@@ -243,6 +243,21 @@ async def test_normalization_layer(bot, mock_message) -> None:
 
 
 @pytest.mark.asyncio
+async def test_mode_preamble_regression_send_path(bot, mock_message) -> None:
+    """Regression: a normal chat response must not leak a leading MODE preamble via the send path."""
+    bot.router.dispatch_message.return_value = ResponseMessage(
+        content="MODE: NORMAL\n\nchilling. what's the move?"
+    )
+    await bot.on_message(mock_message)
+
+    sent = mock_message.reply.call_args
+    assert sent is not None, "expected reply send on normal chat response"
+    sent_text = sent.args[0] if sent.args else sent.kwargs.get("content", "")
+    assert sent_text == "chilling. what's the move?"
+    assert not str(sent_text).lstrip().lower().startswith(("mode: normal", "mode: political"))
+
+
+@pytest.mark.asyncio
 async def test_message_handler_debug_output(bot) -> None:
     """Verify debug output captures processing details."""
     # Setup logging capture

@@ -267,7 +267,7 @@ class IndexingQueue:
             else:
                 await self._handle_task_failure(task, "Backend processing failed", worker_id)
 
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, AttributeError, TimeoutError) as e:
             await self._handle_task_failure(task, str(e), worker_id)
 
     async def _handle_task_failure(self, task: IndexingTask, error_message: str, worker_id: int) -> None:

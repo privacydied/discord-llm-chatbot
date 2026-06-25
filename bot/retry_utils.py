@@ -68,7 +68,7 @@ def is_retryable_error(error: Exception, config: RetryConfig) -> bool:
         retryable_flag = getattr(error, "retryable", None)
         if retryable_flag is False:
             return False
-    except Exception as exc:
+    except (AttributeError, TypeError) as exc:
         logger.debug(f"Failed to check retryable flag: {exc}")
 
     # 1) Direct type match
@@ -121,7 +121,7 @@ def classify_vl_error(exc: Exception) -> dict[str, Any]:
                 if ra:
                     try:
                         retry_after_hint = float(ra)
-                    except Exception:
+                    except (ValueError, TypeError):
                         retry_after_hint = None
     elif isinstance(exc, aiohttp.ClientResponseError):
         status_code = exc.status
@@ -130,7 +130,7 @@ def classify_vl_error(exc: Exception) -> dict[str, Any]:
             if ra:
                 try:
                     retry_after_hint = float(ra)
-                except Exception:
+                except (ValueError, TypeError):
                     retry_after_hint = None
     else:
         status_attr = getattr(exc, "status", None)
@@ -272,7 +272,7 @@ async def retry_async(func: Callable, config: RetryConfig, *args, **kwargs) -> A
                         bounded_ra = min(ra, config.max_delay)
                         delay = max(delay, bounded_ra)
                         extra_note = f" (respecting Retry-After={bounded_ra:.2f}s)"
-            except Exception as exc:
+            except (ValueError, TypeError, AttributeError) as exc:
                 logger.debug(f"Failed to parse Retry-After header: {exc}")
             logger.warning(f"⚠️ Attempt {attempt + 1} failed for {func.__name__}: {e}. Retrying in {delay:.2f}s...{extra_note}")
 

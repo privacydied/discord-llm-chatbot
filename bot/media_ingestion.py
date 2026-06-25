@@ -7,7 +7,6 @@ import os
 import time
 from dataclasses import dataclass
 from typing import Any, Never
-from urllib.parse import urlparse
 
 from .action import BotAction
 from .config import _low_resource_int

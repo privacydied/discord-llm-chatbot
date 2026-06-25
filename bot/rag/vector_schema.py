@@ -239,7 +239,7 @@ class SearchResult:
 
             _rc = _rag_snippet_config()
             max_snippet = int(_rc.get("RAG_MAX_SNIPPET_CHARS", 200))
-        except Exception as exc:
+        except (ValueError, TypeError, OSError, ImportError, AttributeError) as exc:
             logger.debug(f"Failed to load RAG_MAX_SNIPPET_CHARS: {exc}")
         if len(text) > max_snippet:
             return text[: max_snippet - 3] + "..."

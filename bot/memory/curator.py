@@ -591,14 +591,15 @@ class CuratedMemoryCurator:
     @staticmethod
     def _is_temporary_context(lower: str) -> bool:
         """Only treat as temporary when it's clearly short-lived guidance.
+
         Do not treat 'today' as durable on its own; it must be combined with
         a weak/temporary phrase.
         """
-        # Strong temp markers:
-        if any(p in lower for p in ["for now", "temporarily", "this week"]):
+        if any(p in lower for p in ["for now", "temporarily", "this week", "just for today"]):
             return True
-        # 'today' only when paired with temporary-scope language:
-        return bool("today" in lower and any(p in lower for p in ["for now", "until", "just for today", "temporarily"]))
+        if "today" in lower and any(p in lower for p in ["only for today", "for today", "until today", "temporarily"]):
+            return True
+        return False
 
     # ---------------- importance & confidence (inferred) ----------------
 

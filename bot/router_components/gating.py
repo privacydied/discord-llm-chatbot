@@ -15,7 +15,7 @@ def mentions_bot(message: Any, bot_user_id: int | None) -> bool:
         for user in mentions:
             if getattr(user, "id", None) == bot_user_id:
                 return True
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return False
     return False
 
@@ -33,7 +33,7 @@ def is_reply_to_bot(message: Any, bot_user_id: int | None) -> bool:
             return False
         author_id = getattr(getattr(ref_msg, "author", None), "id", None)
         return author_id == bot_user_id
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return False
 
 
@@ -45,5 +45,5 @@ def strip_leading_bot_mention(content: str | None, bot_user_id: int | None) -> s
     pattern = rf"^<@!?{bot_user_id}>\s*"
     try:
         return re.sub(pattern, "", text).strip()
-    except Exception:
+    except (re.error, AttributeError, TypeError, ValueError):
         return text

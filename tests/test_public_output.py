@@ -98,6 +98,18 @@ class TestExtractPublicReplyText:
         result = extract_public_reply_text(text)
         assert result == text
 
+    def test_strips_leading_ab_mode_diagnostics(self) -> None:
+        """Leaked A/B/MODE diagnostic block is stripped before send."""
+        text = "A: false\nB: false\nMODE: NORMAL\n\ndeployment failed because database migration timed out"
+        result = extract_public_reply_text(text)
+        assert result == "deployment failed because database migration timed out"
+
+    def test_strips_compact_ab_mode_diagnostics(self) -> None:
+        """Compact leaked A/B/MODE diagnostic line is stripped before send."""
+        text = "A: false B: false MODE: NORMAL deployment failed because database migration timed out"
+        result = extract_public_reply_text(text)
+        assert result == "deployment failed because database migration timed out"
+
 
 class TestHasReasoningLeakage:
     """Test the reasoning leakage detection function."""

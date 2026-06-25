@@ -115,7 +115,7 @@ class GracefulShutdown:
                 from bot.rag.hybrid_search import set_shutdown_flag
 
                 set_shutdown_flag(True)
-            except Exception as e:
+            except (ImportError, AttributeError, RuntimeError, OSError) as e:
                 logger.warning(f"Failed to set RAG shutdown flag: {e}")
 
             # Execute shutdown tasks with timeout
@@ -128,7 +128,7 @@ class GracefulShutdown:
         except TimeoutError:
             shutdown_duration = asyncio.get_event_loop().time() - shutdown_start_time
             logger.exception(f"❌ Shutdown timed out after {_shutdown_timeout} seconds (actual: {shutdown_duration:.2f}s)")
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, AttributeError, TimeoutError) as e:
             shutdown_duration = asyncio.get_event_loop().time() - shutdown_start_time
             logger.error(
                 f"❌ Error during shutdown after {shutdown_duration:.2f}s: {e}",
@@ -273,7 +273,7 @@ class GracefulShutdown:
                             if not task.done():
                                 task.cancel()
                                 logger.debug(f"Cancelled RAG task: {task_id}")
-                        except Exception as e:
+                        except (RuntimeError, OSError, ValueError, AttributeError) as e:
                             logger.warning(f"Error cancelling RAG task {task_id}: {e}")
 
                     # Wait briefly for tasks to clean up
@@ -313,7 +313,7 @@ class GracefulShutdown:
                             logger.debug("RAG search engine closed")
                         except TimeoutError:
                             logger.warning("RAG search engine close timed out")
-                        except Exception as e:
+                        except (RuntimeError, OSError, ValueError, AttributeError, TimeoutError) as e:
                             logger.debug(f"RAG search engine close warning: {e}")
 
                     # Clean up ChromaDB client if available
@@ -324,7 +324,7 @@ class GracefulShutdown:
                                 if hasattr(backend.client, "close"):
                                     backend.client.close()
                                 logger.debug("ChromaDB client cleaned up")
-                        except Exception as e:
+                        except (RuntimeError, OSError, ValueError, AttributeError) as e:
                             logger.debug(f"ChromaDB client cleanup warning: {e}")
 
                     # Clear the global reference
@@ -335,12 +335,12 @@ class GracefulShutdown:
 
             except ImportError:
                 logger.debug("RAG system not available for cleanup")
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, AttributeError, ImportError) as e:
                 logger.warning(f"Error during RAG search engine cleanup: {e}")
 
             logger.info("✅ RAG system cleanup completed")
 
-        except Exception as e:
+        except (RuntimeError, OSError, ValueError, AttributeError, ImportError) as e:
             logger.error(f"Error during RAG system cleanup: {e}", exc_info=True)
 
     async def _cleanup_subprocesses(self) -> None:

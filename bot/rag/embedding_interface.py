@@ -204,7 +204,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             logger.debug(f"❌ No local cache found for {self.model_name}")
             return None
 
-        except Exception as e:
+        except (OSError, ValueError, AttributeError, ImportError) as e:
             logger.debug(f"Could not determine local model path: {e}")
             return None
 
@@ -261,7 +261,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
             model_dir = find_model_directory(path)
             return model_dir is not None
 
-        except Exception as e:
+        except (OSError, ValueError, AttributeError, PermissionError) as e:
             logger.debug(f"Error checking local cache at {path}: {e}")
             return False
 
@@ -290,7 +290,7 @@ class SentenceTransformerEmbedding(EmbeddingInterface):
                 logger.warning(f"✅ Using fallback model {fallback_model} instead of {original_model_name}")
                 return  # Success with fallback
 
-            except Exception as e:
+            except (RuntimeError, OSError, ValueError, ImportError, AttributeError) as e:
                 logger.debug(f"Fallback {fallback_model} also failed: {e}")
                 continue
 

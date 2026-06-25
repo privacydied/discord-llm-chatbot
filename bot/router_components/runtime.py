@@ -28,28 +28,28 @@ _X_SYNDICATION_ACCEPT_DOMAINS_FALLBACK = {
 def _cfg_float(config: Mapping[str, Any], key: str, default: float) -> float:
     try:
         return float(config.get(key, default))
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return float(default)
 
 
 def _cfg_int(config: Mapping[str, Any], key: str, default: int) -> int:
     try:
         return int(config.get(key, default))
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return int(default)
 
 
 def _cfg_bool(config: Mapping[str, Any], key: str, default: bool) -> bool:
     try:
         return bool(config.get(key, default))
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return bool(default)
 
 
 def _cfg_str(config: Mapping[str, Any], key: str, default: str) -> str:
     try:
         return str(config.get(key, default)).strip()
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return default
 
 
@@ -63,7 +63,7 @@ def _cfg_domain_set(config: Mapping[str, Any]) -> set[str]:
             or ""
         )
         return {d.strip().lower() for d in str(domains).split(",") if d.strip()}
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return set(_X_SYNDICATION_ACCEPT_DOMAINS_FALLBACK)
 
 

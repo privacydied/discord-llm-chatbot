@@ -385,6 +385,15 @@ class PersistentMemoryStore:
             finally:
                 conn.close()
 
+    async def quarantine_memory(self, memory_id: str) -> bool:
+        """Quarantine a memory by soft-deleting it.
+
+        This is a non-destructive review action: the row remains in SQLite,
+        but the canonical active path will ignore it.
+        """
+        await self.initialize()
+        return await self.soft_delete_memory(memory_id)
+
     async def soft_delete_memory(self, memory_id: str) -> bool:
         await self.initialize()
         return await asyncio.to_thread(self._soft_delete_memory_sync, memory_id)
