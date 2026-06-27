@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 
 # Configuration
 PROBE_CACHE_TTL_SECONDS = int(os.getenv("MEDIA_PROBE_CACHE_TTL", "300"))  # 5 minutes default
-PROBE_TIMEOUT_SECONDS = int(os.getenv("MEDIA_PROBE_TIMEOUT", "10"))  # 10 seconds default
+PROBE_TIMEOUT_SECONDS = int(os.getenv("MEDIA_PROBE_TIMEOUT", "20"))  # 20s default; X/Twitter CDN needs headroom
 CACHE_DIR = Path("cache/media_probes")
 
 # Domains that should be probed for media content
