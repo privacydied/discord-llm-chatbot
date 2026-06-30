@@ -2481,6 +2481,12 @@ class Router:
                 self._metric_inc("gate.allowed", {"reason": "reply_to_bot"})
                 return True
 
+            # Ambient reply: last chance before silence, even when mentions are
+            # normally required. Without this, AMBIENT_REPLY_ENABLED is dead
+            # code whenever REQUIRE_MENTION_IN_GUILDS is true (the default).
+            if self._try_ambient_reply(message, context):
+                return True
+
             self._gate_denied[message.id] = "mention_required"
             self.logger.info(
                 f"gate.block | reason=mention_required msg_id={message.id}",
@@ -2605,46 +2611,8 @@ class Router:
             return True
 
         # Ambient reply: last chance before silence. Only in guilds, not DMs.
-        if not is_dm:
-            try:
-                from bot.router_components.ambient import should_ambient_reply
-                from bot.server_features import is_server_feature_enabled
-                guild_id_for_ambient = getattr(message.guild, "id", None)
-                guild_feat = is_server_feature_enabled(guild_id_for_ambient, "ambient_reply")
-                fired, reason = should_ambient_reply(
-                    message,
-                    cfg,
-                    self._ambient_cooldowns,
-                    guild_feat,
-                    now=time.monotonic(),
-                )
-                if fired:
-                    self._ambient_message_ids.add(message.id)
-                    self._update_dispatch_metadata(
-                        message,
-                        context=context,
-                        mention_detected=False,
-                        reply_to_bot=False,
-                    )
-                    self._dispatch_metadata[message.id]["ambient"] = True
-                    self.logger.info(
-                        "ambient.fire | msg_id=%s guild=%s channel=%s",
-                        message.id,
-                        guild_id_for_ambient,
-                        getattr(getattr(message, "channel", None), "id", None),
-                        extra={
-                            "event": "ambient.fire",
-                            "subsys": "ambient",
-                            "msg_id": message.id,
-                            "guild_id": guild_id_for_ambient,
-                        },
-                    )
-                    self._metric_inc("ambient_reply_fired_total", {})
-                    return True
-                else:
-                    self._metric_inc("ambient_reply_suppressed_total", {"reason": reason})
-            except Exception as _ambient_err:
-                self.logger.debug("ambient gate error (suppressed): %s", _ambient_err)
+        if self._try_ambient_reply(message, context):
+            return True
 
         self._gate_denied[message.id] = "not_addressed"
         self.logger.info(
@@ -2662,6 +2630,59 @@ class Router:
         )
         self._metric_inc("gate.blocked", {"reason": "not_addressed"})
         return False
+
+    def _try_ambient_reply(self, message: Message, context: str) -> bool:
+        """Evaluate the ambient-reply gate (opt-in, guild-only, probabilistic).
+
+        Shared by both branches of `_should_process_message` so the feature
+        fires regardless of REQUIRE_MENTION_IN_GUILDS. Errors are swallowed
+        (debug-logged) so a misbehaving ambient gate never blocks normal
+        mention/reply dispatch. [REH]
+        """
+        if isinstance(message.channel, DMChannel):
+            return False
+        try:
+            from bot.router_components.ambient import should_ambient_reply
+            from bot.server_features import is_server_feature_enabled
+
+            guild_id_for_ambient = getattr(message.guild, "id", None)
+            guild_feat = is_server_feature_enabled(guild_id_for_ambient, "ambient_reply")
+            fired, reason = should_ambient_reply(
+                message,
+                self.config,
+                self._ambient_cooldowns,
+                guild_feat,
+                now=time.monotonic(),
+            )
+            if not fired:
+                self._metric_inc("ambient_reply_suppressed_total", {"reason": reason})
+                return False
+
+            self._ambient_message_ids.add(message.id)
+            self._update_dispatch_metadata(
+                message,
+                context=context,
+                mention_detected=False,
+                reply_to_bot=False,
+            )
+            self._dispatch_metadata[message.id]["ambient"] = True
+            self.logger.info(
+                "ambient.fire | msg_id=%s guild=%s channel=%s",
+                message.id,
+                guild_id_for_ambient,
+                getattr(getattr(message, "channel", None), "id", None),
+                extra={
+                    "event": "ambient.fire",
+                    "subsys": "ambient",
+                    "msg_id": message.id,
+                    "guild_id": guild_id_for_ambient,
+                },
+            )
+            self._metric_inc("ambient_reply_fired_total", {})
+            return True
+        except Exception as _ambient_err:
+            self.logger.debug("ambient gate error (suppressed): %s", _ambient_err)
+            return False
 
     def _bind_flow_methods(self, flow_overrides: dict[str, Callable] | None = None) -> None:
         """Binds flow methods to the instance, allowing for overrides for testing."""

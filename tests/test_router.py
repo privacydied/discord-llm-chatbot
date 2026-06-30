@@ -367,6 +367,70 @@ async def test_guild_unmentioned_ignored() -> None:
     assert result is False
 
 
+@pytest.mark.asyncio
+async def test_ambient_reply_fires_when_mention_required(monkeypatch) -> None:
+    """Regression test for the dead-code bug fixed alongside this test.
+
+    Ambient reply must still be reachable even when REQUIRE_MENTION_IN_GUILDS
+    is True (the default) -- previously the mention-required branch always
+    returned False before the ambient-reply gate ever ran, so
+    AMBIENT_REPLY_ENABLED had no effect in any normal deployment.
+    """
+    mock_bot = MagicMock()
+    mock_bot.config = {
+        "OWNER_IDS": [],
+        "REPLY_TRIGGERS": [
+            "dm",
+            "mention",
+            "reply",
+            "bot_threads",
+            "owner",
+            "command_prefix",
+        ],
+        "REQUIRE_MENTION_IN_GUILDS": True,
+        "ALLOW_REPLY_TO_BOT_WITHOUT_MENTION": True,
+        "DM_REQUIRE_MENTION": False,
+        "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO": True,
+        "COMMAND_PREFIX": "!",
+        "AMBIENT_REPLY_ENABLED": True,
+        "AMBIENT_REPLY_PROBABILITY": 1.0,
+        "AMBIENT_REPLY_MIN_CHARS": 1,
+        "AMBIENT_REPLY_CHANNEL_COOLDOWN_S": 0,
+        "AMBIENT_REPLY_GLOBAL_COOLDOWN_S": 0,
+        "AMBIENT_REPLY_CHANNELS": "",
+        "AMBIENT_REPLY_QUIET_HOURS": "",
+    }
+    mock_bot.user.id = 9999
+    mock_logger = MagicMock(spec=logging.Logger)
+    router = Router(bot=mock_bot, flow_overrides={}, logger=mock_logger)
+
+    mock_message = MagicMock()
+    mock_message.id = 555
+    mock_message.guild = MagicMock()
+    mock_message.guild.id = 4242
+    mock_message.channel = MagicMock(spec=discord.TextChannel)
+    mock_message.channel.id = 777
+    mock_message.content = "ambient eligible message body"
+    mock_message.mentions = []
+    mock_message.author = MagicMock(spec=discord.User)
+    mock_message.author.id = 1111
+    mock_message.author.bot = False
+    mock_message.type = discord.MessageType.default
+    mock_message.reference = None
+
+    router._mentions_bot = MagicMock(return_value=False)
+    router._is_reply_to_bot = MagicMock(return_value=False)
+    router._detect_direct_vision_triggers = MagicMock(return_value=False)
+
+    monkeypatch.setattr(
+        "bot.server_features.is_server_feature_enabled", lambda *_a, **_k: True
+    )
+
+    result = router._should_process_message(mock_message)
+    assert result is True
+    assert router._dispatch_metadata.get(mock_message.id, {}).get("ambient") is True
+
+
 class TestExtractionOnlyTimeout:
     """Verify extraction-only items are guarded by asyncio.wait_for timeout. [REH][PA]."""
 
