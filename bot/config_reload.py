@@ -223,6 +223,8 @@ def _infer_subsystems(changes: dict[str, Any]) -> set[str]:
             impacted.add("stt")
         if ku.startswith("TTS_"):
             impacted.add("tts")
+        if ku.startswith("AMBIENT_"):
+            impacted.add("ambient")
         if ku.startswith("LOG_"):
             impacted.add("logging")
         if "PROXY" in ku or ku.startswith("HTTP_"):
