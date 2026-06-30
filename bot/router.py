@@ -420,6 +420,11 @@ class Router:
         self._gate_denied: dict[int, str] = {}
         self._prefilter_gate: dict[int, bool] = {}
 
+        # Ambient reply — opt-in unprompted replies [CA]
+        from bot.router_components.ambient import AmbientCooldowns
+        self._ambient_cooldowns = AmbientCooldowns()
+        self._ambient_message_ids: set[int] = set()
+
         # Vision generation system [CA][SFT]
         self._vision_intent_router: VisionIntentRouter | None = None
         # Single source of truth: orchestrator is owned by the bot
@@ -2284,6 +2289,7 @@ class Router:
         self._dispatch_metadata.pop(message_id, None)
         self._prefilter_gate.pop(message_id, None)
         self._gate_denied.pop(message_id, None)
+        self._ambient_message_ids.discard(message_id)
 
     def _should_process_message(self, message: Message) -> bool:
         """Single source-of-truth gate: decide if this message should be processed.
@@ -2597,6 +2603,48 @@ class Router:
             )
             self._metric_inc("gate.allowed", {"reason": "command_prefix"})
             return True
+
+        # Ambient reply: last chance before silence. Only in guilds, not DMs.
+        if not is_dm:
+            try:
+                from bot.router_components.ambient import should_ambient_reply
+                from bot.server_features import is_server_feature_enabled
+                guild_id_for_ambient = getattr(message.guild, "id", None)
+                guild_feat = is_server_feature_enabled(guild_id_for_ambient, "ambient_reply")
+                fired, reason = should_ambient_reply(
+                    message,
+                    cfg,
+                    self._ambient_cooldowns,
+                    guild_feat,
+                    now=time.monotonic(),
+                )
+                if fired:
+                    self._ambient_message_ids.add(message.id)
+                    self._update_dispatch_metadata(
+                        message,
+                        context=context,
+                        mention_detected=False,
+                        reply_to_bot=False,
+                    )
+                    self._dispatch_metadata[message.id]["ambient"] = True
+                    self.logger.info(
+                        "ambient.fire | msg_id=%s guild=%s channel=%s",
+                        message.id,
+                        guild_id_for_ambient,
+                        getattr(getattr(message, "channel", None), "id", None),
+                        extra={
+                            "event": "ambient.fire",
+                            "subsys": "ambient",
+                            "msg_id": message.id,
+                            "guild_id": guild_id_for_ambient,
+                        },
+                    )
+                    self._metric_inc("ambient_reply_fired_total", {})
+                    return True
+                else:
+                    self._metric_inc("ambient_reply_suppressed_total", {"reason": reason})
+            except Exception as _ambient_err:
+                self.logger.debug("ambient gate error (suppressed): %s", _ambient_err)
 
         self._gate_denied[message.id] = "not_addressed"
         self.logger.info(

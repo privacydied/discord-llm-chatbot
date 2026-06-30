@@ -22,6 +22,8 @@ FEATURE_ALIASES = {
     "x_twitter_extraction": "x_twitter_extraction",
     "rag": "rag",
     "knowledge": "rag",
+    "ambient": "ambient_reply",
+    "ambient_reply": "ambient_reply",
 }
 
 FEATURE_DEFAULTS: dict[str, bool] = {
@@ -32,6 +34,7 @@ FEATURE_DEFAULTS: dict[str, bool] = {
     "web_extraction": True,
     "x_twitter_extraction": True,
     "rag": True,
+    "ambient_reply": False,
 }
 
 
