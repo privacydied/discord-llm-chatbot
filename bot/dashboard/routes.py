@@ -11,6 +11,7 @@ from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import discord
 from aiohttp import web
 
 from bot.utils.logging import get_logger
@@ -209,12 +210,14 @@ class DashboardRoutes:
         if bot and bot.is_ready():
             for g in bot.guilds:
                 with contextlib.suppress(Exception):
-                    guilds.append({
-                        "id": str(g.id),
-                        "name": g.name,
-                        "icon_url": str(g.icon.url) if g.icon else None,
-                        "member_count": g.member_count,
-                    })
+                    guilds.append(
+                        {
+                            "id": str(g.id),
+                            "name": g.name,
+                            "icon_url": str(g.icon.url) if g.icon else None,
+                            "member_count": g.member_count,
+                        }
+                    )
 
         # Bot user info
         bot_username = summary.get("bot_username", "unknown")
@@ -672,19 +675,22 @@ class DashboardRoutes:
                             user = bot.get_user(user_id_or_channel_id)
                             if user is None:
                                 user = await asyncio.wait_for(
-                                    bot.fetch_user(user_id_or_channel_id), timeout=10.0,
+                                    bot.fetch_user(user_id_or_channel_id),
+                                    timeout=10.0,
                                 )
                             if user is not None:
                                 # Get or create DM channel
                                 dm_channel = user.dm_channel
                                 if dm_channel is None:
                                     dm_channel = await asyncio.wait_for(
-                                        user.create_dm(), timeout=10.0,
+                                        user.create_dm(),
+                                        timeout=10.0,
                                     )
                                 if dm_channel is not None:
                                     # Retry live fetch with the real DM channel ID
                                     live2 = await self._services.live_dm_messages(
-                                        channel_id=dm_channel.id, limit=50,
+                                        channel_id=dm_channel.id,
+                                        limit=50,
                                     )
                                     if live2.get("messages"):
                                         # Fetch from DMStore using the real channel ID
@@ -710,7 +716,7 @@ class DashboardRoutes:
                                         return _json_response(result)
                         except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                             logger.debug(f"MessageStore get_thread_messages failed: {e}")
-            except (AttributeError, TypeError, ValueError, RuntimeError):
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 logger.debug(f"MessageStore path failed, falling back to dm_store: {e}")
 
         # Fall back to DMStore

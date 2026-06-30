@@ -3,6 +3,7 @@ Extends memory_cmds.py with !memory-status, !memory-review, !memory-forget,
 !memory-disable, !memory-enable, !memory-export.
 """
 
+import asyncio
 import io
 import logging
 

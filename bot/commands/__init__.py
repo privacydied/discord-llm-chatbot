@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import Callable
-from typing import Any, Dict
+from typing import Any
 
 # Command modules are loaded via the setup_commands function below.
 

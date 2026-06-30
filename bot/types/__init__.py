@@ -9,7 +9,6 @@ package to avoid breaking legacy tests. [CA][REH]
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional
 
 # Re-export InputModality from the dedicated modality module to maintain
 # backward compatibility for legacy imports (e.g., tests importing from bot.types)

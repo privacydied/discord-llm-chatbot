@@ -19,6 +19,8 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import discord
+
 from bot.utils.logging import get_logger
 
 from .audit_store import (
@@ -371,8 +373,6 @@ class DashboardServices:
                     return {"success": False, "error": error_msg, "status": "user_not_found"}
 
             # Send DM
-            import discord
-
             try:
                 msg = await asyncio.wait_for(user.send(content), timeout=30.0)
 
@@ -505,8 +505,6 @@ class DashboardServices:
         bot = self._bot
         if bot is None:
             return {"success": False, "error": "Bot not ready", "status": "not_ready"}
-
-        import discord
 
         try:
             guild = bot.get_guild(guild_id)
@@ -689,8 +687,6 @@ class DashboardServices:
         if bot is None:
             return {"success": False, "error": "Bot not ready", "status": "not_ready"}
 
-        import discord
-
         try:
             # Find the channel
             channel = bot.get_channel(channel_id)
@@ -800,8 +796,6 @@ class DashboardServices:
         if bot is None:
             return {"messages": [], "error": "bot not ready"}
 
-        import discord
-
         try:
             channel = bot.get_channel(channel_id)
             if channel is None:
@@ -819,6 +813,7 @@ class DashboardServices:
 
             messages = []
             try:
+
                 async def _fetch_history_coro():
                     return [m async for m in channel.history(limit=limit, oldest_first=False)]
 
@@ -926,6 +921,7 @@ class DashboardServices:
 
             messages = []
             try:
+
                 async def _fetch_history_coro():
                     return [m async for m in channel.history(limit=limit, oldest_first=False)]
 

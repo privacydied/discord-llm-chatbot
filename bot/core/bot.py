@@ -971,6 +971,7 @@ class LLMBot(commands.Bot):
 
         except Exception as e:
             from bot.exceptions import APIError as _APIError
+
             if isinstance(e, _APIError):
                 # APIError messages are already descriptive — no traceback needed [REH]
                 self.logger.warning(f"APIError in message {message.id}: {e}")

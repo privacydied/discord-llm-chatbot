@@ -422,6 +422,7 @@ class Router:
 
         # Ambient reply — opt-in unprompted replies [CA]
         from bot.router_components.ambient import AmbientCooldowns
+
         self._ambient_cooldowns = AmbientCooldowns()
         self._ambient_message_ids: set[int] = set()
 
@@ -8326,7 +8327,6 @@ class Router:
 
         return text
         # Apply filtering logic here
-
 
     async def _flow_generate_tts(self, text: str) -> str | None:
         """Generate TTS audio from text."""

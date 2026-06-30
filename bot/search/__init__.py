@@ -3,7 +3,6 @@
 # e.g. `from bot.search import web_search, search_memories`. Provide minimal shims
 # to prevent ImportError and keep tests deterministic by mocking aiohttp.
 import os
-from typing import List
 
 import aiohttp
 from bs4 import BeautifulSoup

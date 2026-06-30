@@ -47,7 +47,7 @@ def _validate_remote_playwright_url(raw_url: str, logger) -> None:
     # (must be updated in lockstep with requirements.txt).
     try:
         client_ver = _meta.version("playwright")
-    except importlib.metadata.PackageNotFoundError:
+    except _meta.PackageNotFoundError:
         client_ver = "(unknown)"
     expected_server_ver = "1.59"  # must track requirements.txt
     if not client_ver.startswith(expected_server_ver.split(".", maxsplit=1)[0] + "."):

@@ -422,9 +422,7 @@ async def test_ambient_reply_fires_when_mention_required(monkeypatch) -> None:
     router._is_reply_to_bot = MagicMock(return_value=False)
     router._detect_direct_vision_triggers = MagicMock(return_value=False)
 
-    monkeypatch.setattr(
-        "bot.server_features.is_server_feature_enabled", lambda *_a, **_k: True
-    )
+    monkeypatch.setattr("bot.server_features.is_server_feature_enabled", lambda *_a, **_k: True)
 
     result = router._should_process_message(mock_message)
     assert result is True

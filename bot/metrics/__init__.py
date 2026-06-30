@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from .null_metrics import NoopMetrics as NullMetrics  # Back-compat alias
 
