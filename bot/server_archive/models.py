@@ -75,6 +75,7 @@ class ArchiveUser:
     display_name: str | None = None
     bot: int = 0
     last_seen_at: str = field(default_factory=utc_now_iso)
+    avatar: str | None = None
 
     def to_row(self) -> dict[str, Any]:
         return asdict(self)

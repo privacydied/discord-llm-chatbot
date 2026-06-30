@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 
 async def _to_thread(func, *args):
@@ -140,7 +140,8 @@ class ServerArchiveStore:
                             global_name TEXT,
                             display_name TEXT,
                             bot INTEGER NOT NULL DEFAULT 0,
-                            last_seen_at TEXT NOT NULL
+                            last_seen_at TEXT NOT NULL,
+                            avatar TEXT
                         );
 
                         CREATE TABLE IF NOT EXISTS archive_messages (
@@ -256,7 +257,13 @@ class ServerArchiveStore:
                             )
                             """,
                         )
-                    conn.execute("PRAGMA user_version=1")
+                    # Idempotently add avatar column in case pre-existing table lacks it
+                    try:
+                        conn.execute("ALTER TABLE archive_users ADD COLUMN avatar TEXT")
+                        conn.commit()
+                    except sqlite3.OperationalError:
+                        pass  # column already exists
+                    conn.execute("PRAGMA user_version=2")
                     conn.commit()
                     logger.info(
                         "Server archive schema bootstrapped",
@@ -264,6 +271,15 @@ class ServerArchiveStore:
                             "subsys": "server_archive",
                             "event": "archive_schema_bootstrap",
                         },
+                    )
+                elif version == 1:
+                    # v1→v2: add avatar column to archive_users
+                    conn.execute("ALTER TABLE archive_users ADD COLUMN avatar TEXT")
+                    conn.execute("PRAGMA user_version=2")
+                    conn.commit()
+                    logger.info(
+                        "Server archive schema migrated v1→v2 (avatar column)",
+                        extra={"subsys": "server_archive", "event": "archive_schema_migrate"},
                     )
                 elif version > _SCHEMA_VERSION:
                     logger.warning(
@@ -396,14 +412,15 @@ class ServerArchiveStore:
     def _upsert_user(self, conn: sqlite3.Connection, user: ArchiveUser) -> None:
         conn.execute(
             """
-            INSERT INTO archive_users(user_id, username, global_name, display_name, bot, last_seen_at)
-            VALUES(:user_id, :username, :global_name, :display_name, :bot, :last_seen_at)
+            INSERT INTO archive_users(user_id, username, global_name, display_name, bot, last_seen_at, avatar)
+            VALUES(:user_id, :username, :global_name, :display_name, :bot, :last_seen_at, :avatar)
             ON CONFLICT(user_id) DO UPDATE SET
                 username=excluded.username,
                 global_name=excluded.global_name,
                 display_name=excluded.display_name,
                 bot=excluded.bot,
-                last_seen_at=excluded.last_seen_at
+                last_seen_at=excluded.last_seen_at,
+                avatar=COALESCE(excluded.avatar, avatar)
             """,
             user.to_row(),
         )
@@ -1201,8 +1218,9 @@ class ServerArchiveStore:
                 rows = conn.execute(
                     f"""SELECT am.message_id, am.content, am.created_at, am.edited_at,
                                am.author_id, am.reply_to_message_id, am.deleted_at,
-                               am.metadata_json,
-                               au.username, au.global_name, au.display_name, au.bot
+                               am.metadata_json, am.has_attachments,
+                               au.username, au.global_name, au.display_name, au.bot,
+                               au.avatar
                         FROM archive_messages am
                         LEFT JOIN archive_users au ON am.author_id = au.user_id
                         WHERE {where_sql}
@@ -1210,13 +1228,42 @@ class ServerArchiveStore:
                     [*params, page_size, offset],
                 ).fetchall()
 
+                # Batch-fetch attachments for messages that have them
+                msg_ids = [dict(r)["message_id"] for r in rows if dict(r).get("has_attachments")]
+                attachments_by_msg: dict[str, list[dict[str, Any]]] = {}
+                if msg_ids:
+                    placeholders = ",".join("?" * len(msg_ids))
+                    att_rows = conn.execute(
+                        f"SELECT message_id, attachment_id, filename, content_type, size, url, proxy_url "  # nosec B608
+                        f"FROM archive_attachments WHERE message_id IN ({placeholders})",
+                        msg_ids,
+                    ).fetchall()
+                    for att in att_rows:
+                        a = dict(att)
+                        attachments_by_msg.setdefault(a["message_id"], []).append({
+                            "id": a.get("attachment_id"),
+                            "filename": a.get("filename"),
+                            "content_type": a.get("content_type"),
+                            "size": a.get("size"),
+                            "url": a.get("url") or "",
+                            "proxy_url": a.get("proxy_url") or "",
+                        })
+
                 messages = []
                 for row in rows:
                     r = dict(row)
                     username = r.get("username") or ""
                     display = r.get("display_name") or r.get("global_name") or username
+                    mid = r["message_id"]
+                    avatar = r.get("avatar")
+                    if not avatar:
+                        uid = r.get("author_id")
+                        try:
+                            avatar = f"https://cdn.discordapp.com/embed/avatars/{int(uid) % 6}.png"
+                        except (TypeError, ValueError):
+                            pass
                     messages.append({
-                        "discord_message_id": r["message_id"],
+                        "discord_message_id": mid,
                         "content": r.get("content") or "",
                         "created_at": r.get("created_at"),
                         "edited_at": r.get("edited_at"),
@@ -1224,11 +1271,11 @@ class ServerArchiveStore:
                         "author_id": r.get("author_id"),
                         "author_username": username,
                         "author_display_name": display,
-                        "author_avatar_url": None,
+                        "author_avatar_url": avatar,
                         "author_is_bot": bool(r.get("bot")),
-                        "is_own_bot": False,
+                        "is_own_bot": bool(r.get("bot")),
                         "reply_to_message_id": r.get("reply_to_message_id"),
-                        "attachments_json": [],
+                        "attachments_json": attachments_by_msg.get(mid, []),
                         "embeds_json": [],
                         "metadata_json": r.get("metadata_json") or {},
                     })

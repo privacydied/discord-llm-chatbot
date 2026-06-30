@@ -49,6 +49,24 @@ def _id(value: Any) -> str | None:
     return str(value)
 
 
+def _avatar_url(author: Any) -> str | None:
+    """Return a usable avatar URL for a Discord member/user object, or None."""
+    try:
+        av = getattr(author, "display_avatar", None) or getattr(author, "avatar", None)
+        if av is not None:
+            url = getattr(av, "url", None)
+            if url:
+                return str(url)
+        # Fallback: construct CDN default from user_id (no hash needed)
+        uid = getattr(author, "id", None)
+        if uid is not None:
+            index = int(uid) % 6
+            return f"https://cdn.discordapp.com/embed/avatars/{index}.png"
+    except Exception:
+        pass
+    return None
+
+
 def _iso(value: Any) -> str | None:
     if value is None:
         return None
@@ -157,6 +175,7 @@ def build_bundle_from_message(message: Any, *, max_message_chars: int = 8000, in
             global_name=getattr(author, "global_name", None),
             display_name=getattr(author, "display_name", None),
             bot=int(bool(getattr(author, "bot", False))),
+            avatar=_avatar_url(author),
         ),
         message=ArchiveMessage(
             message_id=_id(getattr(message, "id", None)) or "",
