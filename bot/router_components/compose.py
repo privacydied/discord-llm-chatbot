@@ -23,7 +23,7 @@ def format_x_tweet_with_transcription(
     extract_primary_tweet_id: Callable[[str], str | None] | None = None,
 ) -> str:
     """Assemble a single evidence bundle for a tweet using caption + STT."""
-    bundle = EvidenceBundle(source_platform="x", source_url=url)
+    bundle = EvidenceBundle()
 
     # Primary ID anchor for deterministic media selection [CMV]
     try:
@@ -113,23 +113,33 @@ def format_x_tweet_with_transcription(
         bundle.media_transcript = ""
 
     # Concatenate caption + transcript for video tweets before text flow [REH]
+    # NOTE: EvidenceBundle.extra_sections is a plain dict[str, str]; the key
+    # doubles as the section label rendered by compose(). [CMV]
+    CAPTION_TRANSCRIPT_LABEL = "Tweet Caption + Audio Transcript"
+    AUDIO_TRANSCRIPT_LABEL = "Audio Transcript"
+    CAPTION_ONLY_LABEL = "Tweet Caption"
     try:
         if bundle.caption_text and bundle.media_transcript:
             combined = f"{bundle.caption_text.strip()}\n\n{bundle.media_transcript.strip()}"
-            bundle.add_section(
-                kind="caption_transcript",
-                title="Tweet Caption + Audio Transcript",
-                body=combined,
-                provenance={"source": "tweet_text+stt"},
-            )
+            bundle.extra_sections[CAPTION_TRANSCRIPT_LABEL] = combined
             bundle.caption_text = ""
             bundle.media_transcript = ""
+        elif bundle.media_transcript:
+            # Transcript-only: move out of the default "transcript" label into a
+            # clearly-named section so grounding instructions read naturally.
+            bundle.extra_sections[AUDIO_TRANSCRIPT_LABEL] = bundle.media_transcript.strip()
+            bundle.media_transcript = ""
+        elif bundle.caption_text:
+            # Caption-only: same relabeling for a consistent, human-readable section name.
+            bundle.extra_sections[CAPTION_ONLY_LABEL] = bundle.caption_text.strip()
+            bundle.caption_text = ""
     except (AttributeError, TypeError, ValueError, KeyError) as exc:
         logger.debug(f"caption_transcript concatenation failed: {exc}")
 
     # Add STT grounding instructions to prevent "I can't process audio" responses [REH]
     # This ensures the model knows STT succeeded and uses the transcript
-    if bundle.media_transcript or any(s.kind == "caption_transcript" for s in bundle.extra_sections):
+    has_transcript_section = CAPTION_TRANSCRIPT_LABEL in bundle.extra_sections or AUDIO_TRANSCRIPT_LABEL in bundle.extra_sections
+    if has_transcript_section:
         grounding = (
             "\n\n[STT GROUNDING]\n"
             "- The audio/video was transcribed by STT. Use the transcript above as the source.\n"
@@ -139,14 +149,9 @@ def format_x_tweet_with_transcription(
             "- Do not ask the user to provide the audio in another format.\n"
         )
         # Append grounding to extra_sections as an instruction block
-        bundle.add_section(
-            kind="instruction",
-            title="STT Instructions",
-            body=grounding,
-            provenance={"source": "stt_grounding"},
-        )
+        bundle.extra_sections["STT Instructions"] = grounding
 
-    return bundle.compose_prompt_text()
+    return bundle.compose()
 
 
 def format_x_tweet_result(

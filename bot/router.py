@@ -1250,7 +1250,7 @@ class Router:
         """Build EvidenceBundle for a text-only tweet using syndication payload. [CA]."""
         from .evidence import EvidenceBundle
 
-        bundle = EvidenceBundle(source_platform="x", source_url=url)
+        bundle = EvidenceBundle()
         try:
             ptid = extract_primary_tweet_id(url)
             if ptid:
@@ -1274,7 +1274,7 @@ class Router:
         qtxt = self._extract_syndication_text(q)
         if qtxt:
             bundle.quoted_text = qtxt
-        composed = bundle.compose_prompt_text()
+        composed = bundle.compose()
         with suppress(Exception):
             self.logger.info(
                 "x.text.resolve",
@@ -6923,7 +6923,7 @@ class Router:
 
         # Convert EvidenceBundle to string for processing
         if isinstance(content, EvidenceBundle):
-            content_str = content.compose_prompt_text()
+            content_str = content.compose()
             self.logger.debug(f"📋 Composed evidence bundle for text flow: {len(content_str)} chars")
         else:
             content_str = content
@@ -7201,7 +7201,7 @@ class Router:
 
         # Convert EvidenceBundle to string for processing
         if isinstance(content, EvidenceBundle):
-            content_str = content.compose_prompt_text()
+            content_str = content.compose()
             self.logger.debug(f"📋 Composed evidence bundle into {len(content_str)} chars")
         else:
             content_str = content
