@@ -9,14 +9,16 @@
 
 ## Build, Test, and Development Commands
 - `uv run python -m bot.main` — run the bot locally.
-- `uv run -m pytest -q` — run full test suite.
 - `uv run -m pytest tests/test_router.py -v` — run one file.
 - `uv run -m pytest tests/test_router.py::test_name -v` — run one test.
+- `uv run -m pytest -k "ambient or router" -q` — run tests matching a keyword.
 - `uv run ruff check .` and `uv run ruff format .` — lint/format.
 - `uv run bandit -q -r bot` — security scan.
 - `uv run playwright install chromium` — required once for screenshot/web flows.
 
 Always use `uv run` for reproducible interpreter/environment behavior.
+
+**Never run `uv run -m pytest -q` (full suite, no filter).** The suite is large (2000+ tests, ~5 min) — always scope to the files/tests relevant to the change. Only run it unfiltered if explicitly asked.
 
 ## Coding Style & Naming Conventions
 - Python 3.11+ with async-first patterns; avoid blocking calls in event loop code.
@@ -29,7 +31,7 @@ Always use `uv run` for reproducible interpreter/environment behavior.
 - Framework: `pytest` with `asyncio_mode = auto` (`pytest.ini`).
 - Put tests in `tests/`, named `test_*.py`.
 - Cover routing, retries/timeouts, and failure paths for new behavior.
-- Run targeted tests first, then full suite before opening PR.
+- Run targeted tests for the files/areas touched; do not run the full unfiltered suite (see Build/Test commands above) unless explicitly asked.
 
 ## Commit & Pull Request Guidelines
 - Use imperative commit subjects, optionally with scope/tags, e.g.:
