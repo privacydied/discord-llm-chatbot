@@ -5,6 +5,7 @@ This module should contain NO business logic, only orchestration.
 import asyncio
 import contextlib
 import os
+import sys
 from typing import NoReturn
 
 import aiohttp
@@ -30,6 +31,34 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+
+def _tune_glibc_malloc_arenas() -> None:
+    """Cap glibc malloc arenas to curb per-thread heap fragmentation. [PA][CMV]
+
+    STT/TTS/RAG work runs across executor threads; glibc's default arena cap
+    (8 * ncpus) lets each thread claim its own arena, and arenas don't shrink
+    back to the OS once grown even after their allocations are freed. That
+    fragmentation was a measured large contributor to this process's resident
+    memory while otherwise idle. `mallopt()` is a live runtime call -- unlike
+    the MALLOC_ARENA_MAX env var, it doesn't depend on being set before the
+    process starts, so it's applied here unconditionally. Linux/glibc only;
+    a no-op everywhere else (musl, macOS, Windows).
+    """
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        import ctypes
+
+        libc = ctypes.CDLL("libc.so.6")
+        m_arena_max = -8  # glibc malloc.h: M_ARENA_MAX
+        max_arenas = int(os.getenv("MALLOC_ARENA_MAX", "2"))
+        libc.mallopt(m_arena_max, max_arenas)
+    except (OSError, AttributeError, ValueError):
+        pass  # best-effort tuning; never block startup on this
+
+
+_tune_glibc_malloc_arenas()
 
 
 async def main(bot_ref: dict[str, LLMBot] | None = None) -> NoReturn:

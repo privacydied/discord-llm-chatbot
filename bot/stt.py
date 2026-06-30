@@ -8,8 +8,10 @@ chunked inference.
 from __future__ import annotations
 
 import asyncio
+import gc
 import os
 import threading
+from collections import OrderedDict
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING
@@ -67,6 +69,11 @@ _CACHE_DIR = os.getenv("STT_CACHE_DIR", "stt/cache")
 _LOCAL_ONLY = os.getenv("STT_LOCAL_ONLY", "0").lower() in ("1", "true", "yes", "y")
 _COMPUTE_TYPE_DECL = os.getenv("STT_COMPUTE_TYPE", "int8")
 _INIT_TIMEOUT = float(os.getenv("STT_INIT_TIMEOUT", "8"))
+# Each cached whisper model variant pins its full weights + ctranslate2 buffers
+# in memory for the process lifetime; downgrades (base->tiny on slow_decode)
+# previously stacked indefinitely. Cap how many distinct specs stay resident
+# at once -- the default model always counts as one slot. [PA][CMV]
+_MODEL_CACHE_MAX = max(1, int(os.getenv("STT_MODEL_CACHE_MAX", "2")))
 
 
 @dataclass(frozen=True)
@@ -148,7 +155,10 @@ class STTManager:
 
     def __init__(self) -> None:
         self.engine = _ENGINE
-        self._model_cache: dict[ModelSpec, WhisperModel] = {}
+        # OrderedDict for LRU eviction -- each entry pins a full model's weights
+        # + ctranslate2 buffers in memory; unbounded growth (e.g. repeated
+        # base->tiny downgrades) was the largest contributor to RSS growth. [PA]
+        self._model_cache: OrderedDict[ModelSpec, WhisperModel] = OrderedDict()
         self._model_locks: dict[ModelSpec, threading.Lock] = {}
         self._ready_event = threading.Event()
         self._default_spec = _resolve_spec(_DEFAULT_MODEL_DECL, _COMPUTE_TYPE_DECL)
@@ -196,6 +206,29 @@ class STTManager:
         self._init_thread = threading.Thread(target=_loader, name="stt-fw-init", daemon=True)
         self._init_thread.start()
 
+    def _evict_lru_locked(self) -> None:
+        """Drop least-recently-used cached models beyond the cap. Caller holds the lock.
+
+        The default spec is never evicted -- it's reloaded on essentially every
+        request, so evicting it would just trade memory for repeated reload cost.
+        """
+        while len(self._model_cache) > _MODEL_CACHE_MAX:
+            for victim_spec in self._model_cache:
+                if victim_spec != self._default_spec:
+                    break
+            else:
+                break  # only the default spec remains; nothing safe to evict
+            victim = self._model_cache.pop(victim_spec)
+            del victim
+            gc.collect()
+            logger.info(
+                "stt.model_cache.evict | spec=%s-%s cache_size=%s",
+                victim_spec.size,
+                victim_spec.compute_type,
+                len(self._model_cache),
+                extra={"event": "stt.model_cache.evict", "subsys": "stt"},
+            )
+
     def _load_model(self, spec: ModelSpec) -> WhisperModel:
         from faster_whisper import WhisperModel
 
@@ -203,6 +236,7 @@ class STTManager:
         with lock:
             model = self._model_cache.get(spec)
             if model:
+                self._model_cache.move_to_end(spec)
                 return model
             device = _device_for_runtime()
             try:
@@ -227,6 +261,7 @@ class STTManager:
                     compute_type=spec.compute_type,
                 )
             self._model_cache[spec] = model
+            self._evict_lru_locked()
             return model
 
     # -------------------------------------------------------------- Public API
@@ -260,6 +295,32 @@ class STTManager:
         if not nxt:
             return None
         return ModelSpec(nxt, spec.compute_type)
+
+    def evict_idle_models(self) -> int:
+        """Thread-safe eviction of all cached non-default models. Returns count evicted.
+
+        Public entry point for callers outside this module (e.g. the periodic
+        health check reclaiming memory under pressure) -- acquires each
+        victim's own lock before dropping it, unlike the internal
+        `_evict_lru_locked` which assumes the caller already holds the lock
+        for the spec being loaded. [PA][REH]
+        """
+        victims = [spec for spec in list(self._model_cache) if spec != self._default_spec]
+        evicted = 0
+        for spec in victims:
+            with self._get_lock_for(spec):
+                model = self._model_cache.pop(spec, None)
+            if model is not None:
+                del model
+                evicted += 1
+        if evicted:
+            gc.collect()
+            logger.info(
+                "stt.model_cache.evict_idle | count=%s",
+                evicted,
+                extra={"event": "stt.model_cache.evict_idle", "subsys": "stt"},
+            )
+        return evicted
 
     # Backwards-compatible helpers -------------------------------------------------
 
@@ -306,6 +367,17 @@ def get_stt_manager() -> STTManager:
     global _stt_manager
     if _stt_manager is None:
         _stt_manager = STTManager()
+    return _stt_manager
+
+
+def get_stt_manager_if_initialized() -> STTManager | None:
+    """Return the global STTManager only if already created; never instantiates one.
+
+    For callers that want to act on an existing manager (e.g. evicting idle
+    cached models under memory pressure) without the side effect of cold-
+    starting STT -- which spins up a background model-load thread -- for a
+    bot that has never actually used speech-to-text. [PA][REH]
+    """
     return _stt_manager
 
 

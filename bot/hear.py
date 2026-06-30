@@ -184,7 +184,10 @@ STREAM_FRAME_S = 0.25
 _JOB_SEMAPHORE = asyncio.Semaphore(1)
 MAX_CHUNK_MULTIPLIER = 1.25
 MAX_CHUNK_ABS_LIMIT = 512
-MEMORY_ABORT_THRESHOLD_MB = 900
+try:
+    MEMORY_ABORT_THRESHOLD_MB = int(os.getenv("STT_MEMORY_ABORT_THRESHOLD_MB", "900"))
+except (TypeError, ValueError):
+    MEMORY_ABORT_THRESHOLD_MB = 900
 
 STT_MAX_RAM_MB: int | None = None
 try:
@@ -1649,6 +1652,61 @@ def _find_overlap_len(prev: str, curr: str) -> int:
     return 0
 
 
+_MEMORY_CONFIRM_DELAY_S = 0.3
+
+
+async def _resolve_memory_abort(
+    rss_mb: float,
+    *,
+    confirm: bool,
+    process: psutil.Process,
+    confirm_delay: float = _MEMORY_CONFIRM_DELAY_S,
+) -> bool:
+    """Decide whether to abort the in-progress transcription on high RSS.
+
+    Self-contained: a breach is confirmed (or dismissed) within this same
+    call via a brief re-measurement, instead of deferring resolution to a
+    hypothetical next call. The previous closure-based version only resolved
+    a "confirm" state on a *second* invocation; short/single-chunk clips
+    that never produced a second call left a real high-memory breach
+    unresolved and the job simply completed anyway. [REH][PA]
+
+    Args:
+        rss_mb: Most recently measured RSS, in MB.
+        confirm: Whether to debounce via a re-measurement (True for short
+            clips, where a single transient spike shouldn't kill the job) or
+            abort immediately on the first breach (False, for longer/riskier
+            clips).
+        process: psutil.Process handle to re-measure RSS from when confirming.
+        confirm_delay: Seconds to wait before the confirming re-measurement.
+
+    """
+    if rss_mb < MEMORY_ABORT_THRESHOLD_MB:
+        return False
+
+    if not confirm:
+        with contextlib.suppress(Exception):
+            logger.info("stt.guard.memory rss_mb=%.1f action=abort_partial", rss_mb)
+        return True
+
+    with contextlib.suppress(Exception):
+        logger.info("stt.guard.memory rss_mb=%.1f action=confirm_abort", rss_mb)
+    await asyncio.sleep(confirm_delay)
+    try:
+        rss_second = process.memory_info().rss / (1024 * 1024)
+    except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
+        rss_second = rss_mb
+
+    if rss_second >= MEMORY_ABORT_THRESHOLD_MB:
+        with contextlib.suppress(Exception):
+            logger.info("stt.guard.memory rss_mb=%.1f action=abort_partial", rss_second)
+        return True
+
+    with contextlib.suppress(Exception):
+        logger.info("stt.guard.memory rss_mb=%.1f action=continue", rss_second)
+    return False
+
+
 async def _run_whisper(
     pre: PreprocessResult,
     spans: SpanRecorder,
@@ -1760,64 +1818,9 @@ async def _transcribe_with_model(
     max_chunks = max(1, min(dynamic_limit, MAX_CHUNK_ABS_LIMIT))
     process = psutil.Process()
     confirm_memory_abort = pre.duration_in <= 90.0
-    pending_memory_abort = False
-    memory_probe_started = 0.0
-    MEMORY_CONFIRM_DELAY = 0.3
 
     async def _should_abort_for_memory(rss_mb: float) -> bool:
-        nonlocal pending_memory_abort, memory_probe_started
-        if rss_mb < MEMORY_ABORT_THRESHOLD_MB:
-            if pending_memory_abort:
-                with contextlib.suppress(Exception):
-                    logger.info(
-                        "stt.guard.memory rss_mb=%.1f action=continue",
-                        rss_mb,
-                    )
-            pending_memory_abort = False
-            return False
-
-        if not confirm_memory_abort:
-            with contextlib.suppress(Exception):
-                logger.info(
-                    "stt.guard.memory rss_mb=%.1f action=abort_partial",
-                    rss_mb,
-                )
-            return True
-
-        if not pending_memory_abort:
-            pending_memory_abort = True
-            memory_probe_started = time.perf_counter()
-            with contextlib.suppress(Exception):
-                logger.info(
-                    "stt.guard.memory rss_mb=%.1f action=confirm_abort",
-                    rss_mb,
-                )
-            await asyncio.sleep(MEMORY_CONFIRM_DELAY)
-            return False
-
-        elapsed = time.perf_counter() - memory_probe_started
-        if elapsed < MEMORY_CONFIRM_DELAY:
-            await asyncio.sleep(max(0.0, MEMORY_CONFIRM_DELAY - elapsed))
-        try:
-            rss_second = process.memory_info().rss / (1024 * 1024)
-        except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
-            rss_second = rss_mb
-
-        if rss_second >= MEMORY_ABORT_THRESHOLD_MB:
-            with contextlib.suppress(Exception):
-                logger.info(
-                    "stt.guard.memory rss_mb=%.1f action=abort_partial",
-                    rss_second,
-                )
-            return True
-
-        with contextlib.suppress(Exception):
-            logger.info(
-                "stt.guard.memory rss_mb=%.1f action=continue",
-                rss_second,
-            )
-        pending_memory_abort = False
-        return False
+        return await _resolve_memory_abort(rss_mb, confirm=confirm_memory_abort, process=process)
 
     async def _decode_chunk(chunk_audio: np.ndarray, language: str | None = None) -> tuple[list[Any], Any, float]:
         """Decode a single audio chunk with Whisper.

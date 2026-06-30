@@ -30,6 +30,44 @@ _background_tasks: dict[str, tasks.Loop] = {}
 _running_tasks: list[asyncio.Task] = []
 
 
+def _reclaim_memory(cfg: dict[str, Any]) -> float:
+    """Best-effort memory reclaim when the health check sees high RSS. [PA][REH]
+
+    Three steps, cheapest/safest first: collect Python-level cycles, evict
+    non-default STT whisper models (each pins tens-to-hundreds of MB of
+    weights -- see bot/stt.py's LRU cache), then ask glibc to release freed
+    arena pages back to the OS via malloc_trim(). Returns MB reclaimed
+    (0 if measurement or trimming isn't available); never raises.
+    """
+    import gc
+
+    import psutil
+
+    process = psutil.Process()
+    before_mb = process.memory_info().rss / 1024 / 1024
+    gc.collect()
+
+    if cfg.get("MEMORY_EVICT_STT_CACHE_ON_WARNING", True):
+        try:
+            from .stt import get_stt_manager_if_initialized
+
+            manager = get_stt_manager_if_initialized()
+            if manager is not None:
+                manager.evict_idle_models()
+        except Exception as exc:
+            logger.debug(f"STT cache eviction during memory reclaim skipped: {exc}")
+
+    try:
+        import ctypes
+
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):
+        pass
+
+    after_mb = process.memory_info().rss / 1024 / 1024
+    return max(0.0, before_mb - after_mb)
+
+
 def _persist_profiles_sync() -> tuple[bool, bool]:
     """Persist profile caches to disk."""
     return save_all_profiles(), save_all_server_profiles()
@@ -316,8 +354,20 @@ class TaskManager:
                 process = psutil.Process()
                 memory_mb = process.memory_info().rss / 1024 / 1024
 
-                if memory_mb > current_cfg.get("MEMORY_WARNING_THRESHOLD", 500):
+                warning_threshold = current_cfg.get("MEMORY_WARNING_THRESHOLD", 1200)
+                if memory_mb > warning_threshold:
                     logger.warning(f"High memory usage: {memory_mb:.1f}MB")
+                    reclaimed_mb = _reclaim_memory(current_cfg)
+                    if reclaimed_mb > 0:
+                        logger.info(
+                            "healthcheck.memory_reclaim | reclaimed_mb=%.1f",
+                            reclaimed_mb,
+                            extra={
+                                "subsys": "healthcheck",
+                                "event": "healthcheck.memory_reclaim",
+                                "detail": {"reclaimed_mb": reclaimed_mb},
+                            },
+                        )
 
                 # Update bot status if needed
                 if guild_count == 0:

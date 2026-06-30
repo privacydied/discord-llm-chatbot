@@ -251,6 +251,9 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "MAX_TEXT_ATTACHMENT_SIZE": _safe_int(env_getter("MAX_TEXT_ATTACHMENT_SIZE", None), "20000", "MAX_TEXT_ATTACHMENT_SIZE"),
         "MAX_FILE_SIZE": _safe_int(env_getter("MAX_FILE_SIZE", None), "2097152", "MAX_FILE_SIZE"),
         "MAX_ATTACHMENT_SIZE_MB": _safe_int(env_getter("MAX_ATTACHMENT_SIZE_MB", None), "25", "MAX_ATTACHMENT_SIZE_MB"),
+        # RESOURCE / MEMORY MANAGEMENT — health-check RSS warning + reclaim
+        "MEMORY_WARNING_THRESHOLD": _safe_int(env_getter("MEMORY_WARNING_THRESHOLD", None), "1200", "MEMORY_WARNING_THRESHOLD"),
+        "MEMORY_EVICT_STT_CACHE_ON_WARNING": _parse_bool_str(_clean_env_value(env_getter("MEMORY_EVICT_STT_CACHE_ON_WARNING", None)), True),
         # SILENCE GATE - SPEAK ONLY WHEN SPOKEN TO
         "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO": _parse_bool_str(_clean_env_value(env_getter("BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", None)), True),
         "REQUIRE_MENTION_IN_GUILDS": _parse_bool_str(_clean_env_value(env_getter("REQUIRE_MENTION_IN_GUILDS", None)), True),
