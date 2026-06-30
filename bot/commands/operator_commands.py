@@ -48,25 +48,21 @@ class OperatorCommands(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def feature_command(self, ctx: commands.Context, name: str = "", setting: str = "") -> None:
         """Toggle a per-server feature flag on or off."""
+        _feature_list = ", ".join(sorted(FEATURE_DEFAULTS))
+        _usage = f"Usage: `!feature <{_feature_list}> <on|off>`"
         try:
             if not name:
-                await ctx.reply(
-                    "Usage: `!feature <stt|tts|vision|image|web|x|rag> <on|off>`",
-                    mention_author=False,
-                )
+                await ctx.reply(_usage, mention_author=False)
                 return
 
             if not setting:
-                await ctx.reply(
-                    "Usage: `!feature <stt|tts|vision|image|web|x|rag> <on|off>`",
-                    mention_author=False,
-                )
+                await ctx.reply(_usage, mention_author=False)
                 return
 
             normalized = normalize_feature_name(name)
             if normalized not in FEATURE_DEFAULTS:
                 await ctx.reply(
-                    "❌ Unknown feature. Try: stt, tts, vision, image, web, x, rag.",
+                    f"❌ Unknown feature. Try: {_feature_list}.",
                     mention_author=False,
                 )
                 return
