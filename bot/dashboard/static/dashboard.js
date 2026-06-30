@@ -579,14 +579,17 @@
     }
 
     const msgs = data.messages || data.events || [];
-    state.messages = msgs;
+    // API returns newest-first (ORDER BY created_at DESC). Reverse to oldest-first
+    // so the DOM renders chronologically and scrollToBottom shows the newest messages.
+    state.messages = [...msgs].reverse();
     state.messagesPage = data.page || 1;
     state.messagesTotalPages = data.total_pages || 1;
     state.hasMoreOlder = data.page < data.total_pages;
 
-    renderMessageList(msgs);
+    renderMessageList(state.messages);
     updateHash(state.view, state.guildId, channelId, type);
     checkSendPermission();
+    scheduleRefresh();
 
     // Update guild rail active
     qsa(".guild-item").forEach((el) => el.classList.remove("active"));
@@ -679,9 +682,74 @@
   }
 
   /* ============================================================
+     LIVE REFRESH
+     ============================================================ */
+  let refreshTimer = null;
+
+  function clearRefresh() {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+    }
+  }
+
+  function scheduleRefresh() {
+    clearRefresh();
+    if (
+      !state.authenticated ||
+      !state.channelId ||
+      state.view === "overview" ||
+      state.view === "backfill" ||
+      state.view === "audit"
+    ) {
+      return;
+    }
+    refreshTimer = setTimeout(() => {
+      refreshCurrentChannel();
+    }, 15000);
+  }
+
+  async function refreshCurrentChannel() {
+    if (!state.channelId || !Array.isArray(state.messages) || state.messages.length === 0) {
+      scheduleRefresh();
+      return;
+    }
+
+    const isDm = state.channelType === "dm";
+    const latest = state.messages[state.messages.length - 1];
+    const latestId = getMessageId(latest);
+    if (!latestId) {
+      scheduleRefresh();
+      return;
+    }
+
+    const path = isDm
+      ? `/api/dms/${state.channelId}/messages?page=1&page_size=50&after_id=${latestId}&auto_backfill=true`
+      : `/api/channels/${state.channelId}/messages?page=1&page_size=50&after_id=${latestId}&auto_backfill=true`;
+
+    const container = $("messages-container");
+    const wasNearBottom = !container || (container.scrollHeight - container.scrollTop - container.clientHeight < 150);
+
+    const data = await apiFetch(path);
+    if (data && Array.isArray(data.messages) && data.messages.length > 0) {
+      // API returns newest-first; reverse so they append in chronological order
+      state.messages = state.messages.concat([...data.messages].reverse());
+      renderMessageList(state.messages, { scrollToLatest: wasNearBottom });
+    }
+    scheduleRefresh();
+  }
+
+  function stopRefreshOnViewChange(view) {
+    clearRefresh();
+    if (view === "guild" || view === "dm") {
+      scheduleRefresh();
+    }
+  }
+
+  /* ============================================================
      RENDER MESSAGE LIST
      ============================================================ */
-  function renderMessageList(messages) {
+  function renderMessageList(messages, { scrollToLatest = true } = {}) {
     const list = $("messages-list");
     list.innerHTML = "";
 
@@ -722,6 +790,7 @@
 
     let lastAuthor = null;
     let lastDate = null;
+    let lastTimestamp = null;
     let groupEl = null;
 
     // We show messages in chronological order (oldest first)
@@ -748,13 +817,18 @@
         sep.innerHTML = `<span>${esc(msgDate)}</span>`;
         list.appendChild(sep);
         lastAuthor = null;
+        lastTimestamp = null;
         groupEl = null;
       }
 
       const sameAuthor = lastAuthor === authorId;
+      const withinWindow = lastTimestamp && timestamp &&
+        (new Date(timestamp) - new Date(lastTimestamp)) < 7 * 60 * 1000;
+      const isGrouped = sameAuthor && withinWindow && !replyToId;
       lastAuthor = authorId;
+      lastTimestamp = timestamp;
 
-      if (!sameAuthor || !groupEl) {
+      if (!isGrouped || !groupEl) {
         // New message group — first message show avatar + header
         groupEl = createElement("div", { className: "message-group" });
 
@@ -837,10 +911,11 @@
         groupEl.appendChild(bodyDiv);
         list.appendChild(groupEl);
       } else {
-        // Compact mode — same author, continuation message
+        // Compact mode — same author within 7 min, continuation message
         const compactDiv = createElement("div", { className: "message-compact" });
         let replyHtml = replyToId ? `<div class="reply-preview-msg"><span class="reply-author">↪ Replying to a message</span></div>` : "";
-        compactDiv.innerHTML = `<div class="msg-body"><span class="msg-timestamp">${formatTime(timestamp)}</span><div class="msg-content">${esc(content)}</div></div>${replyHtml}`;
+        // Timestamp goes in the left gutter (revealed on hover via CSS)
+        compactDiv.innerHTML = `${replyHtml}<span class="msg-timestamp">${formatTime(timestamp)}</span><div class="msg-content">${esc(content)}</div>`;
 
         attachments.forEach((a) => {
           const url = a.url || "";
@@ -873,7 +948,7 @@
     });
 
     // Scroll to latest
-    scrollToBottom();
+    if (scrollToLatest) scrollToBottom();
   }
 
   function scrollToBottom() {
@@ -910,8 +985,9 @@
     state.hasMoreOlder = data.page < data.total_pages;
     const msgs = data.messages || data.events || [];
     if (msgs.length > 0) {
-      state.messages = msgs.concat(state.messages);
-      renderMessageList(state.messages);
+      // API returns newest-first; reverse so older pages prepend in chronological order
+      state.messages = [...msgs].reverse().concat(state.messages);
+      renderMessageList(state.messages, { scrollToLatest: false });
     }
     $("load-older-btn").classList.toggle("hidden", !state.hasMoreOlder);
     if (!state.hasMoreOlder) {

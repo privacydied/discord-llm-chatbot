@@ -960,7 +960,12 @@ class LLMBot(commands.Bot):
                 await self.process_commands(message)
 
         except Exception as e:
-            self.logger.error(f"Error in _process_single_message for {message.id}: {e}", exc_info=True)
+            from bot.exceptions import APIError as _APIError
+            if isinstance(e, _APIError):
+                # APIError messages are already descriptive — no traceback needed [REH]
+                self.logger.warning(f"APIError in message {message.id}: {e}")
+            else:
+                self.logger.error(f"Error in _process_single_message for {message.id}: {e}", exc_info=True)
 
     def _infer_streaming_plan(self, message: discord.Message) -> list[str] | None:
         """Infer a labeled streaming plan (list of step labels) based on message content and attachments.

@@ -539,11 +539,19 @@ Server Context: {server_context}"""
                         attempts = getattr(rr, "attempts", 0)
                         total_time = getattr(rr, "total_time", 0.0)
                         err_str = str(base_err).lower()
-                        if "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str):
+                        _is_moderation = (
+                            ("flagged" in err_str or "moderation" in err_str or "self-harm" in err_str or "self_harm" in err_str or "content_filter" in err_str or "content filter" in err_str or "requires moderation" in err_str)
+                            and ("403" in err_str or "400" in err_str)
+                        )
+                        _is_no_endpoints = "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str)
+                        _is_auth = ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str)
+                        if _is_no_endpoints:
                             msg = (
                                 f"Text providers unavailable via OpenRouter (404 / no endpoints) after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
                             )
-                        elif ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str):
+                        elif _is_moderation:
+                            msg = f"Content blocked by moderation (last_provider={prov}): input was flagged. Last error: {type(base_err).__name__}: {base_err}"
+                        elif _is_auth:
                             msg = f"Text provider authentication failed (last_provider={prov}). Check OPENAI_API_KEY / OpenRouter account. Last error: {type(base_err).__name__}: {base_err}"
                         elif "timeout" in err_str:
                             msg = f"Text generation timeout after {total_time:.2f}s across {attempts} attempt(s) (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
@@ -551,12 +559,10 @@ Server Context: {server_context}"""
                             msg = f"Text fallback ladder failed after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}): {type(base_err).__name__}: {base_err}"
                         api_err = APIError(msg)
                         try:
-                            if "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str):
+                            if _is_no_endpoints or _is_auth or _is_moderation:
                                 api_err.retryable = False
-                            if ("401" in err_str or "403" in err_str) and (
-                                "authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str
-                            ):
-                                api_err.retryable = False
+                            if _is_moderation:
+                                api_err.content_moderation = True
                         except Exception as e:
                             logger.debug(f"Failed to classify error retryability: {e}")
                     except Exception:
@@ -620,9 +626,24 @@ Server Context: {server_context}"""
             logger.debug(f"Failed to set retry_after_seconds: {exc}")
         raise err
     except OpenAIAPIError as e:
-        logger.exception(f"OpenAI API error: {e}")
-        msg_0 = f"OpenAI API error: {e!s}"
-        raise APIError(msg_0)
+        _es = str(e).lower()
+        _mod = ("flagged" in _es or "moderation" in _es or "self-harm" in _es or "self_harm" in _es or "requires moderation" in _es or "content_filter" in _es) and ("403" in _es or "400" in _es)
+        _no_ep = "no endpoints found" in _es or ("404" in _es and "endpoint" in _es)
+        if _mod:
+            logger.warning(f"[OpenAI] Content moderation block (not retried): {e}")
+            _err = APIError(f"Content blocked by moderation: {e!s}")
+            _err.retryable = False
+            _err.content_moderation = True
+            raise _err
+        elif _no_ep:
+            logger.warning(f"[OpenAI] Model/endpoint not found: {e}")
+            _err = APIError(f"Model not found (no endpoints): {e!s}")
+            _err.retryable = False
+            raise _err
+        else:
+            logger.exception(f"OpenAI API error: {e}")
+            msg_0 = f"OpenAI API error: {e!s}"
+            raise APIError(msg_0)
     except httpx.HTTPStatusError as e:
         # Surface HTTP errors (e.g., 429 Too Many Requests from OpenRouter) as retriable APIError
         status = e.response.status_code if e.response is not None else "unknown"
@@ -949,10 +970,18 @@ async def _generate_vl_response_with_retry(
                     attempts = getattr(rr, "attempts", 0)
                     total_time = getattr(rr, "total_time", 0.0)
                     err_str = str(base_err).lower()
+                    _is_mod = (
+                        ("flagged" in err_str or "moderation" in err_str or "self-harm" in err_str or "self_harm" in err_str or "requires moderation" in err_str or "content_filter" in err_str)
+                        and ("403" in err_str or "400" in err_str)
+                    )
+                    _is_no_ep = "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str)
+                    _is_auth = ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str)
 
-                    if "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str):
+                    if _is_no_ep:
                         msg = f"Vision providers unavailable via OpenRouter (404 / no endpoints) after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
-                    elif ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str):
+                    elif _is_mod:
+                        msg = f"Vision content blocked by moderation (last_provider={prov}): input was flagged. Last error: {type(base_err).__name__}: {base_err}"
+                    elif _is_auth:
                         msg = f"Vision provider authentication failed (last_provider={prov}). Check OPENAI_API_KEY / OpenRouter account. Last error: {type(base_err).__name__}: {base_err}"
                     elif "timeout" in err_str:
                         msg = f"Vision generation timeout after {total_time:.2f}s across {attempts} attempt(s) (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
@@ -965,10 +994,10 @@ async def _generate_vl_response_with_retry(
                     api_err.vl_attempts = attempts
                     api_err.vl_provider_base = base_url
                     try:
-                        if "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str):
+                        if _is_no_ep or _is_auth or _is_mod:
                             api_err.retryable = False
-                        if ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str):
-                            api_err.retryable = False
+                        if _is_mod:
+                            api_err.content_moderation = True
                     except Exception as exc:
                         logger.debug(f"Failed to classify error retryability: {exc}")
                 except Exception:
