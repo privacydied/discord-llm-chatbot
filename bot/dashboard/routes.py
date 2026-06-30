@@ -446,9 +446,10 @@ class DashboardRoutes:
 
     @auth_required
     async def get_channel_messages(self, request: web.Request) -> web.Response:
-        """Paginated message history from MessageStore for a guild channel.
+        """Paginated message history for a guild channel.
 
-        Supports auto_backfill=true to live-fetch from Discord when store is empty.
+        Prefers server_archive (ServerArchiveStore) when available since it receives
+        live ingest. Falls back to the dashboard MessageStore, then auto-backfill.
         """
         channel_id_str = request.match_info.get("channel_id", "")
         try:
@@ -466,6 +467,28 @@ class DashboardRoutes:
         after_id_str = _str_param(request, "after_id")
         auto_backfill = _str_param(request, "auto_backfill", "true") == "true"
 
+        # after_id / before_id are Discord snowflakes (string IDs)
+        after_id_str = after_id_str or None
+        before_id_str = before_id_str or None
+
+        # Prefer ServerArchiveStore — it receives live ingest and has current data.
+        bot = self._services.bot
+        archive_store = getattr(getattr(bot, "archive_service", None), "store", None)
+        if archive_store is not None:
+            try:
+                result = await archive_store.get_channel_messages(
+                    channel_id=str(channel_id),
+                    page=page,
+                    page_size=page_size,
+                    max_page_size=MAX_PAGE_SIZE,
+                    after_id=after_id_str,
+                    before_id=before_id_str,
+                )
+                return _json_response(result)
+            except Exception as e:
+                logger.warning("get_channel_messages: archive_store failed, falling back: %s", e)
+
+        # Fallback: dashboard MessageStore (legacy / dashboard-sent messages)
         before_id = int(before_id_str) if before_id_str else None
         after_id = int(after_id_str) if after_id_str else None
 

@@ -1151,3 +1151,96 @@ class ServerArchiveStore:
                 return str(row[0]) if row else None
             finally:
                 conn.close()
+
+    async def get_channel_messages(
+        self,
+        channel_id: str,
+        page: int = 1,
+        page_size: int = 50,
+        max_page_size: int = 200,
+        after_id: str | None = None,
+        before_id: str | None = None,
+    ) -> dict[str, Any]:
+        await self.initialize()
+        page_size = min(max(1, page_size), max_page_size)
+        offset = (page - 1) * page_size
+        return await _to_thread(self._get_channel_messages_sync, channel_id, page, page_size, offset, after_id, before_id)
+
+    def _get_channel_messages_sync(
+        self,
+        channel_id: str,
+        page: int,
+        page_size: int,
+        offset: int,
+        after_id: str | None,
+        before_id: str | None,
+    ) -> dict[str, Any]:
+        with self._lock:
+            conn = self._connect()
+            try:
+                where_parts = ["am.channel_id = ? AND am.deleted_at IS NULL"]
+                params: list[Any] = [channel_id]
+
+                if after_id:
+                    where_parts.append(
+                        "am.created_at > (SELECT created_at FROM archive_messages WHERE message_id = ?)"
+                    )
+                    params.append(after_id)
+                if before_id:
+                    where_parts.append(
+                        "am.created_at < (SELECT created_at FROM archive_messages WHERE message_id = ?)"
+                    )
+                    params.append(before_id)
+
+                where_sql = " AND ".join(where_parts)
+                count = conn.execute(
+                    f"SELECT COUNT(*) FROM archive_messages am WHERE {where_sql}",  # nosec B608
+                    params,
+                ).fetchone()[0]
+
+                rows = conn.execute(
+                    f"""SELECT am.message_id, am.content, am.created_at, am.edited_at,
+                               am.author_id, am.reply_to_message_id, am.deleted_at,
+                               am.metadata_json,
+                               au.username, au.global_name, au.display_name, au.bot
+                        FROM archive_messages am
+                        LEFT JOIN archive_users au ON am.author_id = au.user_id
+                        WHERE {where_sql}
+                        ORDER BY am.created_at DESC LIMIT ? OFFSET ?""",  # nosec B608
+                    [*params, page_size, offset],
+                ).fetchall()
+
+                messages = []
+                for row in rows:
+                    r = dict(row)
+                    username = r.get("username") or ""
+                    display = r.get("display_name") or r.get("global_name") or username
+                    messages.append({
+                        "discord_message_id": r["message_id"],
+                        "content": r.get("content") or "",
+                        "created_at": r.get("created_at"),
+                        "edited_at": r.get("edited_at"),
+                        "deleted_at": r.get("deleted_at"),
+                        "author_id": r.get("author_id"),
+                        "author_username": username,
+                        "author_display_name": display,
+                        "author_avatar_url": None,
+                        "author_is_bot": bool(r.get("bot")),
+                        "is_own_bot": False,
+                        "reply_to_message_id": r.get("reply_to_message_id"),
+                        "attachments_json": [],
+                        "embeds_json": [],
+                        "metadata_json": r.get("metadata_json") or {},
+                    })
+
+                total_pages = max(1, (count + page_size - 1) // page_size)
+                return {
+                    "messages": messages,
+                    "channel_id": channel_id,
+                    "page": page,
+                    "page_size": page_size,
+                    "total": count,
+                    "total_pages": total_pages,
+                }
+            finally:
+                conn.close()
