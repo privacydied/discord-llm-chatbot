@@ -157,6 +157,11 @@ tts/*voices*.json
 # Safety: common heavyweight formats (scoped)
 tts/**/*.onnx
 chroma_db/**/*.sqlite3
+
+# SQLite databases (generated/runtime data, not source)
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 cache/stt_pcm/*
 cache/stt_transcripts/*
 .kokoro_espeak_tmp/*
