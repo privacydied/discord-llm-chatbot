@@ -594,6 +594,16 @@ class LLMBot(commands.Bot):
                         "Vision route blocked",
                         labels=["reason", "path"],
                     )
+                    # Ambient reply gate counters [CMV][REH]
+                    self.metrics.define_counter(
+                        "ambient_reply_fired_total",
+                        "Ambient (unprompted) replies fired",
+                    )
+                    self.metrics.define_counter(
+                        "ambient_reply_suppressed_total",
+                        "Ambient reply gate evaluated but suppressed",
+                        labels=["reason"],
+                    )
                     self.logger.debug(
                         "📈 Registered gate counters",
                         extra={

@@ -2655,6 +2655,19 @@ class Router:
                 now=time.monotonic(),
             )
             if not fired:
+                self.logger.debug(
+                    "ambient.suppress | msg_id=%s guild=%s reason=%s",
+                    message.id,
+                    guild_id_for_ambient,
+                    reason,
+                    extra={
+                        "event": "ambient.suppress",
+                        "subsys": "ambient",
+                        "msg_id": message.id,
+                        "guild_id": guild_id_for_ambient,
+                        "detail": reason,
+                    },
+                )
                 self._metric_inc("ambient_reply_suppressed_total", {"reason": reason})
                 return False
 
