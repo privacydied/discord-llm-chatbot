@@ -2698,6 +2698,39 @@ class Router:
             self.logger.debug("ambient gate error (suppressed): %s", _ambient_err)
             return False
 
+    async def _build_ambient_local_context(self, message: Message) -> str:
+        """Build the message-local context for an ambient reply (no rolling buffer).
+
+        Thin wrapper around `router_components.ambient_context` so the dispatch
+        loop stays readable; records which context mode was used for metrics
+        visibility. [CMV]
+        """
+        try:
+            from bot.router_components.ambient_context import build_ambient_local_context
+
+            local_context = await build_ambient_local_context(message)
+            self._metric_inc("ambient_context_build_total", {"mode": "scoped_local"})
+            return local_context
+        except Exception as exc:
+            self.logger.debug("ambient local context build failed (suppressed): %s", exc)
+            self._metric_inc("ambient_context_build_total", {"mode": "build_failed"})
+            return ""
+
+    async def _apply_ambient_context_override(self, message: Message, context_str: str) -> str:
+        """Swap in a message-local context for ambient replies that resolved no context.
+
+        Ambient replies must never fall through to the rolling per-channel buffer
+        — it can hold an unrelated prior exchange that hijacks the reply. If scope
+        resolution (thread/reply case) already produced a locally-scoped
+        `context_str`, it's left untouched (it's never the rolling buffer either).
+        Only when ambient fired AND resolution came back empty (the lone-message
+        case) do we build one; a non-empty `context_str` here makes the downstream
+        contextual-brain layer skip the rolling buffer entirely. [CA][REH]
+        """
+        if context_str or not self.get_dispatch_metadata(message.id).get("ambient"):
+            return context_str
+        return await self._build_ambient_local_context(message)
+
     def _bind_flow_methods(self, flow_overrides: dict[str, Callable] | None = None) -> None:
         """Binds flow methods to the instance, allowing for overrides for testing."""
         self._flows = {
@@ -3385,6 +3418,8 @@ class Router:
                     reply_target,
                     context_str,
                 ) = await self._resolve_scope_and_target(message)
+
+                context_str = await self._apply_ambient_context_override(message, context_str)
 
                 self.logger.debug(f"Scope resolved: context_str='{context_str[:100]}...'")
 

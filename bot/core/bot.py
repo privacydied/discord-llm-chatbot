@@ -604,6 +604,11 @@ class LLMBot(commands.Bot):
                         "Ambient reply gate evaluated but suppressed",
                         labels=["reason"],
                     )
+                    self.metrics.define_counter(
+                        "ambient_context_build_total",
+                        "Context mode used when building an ambient-reply prompt",
+                        labels=["mode"],
+                    )
                     self.logger.debug(
                         "📈 Registered gate counters",
                         extra={

@@ -429,6 +429,70 @@ async def test_ambient_reply_fires_when_mention_required(monkeypatch) -> None:
     assert router._dispatch_metadata.get(mock_message.id, {}).get("ambient") is True
 
 
+@pytest.mark.asyncio
+async def test_ambient_override_builds_local_context_when_unresolved() -> None:
+    """Wiring test for _apply_ambient_context_override: an ambient-flagged
+    message whose scope resolution returned no context must get the
+    message-local builder's output instead of an empty string -- empty
+    context_str is exactly what lets the rolling buffer leak into the
+    downstream prompt (see bot/contextual_brain.py skip_history)."""
+    mock_bot = MagicMock()
+    router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
+
+    mock_message = MagicMock()
+    mock_message.id = 4242
+
+    router._dispatch_metadata[mock_message.id] = {"ambient": True}
+    expected_context = "[Message to respond to]\nSomeone: ambient trigger text"
+    router._build_ambient_local_context = AsyncMock(return_value=expected_context)
+
+    result = await router._apply_ambient_context_override(mock_message, "")
+
+    router._build_ambient_local_context.assert_awaited_once_with(mock_message)
+    assert result == expected_context
+
+
+@pytest.mark.asyncio
+async def test_ambient_override_leaves_existing_local_context_untouched() -> None:
+    """An ambient message whose scope resolution already produced a locally-
+    scoped context (thread/reply case) must not be re-built or overridden."""
+    mock_bot = MagicMock()
+    router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
+
+    mock_message = MagicMock()
+    mock_message.id = 4243
+
+    router._dispatch_metadata[mock_message.id] = {"ambient": True}
+    router._build_ambient_local_context = AsyncMock(return_value="should not be used")
+
+    result = await router._apply_ambient_context_override(mock_message, "already resolved reply context")
+
+    router._build_ambient_local_context.assert_not_called()
+    assert result == "already resolved reply context"
+
+
+@pytest.mark.asyncio
+async def test_ambient_override_noop_for_non_ambient_messages() -> None:
+    """Regression: normal (non-ambient) messages must never trigger the
+    ambient-scoped context builder, even when scope resolution returned no
+    context (e.g. a bare LONE mention) -- their context_str must pass through
+    unchanged so the existing rolling-buffer behavior for normal replies is
+    untouched by this change."""
+    mock_bot = MagicMock()
+    router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
+
+    mock_message = MagicMock()
+    mock_message.id = 4244
+    # No "ambient" key recorded for this message at all.
+
+    router._build_ambient_local_context = AsyncMock(return_value="should not be used")
+
+    result = await router._apply_ambient_context_override(mock_message, "")
+
+    router._build_ambient_local_context.assert_not_called()
+    assert result == ""
+
+
 class TestExtractionOnlyTimeout:
     """Verify extraction-only items are guarded by asyncio.wait_for timeout. [REH][PA]."""
 
