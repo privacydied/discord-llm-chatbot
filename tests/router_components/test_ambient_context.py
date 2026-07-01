@@ -72,14 +72,43 @@ async def test_lone_message_centers_trigger_with_recent_background() -> None:
 
     assert "[Message to respond to]" in result
     assert "topic B: what about pizza?" in result
-    assert "[For context, recent messages in this channel" in result
-    assert "NOT a conversation you are part of" in result
+    assert "[Recent channel messages" in result
+    assert "you are joining an ongoing conversation" in result
     assert "topic A: let's talk about cars" in result
     assert "topic A: I like sedans" in result
     # Background must read oldest -> newest
     assert result.index("let's talk about cars") < result.index("I like sedans")
     # Background block must come before the trigger block
-    assert result.index("[For context") < result.index("[Message to respond to]")
+    assert result.index("[Recent channel messages") < result.index("[Message to respond to]")
+
+
+@pytest.mark.asyncio
+async def test_bots_own_prior_turn_shown_as_background_not_active_conversation() -> None:
+    """Bleed regression: if the bot's own earlier message on an unrelated topic
+    is among the recent channel messages, it must appear only inside the
+    labeled background block as one participant among others -- never
+    presented as the assistant's own running turn the model should continue.
+    Concretely: it's rendered with the same neutral `Author: text` format as
+    everyone else, with no special role/assistant framing."""
+    trigger = _msg("bare follow-up: on second thought", author_name="Bob", msg_id=101)
+    bots_old_turn = _msg(
+        "unrelated topic A answer from the bot",
+        author_name="MyBot",
+        msg_id=99,
+    )
+    trigger.channel = _channel_with_history([bots_old_turn])
+
+    result = await build_ambient_local_context(trigger)
+
+    assert "you are joining an ongoing conversation" in result
+    # Rendered as a plain background line, not as an "assistant:" turn or any
+    # role-structured continuation marker.
+    assert "MyBot: unrelated topic A answer from the bot" in result
+    assert "assistant" not in result.lower()
+    # It must land inside the background block, before the trigger block --
+    # never merged into / preceding the "[Message to respond to]" as if it
+    # were the model's own history to continue.
+    assert result.index("MyBot: unrelated topic A answer from the bot") < result.index("[Message to respond to]")
 
 
 @pytest.mark.asyncio
@@ -105,18 +134,20 @@ async def test_background_window_is_bounded() -> None:
     assert len(background_lines) == AMBIENT_BACKGROUND_LIMIT
 
 
-# ── reference present: referenced message preferred over background ────────
+# ── reference present: background is still included alongside it ──────────
 
 
 @pytest.mark.asyncio
-async def test_reply_trigger_uses_resolved_reference_as_immediate_context() -> None:
+async def test_reply_trigger_includes_background_alongside_resolved_reference() -> None:
+    """A resolved reply reference is grounding, but it isn't the whole channel
+    picture -- the recent-background window must still be included so the
+    model sees what else is happening, not just the one message replied to."""
     referenced = _msg("the original thing being replied to", author_name="OriginalAuthor", msg_id=50)
     ref = MagicMock()
     ref.resolved = referenced
     ref.message_id = referenced.id
     trigger = _msg("ambient reply to a reply chain", author_name="Bob", reference=ref, msg_id=51)
-    # Background history should NOT be consulted when a reference resolves
-    trigger.channel = _channel_with_history([_msg("unrelated background", msg_id=49)])
+    trigger.channel = _channel_with_history([_msg("meanwhile, elsewhere in the channel", msg_id=49)])
 
     result = await build_ambient_local_context(trigger)
 
@@ -124,9 +155,25 @@ async def test_reply_trigger_uses_resolved_reference_as_immediate_context() -> N
     assert "the original thing being replied to" in result
     assert "[Message to respond to]" in result
     assert "ambient reply to a reply chain" in result
-    # Channel-order neighbors must not be pulled in when a reference is available
-    assert "unrelated background" not in result
-    trigger.channel.history.assert_not_called()
+    # Background is grounding too now, not suppressed just because a reference resolved.
+    assert "meanwhile, elsewhere in the channel" in result
+    assert "you are joining an ongoing conversation" in result
+
+
+@pytest.mark.asyncio
+async def test_reply_trigger_does_not_duplicate_reference_in_background() -> None:
+    """If the resolved reference also falls inside the recent-history window,
+    it must not be rendered twice."""
+    referenced = _msg("the original thing being replied to", author_name="OriginalAuthor", msg_id=50)
+    ref = MagicMock()
+    ref.resolved = referenced
+    ref.message_id = referenced.id
+    trigger = _msg("ambient reply to a reply chain", author_name="Bob", reference=ref, msg_id=51)
+    trigger.channel = _channel_with_history([referenced])
+
+    result = await build_ambient_local_context(trigger)
+
+    assert result.count("the original thing being replied to") == 1
 
 
 @pytest.mark.asyncio
@@ -138,12 +185,13 @@ async def test_reply_trigger_fetches_unresolved_reference() -> None:
     trigger = _msg("ambient reply", reference=ref, msg_id=61)
     trigger.channel = MagicMock()
     trigger.channel.fetch_message = AsyncMock(return_value=referenced)
-    trigger.channel.history = MagicMock(side_effect=AssertionError("history should not be called"))
+    trigger.channel.history = _channel_with_history([_msg("other recent chatter", msg_id=59)]).history
 
     result = await build_ambient_local_context(trigger)
 
     trigger.channel.fetch_message.assert_awaited_once_with(referenced.id)
     assert "fetched reference text" in result
+    assert "other recent chatter" in result
 
 
 @pytest.mark.asyncio

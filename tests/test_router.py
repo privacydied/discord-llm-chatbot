@@ -493,6 +493,50 @@ async def test_ambient_override_noop_for_non_ambient_messages() -> None:
     assert result == ""
 
 
+@pytest.mark.asyncio
+async def test_ambient_context_depth_defaults_to_max_context_messages() -> None:
+    """AMBIENT_REPLY_CONTEXT_MESSAGES defaults to MAX_CONTEXT_MESSAGES when unset,
+    so ambient background depth stays in lockstep with the normal context depth
+    unless explicitly overridden."""
+    mock_bot = MagicMock()
+    mock_bot.config = {"MAX_CONTEXT_MESSAGES": 7}
+    router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
+
+    assert router._ambient_context_depth() == 7
+
+
+@pytest.mark.asyncio
+async def test_ambient_context_depth_respects_explicit_override() -> None:
+    """AMBIENT_REPLY_CONTEXT_MESSAGES, when set, wins over MAX_CONTEXT_MESSAGES --
+    ambient depth is independently tunable without a code change."""
+    mock_bot = MagicMock()
+    mock_bot.config = {"MAX_CONTEXT_MESSAGES": 7, "AMBIENT_REPLY_CONTEXT_MESSAGES": 3}
+    router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
+
+    assert router._ambient_context_depth() == 3
+
+
+@pytest.mark.asyncio
+async def test_build_ambient_local_context_passes_configured_depth() -> None:
+    """_build_ambient_local_context must pass the resolved depth through to the
+    builder as `background_limit`, not the module's hardcoded default."""
+    mock_bot = MagicMock()
+    mock_bot.config = {"AMBIENT_REPLY_CONTEXT_MESSAGES": 4}
+    router = Router(bot=mock_bot, flow_overrides={}, logger=logging.getLogger("test"))
+
+    mock_message = MagicMock()
+    mock_message.id = 4245
+
+    with patch(
+        "bot.router_components.ambient_context.build_ambient_local_context",
+        new=AsyncMock(return_value="ctx"),
+    ) as mock_builder:
+        result = await router._build_ambient_local_context(mock_message)
+
+    mock_builder.assert_awaited_once_with(mock_message, background_limit=4)
+    assert result == "ctx"
+
+
 class TestExtractionOnlyTimeout:
     """Verify extraction-only items are guarded by asyncio.wait_for timeout. [REH][PA]."""
 

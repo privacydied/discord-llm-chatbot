@@ -223,6 +223,10 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
     _ve = _parse_bool_str(_ve_raw, True)  # default ON when unset
     _t2i = _parse_bool_str(_t2i_raw, True)  # default ON when unset
 
+    # Shared context-depth default so ambient replies can inherit it without
+    # a hardcoded duplicate value. [CMV]
+    _max_context_messages = _safe_int(env_getter("MAX_CONTEXT_MESSAGES", None), "10", "MAX_CONTEXT_MESSAGES")
+
     config = {
         # DISCORD BOT SETTINGS
         "DISCORD_TOKEN": env_getter("DISCORD_TOKEN", None),
@@ -401,7 +405,15 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
             True,
         ),
         "CONTEXT_FILE_PATH": env_getter("CONTEXT_FILE_PATH", "runtime/context.json"),
-        "MAX_CONTEXT_MESSAGES": _safe_int(env_getter("MAX_CONTEXT_MESSAGES", None), "10", "MAX_CONTEXT_MESSAGES"),
+        "MAX_CONTEXT_MESSAGES": _max_context_messages,
+        # Ambient (unprompted) reply background-history depth. Defaults to
+        # MAX_CONTEXT_MESSAGES so it can be tuned independently later without
+        # a code change. [CMV]
+        "AMBIENT_REPLY_CONTEXT_MESSAGES": _safe_int(
+            env_getter("AMBIENT_REPLY_CONTEXT_MESSAGES", None),
+            str(_max_context_messages),
+            "AMBIENT_REPLY_CONTEXT_MESSAGES",
+        ),
         "MEM_MAX_MSGS": _safe_int(env_getter("MEM_MAX_MSGS", None), "40", "MEM_MAX_MSGS"),
         "MEM_MAX_CHARS": _safe_int(env_getter("MEM_MAX_CHARS", None), "8000", "MEM_MAX_CHARS"),
         "MEM_MAX_AGE_MIN": _safe_int(env_getter("MEM_MAX_AGE_MIN", None), "240", "MEM_MAX_AGE_MIN"),

@@ -2698,6 +2698,21 @@ class Router:
             self.logger.debug("ambient gate error (suppressed): %s", _ambient_err)
             return False
 
+    def _ambient_context_depth(self) -> int:
+        """Resolve the background-history depth for ambient context.
+
+        Reuses AMBIENT_REPLY_CONTEXT_MESSAGES, defaulting to
+        MAX_CONTEXT_MESSAGES, so ambient background depth can be tuned
+        independently later without a code change. [CMV]
+        """
+        depth = self.config.get("AMBIENT_REPLY_CONTEXT_MESSAGES")
+        if depth is None:
+            depth = self.config.get("MAX_CONTEXT_MESSAGES", 10)
+        try:
+            return int(depth)
+        except (TypeError, ValueError):
+            return 10
+
     async def _build_ambient_local_context(self, message: Message) -> str:
         """Build the message-local context for an ambient reply (no rolling buffer).
 
@@ -2708,7 +2723,7 @@ class Router:
         try:
             from bot.router_components.ambient_context import build_ambient_local_context
 
-            local_context = await build_ambient_local_context(message)
+            local_context = await build_ambient_local_context(message, background_limit=self._ambient_context_depth())
             self._metric_inc("ambient_context_build_total", {"mode": "scoped_local"})
             return local_context
         except Exception as exc:
