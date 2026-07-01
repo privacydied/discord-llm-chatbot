@@ -266,7 +266,7 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "REPLY_TRIGGERS": [s.strip() for s in env_getter("REPLY_TRIGGERS", "dm,mention,reply,bot_threads,owner,command_prefix").split(",") if s.strip()],
         # AMBIENT REPLY — opt-in unprompted replies (default off, very rare)
         "AMBIENT_REPLY_ENABLED": _parse_bool_str(_clean_env_value(env_getter("AMBIENT_REPLY_ENABLED", None)), False),
-        "AMBIENT_REPLY_PROBABILITY": float(env_getter("AMBIENT_REPLY_PROBABILITY", "0.02")),
+        "AMBIENT_REPLY_PROBABILITY": float(env_getter("AMBIENT_REPLY_PROBABILITY", "0.002")),
         "AMBIENT_REPLY_MIN_CHARS": _safe_int(env_getter("AMBIENT_REPLY_MIN_CHARS", None), "12", "AMBIENT_REPLY_MIN_CHARS"),
         "AMBIENT_REPLY_CHANNEL_COOLDOWN_S": _safe_int(env_getter("AMBIENT_REPLY_CHANNEL_COOLDOWN_S", None), "1800", "AMBIENT_REPLY_CHANNEL_COOLDOWN_S"),
         "AMBIENT_REPLY_GLOBAL_COOLDOWN_S": _safe_int(env_getter("AMBIENT_REPLY_GLOBAL_COOLDOWN_S", None), "600", "AMBIENT_REPLY_GLOBAL_COOLDOWN_S"),

@@ -186,7 +186,7 @@ def should_ambient_reply(
         return False, REASON_CHANNEL_COOLDOWN
 
     # 11. Probability roll
-    prob: float = config.get("AMBIENT_REPLY_PROBABILITY", 0.02)
+    prob: float = config.get("AMBIENT_REPLY_PROBABILITY", 0.002)
     if rng.random() >= prob:
         return False, REASON_PROBABILITY
 
