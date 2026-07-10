@@ -160,6 +160,7 @@ def _ollama_coro_factory(
     max_tokens: int | None,
     kwargs: dict,
     provider_config,
+    presence_penalty: float | None = None,
 ):
     """Create a coroutine that calls the local Ollama API.
 
@@ -198,6 +199,7 @@ def _ollama_coro_factory(
                 model=model,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                presence_penalty=presence_penalty if presence_penalty is not None else config.get("PRESENCE_PENALTY", 0.0),
                 **{k: v for k, v in kwargs.items() if k != "stream"},
             )
             text = result.get("response", "")
@@ -247,6 +249,7 @@ async def generate_openai_response(
     user_id: str | None = None,
     guild_id: str | None = None,
     temperature: float | None = None,
+    presence_penalty: float | None = None,
     max_tokens: int | None = None,
     stream: bool = False,
     **kwargs,
@@ -259,6 +262,8 @@ async def generate_openai_response(
         user_id: Optional user ID for personalization
         guild_id: Optional guild ID for server-specific context
         temperature: Controls randomness (0.0 to 1.0)
+        presence_penalty: Penalizes tokens that have already appeared, encouraging
+            new topics (config default: PRESENCE_PENALTY, 0.0)
         max_tokens: Maximum number of tokens to generate
         stream: Whether to stream the response
         **kwargs: Additional parameters to pass to the API
@@ -307,8 +312,11 @@ async def generate_openai_response(
             # Apply user preferences if not overridden
             if temperature is None:
                 temperature = user_prefs.get("temperature", config.get("TEMPERATURE", 0.7))
+            if presence_penalty is None:
+                presence_penalty = user_prefs.get("presence_penalty", config.get("PRESENCE_PENALTY", 0.0))
         else:
             temperature = temperature or config.get("TEMPERATURE", 0.7)
+            presence_penalty = config.get("PRESENCE_PENALTY", 0.0) if presence_penalty is None else presence_penalty
 
         # Get server context if guild_id is provided
         server_context = ""
@@ -362,7 +370,7 @@ Server Context: {server_context}"""
             max_tokens = config.get("MAX_RESPONSE_TOKENS", 1000)
 
         logger.info(f"Configured OpenAI-compatible text model: {model}")
-        logger.debug(f"[OpenAI] Request params: temp={temperature}, max_tokens={max_tokens}, stream={stream}")
+        logger.debug(f"[OpenAI] Request params: temp={temperature}, presence_penalty={presence_penalty}, max_tokens={max_tokens}, stream={stream}")
 
         # Helper to normalize a completion response into our result dict
         def _normalize_nonstream_response(response_obj, used_model: str) -> dict[str, Any]:
@@ -403,6 +411,7 @@ Server Context: {server_context}"""
                 model=model,
                 messages=messages,
                 temperature=temperature,
+                presence_penalty=presence_penalty,
                 max_tokens=max_tokens,
                 stream=True,
                 **kwargs,
@@ -451,6 +460,7 @@ Server Context: {server_context}"""
                         max_tokens,
                         kwargs,
                         provider_config,
+                        presence_penalty=presence_penalty,
                     )
 
                 attempt_api_key, attempt_base_url, attempt_provider = _resolve_openai_compatible_endpoint(provider_config.name, config)
@@ -469,6 +479,7 @@ Server Context: {server_context}"""
                             model=selected_model,
                             messages=messages,
                             temperature=temperature,
+                            presence_penalty=presence_penalty,
                             max_tokens=max_tokens,
                             stream=False,
                             **kwargs,
@@ -584,6 +595,7 @@ Server Context: {server_context}"""
                     model=model,
                     messages=messages,
                     temperature=temperature,
+                    presence_penalty=presence_penalty,
                     max_tokens=max_tokens,
                     stream=False,
                     **kwargs,

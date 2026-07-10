@@ -1898,9 +1898,17 @@ class UnifiedVisionAdapter:
             except Exception as exc:
                 logger.debug(f"preferred provider ordering failed: {exc}")
 
-        if self.default_provider == "openrouter":
+        # Promote the configured default provider to the front of the order.
+        # Previously this only special-cased "openrouter", so e.g.
+        # VISION_DEFAULT_PROVIDER=nvidia was silently ignored for every other
+        # provider name. Safe to generalize: providers that can't handle the
+        # requested task are skipped later via the capabilities() check
+        # (line ~1945), so promoting a provider with no matching capability
+        # (e.g. nvidia for IMAGE_TO_IMAGE) just falls through to the next
+        # candidate instead of erroring. [REH][CMV]
+        if self.default_provider:
             with contextlib.suppress(Exception):
-                provider_order = ["openrouter"] + [p for p in provider_order if p != "openrouter"]
+                provider_order = [self.default_provider] + [p for p in provider_order if p != self.default_provider]
 
         # Filter by configured/healthy providers, preserving order [SFT]
         filtered_order: list[str] = []
