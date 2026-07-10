@@ -238,6 +238,11 @@ class VisionCommands(commands.Cog):
         try:
             # Download attachment to temporary file
             input_image_path = await self._download_attachment(image)
+            # NOTE: providers/safety-filter read `input_image_data` (raw bytes),
+            # never `input_image` (Path) - it's only used for cleanup bookkeeping.
+            # Without this, every /imgedit request was silently blocked by the
+            # safety filter's "missing_input_image" check. [REH][SFT]
+            input_image_bytes = input_image_path.read_bytes()
 
             # Create vision request
             request = VisionRequest(
@@ -247,6 +252,7 @@ class VisionCommands(commands.Cog):
                 guild_id=str(interaction.guild.id) if interaction.guild else None,
                 channel_id=str(interaction.channel.id),
                 input_image=input_image_path,
+                input_image_data=input_image_bytes,
                 strength=strength,
                 steps=steps,
                 guidance_scale=guidance,

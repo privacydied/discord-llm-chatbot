@@ -7,6 +7,12 @@ from .compose import (
     format_x_tweet_with_transcription,
     has_visual_facts_section,
 )
+from .conversational_edit import (
+    EditIntentResult,
+    ResolvedEditImage,
+    classify_edit_intent,
+    resolve_edit_source_image,
+)
 from .gating import is_reply_to_bot, mentions_bot, strip_leading_bot_mention
 from .input_harvest import (
     all_attachments_are_text,
@@ -559,6 +565,8 @@ from .x_routing import (
 )
 
 __all__ = [
+    "EditIntentResult",
+    "ResolvedEditImage",
     "RouterRuntimeCompat",
     "all_attachments_are_text",
     "append_article_header_parts",
@@ -744,6 +752,7 @@ __all__ = [
     "canonicalized_value_for_result",
     "canonicalized_value_result",
     "canonicalized_value_source",
+    "classify_edit_intent",
     "classify_stt_error_reason",
     "classify_syndication_cache_hit",
     "collect_attachment_candidate_urls",
@@ -973,6 +982,7 @@ __all__ = [
     "raw_url_source_texts_iter",
     "resolve_and_probe_twitter_images",
     "resolve_caption_only_base_text",
+    "resolve_edit_source_image",
     "resolve_first_image_host",
     "resolve_first_image_url",
     "resolve_matched_status_raw_url",

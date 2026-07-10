@@ -666,6 +666,22 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         ),
         "VISION_EPHEMERAL_RESPONSES": _parse_bool_str(_clean_env_value(env_getter("VISION_EPHEMERAL_RESPONSES", None)), True),
         "VISION_DRY_RUN_MODE": _parse_bool_str(_clean_env_value(env_getter("VISION_DRY_RUN_MODE", None)), False),
+        # Conversational image editing (mention/reply img2img, no /imgedit needed) [CMV]
+        "VISION_CONVERSATIONAL_EDIT_ENABLED": _parse_bool_str(_clean_env_value(env_getter("VISION_CONVERSATIONAL_EDIT_ENABLED", None)), True),
+        "VISION_CONVERSATIONAL_EDIT_TIMEOUT_S": _safe_float(
+            env_getter("VISION_CONVERSATIONAL_EDIT_TIMEOUT_S", None),
+            "90.0",
+            "VISION_CONVERSATIONAL_EDIT_TIMEOUT_S",
+        ),
+        "VISION_CONVERSATIONAL_EDIT_POLL_INTERVAL_S": _safe_float(
+            env_getter("VISION_CONVERSATIONAL_EDIT_POLL_INTERVAL_S", None),
+            "2.0",
+            "VISION_CONVERSATIONAL_EDIT_POLL_INTERVAL_S",
+        ),
+        # Extra comma-separated edit-intent trigger phrases, merged with the
+        # defaults baked into bot/router_components/conversational_edit.py and
+        # configs/vision_policy.json's intent_patterns.image_editing list.
+        "VISION_EDIT_INTENT_KEYWORDS": env_getter("VISION_EDIT_INTENT_KEYWORDS", ""),
         "STT_MODE": env_getter("STT_MODE", "single"),
         "STT_ACTIVE_PROVIDERS": [s.strip() for s in env_getter("STT_ACTIVE_PROVIDERS", "local_whisper").split(",") if s.strip()],
         "STT_CONFIDENCE_MIN": _safe_float(env_getter("STT_CONFIDENCE_MIN", None), "0.0", "STT_CONFIDENCE_MIN"),

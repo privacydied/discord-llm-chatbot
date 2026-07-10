@@ -87,6 +87,7 @@ from .router_components import (
     build_x_text_resolve_payload,
     build_x_video_stt_error_result_payload,
     canonicalize_twitter_status_url,
+    classify_edit_intent,
     classify_stt_error_reason,
     classify_syndication_cache_hit,
     collect_x_candidate_urls,
@@ -130,6 +131,7 @@ from .router_components import (
     parse_twitter_status_id,
     resolve_and_probe_twitter_images,
     resolve_caption_only_base_text,
+    resolve_edit_source_image,
     resolve_twitter_status_id,
     resolve_video_stt_error_base_text,
     strip_discord_mentions_and_urls,
@@ -154,6 +156,7 @@ from .types import Command, ParsedCommand
 from .utils.attachment_text import read_attachment_text
 from .utils.file_utils import download_file
 from .utils.logging import get_logger
+from .vision.types import VisionError, VisionErrorType
 from .vl.postprocess import sanitize_model_output, sanitize_vl_reply_text
 from .web import process_url
 from .web_extraction_service import web_extractor
@@ -4622,6 +4625,16 @@ class Router:
 
             combined_count = len(filtered_items)
 
+        # Conversational image editing: an addressed message with an image + an
+        # edit-style instruction ("give him a mustache") routes to img2img
+        # instead of VL analysis. Must run BEFORE the perception branch below,
+        # and only when the bot was actually addressed (mention/DM/reply) so
+        # this never adds cost to unaddressed traffic. [CA]
+        if (is_dm or mentioned_me or is_reply) and combined_count >= 1 and not has_x_url:
+            edit_action = await self._maybe_route_conversational_edit(message, original_text)
+            if edit_action is not None:
+                return edit_action
+
         # Route to perception (VL notes) → TEXT when conditions met (but skip for X/Twitter)
         if (is_dm or mentioned_me or is_reply) and combined_count >= 1 and bool(self.config.get("HYBRID_FORCE_PERCEPTION_ON_REPLY", True)) and not has_x_url:
             self.logger.info(f"🎯 Route: text (with perception) | images={combined_count} | msg_id={message.id}")
@@ -8539,6 +8552,134 @@ class Router:
             except Exception as exc:
                 self.logger.debug(f"progress message edit failed: {exc}")  # Don't fail if message edit fails
             return BotAction(content="Job monitoring failed", error=True)
+
+    def _conversational_edit_enabled(self, message: Message) -> bool:
+        """Global + per-guild gate for the conversational image-edit route. [CMV]"""
+        if not bool(self.config.get("VISION_ENABLED", True)):
+            return False
+        if not bool(self.config.get("VISION_CONVERSATIONAL_EDIT_ENABLED", True)):
+            return False
+        guild_id = message.guild.id if message.guild else None
+        return is_server_feature_enabled(guild_id, "image_editing")
+
+    async def _maybe_route_conversational_edit(self, message: Message, original_text: str) -> BotAction | None:
+        """Route an addressed image+edit-instruction message to img2img.
+
+        Returns None when the route doesn't apply (feature disabled, not an
+        edit instruction, or no source image resolvable) so the caller falls
+        through to the existing VL-analysis branch unchanged. [CA]
+        """
+        if not self._conversational_edit_enabled(message) or not self._vision_orchestrator:
+            return None
+
+        intent = classify_edit_intent(
+            original_text,
+            self.config.get("VISION_POLICY_PATH", "configs/vision_policy.json"),
+            self.config.get("VISION_EDIT_INTENT_KEYWORDS", ""),
+        )
+        if not intent.is_edit:
+            return None
+
+        max_mb = int(self.config.get("MAX_ATTACHMENT_SIZE_MB", 25) or 25)
+        resolved = await resolve_edit_source_image(message, max_mb)
+        if resolved is None:
+            return None
+
+        self._metric_inc("vision.route.conversational_edit", {"outcome": "fired"})
+        self._log_edit_route_fired(message, resolved, intent)
+        return await self._run_conversational_edit_job(message, original_text, resolved)
+
+    def _log_edit_route_fired(self, message: Message, resolved, intent) -> None:
+        """Structured log for a conversational-edit routing decision. [REH]"""
+        with suppress(Exception):
+            self.logger.info(
+                "edit_route.fired",
+                extra={
+                    "subsys": "vision",
+                    "event": "edit_route",
+                    "guild_id": str(message.guild.id) if message.guild else None,
+                    "user_id": str(message.author.id),
+                    "msg_id": message.id,
+                    "detail": f"source={resolved.source} phrase={intent.matched_phrase}",
+                },
+            )
+
+    async def _run_conversational_edit_job(self, message: Message, edit_prompt: str, resolved) -> BotAction:
+        """Submit the img2img job (safety+budget gated by the orchestrator) and
+        await its result, same provider path as /imgedit. [REH][SFT]
+        """
+        from .vision.types import VisionRequest, VisionTask
+
+        request = VisionRequest(
+            task=VisionTask.IMAGE_TO_IMAGE,
+            prompt=(edit_prompt or "").strip() or "Edit this image as instructed.",
+            user_id=str(message.author.id),
+            guild_id=str(message.guild.id) if message.guild else None,
+            channel_id=str(message.channel.id),
+            input_image_data=resolved.data,
+        )
+
+        try:
+            job = await self._vision_orchestrator.submit_job(request)
+        except VisionError as e:
+            return self._conversational_edit_error_action(e)
+        except Exception as e:
+            self.logger.error(f"conversational edit submission failed: {e}", exc_info=True)
+            self._metric_inc("vision.route.conversational_edit", {"outcome": "provider_error"})
+            return BotAction(content="Sorry, I couldn't start that edit. Please try again.", error=True)
+
+        final_job = await self._await_conversational_edit_job(job.job_id, request.user_id)
+        return await self._finish_conversational_edit(message, final_job)
+
+    async def _await_conversational_edit_job(self, job_id: str, user_id: str):
+        """Bounded poll for job completion - no unbounded waits. [REH]"""
+        timeout_s = float(self.config.get("VISION_CONVERSATIONAL_EDIT_TIMEOUT_S", 90.0) or 90.0)
+        poll_interval = float(self.config.get("VISION_CONVERSATIONAL_EDIT_POLL_INTERVAL_S", 2.0) or 2.0)
+        elapsed = 0.0
+        while elapsed < timeout_s:
+            job = await self._vision_orchestrator.get_job_status(job_id)
+            if job is None or job.is_terminal_state():
+                return job
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        with suppress(Exception):
+            await self._vision_orchestrator.cancel_job(job_id, user_id)
+        return await self._vision_orchestrator.get_job_status(job_id)
+
+    def _conversational_edit_error_action(self, error: VisionError) -> BotAction:
+        outcome_by_type = {
+            VisionErrorType.CONTENT_FILTERED: "safety_blocked",
+            VisionErrorType.QUOTA_EXCEEDED: "budget_blocked",
+        }
+        outcome = outcome_by_type.get(error.error_type, "provider_error")
+        self._metric_inc("vision.route.conversational_edit", {"outcome": outcome})
+        return BotAction(content=error.user_message or "Sorry, I couldn't edit that image.", error=True)
+
+    async def _finish_conversational_edit(self, message: Message, job) -> BotAction:
+        """Turn a completed/failed edit job into a Discord reply-with-attachment,
+        or a short error message on the same error surface as /imgedit. [REH]
+        """
+        if job is None:
+            self._metric_inc("vision.route.conversational_edit", {"outcome": "provider_error"})
+            return BotAction(content="Sorry, that image edit timed out. Please try again.", error=True)
+
+        if job.state.value != "completed" or not job.response:
+            outcome = "provider_error"
+            if job.error and job.error.error_type == VisionErrorType.CONTENT_FILTERED:
+                outcome = "safety_blocked"
+            elif job.error and job.error.error_type == VisionErrorType.QUOTA_EXCEEDED:
+                outcome = "budget_blocked"
+            self._metric_inc("vision.route.conversational_edit", {"outcome": outcome})
+            fallback = "Image editing failed. Please try again."
+            return BotAction(content=(job.error.user_message if job.error else fallback), error=True)
+
+        files = [discord.File(p, filename=f"edited_{job.job_id[:8]}_{i}{p.suffix or '.png'}") for i, p in enumerate(job.response.artifacts, 1) if p.exists()]
+        if not files:
+            self._metric_inc("vision.route.conversational_edit", {"outcome": "provider_error"})
+            return BotAction(content="The edit finished but produced no image. Please try again.", error=True)
+
+        self._metric_inc("vision.route.conversational_edit", {"outcome": "success"})
+        return BotAction(content="", files=files)
 
     async def _handle_reply_image_analysis(
         self,

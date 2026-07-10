@@ -594,6 +594,11 @@ class LLMBot(commands.Bot):
                         "Vision route blocked",
                         labels=["reason", "path"],
                     )
+                    self.metrics.define_counter(
+                        "vision.route.conversational_edit",
+                        "Conversational (mention/reply) image-edit invocations",
+                        labels=["outcome"],
+                    )
                     # Ambient reply gate counters [CMV][REH]
                     self.metrics.define_counter(
                         "ambient_reply_fired_total",
@@ -1415,6 +1420,12 @@ class LLMBot(commands.Bot):
                 extra={**base_extra, "event": "voice.native.exception"},
                 exc_info=True,
             )
+
+        # Attach any files carried directly on the action (e.g. conversational
+        # image-edit results) alongside any TTS audio file already queued.
+        # `action.files` was previously a dead field - nothing read it. [RM][CA]
+        if action.files:
+            files = (files or []) + list(action.files)
 
         content = action.content or ""
         content = sanitize_public_text(content)

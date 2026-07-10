@@ -46,6 +46,22 @@ class SafetyResult:
     detected_issues: list[str]
 
 
+# Severity ranking for SafetyLevel escalation checks. [CMV]
+# NOTE: `SafetyLevel.value` strings ("blocked" < "safe" < "warning") do NOT
+# sort in severity order, so comparing `.value > .value` silently fails to
+# escalate BLOCKED over SAFE/WARNING. Always compare via this rank. [SFT][REH]
+_SAFETY_LEVEL_SEVERITY: dict[SafetyLevel, int] = {
+    SafetyLevel.SAFE: 0,
+    SafetyLevel.WARNING: 1,
+    SafetyLevel.BLOCKED: 2,
+}
+
+
+def _more_severe(candidate: SafetyLevel, current: SafetyLevel) -> bool:
+    """True if `candidate` is a strictly worse safety level than `current`."""
+    return _SAFETY_LEVEL_SEVERITY[candidate] > _SAFETY_LEVEL_SEVERITY[current]
+
+
 class VisionSafetyFilter:
     """Content safety filter for vision generation requests.
 
@@ -92,26 +108,26 @@ class VisionSafetyFilter:
             if request.prompt:
                 prompt_result = self._analyze_text_content(request.prompt, "prompt")
                 detected_issues.extend(prompt_result.detected_issues)
-                if prompt_result.level.value > max_level.value:
+                if _more_severe(prompt_result.level, max_level):
                     max_level = prompt_result.level
 
             # 2. Validate negative prompt
             if request.negative_prompt:
                 neg_result = self._analyze_text_content(request.negative_prompt, "negative_prompt")
                 detected_issues.extend(neg_result.detected_issues)
-                if neg_result.level.value > max_level.value:
+                if _more_severe(neg_result.level, max_level):
                     max_level = neg_result.level
 
             # 3. Task-specific validations
             task_result = self._validate_task_specific(request)
             detected_issues.extend(task_result.detected_issues)
-            if task_result.level.value > max_level.value:
+            if _more_severe(task_result.level, max_level):
                 max_level = task_result.level
 
             # 4. Server policy checks (NSFW, etc.)
             server_result = self._check_server_policies(request)
             detected_issues.extend(server_result.detected_issues)
-            if server_result.level.value > max_level.value:
+            if _more_severe(server_result.level, max_level):
                 max_level = server_result.level
 
             # 5. Generate final result

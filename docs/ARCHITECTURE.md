@@ -240,3 +240,27 @@ X/Twitter (twitter.com, x.com, fxtwitter.com, vxtwitter.com) URL routing has its
 
 Do not route X/Twitter URLs through the generic `process_url` or `web_extractor` paths — they have a specialized pipeline with caching, transcription, and media selection semantics.
 
+### Conversational Image Editing (mention/reply img2img)
+
+An addressed message (mention/DM/reply) that includes an image and reads as an
+edit *instruction* ("give him a beard", "remove the background") is routed to
+img2img instead of VL analysis or `/imgedit`. See `docs/CONVERSATIONAL_IMAGE_EDIT.md`
+for the full design; summary:
+
+- Decision point: `Router._maybe_route_conversational_edit()`, called from
+  `_process_multimodal_message_internal()` **before** the existing
+  reply-image → VL-perception branch, gated on `(is_dm or mentioned_me or
+  is_reply) and combined_count >= 1` (same image-presence signal the VL
+  branch already computes) so it never runs on unaddressed traffic.
+- Intent heuristic: `bot.router_components.conversational_edit.classify_edit_intent()`
+  (keyword-based v1; analysis/question phrasing always wins ties).
+- Image sourcing: `resolve_edit_source_image()` — current message attachment/embed,
+  then the replied-to message's attachment/embed, then a bare image URL in the
+  triggering text; enforces `MAX_ATTACHMENT_SIZE_MB` via `download_robust_image()`.
+- Execution: reuses `VisionOrchestrator.submit_job()` unchanged — same safety
+  filter and budget ledger as `/imgedit`, no new provider/pool. Result files are
+  attached to `BotAction.files`, which `LLMBot._execute_action()` now forwards
+  into the standard reply-with-reference send path (previously a dead field).
+- Feature gate: `!feature image_editing on|off` (`bot/server_features.py`), plus
+  `VISION_CONVERSATIONAL_EDIT_ENABLED` (global kill switch, `.env.example`).
+
