@@ -49,15 +49,32 @@ async def test_default_provider_promoted_for_supported_task(adapter) -> None:
 
 
 @pytest.mark.asyncio
-async def test_default_provider_skipped_when_it_cant_do_the_task(adapter) -> None:
-    """nvidia has no IMAGE_TO_IMAGE capability - promoting it to the front
-    must NOT break editing; it should be silently skipped and the next
-    capable provider (novita) used instead."""
+async def test_default_provider_promoted_for_image_to_image_too(adapter) -> None:
+    """nvidia gained IMAGE_TO_IMAGE (FLUX.1 Kontext) support - promoting it to
+    the front means it's attempted first for edits too, not just generation."""
     request = VisionRequest(
         task=VisionTask.IMAGE_TO_IMAGE,
         prompt="give this man a beard",
         user_id="1",
         input_image_data=b"fake-image-bytes",
+    )
+
+    response = await adapter.submit(request)
+
+    assert response.provider == VisionProvider.NVIDIA
+    adapter.providers["nvidia"].submit.assert_awaited_once()
+    adapter.providers["novita"].submit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_default_provider_skipped_when_it_cant_do_the_task(adapter) -> None:
+    """nvidia has no VIDEO_GENERATION capability - promoting it to the front
+    must NOT break video; it should be silently skipped and the next capable
+    provider (novita) used instead."""
+    request = VisionRequest(
+        task=VisionTask.VIDEO_GENERATION,
+        prompt="a dog running on a beach",
+        user_id="1",
     )
 
     response = await adapter.submit(request)

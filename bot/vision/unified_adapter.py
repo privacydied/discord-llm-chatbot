@@ -1104,12 +1104,33 @@ class NvidiaPlugin(OpenRouterPlugin):
         self.genai_base_url = (config.get("genai_base_url") or os.getenv("NVIDIA_IMAGE_API_BASE") or "https://ai.api.nvidia.com/v1").rstrip("/")
         self.model_map = {
             VisionTask.TEXT_TO_IMAGE: "black-forest-labs/flux.1-dev",
+            # FLUX.1 Kontext [dev]: NVIDIA-hosted image-EDITING NIM, same
+            # {genai_base_url}/genai/{model} endpoint shape as flux.1-dev above.
+            # Request/response shape below is sourced from NVIDIA's public NIM
+            # docs (no live account was used to verify it end-to-end) - if the
+            # provider rejects a real request, the raw error_text is surfaced
+            # via VisionError.message for fast diagnosis. [CMV][REH]
+            # https://docs.nvidia.com/nim/visual-genai/latest/api/flux.1-kontext-dev.html
+            VisionTask.IMAGE_TO_IMAGE: "black-forest-labs/flux.1-kontext-dev",
+        }
+
+    def capabilities(self) -> dict[str, Any]:
+        """Override OpenRouterPlugin's TEXT_TO_IMAGE-only default: NVIDIA also
+        hosts FLUX.1 Kontext for image editing. [CMV]
+        """
+        return {
+            "modes": [VisionTask.TEXT_TO_IMAGE, VisionTask.IMAGE_TO_IMAGE],
+            "max_size": (1568, 1568),
+            "max_steps": 50,
+            "supports_negative_prompt": False,
+            "supports_batch": False,
+            "nsfw_policy": "unknown",
         }
 
     async def submit(self, request: NormalizedRequest) -> str:
         await self.startup()
         model = request.preferred_model or self.model_map.get(request.task)
-        if request.task != VisionTask.TEXT_TO_IMAGE or not model:
+        if request.task not in self.model_map or not model:
             raise VisionError(
                 message=f"Task {request.task.value} not supported by {self.name}",
                 error_type=VisionErrorType.UNSUPPORTED_TASK,
@@ -1126,6 +1147,28 @@ class NvidiaPlugin(OpenRouterPlugin):
         if request.seed is not None:
             payload["seed"] = int(request.seed)
 
+        if request.task == VisionTask.IMAGE_TO_IMAGE:
+            if not request.input_image_data:
+                raise VisionError(
+                    message="No input image data provided for image_to_image",
+                    error_type=VisionErrorType.VALIDATION_ERROR,
+                    user_message="An input image is required to edit it.",
+                )
+            b64_image = base64.b64encode(request.input_image_data).decode()
+            payload["image"] = f"data:image/png;base64,{b64_image}"
+            # FLUX.1 Kontext constraints: cfg_scale<=9 (default 3.5), steps
+            # 20-50 (default 30). Clamp rather than forward request values
+            # unchecked - this codebase's VisionRequest defaults (guidance=7.0,
+            # steps=30) already fall inside these ranges. width/height are
+            # intentionally omitted: the NIM enumerates specific supported
+            # sizes rather than accepting arbitrary integers, and getting that
+            # enum wrong would 422 the whole request, so we let it default
+            # instead of guessing. [IV]
+            if request.guidance_scale:
+                payload["cfg_scale"] = max(0.0, min(9.0, float(request.guidance_scale)))
+            if request.steps:
+                payload["steps"] = max(20, min(50, int(request.steps)))
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Accept": "application/json",
@@ -1136,9 +1179,9 @@ class NvidiaPlugin(OpenRouterPlugin):
         try:
             async with self.session.post(url, json=payload, headers=headers) as response:
                 error_text = await response.text()
-                if response.status == 400:
+                if response.status in (400, 422):
                     raise VisionError(
-                        message=f"{self.name} invalid request: {error_text}",
+                        message=f"{self.name} invalid request ({response.status}): {error_text}",
                         error_type=VisionErrorType.VALIDATION_ERROR,
                         user_message="There was an issue with your request parameters. Please check and try again.",
                     )
