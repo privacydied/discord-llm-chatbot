@@ -1993,7 +1993,14 @@ class UnifiedVisionAdapter:
 
             # Check if provider supports the task
             capabilities = provider.capabilities()
-            if normalized_request.task not in capabilities.get("modes", []):
+            supported_modes = capabilities.get("modes", [])
+            task_supported = normalized_request.task in supported_modes
+            self.logger.info(
+                f"vision.capability_check provider={provider_name} task={normalized_request.task.value} "
+                f"supported={task_supported} modes={[m.value if hasattr(m, 'value') else m for m in supported_modes]} "
+                f"plugin_class={type(provider).__name__}",
+            )
+            if not task_supported:
                 continue
 
             # Determine endpoint for this provider
