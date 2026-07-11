@@ -484,15 +484,20 @@ class Janitor:
             return
 
         try:
-            before_bytes = get_directory_size_bytes(policy.path)
+            # Compression + directory walks are blocking CPU/IO; run them in a
+            # worker thread so a large log backlog never stalls the event loop
+            # (and the Discord gateway handshake) on startup. [PA][REH]
+            before_bytes = await asyncio.to_thread(get_directory_size_bytes, policy.path)
 
             # Compress old log files
-            compressed_count = compress_old_logs(policy.path, LOG_COMPRESS_AGE_HOURS)
+            compressed_count = await asyncio.to_thread(compress_old_logs, policy.path, LOG_COMPRESS_AGE_HOURS)
 
             # Prune old compressed logs
-            deleted_count, bytes_freed = prune_old_compressed_logs(policy.path, LOG_RETENTION_DAYS, LOG_TOTAL_CAP_MB)
+            deleted_count, bytes_freed = await asyncio.to_thread(
+                prune_old_compressed_logs, policy.path, LOG_RETENTION_DAYS, LOG_TOTAL_CAP_MB
+            )
 
-            after_bytes = get_directory_size_bytes(policy.path)
+            after_bytes = await asyncio.to_thread(get_directory_size_bytes, policy.path)
 
             logger.info(
                 f"janitor.dir name=logs before_bytes={before_bytes} after_bytes={after_bytes} deleted_files={deleted_count} deleted_bytes={bytes_freed} compressed_logs={compressed_count}",
@@ -525,21 +530,23 @@ class Janitor:
             return
 
         try:
-            before_bytes = get_directory_size_bytes(policy.path)
+            # Directory walks + deletions are blocking IO; offload to a thread
+            # so the janitor never blocks the event loop. [PA][REH]
+            before_bytes = await asyncio.to_thread(get_directory_size_bytes, policy.path)
 
             # Prune by age first
             age_deleted = 0
             age_bytes_freed = 0
             if policy.age_ttl_hours is not None:
-                age_deleted, age_bytes_freed = prune_by_age(policy, HOLD_OFF_MINUTES)
+                age_deleted, age_bytes_freed = await asyncio.to_thread(prune_by_age, policy, HOLD_OFF_MINUTES)
 
             # Then prune by size if needed
             size_deleted = 0
             size_bytes_freed = 0
             if policy.size_cap_mb is not None:
-                size_deleted, size_bytes_freed = prune_by_size(policy, HOLD_OFF_MINUTES)
+                size_deleted, size_bytes_freed = await asyncio.to_thread(prune_by_size, policy, HOLD_OFF_MINUTES)
 
-            after_bytes = get_directory_size_bytes(policy.path)
+            after_bytes = await asyncio.to_thread(get_directory_size_bytes, policy.path)
             total_deleted = age_deleted + size_deleted
             total_freed = age_bytes_freed + size_bytes_freed
 
