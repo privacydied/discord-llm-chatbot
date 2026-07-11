@@ -183,6 +183,61 @@ X_STT_PADDING_S = 45.0
 X_STT_MAX_TIMEOUT_S = 900.0
 X_STT_RTF_DEFAULT = 1.6
 
+# Multimodal parallelization: bound concurrent per-item processing to avoid
+# unbounded fan-out while collapsing serial per-item latency. Tunable via the
+# MULTIMODAL_MAX_CONCURRENCY config key. [PA][REH][CMV]
+MULTIMODAL_MAX_CONCURRENCY_DEFAULT = 4
+
+# Extraction-only modalities do not benefit from the model-provider fallback ladder;
+# hoisted to a module constant so both serial and parallel paths share it. [CA][CMV]
+_EXTRACTION_ONLY_MODALITIES = (
+    InputModality.GENERAL_URL,
+    InputModality.SCREENSHOT_URL,
+    InputModality.VIDEO_URL,
+    InputModality.AUDIO_VIDEO_FILE,
+    InputModality.PDF_DOCUMENT,
+    InputModality.PDF_OCR,
+)
+
+# Reply-target (referenced message) memoization: many handlers re-fetch the same
+# reply target via a Discord REST round-trip within one dispatch. Cache briefly to
+# collapse those into a single fetch. [PA][RM]
+REF_MSG_CACHE_MAX_SIZE = 256
+REF_MSG_CACHE_TTL_S = 5.0
+
+# --- Hoisted static compiled regex patterns (compiled once at import). [PA][CMV] ---
+# Direct vision trigger tokens (DM/optional-mention + always-allowed phrases).
+_VISION_TRIGGER_DM_PATTERNS = [
+    re.compile(r"^(?:img|image):\s+(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^!(?:img|image)\s+(.+)$", re.IGNORECASE | re.DOTALL),
+    re.compile(r"^(?:draw|render):\s+(.+)$", re.IGNORECASE | re.DOTALL),
+]
+_VISION_TRIGGER_PHRASE_PATTERNS = [
+    re.compile(
+        r"^(?:generate|create|make|draw)\s+(?:an?\s+)?image\s+(?:of\s+)?(.+)$",
+        re.IGNORECASE | re.DOTALL,
+    ),
+    re.compile(r"^(?:paint|illustrate)\s+(.+)$", re.IGNORECASE | re.DOTALL),
+]
+
+# Verification-branch "no image" contradiction heuristics for _flow_process_text.
+_VERIFY_PATTERN_WHERE = re.compile(
+    r"where['’]s\s+the\s+(actual\s+)?(pic|image|photo)",
+    re.IGNORECASE,
+)
+_VERIFY_PATTERN_SEND = re.compile(r"(re)?send\s+the\s+(pic|image|photo)", re.IGNORECASE)
+_VERIFY_PATTERN_NOT_PIC = re.compile(
+    r"\b(ain['’]?t|isn['’]?t|not)\s+(an?\s+)?(pic|image|photo)\b",
+    re.IGNORECASE,
+)
+_VERIFY_PATTERN_JUST = re.compile(
+    r"\bjust\s+(a\s+)?(screenshot|scan|document|letter|text)\b",
+    re.IGNORECASE,
+)
+
+# Inline [search(...)] directive extraction.
+_INLINE_SEARCH_PATTERN = re.compile(r"\[search\s*\((.*?)\)\]", re.IGNORECASE | re.DOTALL)
+
 _router_instance: Router | None = None
 
 
@@ -491,9 +546,31 @@ class Router:
         # Gate for early X-resolve (enabled by default for correctness) [KBT]
         self._x_early_resolve_enabled = runtime_compat.x_early_resolve_enabled
 
+        # Reply-target fetch memoization: (channel_id, ref_message_id) -> (msg, expiry_ts).
+        # Bounded LRU with a short TTL so repeated reply-context fetches within one
+        # dispatch collapse to a single Discord REST round-trip. [PA][RM]
+        self._ref_msg_cache: collections.OrderedDict[tuple[int, int], tuple[Message | None, float]] = collections.OrderedDict()
+        # Lazily-compiled bot-mention prefix regex (bot.user.id known only after login). [PA]
+        self._mention_re: re.Pattern[str] | None = None
+
     def _get_system_prompt(self, key: str, default: str | None = None) -> str | None:
         """Safely read a prompt template from bot.system_prompts."""
         return get_system_prompt(self.bot, key, default)
+
+    def _get_mention_re(self) -> re.Pattern[str] | None:
+        """Lazily compile the leading bot-mention prefix pattern.
+
+        `bot.user.id` is only known after login, so we compile once on first use
+        and reuse the compiled pattern thereafter. Returns None if the id is not
+        yet available (callers fall back to leaving text unchanged). [PA]
+        """
+        if self._mention_re is not None:
+            return self._mention_re
+        bot_id = getattr(getattr(self.bot, "user", None), "id", None)
+        if bot_id is None:
+            return None
+        self._mention_re = re.compile(rf"^<@!?{bot_id}>\s*")
+        return self._mention_re
 
     def _format_x_tweet_with_transcription(
         self,
@@ -1566,10 +1643,9 @@ class Router:
         try:
             if message.reference and message.reference.message_id:
                 try:
-                    ref_message = message.reference.resolved if getattr(message.reference, "resolved", None) else None
-                    if ref_message is None:
-                        ref_message = await message.channel.fetch_message(message.reference.message_id)
-                    texts.append(ref_message.content or "")
+                    ref_message = await self._fetch_referenced_message(message)
+                    if ref_message is not None:
+                        texts.append(ref_message.content or "")
                 except Exception as exc:
                     logger.debug(f"Failed to fetch referenced message: {exc}")
         except Exception as exc:
@@ -2233,19 +2309,60 @@ class Router:
         """Resolve referenced message from cache first, then fetch if needed."""
         if fallback is not None:
             return fallback
+        return await self._fetch_referenced_message(message)
+
+    def _ref_cache_get(self, key: tuple[int, int]) -> tuple[bool, Message | None]:
+        """Return (hit, message) from the reply-target cache, honoring TTL. [PA]"""
+        entry = self._ref_msg_cache.get(key)
+        if entry is None:
+            return False, None
+        msg, expiry = entry
+        if time.time() >= expiry:
+            with suppress(KeyError):
+                del self._ref_msg_cache[key]
+            return False, None
+        self._ref_msg_cache.move_to_end(key)
+        return True, msg
+
+    def _ref_cache_put(self, key: tuple[int, int], msg: Message | None) -> None:
+        """Store a reply-target fetch result with bounded size + short TTL. [PA][RM]"""
+        self._ref_msg_cache[key] = (msg, time.time() + REF_MSG_CACHE_TTL_S)
+        self._ref_msg_cache.move_to_end(key)
+        while len(self._ref_msg_cache) > REF_MSG_CACHE_MAX_SIZE:
+            self._ref_msg_cache.popitem(last=False)
+
+    async def _fetch_referenced_message(self, message: Message) -> Message | None:
+        """Fetch the reply target of `message`, memoized per short dispatch window.
+
+        Uses `reference.resolved` when Discord already populated it (no REST call),
+        otherwise performs a single cached `channel.fetch_message` round-trip shared
+        by all handlers within the TTL. Fetch failures (NotFound/Forbidden) are cached
+        as None to avoid repeated failing round-trips, matching prior per-site
+        behavior of returning None on error. [PA][REH]
+        """
         ref = getattr(message, "reference", None)
         if not ref:
             return None
-        ref_msg = getattr(ref, "resolved", None)
-        if ref_msg is not None:
-            return ref_msg
+        resolved = getattr(ref, "resolved", None)
+        if resolved is not None:
+            return resolved
         ref_id = getattr(ref, "message_id", None)
-        if not ref_id:
+        channel = getattr(message, "channel", None)
+        channel_id = getattr(channel, "id", None)
+        if not ref_id or channel is None:
             return None
+        key = (channel_id, ref_id) if channel_id is not None else None
+        if key is not None:
+            hit, cached = self._ref_cache_get(key)
+            if hit:
+                return cached
         try:
-            return await message.channel.fetch_message(ref_id)
+            fetched = await channel.fetch_message(ref_id)
         except Exception:
-            return None
+            fetched = None
+        if key is not None:
+            self._ref_cache_put(key, fetched)
+        return fetched
 
     def _mentions_bot(self, message: Message) -> bool:
         """Return True if the message explicitly mentions this bot."""
@@ -2791,13 +2908,7 @@ class Router:
 
             # REPLY_CASE: direct reply chain
             if getattr(message, "reference", None):
-                ref = getattr(message, "reference", None)
-                ref_msg = getattr(ref, "resolved", None)
-                if ref_msg is None and getattr(ref, "message_id", None):
-                    try:
-                        ref_msg = await message.channel.fetch_message(ref.message_id)
-                    except Exception:
-                        ref_msg = None
+                ref_msg = await self._fetch_referenced_message(message)
 
                 if ref_msg is not None:
                     mc = await maybe_build_mention_context(self.bot, message, self.config)
@@ -2896,9 +3007,13 @@ class Router:
             except Exception as exc:
                 self.logger.debug(f"pdf processing failed: {exc}")
 
-        try:
+        def _read_text() -> str:
             with open(path, encoding="utf-8", errors="ignore") as f:
                 return f.read()
+
+        try:
+            # Off-load the blocking file read so we never stall the event loop. [PA]
+            return await asyncio.to_thread(_read_text)
         except Exception:
             return ""
 
@@ -3157,8 +3272,8 @@ class Router:
             content = str(content_raw).strip()
 
             # Remove bot mention to check for command pattern
-            mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
-            clean_content = re.sub(mention_pattern, "", content)
+            mention_re = self._get_mention_re()
+            clean_content = re.sub(mention_re, "", content) if mention_re else content
 
             # Router debug flag from config [IV]
             try:
@@ -3241,7 +3356,7 @@ class Router:
                 has_attachments = bool(getattr(message, "attachments", None)) and len(message.attachments) > 0
             except Exception:
                 has_attachments = False
-            cleaned_for_compat = re.sub(mention_pattern, "", content)
+            cleaned_for_compat = re.sub(mention_re, "", content) if mention_re else content
             cleaned_for_compat = strip_leading_bot_mention(cleaned_for_compat, getattr(getattr(self.bot, "user", None), "id", None))
             preflight_gate = self._feature_gate_response(message, cleaned_for_compat)
             if preflight_gate is not None:
@@ -3350,9 +3465,9 @@ class Router:
                     is_mentioned = self._is_mentioned(message)
                 except Exception:
                     is_mentioned = False
-                mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
+                mention_re = self._get_mention_re()
                 try:
-                    cleaned = re.sub(mention_pattern, "", content).strip()
+                    cleaned = re.sub(mention_re, "", content).strip() if mention_re else content.strip()
                 except Exception:
                     cleaned = content.strip()
                 cleaned = strip_leading_bot_mention(cleaned, getattr(getattr(self.bot, "user", None), "id", None))
@@ -3396,8 +3511,8 @@ class Router:
                 except Exception:
                     has_attachments = False
                 # Recompute a minimal cleaned content (strip mention prefix like above)
-                mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
-                cleaned_for_compat = re.sub(mention_pattern, "", (message.content or "").strip())
+                mention_re = self._get_mention_re()
+                cleaned_for_compat = re.sub(mention_re, "", (message.content or "").strip()) if mention_re else (message.content or "").strip()
                 cleaned_for_compat = strip_leading_bot_mention(
                     cleaned_for_compat,
                     getattr(getattr(self.bot, "user", None), "id", None),
@@ -4440,14 +4555,7 @@ class Router:
                         self.logger.debug(f"minimal text check failed: {exc}")
                         minimal = not bool(original_text and original_text.strip())
                     if minimal:
-                        ref = getattr(message, "reference", None)
-                        ref_msg = getattr(ref, "resolved", None)
-                        if ref_msg is None and getattr(ref, "message_id", None):
-                            try:
-                                ref_msg = await message.channel.fetch_message(ref.message_id)
-                            except Exception as exc:
-                                self.logger.debug(f"reference message fetch failed: {exc}")
-                                ref_msg = None
+                        ref_msg = await self._fetch_referenced_message(message)
                         if ref_msg and getattr(ref_msg, "content", None):
                             rt_raw = str(ref_msg.content or "")
                             try:
@@ -4549,9 +4657,10 @@ class Router:
             ref_count = 0
             if message.reference:
                 try:
-                    ref_message = await message.channel.fetch_message(message.reference.message_id)
-                    ref_imgs = collect_image_urls_from_message(ref_message)
-                    ref_count = len(ref_imgs or [])
+                    ref_message = await self._fetch_referenced_message(message)
+                    if ref_message is not None:
+                        ref_imgs = collect_image_urls_from_message(ref_message)
+                        ref_count = len(ref_imgs or [])
                 except Exception:
                     ref_count = 0
             cur_imgs = collect_image_urls_from_message(message) or []
@@ -4771,199 +4880,59 @@ class Router:
             items = image_attachment_items
             precedence_applied = True
 
-        self.logger.info(f"🚶 Processing {len(items)} input items SEQUENTIALLY for deterministic order (precedence={precedence_applied}) (msg_id: {message.id})")
-
         # Initialize result aggregator and retry manager
         aggregator = ResultAggregator()
         retry_manager = get_retry_manager()
-        # Define timeout mappings for different modalities
 
         # Per-item budgets: read from live config so hot-reloads take effect [REH][PA]
         # LLM/vision tasks can be shorter; media (yt-dlp/transcribe) needs more time.
-        LLM_PER_ITEM_BUDGET = float(self.config.get("MULTIMODAL_PER_ITEM_BUDGET", "30.0"))
-        MEDIA_PER_ITEM_BUDGET = float(self.config.get("MEDIA_PER_ITEM_BUDGET", "120.0"))
+        llm_budget = float(self.config.get("MULTIMODAL_PER_ITEM_BUDGET", "30.0"))
+        media_budget = float(self.config.get("MEDIA_PER_ITEM_BUDGET", "120.0"))
 
-        # Process items strictly sequentially for determinism [CA]
         start_time = time.time()
-        for i, item in enumerate(items, start=1):
-            modality = await map_item_to_modality(item)
 
-            x_candidate_urls: list[str] = []
-            status_keys: set[str] = set()
-            is_twitter_thumbnail = False
-            if has_x_url:
-                x_candidate_urls = self._collect_x_candidate_urls(item)
-                status_keys = {self._normalize_x_url(u) for u in x_candidate_urls if self._is_twitter_status_url(u)}
-                if not status_keys and x_candidate_urls:
-                    for u in x_candidate_urls:
-                        normalized = self._normalize_x_url(u)
-                        if normalized in x_media_state["primary_urls"]:
-                            status_keys.add(normalized)
-                if x_candidate_urls and all(self._is_twitter_thumbnail_url(u) for u in x_candidate_urls):
-                    is_twitter_thumbnail = True
+        async def _exec_extraction(item, modality, selected_budget, i):
+            """Extraction-only modalities: single direct handler call, no provider ladder.
 
-            if x_media_state["kind"] == "video" and modality == InputModality.GENERAL_URL and status_keys:
-                modality = InputModality.VIDEO_URL
-
-            # Create description for logging
-            if item.source_type == "attachment":
-                description = f"{item.payload.filename}"
-            elif item.source_type == "url":
-                description = f"URL: {item.payload[:30]}{'...' if len(item.payload) > 30 else ''}"
-            else:
-                description = f"{item.source_type}"
-
-            self.logger.debug(f"📋 Starting item {i}: {modality.name} - {description}")
-
-            skip_reason: str | None = None
-            # Only dedupe/skip X status processing on true URL items.
-            # Never let embed/thumbnail/image items consume the tweet URL path. [REH][CA]
-            should_dedupe_x_status = bool(status_keys and item.source_type == "url")
-            if should_dedupe_x_status:
-                for key in status_keys:
-                    existing = x_media_state["processed"].get(key)
-                    if existing:
-                        skip_reason = f"duplicate:{existing}"
-                        break
-            if skip_reason is None and x_media_state["kind"] == "video" and not x_media_state["allow_vision"] and is_twitter_thumbnail:
-                skip_reason = "thumbnail_blocked"
-
-            if skip_reason:
-                with suppress(Exception):
-                    self.logger.info(f"x.media.skip reason={skip_reason}")
-                continue
-
-            # Determine modality type for retry manager and per-item budget
-            if modality in [InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE]:
-                retry_modality = "vision"
-                selected_budget = LLM_PER_ITEM_BUDGET
-            elif modality in [InputModality.VIDEO_URL, InputModality.AUDIO_VIDEO_FILE] or modality in [InputModality.PDF_DOCUMENT, InputModality.PDF_OCR]:
-                retry_modality = "media"
-                selected_budget = MEDIA_PER_ITEM_BUDGET
-            else:
-                retry_modality = "text"
-                selected_budget = LLM_PER_ITEM_BUDGET
-
-            # Special-case: Twitter/X GENERAL_URL items may invoke heavy media (STT) work even though
-            # we keep API-first logic in _handle_general_url(). To avoid cancelling STT with short
-            # text timeouts, treat these items as 'media' for retry/budget purposes. [PA][REH]
+            Kept inline with the dispatch so the per-modality timeout guard
+            (asyncio.wait_for(..., timeout=selected_budget)) stays here. [REH][PA]
+            """
             try:
-                if modality == InputModality.GENERAL_URL and item.source_type == "url":
-                    raw_url = str(item.payload)
-                    if self._is_twitter_url(raw_url):
-                        self.logger.info(
-                            "⚙️ Treating Twitter/X GENERAL_URL as media for retry budget/timeouts",
-                            extra={
-                                "event": "x.retry_policy.media_budget",
-                                "detail": {"url": raw_url},
-                            },
-                        )
-                        retry_modality = "media"
-                        selected_budget = MEDIA_PER_ITEM_BUDGET
-            except Exception as exc:
-                # Never break dispatch due to budgeting heuristics
-                self.logger.debug(f"budget heuristic failed: {exc}")
+                result_text = await asyncio.wait_for(
+                    self._handle_item_with_provider(item, modality, None, message=message),
+                    timeout=selected_budget,
+                )
+                duration = time.time() - start_time
+                self.logger.info(f"✅ Item {i} completed (extraction-only, no provider ladder) ({duration:.2f}s)")
+                return result_text, True, duration, 0
+            except TimeoutError:
+                self.logger.warning(f"⏱️ Item {i} timed out (budget={selected_budget}s)")
+                return f"⏱️ Timed out after {selected_budget}s", False, selected_budget, 1
+            except Exception as e:
+                self.logger.warning(f"❌ Item {i} failed: {e}")
+                return f"❌ Failed: {e}", False, time.time() - start_time, 1
 
-            # Extraction-only modalities (URL scraping, document ingest, STT) do not
-            # benefit from the model-provider fallback ladder. DispatchEmptyError from
-            # extraction-side failure (403, version mismatch, etc.) is deterministic —
-            # re-running the same extraction against different model providers burns
-            # budget and latency with identical results. [REH][PA]
-            extraction_only_modalities = (
-                InputModality.GENERAL_URL,
-                InputModality.SCREENSHOT_URL,
-                InputModality.VIDEO_URL,
-                InputModality.AUDIO_VIDEO_FILE,
-                InputModality.PDF_DOCUMENT,
-                InputModality.PDF_OCR,
-            )
+        async def execute_item(item, modality, retry_modality, selected_budget, i):
+            """Run one item to completion; returns (result_text, success, duration, attempts).
 
-            if modality in extraction_only_modalities:
-                # Direct handler call — no provider ladder
-                result_text = ""
-                success = False
-                duration = 0.0
-                attempts = 0
-                try:
-                    result_text = await asyncio.wait_for(
-                        self._handle_item_with_provider(item, modality, None, message=message),
-                        timeout=selected_budget,
-                    )
-                    success = True
-                    duration = time.time() - start_time
-                    self.logger.info(f"✅ Item {i} completed (extraction-only, no provider ladder) ({duration:.2f}s)")
-                except TimeoutError:
-                    self.logger.warning(f"⏱️ Item {i} timed out (budget={selected_budget}s)")
-                    success = False
-                    result_text = f"⏱️ Timed out after {selected_budget}s"
-                    duration = selected_budget
-                    attempts = 1
-                except Exception as e:
-                    self.logger.warning(f"❌ Item {i} failed: {e}")
-                    success = False
-                    result_text = f"❌ Failed: {e}"
-                    duration = time.time() - start_time
-                    attempts = 1
-            else:
-                # Vision/image modalities benefit from model-provider fallback
-                def create_handler_coro(provider_config: ProviderConfig):
-                    async def handler_coro():
-                        return await self._handle_item_with_provider(item, modality, provider_config, message=message)
+            Never raises: extraction failures and provider-ladder exhaustion are
+            recorded as failed results, matching the prior per-item handling. [REH]
+            """
+            if modality in _EXTRACTION_ONLY_MODALITIES:
+                return await _exec_extraction(item, modality, selected_budget, i)
+            return await self._execute_ladder_item(item, modality, retry_manager, message, retry_modality, selected_budget, i)
 
-                    return handler_coro
-
-                try:
-                    result = await retry_manager.run_with_fallback(
-                        modality=retry_modality,
-                        coro_factory=create_handler_coro,
-                        per_item_budget=selected_budget,
-                    )
-
-                    if result.success:
-                        self.logger.info(f"✅ Item {i} completed successfully ({result.total_time:.2f}s)")
-                        success = True
-                        result_text = result.result
-                        duration = result.total_time
-                        attempts = result.attempts
-                    else:
-                        msg = f"❌ Failed after {result.attempts} attempts: {result.error}"
-                        if result.fallback_occurred:
-                            msg += " (fallback attempted)"
-                        self.logger.warning(f"❌ Item {i} failed ({result.total_time:.2f}s)")
-                        success = False
-                        result_text = msg
-                        duration = result.total_time
-                        attempts = result.attempts
-                except Exception as e:
-                    self.logger.exception(f"❌ Item {i} exception: {e}")
-                    success = False
-                    result_text = f"❌ Exception: {e}"
-                    duration = 0.0
-                    attempts = 0
-
-            # Mark X status processed for true URL items (shared after both branches).
-            # Never mark for embeds/thumbnails/images. [REH][CA]
-            should_mark_x_status = bool(status_keys and item.source_type == "url")
-            if should_mark_x_status:
-                status_label = "consumed" if success else "failed"
-                for key in status_keys:
-                    x_media_state["processed"][key] = status_label
-                if success and modality == InputModality.VIDEO_URL:
-                    x_media_state["allow_vision"] = False
-                    with suppress(Exception):
-                        self.logger.info("x.media.consumed by=stt")
-                elif not success:
-                    x_media_state["allow_vision"] = True
-
-            aggregator.add_result(
-                item_index=i,
-                item=item,
-                modality=modality,
-                result_text=result_text,
-                success=success,
-                duration=duration,
-                attempts=attempts,
-            )
+        if has_x_url:
+            # X/Twitter batches mutate order-sensitive shared dedup/allow-vision state
+            # (x_media_state["processed"] / ["allow_vision"]) across items, so this path
+            # MUST stay serial for correct de-duplication and thumbnail gating. [REH][CA]
+            self.logger.info(f"🚶 Processing {len(items)} input items SERIALLY (X/Twitter shared state, precedence={precedence_applied}) (msg_id: {message.id})")
+            await self._process_items_serial(items, aggregator, execute_item, message, x_media_state, has_x_url, llm_budget, media_budget)
+        else:
+            # Independent items: process concurrently under a bounded semaphore, then
+            # aggregate in item-index order for deterministic output. [PA]
+            self.logger.info(f"🚀 Processing {len(items)} input items CONCURRENTLY (deterministic aggregation, precedence={precedence_applied}) (msg_id: {message.id})")
+            await self._process_items_parallel(items, aggregator, execute_item, llm_budget, media_budget)
 
         total_time = time.time() - start_time
         # Generate aggregated prompt and send single response
@@ -4992,6 +4961,147 @@ class Router:
             return response_action
         self.logger.warning(f"No response generated from text flow (msg_id: {message.id})")
         return None
+
+    def _multimodal_max_concurrency(self) -> int:
+        """Bounded fan-out for parallel multimodal item processing. [PA][REH][CMV]"""
+        try:
+            val = int(self.config.get("MULTIMODAL_MAX_CONCURRENCY", MULTIMODAL_MAX_CONCURRENCY_DEFAULT))
+        except Exception:
+            val = MULTIMODAL_MAX_CONCURRENCY_DEFAULT
+        return max(1, val)
+
+    def _select_item_budget(self, modality: InputModality, item: InputItem, llm_budget: float, media_budget: float) -> tuple[str, float]:
+        """Pick (retry_modality, per_item_budget) for a single item. [PA][REH]"""
+        if modality in (InputModality.SINGLE_IMAGE, InputModality.MULTI_IMAGE):
+            return "vision", llm_budget
+        if modality in (InputModality.VIDEO_URL, InputModality.AUDIO_VIDEO_FILE, InputModality.PDF_DOCUMENT, InputModality.PDF_OCR):
+            return "media", media_budget
+        # Twitter/X GENERAL_URL items may invoke heavy media (STT) work; treat them as
+        # 'media' so short text timeouts don't cancel transcription mid-flight. [PA][REH]
+        try:
+            if modality == InputModality.GENERAL_URL and item.source_type == "url" and self._is_twitter_url(str(item.payload)):
+                self.logger.info(
+                    "⚙️ Treating Twitter/X GENERAL_URL as media for retry budget/timeouts",
+                    extra={"event": "x.retry_policy.media_budget", "detail": {"url": str(item.payload)}},
+                )
+                return "media", media_budget
+        except Exception as exc:
+            self.logger.debug(f"budget heuristic failed: {exc}")
+        return "text", llm_budget
+
+    async def _execute_ladder_item(self, item: InputItem, modality: InputModality, retry_manager, message: Message, retry_modality: str, selected_budget: float, i: int) -> tuple[str, bool, float, int]:
+        """Vision/image modalities benefit from the model-provider fallback ladder. [REH]"""
+
+        def create_handler_coro(provider_config: ProviderConfig):
+            async def handler_coro():
+                return await self._handle_item_with_provider(item, modality, provider_config, message=message)
+
+            return handler_coro
+
+        try:
+            result = await retry_manager.run_with_fallback(modality=retry_modality, coro_factory=create_handler_coro, per_item_budget=selected_budget)
+        except Exception as e:
+            self.logger.exception(f"❌ Item {i} exception: {e}")
+            return f"❌ Exception: {e}", False, 0.0, 0
+        if result.success:
+            self.logger.info(f"✅ Item {i} completed successfully ({result.total_time:.2f}s)")
+            return result.result, True, result.total_time, result.attempts
+        msg = f"❌ Failed after {result.attempts} attempts: {result.error}"
+        if result.fallback_occurred:
+            msg += " (fallback attempted)"
+        self.logger.warning(f"❌ Item {i} failed ({result.total_time:.2f}s)")
+        return msg, False, result.total_time, result.attempts
+
+    def _collect_x_item_state(self, item: InputItem, x_media_state: dict[str, Any], has_x_url: bool) -> tuple[set[str], bool]:
+        """Compute (status_keys, is_twitter_thumbnail) for X/Twitter dedup. [CA]"""
+        if not has_x_url:
+            return set(), False
+        x_candidate_urls = self._collect_x_candidate_urls(item)
+        status_keys = {self._normalize_x_url(u) for u in x_candidate_urls if self._is_twitter_status_url(u)}
+        if not status_keys and x_candidate_urls:
+            for u in x_candidate_urls:
+                normalized = self._normalize_x_url(u)
+                if normalized in x_media_state["primary_urls"]:
+                    status_keys.add(normalized)
+        is_twitter_thumbnail = bool(x_candidate_urls) and all(self._is_twitter_thumbnail_url(u) for u in x_candidate_urls)
+        return status_keys, is_twitter_thumbnail
+
+    def _x_skip_reason(self, item: InputItem, status_keys: set[str], is_twitter_thumbnail: bool, x_media_state: dict[str, Any]) -> str | None:
+        """Return an X dedup/thumbnail-block skip reason, else None. [REH][CA]"""
+        if status_keys and item.source_type == "url":
+            for key in status_keys:
+                existing = x_media_state["processed"].get(key)
+                if existing:
+                    return f"duplicate:{existing}"
+        if x_media_state["kind"] == "video" and not x_media_state["allow_vision"] and is_twitter_thumbnail:
+            return "thumbnail_blocked"
+        return None
+
+    def _mark_x_status(self, item: InputItem, modality: InputModality, status_keys: set[str], success: bool, x_media_state: dict[str, Any]) -> None:
+        """Record X status outcome for true URL items + toggle allow_vision. [REH][CA]"""
+        if not (status_keys and item.source_type == "url"):
+            return
+        status_label = "consumed" if success else "failed"
+        for key in status_keys:
+            x_media_state["processed"][key] = status_label
+        if success and modality == InputModality.VIDEO_URL:
+            x_media_state["allow_vision"] = False
+            with suppress(Exception):
+                self.logger.info("x.media.consumed by=stt")
+        elif not success:
+            x_media_state["allow_vision"] = True
+
+    async def _process_items_serial(
+        self, items: list[InputItem], aggregator: ResultAggregator, execute_item: Callable, message: Message, x_media_state: dict[str, Any], has_x_url: bool, llm_budget: float, media_budget: float
+    ) -> None:
+        """Serial per-item processing, required whenever X/Twitter shared dedup state is
+        mutated across items in an order-sensitive way. Preserves the legacy behavior
+        exactly (dedup skips, thumbnail gating, allow_vision toggles). [REH][CA]
+        """
+        for i, item in enumerate(items, start=1):
+            modality = await map_item_to_modality(item)
+            status_keys, is_twitter_thumbnail = self._collect_x_item_state(item, x_media_state, has_x_url)
+            if x_media_state["kind"] == "video" and modality == InputModality.GENERAL_URL and status_keys:
+                modality = InputModality.VIDEO_URL
+            skip_reason = self._x_skip_reason(item, status_keys, is_twitter_thumbnail, x_media_state)
+            if skip_reason:
+                with suppress(Exception):
+                    self.logger.info(f"x.media.skip reason={skip_reason}")
+                continue
+            retry_modality, selected_budget = self._select_item_budget(modality, item, llm_budget, media_budget)
+            result_text, success, duration, attempts = await execute_item(item, modality, retry_modality, selected_budget, i)
+            self._mark_x_status(item, modality, status_keys, success, x_media_state)
+            aggregator.add_result(item_index=i, item=item, modality=modality, result_text=result_text, success=success, duration=duration, attempts=attempts)
+
+    async def _process_items_parallel(self, items: list[InputItem], aggregator: ResultAggregator, execute_item: Callable, llm_budget: float, media_budget: float) -> None:
+        """Concurrent per-item processing bounded by a semaphore. Safe only for
+        independent items (no X/Twitter shared state); results are added to the
+        aggregator in item-index order to preserve deterministic output. [PA][CA]
+        """
+        sem = asyncio.Semaphore(self._multimodal_max_concurrency())
+
+        async def run_one(i: int, item: InputItem) -> tuple:
+            async with sem:
+                try:
+                    modality = await map_item_to_modality(item)
+                except Exception as e:
+                    self.logger.warning(f"❌ Item {i} modality mapping failed: {e}")
+                    return i, item, InputModality.TEXT_ONLY, f"❌ Failed: {e}", False, 0.0, 1
+                retry_modality, budget = self._select_item_budget(modality, item, llm_budget, media_budget)
+                result_text, success, duration, attempts = await execute_item(item, modality, retry_modality, budget, i)
+                return i, item, modality, result_text, success, duration, attempts
+
+        results = await asyncio.gather(*(run_one(i, item) for i, item in enumerate(items, start=1)), return_exceptions=True)
+        self._aggregate_parallel_results(results, aggregator)
+
+    def _aggregate_parallel_results(self, results: list, aggregator: ResultAggregator) -> None:
+        """Add gathered results to the aggregator in deterministic item-index order. [CA]"""
+        ordered = sorted((r for r in results if isinstance(r, tuple)), key=lambda r: r[0])
+        for i, item, modality, result_text, success, duration, attempts in ordered:
+            aggregator.add_result(item_index=i, item=item, modality=modality, result_text=result_text, success=success, duration=duration, attempts=attempts)
+        for r in results:
+            if not isinstance(r, tuple):
+                self.logger.warning(f"❌ Parallel item task raised unexpectedly: {r}")
 
     async def _handle_item_with_provider(
         self,
@@ -6754,8 +6864,8 @@ class Router:
 
             # Clean mention prefix for more accurate intent detection
             try:
-                mention_pattern = rf"^<@!?{self.bot.user.id}>\s*"
-                content_clean = re.sub(mention_pattern, "", content)
+                mention_re = self._get_mention_re()
+                content_clean = re.sub(mention_re, "", content) if mention_re else content
             except Exception:
                 content_clean = content
 
@@ -6768,10 +6878,7 @@ class Router:
             # Include referenced message (reply target) for gating if present [REH][IV]
             ref_msg = None
             try:
-                ref = getattr(message, "reference", None)
-                ref_msg = getattr(ref, "resolved", None)
-                if ref_msg is None and getattr(ref, "message_id", None):
-                    ref_msg = await message.channel.fetch_message(ref.message_id)
+                ref_msg = await self._fetch_referenced_message(message)
             except Exception as exc:
                 self.logger.debug(f"reference message fetch failed: {exc}")
                 ref_msg = None
@@ -7010,10 +7117,7 @@ class Router:
             # Bring in URLs/attachments from reply target if present [REH]
             ref_msg = None
             try:
-                ref = getattr(message, "reference", None)
-                ref_msg = getattr(ref, "resolved", None)
-                if ref_msg is None and getattr(ref, "message_id", None):
-                    ref_msg = await message.channel.fetch_message(ref.message_id)
+                ref_msg = await self._fetch_referenced_message(message)
             except Exception:
                 ref_msg = None
             if ref_msg:
@@ -7157,10 +7261,11 @@ class Router:
             ref_id = None
             if message.reference:
                 try:
-                    ref_message = await message.channel.fetch_message(message.reference.message_id)
-                    ref_id = getattr(ref_message, "id", None)
-                    refs = collect_image_urls_from_message(ref_message) or []
-                    image_refs.extend(refs)
+                    ref_message = await self._fetch_referenced_message(message)
+                    if ref_message is not None:
+                        ref_id = getattr(ref_message, "id", None)
+                        refs = collect_image_urls_from_message(ref_message) or []
+                        image_refs.extend(refs)
                 except Exception as e:
                     self.logger.debug(f"perception: harvest(ref) failed | {e}")
             cur_refs = collect_image_urls_from_message(message) or []
@@ -7411,21 +7516,13 @@ class Router:
                     lower_out = (response_text or "").lower()
                     contradicts = any(p in lower_out for p in bad_phrases)
                     if not contradicts:
-                        # Lightweight regex heuristics for variants [REH]
-                        pattern_where = re.compile(
-                            r"where['’]s\s+the\s+(actual\s+)?(pic|image|photo)",
-                            re.IGNORECASE,
+                        # Lightweight regex heuristics for variants (hoisted constants) [REH][PA]
+                        contradicts = bool(
+                            _VERIFY_PATTERN_WHERE.search(response_text or "")
+                            or _VERIFY_PATTERN_SEND.search(response_text or "")
+                            or _VERIFY_PATTERN_NOT_PIC.search(response_text or "")
+                            or _VERIFY_PATTERN_JUST.search(response_text or "")
                         )
-                        pattern_send = re.compile(r"(re)?send\s+the\s+(pic|image|photo)", re.IGNORECASE)
-                        pattern_not_pic = re.compile(
-                            r"\b(ain['’]?t|isn['’]?t|not)\s+(an?\s+)?(pic|image|photo)\b",
-                            re.IGNORECASE,
-                        )
-                        pattern_just = re.compile(
-                            r"\bjust\s+(a\s+)?(screenshot|scan|document|letter|text)\b",
-                            re.IGNORECASE,
-                        )
-                        contradicts = bool(pattern_where.search(response_text or "") or pattern_send.search(response_text or "") or pattern_not_pic.search(response_text or "") or pattern_just.search(response_text or ""))
                 except Exception:
                     contradicts = False
 
@@ -7508,7 +7605,7 @@ class Router:
         """
         if not text:
             return []
-        pattern = re.compile(r"\[search\s*\((.*?)\)\]", re.IGNORECASE | re.DOTALL)
+        pattern = _INLINE_SEARCH_PATTERN
         matches: list[tuple[tuple[int, int], str, SearchCategory | None]] = []
 
         def _parse_category(arg_tail: str) -> SearchCategory | None:
@@ -8717,8 +8814,9 @@ class Router:
             image_refs = []
             if message.reference:
                 try:
-                    ref_message = await message.channel.fetch_message(message.reference.message_id)
-                    image_refs.extend(collect_image_urls_from_message(ref_message) or [])
+                    ref_message = await self._fetch_referenced_message(message)
+                    if ref_message is not None:
+                        image_refs.extend(collect_image_urls_from_message(ref_message) or [])
                 except Exception as exc:
                     self.logger.debug(f"reference image collect failed: {exc}")
             image_refs.extend(collect_image_urls_from_message(message) or [])
@@ -9329,21 +9427,10 @@ class Router:
             mention_pattern = rf"^<@!?{bot_id}>\s*"
             text = re.sub(mention_pattern, "", text).strip()
 
-        # Patterns for DMs or when mention is optional
-        dm_or_optional_mention_patterns = [
-            re.compile(r"^(?:img|image):\s+(.+)$", re.IGNORECASE | re.DOTALL),
-            re.compile(r"^!(?:img|image)\s+(.+)$", re.IGNORECASE | re.DOTALL),
-            re.compile(r"^(?:draw|render):\s+(.+)$", re.IGNORECASE | re.DOTALL),
-        ]
-
-        # Legacy phrase patterns (always allowed)
-        phrase_patterns = [
-            re.compile(
-                r"^(?:generate|create|make|draw)\s+(?:an?\s+)?image\s+(?:of\s+)?(.+)$",
-                re.IGNORECASE | re.DOTALL,
-            ),
-            re.compile(r"^(?:paint|illustrate)\s+(.+)$", re.IGNORECASE | re.DOTALL),
-        ]
+        # Patterns for DMs or when mention is optional (hoisted module constants). [PA]
+        dm_or_optional_mention_patterns = _VISION_TRIGGER_DM_PATTERNS
+        # Legacy phrase patterns (always allowed).
+        phrase_patterns = _VISION_TRIGGER_PHRASE_PATTERNS
 
         debug_triggers = os.getenv("VISION_TRIGGER_DEBUG", "0").lower() in (
             "1",
