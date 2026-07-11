@@ -124,12 +124,18 @@ async def download_file(url: str, save_path: Path, session: aiohttp.ClientSessio
         return False
 
     close_session = False
-    # Per-attempt timeout budget: defaults tuned for image fetches [PA]
+    # Per-attempt timeout budget. A hard 800ms total used to guillotine
+    # healthy full-resolution downloads (pbs.twimg.com name=orig can be several
+    # MB), so name=orig almost always "timed out" and fell back needlessly.
+    # Give the whole attempt a generous-but-bounded `total` (≤10s external-call
+    # rule) and let sock_connect/sock_read fail fast on a genuinely stalled
+    # connection instead of cutting off an in-progress large image. [PA][REH]
     try:
-        per_attempt_ms = int(os.getenv("IMAGEDL_TIMEOUT_PER_ATTEMPT_MS", "800"))
+        per_attempt_ms = int(os.getenv("IMAGEDL_TIMEOUT_PER_ATTEMPT_MS", "8000"))
     except Exception:
-        per_attempt_ms = 900
-    timeout = aiohttp.ClientTimeout(total=max(0.2, per_attempt_ms / 1000.0))
+        per_attempt_ms = 8000
+    total_s = max(1.0, per_attempt_ms / 1000.0)
+    timeout = aiohttp.ClientTimeout(total=total_s, sock_connect=5.0, sock_read=total_s)
 
     # Default fetch headers to improve pbs.twimg.com compatibility [IV]
     headers = {
@@ -178,7 +184,9 @@ async def download_file(url: str, save_path: Path, session: aiohttp.ClientSessio
             METRICS.counter("x.syndication.image_fetch_timeout").inc(1)
         except Exception as exc:
             logging.debug(f"metrics timeout counter failed: {exc}")
-        logging.exception(f"Timeout downloading {url}")
+        # Handled condition: the caller retries with a lower-res variant, so log
+        # a concise warning rather than an ERROR-level traceback. [REH]
+        logging.warning(f"Timeout downloading {url} after {total_s:.1f}s (falling back to lower-res variant)")
         return False
     except Exception as e:
         logging.exception(f"Error downloading {url}: {e}")
