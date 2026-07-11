@@ -203,10 +203,10 @@ class VisionOrchestrator:
             # Reserve budget (will be adjusted when job completes)
             await self.budget_manager.reserve_budget(request.user_id, estimated_cost_money)
 
-            # Persist initial job state
-            await self.job_store.save_job(job)
-
-            # Queue job for execution
+            # Queue job for execution -- persist once, already in QUEUED state.
+            # Previously this wrote CREATED, then immediately transitioned and wrote
+            # QUEUED again with no await (and so no external observer) in between;
+            # that first write was pure overhead. [PA]
             job.transition_to(VisionJobState.QUEUED, "Job queued for execution")
             await self.job_store.save_job(job)
 
@@ -369,15 +369,17 @@ class VisionOrchestrator:
                     )
                 job.request.images = capped_images
 
-            # Transition to running state
+            # Transition to running state. The progress bump to 10% used to be a
+            # separate save_job() call -- a second full job-file write + fsync'd
+            # ledger append with no consumer, since generation below is a single
+            # awaited call rather than a polling loop that reads intermediate
+            # progress. Both updates now land in one write. [PA]
             job.transition_to(VisionJobState.RUNNING, "Starting generation")
             job.provider_assigned = job.request.preferred_provider  # May be overridden by gateway
-            await self.job_store.save_job(job)
-
-            # Execute generation via gateway
             job.update_progress(10, "Contacting provider")
             await self.job_store.save_job(job)
 
+            # Execute generation via gateway
             response = await self.gateway.generate(job.request)
 
             if response.success:
@@ -536,15 +538,29 @@ class VisionOrchestrator:
 
     async def _background_cleanup(self) -> None:
         """Background task for cleanup and monitoring [RM]."""
+        tick = 0
         while True:
             try:
                 await asyncio.sleep(300)  # Run every 5 minutes
+                tick += 1
 
                 # Cleanup expired jobs
                 await self._cleanup_expired_jobs()
 
                 # Cleanup old artifacts
                 await self._cleanup_old_artifacts()
+
+                # Prune old job JSON files from disk. job_store.cleanup_old_jobs()
+                # already existed but had zero callers anywhere in the codebase --
+                # completed/failed job files accumulated forever (300+ found on disk
+                # during the I/O audit). Runs roughly hourly (every 12th tick) since
+                # it's a full directory scan, not worth doing on every 5-min tick. [PA]
+                if tick % 12 == 0:
+                    with contextlib.suppress(Exception):
+                        retention_days = self.config.get("VISION_JOB_RETENTION_DAYS", 30)
+                        cleaned = await self.job_store.cleanup_old_jobs(days=retention_days)
+                        if cleaned:
+                            self.logger.info(f"vision.job_store.cleanup | removed={cleaned} retention_days={retention_days}")
 
                 # Log system health (metadata via 'extra' to avoid kwargs to logger) [REH]
                 self.logger.debug(

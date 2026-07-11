@@ -206,26 +206,42 @@ class IndexingQueue:
             return False
 
     async def _worker_loop(self, worker_id: int) -> None:
-        """Main worker loop for processing indexing tasks."""
+        """Main worker loop for processing indexing tasks, batched across
+        documents. [PA]
+
+        `batch_size` was already accepted by __init__ and logged at startup, but
+        nothing ever read it again -- each task hit the backend (one SQLite
+        commit/fsync cycle) on its own. This drains up to `batch_size` queued
+        tasks before handing them to the backend together.
+        """
         logger.info(f"[RAG Indexing] Worker {worker_id} started")
 
         try:
             while not self._shutdown_event.is_set():
+                batch: list[IndexingTask] = []
                 try:
-                    # Wait for tasks with timeout to allow shutdown checking
-                    task = await asyncio.wait_for(self._queue.get(), timeout=1.0)
-
-                    # Process the task
-                    await self._process_task(task, worker_id)
-                    self._queue.task_done()
-
+                    # Wait for the first task with timeout to allow shutdown checking
+                    batch.append(await asyncio.wait_for(self._queue.get(), timeout=1.0))
                 except TimeoutError:
                     # No task available, continue loop to check shutdown
                     continue
 
+                # Opportunistically grab more already-queued tasks without
+                # waiting, up to batch_size, so a burst of enqueues commits once.
+                while len(batch) < self.batch_size:
+                    try:
+                        batch.append(self._queue.get_nowait())
+                    except asyncio.QueueEmpty:
+                        break
+
+                try:
+                    await self._process_batch(batch, worker_id)
                 except Exception as e:
                     self._stats["worker_errors"] += 1
                     logger.exception(f"[RAG Indexing] Worker {worker_id} error: {e}")
+                finally:
+                    for _ in batch:
+                        self._queue.task_done()
 
         except asyncio.CancelledError:
             logger.info(f"[RAG Indexing] Worker {worker_id} cancelled")
@@ -233,6 +249,62 @@ class IndexingQueue:
 
         finally:
             logger.info(f"[RAG Indexing] Worker {worker_id} stopped")
+
+    async def _process_batch(self, batch: list[IndexingTask], worker_id: int) -> None:
+        """Process a batch of tasks with a single backend commit when possible.
+
+        Falls back to the existing one-at-a-time path when there's only one
+        task, or when the backend doesn't implement add_documents_batch (e.g.
+        test doubles) -- so this only changes behavior when there's actually a
+        batch to commit and a backend that can do it in one write. On a whole-
+        batch failure, falls back to retrying tasks individually so one bad
+        document doesn't fail the rest of an otherwise-good batch. [REH][PA]
+        """
+        if len(batch) == 1 or not hasattr(self.rag_backend, "add_documents_batch"):
+            for task in batch:
+                await self._process_task(task, worker_id)
+            return
+
+        start_time = time.time()
+        for task in batch:
+            task.status = IndexingTaskStatus.PROCESSING
+            task.attempts += 1
+
+        try:
+            results = await self.rag_backend.add_documents_batch(
+                [
+                    {
+                        "source_id": t.source_id,
+                        "text": t.text,
+                        "metadata": t.metadata,
+                        "file_type": t.file_type,
+                    }
+                    for t in batch
+                ],
+            )
+
+            processing_time = time.time() - start_time
+            self._stats["total_processing_time"] += processing_time
+            self._stats["last_activity"] = datetime.utcnow()
+
+            for task in batch:
+                if results.get(task.source_id):
+                    task.status = IndexingTaskStatus.COMPLETED
+                    self._stats["tasks_processed"] += 1
+                    logger.debug(f"[RAG Indexing] ✔ Worker {worker_id} batch-completed: {task.source_id}")
+                else:
+                    await self._handle_task_failure(task, "Batch backend processing failed", worker_id)
+
+            if self._stats["tasks_processed"] > 0:
+                self._stats["avg_processing_time"] = self._stats["total_processing_time"] / self._stats["tasks_processed"]
+
+            logger.debug(f"[RAG Indexing] Worker {worker_id} committed batch of {len(batch)} document(s) in {processing_time:.2f}s")
+
+        except (RuntimeError, OSError, ValueError, AttributeError, TimeoutError) as e:
+            logger.warning(f"[RAG Indexing] Worker {worker_id} batch of {len(batch)} failed ({e}), retrying individually")
+            for task in batch:
+                task.attempts -= 1  # _process_task below re-increments per-task
+                await self._process_task(task, worker_id)
 
     async def _process_task(self, task: IndexingTask, worker_id: int) -> None:
         """Process a single indexing task with retry logic."""

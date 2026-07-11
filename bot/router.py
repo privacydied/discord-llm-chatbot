@@ -3147,7 +3147,10 @@ class Router:
 
     async def dispatch_message(self, message: Message) -> BotAction | None:
         """Process a message and ensure exactly one response is generated (1 IN > 1 OUT rule)."""
-        self.logger.info(f" === ROUTER DISPATCH STARTED: MSG {message.id} ====")
+        # Demoted from .info() -- pure tracing breadcrumb on the every-message hot
+        # path; dispatch:pre/attempt/ok downstream already carry the operational
+        # signal. Still available at DEBUG for troubleshooting. [PA]
+        self.logger.debug(f" === ROUTER DISPATCH STARTED: MSG {message.id} ====")
         try:
             # 1. Quick pre-filter: Only parse commands for messages that start with '!'
             content_raw = getattr(message, "content", "") or ""
@@ -3383,7 +3386,9 @@ class Router:
 
             # --- Start of processing for DMs, Mentions, and Replies ---
             async with self._optional_typing(message.channel):
-                self.logger.info(f"Processing message: DM={isinstance(message.channel, DMChannel)}, Mention={self._is_mentioned(message)} (msg_id: {message.id})")
+                # Demoted from .info() -- tracing breadcrumb, fires on every addressed
+                # message. [PA]
+                self.logger.debug(f"Processing message: DM={isinstance(message.channel, DMChannel)}, Mention={self._is_mentioned(message)} (msg_id: {message.id})")
 
                 # 4. Compatibility fast-path for legacy tests: attachments + empty content (secondary safeguard)
                 try:
@@ -3454,7 +3459,7 @@ class Router:
                     self.logger.debug(f"vision.precheck_exception | {e}")
                 if prechecked is not None:
                     if router_debug:
-                        self.logger.info(f"ROUTER_DEBUG | path=t2i reason=vision_intent_detected msg_id={message.id}")
+                        self.logger.debug(f"ROUTER_DEBUG | path=t2i reason=vision_intent_detected msg_id={message.id}")
                     # Decide final route here for vision
                     with suppress(Exception):
                         self.logger.info(
@@ -3895,11 +3900,11 @@ class Router:
                     has_x_urls = any(self._is_twitter_url(url) for url in re.findall(r"https?://\S+", content))
                     has_attachments = bool(getattr(message, "attachments", None))
                     if has_x_urls:
-                        self.logger.info(f"ROUTER_DEBUG | path=x_syndication_vl reason=twitter_url_detected msg_id={message.id}")
+                        self.logger.debug(f"ROUTER_DEBUG | path=x_syndication_vl reason=twitter_url_detected msg_id={message.id}")
                     elif has_attachments:
-                        self.logger.info(f"ROUTER_DEBUG | path=attachment_vl reason=image_attachments msg_id={message.id}")
+                        self.logger.debug(f"ROUTER_DEBUG | path=attachment_vl reason=image_attachments msg_id={message.id}")
                     else:
-                        self.logger.info(f"ROUTER_DEBUG | path=multimodal reason=default_flow msg_id={message.id}")
+                        self.logger.debug(f"ROUTER_DEBUG | path=multimodal reason=default_flow msg_id={message.id}")
                 return result_action  # Return the actual processing result
 
         except Exception as e:
@@ -4808,7 +4813,7 @@ class Router:
             else:
                 description = f"{item.source_type}"
 
-            self.logger.info(f"📋 Starting item {i}: {modality.name} - {description}")
+            self.logger.debug(f"📋 Starting item {i}: {modality.name} - {description}")
 
             skip_reason: str | None = None
             # Only dedupe/skip X status processing on true URL items.
@@ -4968,7 +4973,7 @@ class Router:
         stats = aggregator.get_summary_stats()
         successful_items = stats.get("successful_items", 0)
         total_items = stats.get("total_items", 0)
-        self.logger.info(f"📦 SEQUENTIAL MULTIMODAL COMPLETE: {successful_items}/{total_items} successful, total: {total_time:.1f}s")
+        self.logger.debug(f"📦 SEQUENTIAL MULTIMODAL COMPLETE: {successful_items}/{total_items} successful, total: {total_time:.1f}s")
 
         # Generate single aggregated response through text flow (1 IN → 1 OUT)
         # Gate out early if all multimodal items failed and no meaningful text remains.
@@ -7261,7 +7266,7 @@ class Router:
         perception_notes: str | None = None,
     ) -> BotAction:
         """Process text input through the AI model with RAG integration and conversation context."""
-        self.logger.info("Processing text with AI model and RAG integration.")
+        self.logger.debug("Processing text with AI model and RAG integration.")
 
         # Convert EvidenceBundle to string for processing
         if isinstance(content, EvidenceBundle):
@@ -7356,7 +7361,7 @@ class Router:
                 if perception_notes:
                     # Breadcrumb for injection [INFO]
                     with suppress(Exception):
-                        self.logger.info(f"🧩 Injecting perception into text prompt | chars={len(perception_notes)}")
+                        self.logger.debug(f"🧩 Injecting perception into text prompt | chars={len(perception_notes)}")
                 # Anchor visual analysis when present to avoid "no image" drift while preserving persona [REH][IV]
                 anchored_system = self._build_visual_anchored_system_prompt(content_str, perception_notes=perception_notes)
 
@@ -7550,7 +7555,7 @@ class Router:
         if not directives:
             return text
 
-        self.logger.info(f"🔎 Found {len(directives)} inline search directive(s) (msg_id: {message.id})")
+        self.logger.debug(f"🔎 Found {len(directives)} inline search directive(s) (msg_id: {message.id})")
 
         # Config [IV]: pull from self.config with safe defaults
         provider_name = str(self.config.get("SEARCH_PROVIDER", "ddg"))

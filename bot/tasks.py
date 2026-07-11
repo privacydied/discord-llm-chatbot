@@ -1,6 +1,7 @@
 """Background task management for the Discord bot."""
 
 import asyncio
+import contextlib
 import logging
 from typing import Any
 
@@ -154,6 +155,9 @@ class TaskManager:
             # Start profile auto-save task
             await self._start_profile_autosave()
 
+            # Start context manager auto-save task
+            await self._start_context_autosave()
+
             # Start cleanup tasks
             await self._start_cleanup_tasks()
 
@@ -265,6 +269,48 @@ class TaskManager:
         self.tasks["profile_autosave"] = profile_autosave
         logger.info("Profile auto-save task started")
 
+    async def _start_context_autosave(self) -> None:
+        """Periodically flush ContextManager/EnhancedContextManager to disk. [PA]
+
+        Both managers used to write a full-file atomic rewrite (+fsync) to disk
+        on every single message -- now append() just marks an in-memory dirty
+        flag (reads always come from memory, never disk, so nothing needs the
+        write to land synchronously). This task is what actually gets the dirty
+        data onto disk, on a much shorter interval than profile autosave since
+        losing conversational context on a crash is more noticeable than losing
+        a few minutes of profile updates.
+        """
+        cfg = load_config()
+        interval_seconds = cfg.get("CONTEXT_AUTOSAVE_INTERVAL_SECONDS", 20)
+
+        @tasks.loop(seconds=interval_seconds)
+        async def context_autosave() -> None:
+            """Flush context managers if there are unsaved changes."""
+            try:
+                current_cfg = load_config()
+                target_seconds = current_cfg.get("CONTEXT_AUTOSAVE_INTERVAL_SECONDS", 20)
+                if target_seconds != context_autosave.current_interval:
+                    context_autosave.change_interval(seconds=target_seconds)
+                    context_autosave.current_interval = target_seconds
+
+                context_manager = getattr(self.bot, "context_manager", None)
+                if context_manager is not None:
+                    with contextlib.suppress(Exception):
+                        await context_manager.flush_if_dirty()
+
+                enhanced_context_manager = getattr(self.bot, "enhanced_context_manager", None)
+                if enhanced_context_manager is not None:
+                    with contextlib.suppress(Exception):
+                        await enhanced_context_manager.flush_if_dirty()
+
+            except Exception as e:
+                logger.error(f"Error during context autosave: {e}", exc_info=True)
+
+        context_autosave.current_interval = interval_seconds
+        context_autosave.start()
+        self.tasks["context_autosave"] = context_autosave
+        logger.info(f"Context auto-save task started (interval={interval_seconds}s)")
+
     async def _start_cleanup_tasks(self) -> None:
         """Start cleanup tasks."""
         cfg = load_config()
@@ -310,6 +356,16 @@ class TaskManager:
 
             except Exception as e:
                 logger.error(f"Error during log cleanup: {e}", exc_info=True)
+
+            # TTS cache TTL sweep -- purge_old_cache() existed but had zero callers
+            # anywhere in the codebase, so rendered audio accumulated on disk forever. [PA]
+            try:
+                tts_manager = getattr(self.bot, "tts_manager", None)
+                if tts_manager is not None:
+                    await asyncio.to_thread(tts_manager.purge_old_cache)
+                    logger.debug("TTS cache purge completed")
+            except Exception as e:
+                logger.warning(f"Error during TTS cache purge: {e}")
 
         cleanup_old_logs.current_interval = interval_hours
         cleanup_old_logs.start()

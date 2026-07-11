@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import os
@@ -65,6 +64,13 @@ class ContextManager:
         self.max_total_chars = _load_int_config("CONTEXT_MAX_TOTAL_CHARS", 8000)
         self.ignore_continuation_chunks = _load_bool_config("CONTEXT_IGNORE_BOT_CONTINUATION_CHUNKS", True)
         self.memory: dict[str, Any] = {}
+        # Dirty-flag debounce: append() used to fire a fire-and-forget disk write
+        # (full-file atomic rewrite + fsync) on every single message. Reads always
+        # come from self.memory in-process, never from disk, so nothing needs the
+        # write to land synchronously -- only a periodic flush (see
+        # bot/tasks.py's context_autosave task) and flush-on-shutdown need it to
+        # land at all. [PA]
+        self._dirty = False
         self._load()
         logger.info(f"ContextManager initialized. In-memory only: {self.in_memory_only}, Max messages: {self.max_messages}, Max chars/msg: {self.max_chars_per_message}, Max total chars: {self.max_total_chars}")
 
@@ -167,22 +173,26 @@ class ContextManager:
             self.memory.setdefault(primary_key, []).append(entry)
             self.memory[primary_key] = self.memory[primary_key][-self.max_messages :]
 
-        # Fire-and-forget async save (sync caller)
-        try:
-            loop = asyncio.get_event_loop()
-            task = loop.create_task(self._save())
-            task.add_done_callback(
-                lambda t: (
-                    logger.warning(
-                        f"Context save failed: {t.exception()}",
-                        exc_info=t.exception(),
-                    )
-                    if not t.cancelled() and t.exception()
-                    else None
-                ),
-            )
-        except RuntimeError:
-            pass
+        # Mark dirty instead of writing to disk on every single message [PA].
+        # A periodic task (bot/tasks.py context_autosave) and shutdown both call
+        # flush_if_dirty(); in-process reads always hit self.memory directly so
+        # there's no correctness gap, only a bounded window of at-most-N-seconds
+        # of context that could be lost on an unclean crash (same tradeoff
+        # already accepted for user/server profile autosave).
+        self._dirty = True
+
+    async def flush_if_dirty(self) -> bool:
+        """Persist to disk if there are unsaved changes; no-op otherwise.
+
+        Returns:
+            True if a save was performed, False if there was nothing to flush.
+
+        """
+        if not self._dirty or self.in_memory_only:
+            return False
+        self._dirty = False
+        await self._save()
+        return True
 
     def get_context(self, message: discord.Message) -> list[dict[str, str]]:
         """Retrieves the context for a given message's source."""

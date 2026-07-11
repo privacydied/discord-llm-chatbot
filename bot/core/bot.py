@@ -880,8 +880,11 @@ class LLMBot(commands.Bot):
                             ),
                         )
 
+            # Demoted from .info() -- pure per-message tracing breadcrumb, fires on every
+            # single message the bot sees; dispatch:pre/attempt/ok already cover the
+            # operationally-relevant signal downstream. Still emitted at DEBUG. [PA]
             guild_info = "DM" if isinstance(message.channel, discord.DMChannel) else f"guild:{message.guild.id}"
-            self.logger.info(
+            self.logger.debug(
                 " === DM MESSAGE PROCESSING STARTED ===="
                 if guild_info == "DM"
                 else f"Message queued: msg_id:{message.id} author:{message.author.id} in:{guild_info} len:{len(message.content)} queue_size:{self._get_user_queue(str(message.author.id)).qsize()}",

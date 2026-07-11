@@ -217,6 +217,25 @@ class GracefulShutdown:
         except Exception as e:
             logger.error(f"Error saving profiles during shutdown: {e}", exc_info=True)
 
+        # Flush context managers -- append()/append_message() now only mark an
+        # in-memory dirty flag instead of writing on every message (see
+        # bot/tasks.py's context_autosave task), so shutdown must force one last
+        # flush or the last <=CONTEXT_AUTOSAVE_INTERVAL_SECONDS of conversation
+        # context would be lost on a clean stop, not just a crash. [PA]
+        try:
+            context_manager = getattr(self.bot, "context_manager", None)
+            if context_manager is not None:
+                flushed = await context_manager.flush_if_dirty()
+                logger.info(f"Context manager flushed on shutdown: {flushed}")
+
+            enhanced_context_manager = getattr(self.bot, "enhanced_context_manager", None)
+            if enhanced_context_manager is not None:
+                flushed = await enhanced_context_manager.flush_if_dirty()
+                logger.info(f"Enhanced context manager flushed on shutdown: {flushed}")
+
+        except Exception as e:
+            logger.error(f"Error flushing context managers during shutdown: {e}", exc_info=True)
+
     async def _stop_background_tasks(self) -> None:
         """Stop all background tasks."""
         try:

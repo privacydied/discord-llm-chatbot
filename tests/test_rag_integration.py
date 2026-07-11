@@ -256,7 +256,11 @@ class TestChromaBackend:
 
             assert len(documents) > 0
             assert all(isinstance(doc, VectorDocument) for doc in documents)
-            mock_collection.add.assert_called_once()
+            # _store_documents() now calls upsert() rather than add() -- functionally
+            # identical for a brand-new id, but tolerant of a caller re-adding a
+            # document that already exists (e.g. a retried indexing batch). [PA]
+            mock_collection.upsert.assert_called_once()
+            mock_collection.add.assert_not_called()
 
 
 @pytest.mark.asyncio

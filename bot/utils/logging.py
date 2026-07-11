@@ -1,13 +1,25 @@
 import contextlib
 import json
 import logging
+import logging.handlers
 import os
+import queue
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NoReturn
 
 from rich.logging import RichHandler
+
+# Rotation policy for the JSONL sink [CMV][PA]. Same defaults the (dead) constants in
+# bot/janitor.py used to document but never applied -- this is now the one place that
+# actually rotates the live file, via stdlib RotatingFileHandler (cheap rename, not a
+# copy+truncate). janitor.py's compress/prune sweep picks up the rotated *.jsonl.N files.
+LOG_ROTATION_SIZE_MB = int(os.getenv("LOG_ROTATION_SIZE_MB", "50"))
+LOG_ROTATION_BACKUPS = int(os.getenv("LOG_ROTATION_BACKUPS", "5"))
+
+# Module-level handle so shutdown can stop the background flush thread cleanly.
+_queue_listener: "logging.handlers.QueueListener | None" = None
 
 
 def _rich_tracebacks_supported() -> bool:
@@ -84,13 +96,31 @@ def _ensure_dir(p: Path) -> None:
 
 
 def init_logging() -> None:
-    """Configure dual-sink logging: Rich console + JSONL file (enforced)."""
+    """Configure dual-sink logging: Rich console + JSONL file (enforced).
+
+    Both sinks are driven off a background QueueListener thread instead of being
+    attached to the root logger directly [PA]. Every call site's logger.info()/debug()
+    only does an in-memory queue.put() -- the per-record flush()/write(2) syscall that
+    logging.FileHandler.emit() forces happens on the listener thread, off the hot
+    request path. This does not change *what* gets logged, only when the physical
+    write happens; both handlers are still constructed and active, satisfying the
+    mandatory dual-sink enforcement below.
+    """
+    global _queue_listener
+
     level = os.getenv("LOG_LEVEL", "INFO").upper()
     jsonl_path = Path(os.getenv("LOG_JSONL_PATH", "logs/bot.jsonl"))
     _ensure_dir(jsonl_path)
 
     root = logging.getLogger()
     root.setLevel(level)
+
+    # Stop any previously-running listener thread before reconfiguring (reload-safe).
+    if _queue_listener is not None:
+        with contextlib.suppress(Exception):
+            _queue_listener.stop()
+        _queue_listener = None
+
     # Clear to avoid duplicates on reload
     if root.hasHandlers():
         root.handlers.clear()
@@ -109,8 +139,13 @@ def init_logging() -> None:
     pretty.addFilter(LevelIconFilter())
     pretty.setFormatter(logging.Formatter(fmt="%(level_icon)s %(message)s"))
 
-    # JSONL sink
-    jsonl = logging.FileHandler(str(jsonl_path), encoding="utf-8")
+    # JSONL sink -- rotates at LOG_ROTATION_SIZE_MB instead of growing unbounded [PA].
+    jsonl = logging.handlers.RotatingFileHandler(
+        str(jsonl_path),
+        maxBytes=LOG_ROTATION_SIZE_MB * 1024 * 1024,
+        backupCount=LOG_ROTATION_BACKUPS,
+        encoding="utf-8",
+    )
     jsonl.set_name("jsonl_handler")
     jsonl.setFormatter(JsonlFormatter())
 
@@ -118,10 +153,21 @@ def init_logging() -> None:
     pretty.addFilter(SensitiveDataFilter())
     jsonl.addFilter(SensitiveDataFilter())
 
-    logging.basicConfig(handlers=[pretty, jsonl], level=level, force=True, format="%(message)s")
+    # Route both real handlers through a background listener thread so emit() from
+    # any coroutine is a cheap queue.put_nowait() -- the flush()/write(2) syscall for
+    # each handler happens on the listener thread instead of the caller's.
+    log_queue: queue.SimpleQueue = queue.SimpleQueue()
+    queue_handler = logging.handlers.QueueHandler(log_queue)
+    queue_handler.set_name("queue_handler")
 
-    # Enforce exactly the two sinks are present
-    names = sorted(h.get_name() for h in logging.getLogger().handlers)
+    logging.basicConfig(handlers=[queue_handler], level=level, force=True, format="%(message)s")
+
+    _queue_listener = logging.handlers.QueueListener(log_queue, pretty, jsonl, respect_handler_level=True)
+    _queue_listener.start()
+
+    # Enforce exactly the two sinks are present (now behind the queue listener,
+    # not attached directly to the root logger).
+    names = sorted(h.get_name() for h in _queue_listener.handlers)
     if names != ["jsonl_handler", "pretty_handler"]:
         try:
             sys.stderr.write(f"[logging-enforcer] expected pretty_handler + jsonl_handler, got {names}\n")
@@ -146,12 +192,17 @@ def get_logger(name: str) -> logging.Logger:
 
 
 def shutdown_logging_and_exit(exit_code: int) -> NoReturn:
+    global _queue_listener
     try:
         logging.getLogger(__name__).info("Shutting down", extra={"subsys": "logging"})
     except Exception as exc:
         logging.getLogger(__name__).debug(f"shutdown log failed: {exc}")
     finally:
         try:
+            if _queue_listener is not None:
+                with contextlib.suppress(Exception):
+                    _queue_listener.stop()  # flushes any queued records before returning
+                _queue_listener = None
             cleanup_rich_handlers()
             logging.shutdown()
         finally:
@@ -161,7 +212,10 @@ def shutdown_logging_and_exit(exit_code: int) -> NoReturn:
 def cleanup_rich_handlers() -> None:
     try:
         root = logging.getLogger()
-        for h in list(root.handlers):
+        candidates = list(root.handlers)
+        if _queue_listener is not None:
+            candidates.extend(_queue_listener.handlers)
+        for h in candidates:
             if isinstance(h, RichHandler):
                 try:
                     h.rich_tracebacks = False

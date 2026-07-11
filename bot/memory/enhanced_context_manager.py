@@ -136,6 +136,14 @@ class EnhancedContextManager:
         # Concurrency protection for thread-safe operations
         self._memory_lock = asyncio.Lock()
 
+        # Dirty-flag debounce: append_message() used to do a full-file atomic
+        # rewrite + fsync of *every* tracked guild/channel/thread's history on
+        # every single message (and again on every bot reply). Reads always come
+        # from self.memory in-process, so the write can be deferred to a
+        # periodic flush (bot/tasks.py's context_autosave task) and
+        # flush-on-shutdown instead of landing synchronously per message. [PA]
+        self._dirty = False
+
         self._load()
         logger.info(f"✔ Enhanced context manager initialized [history_window={self.history_window}, encryption=enabled]")
 
@@ -295,11 +303,32 @@ class EnhancedContextManager:
             if len(self.memory[context_key]) > self.history_window:
                 self.memory[context_key] = self.memory[context_key][-self.history_window :]
 
-            # Save to disk if not in memory-only mode
+            # Mark dirty instead of writing to disk on every message/reply [PA].
+            # A periodic task (bot/tasks.py context_autosave) and shutdown both
+            # call flush_if_dirty(); in-process reads always hit self.memory
+            # directly, so there's no read-consistency gap -- only a bounded
+            # window of at-most-N-seconds of context that could be lost on an
+            # unclean crash (same tradeoff already accepted for profile autosave).
             if not self.in_memory_only:
-                await self._save()
+                self._dirty = True
 
             logger.debug(f"✔ Message stored [context={context_key}, role={role}, user={message.author.id}]")
+
+    async def flush_if_dirty(self) -> bool:
+        """Persist to disk if there are unsaved changes; no-op otherwise.
+
+        Returns:
+            True if a save was performed, False if there was nothing to flush.
+
+        """
+        if not self._dirty or self.in_memory_only:
+            return False
+        async with self._memory_lock:
+            if not self._dirty:  # re-check under lock (a flush may have raced in)
+                return False
+            self._dirty = False
+            await self._save()
+        return True
 
     def _estimate_token_count(self, text: str) -> int:
         """Rough token count estimation (1 token ≈ 4 characters)."""

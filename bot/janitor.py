@@ -43,8 +43,10 @@ class DirectoryPolicy:
 
 
 # Default policies - read from existing config paths
-LOG_ROTATION_SIZE_MB = 50  # Rotate active log at this size
-LOG_ROTATION_BACKUPS = 5  # Keep this many backups before compression
+# NOTE: live-file rotation (size threshold + backup count) is handled by
+# logging.handlers.RotatingFileHandler in bot/utils/logging.py (LOG_ROTATION_SIZE_MB /
+# LOG_ROTATION_BACKUPS env vars there) -- that's what actually renames bot.jsonl -> .1,
+# .2, etc. This module only compresses/prunes the *already-rotated* backups below. [PA]
 LOG_COMPRESS_AGE_HOURS = 1.0  # Compress rotated logs older than this
 LOG_RETENTION_DAYS = 7  # Keep compressed logs this long
 LOG_TOTAL_CAP_MB = 256  # Total logs directory cap
@@ -245,6 +247,11 @@ def compress_old_logs(log_dir: Path, compress_age_hours: float) -> int:
     """Compress log files older than compress_age_hours. Returns count compressed. [CA].
 
     Only compresses files matching *.log or *.jsonl that aren't already .gz
+
+    Also matches RotatingFileHandler-style rotated backups (bot.jsonl.1, bot.jsonl.2, ...)
+    -- these have a numeric suffix *after* the extension, so "*.jsonl"/"*.log" alone never
+    match them; without the extra patterns below, rotated backups accumulate uncompressed
+    forever even though this function's whole job is to compress them. [PA]
     """
     if not log_dir.exists():
         return 0
@@ -254,7 +261,7 @@ def compress_old_logs(log_dir: Path, compress_age_hours: float) -> int:
 
     try:
         # Look for uncompressed log files
-        for pattern in ["*.log", "*.jsonl"]:
+        for pattern in ["*.log", "*.jsonl", "*.log.[0-9]*", "*.jsonl.[0-9]*"]:
             for log_file in log_dir.glob(pattern):
                 try:
                     mtime = log_file.stat().st_mtime

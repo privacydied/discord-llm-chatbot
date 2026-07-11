@@ -324,24 +324,29 @@ class TestBudgetManager:
 
     @pytest.mark.asyncio
     async def test_atomic_writes(self, budget_manager, tmp_path) -> None:
-        """Test atomic file writes."""
+        """Test atomic file writes.
+
+        Budgets are stored one-file-per-user under budgets/ (not a single
+        all-users budgets.json) so that one user's spend event never rewrites
+        every other user's data. [PA]
+        """
         user_id = "test_user"
 
         # Create initial budget
         await budget_manager.reserve_budget(user_id, Money("1.00"))
 
         # Verify files exist
-        budgets_file = tmp_path / "budgets.json"
+        user_budget_file = tmp_path / "budgets" / f"{user_id}.json"
         transactions_file = tmp_path / "transactions.jsonl"
 
-        assert budgets_file.exists()
+        assert user_budget_file.exists()
         assert transactions_file.exists()
+        assert not (tmp_path / "budgets.json").exists()  # legacy monolithic file, no longer written
 
         # Verify JSON is valid
-        with open(budgets_file) as f:
+        with open(user_budget_file) as f:
             data = json.load(f)
-            assert user_id in data
-            assert data[user_id]["reserved_amount"] == "1.0000"
+            assert data["reserved_amount"] == "1.0000"
 
         # Verify transaction log
         with open(transactions_file) as f:

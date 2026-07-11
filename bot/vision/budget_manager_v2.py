@@ -181,12 +181,16 @@ class VisionBudgetManager:
         """Initialize budget manager with config."""
         self.config = config
         self.data_dir = Path(config.get("VISION_DATA_DIR", "data/vision"))
+        # Legacy monolithic file -- no longer written to, only read once at startup
+        # to migrate any pre-existing data into per-user files below. [PA]
         self.budgets_file = self.data_dir / "budgets.json"
+        self.budgets_dir = self.data_dir / "budgets"
         self.transactions_file = self.data_dir / "transactions.jsonl"
         self.spend_ledger_file = self.data_dir / "spend_ledger.jsonl"
 
         # Create data directory if needed
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.budgets_dir.mkdir(parents=True, exist_ok=True)
 
         # User locks for concurrent access
         self._user_locks: dict[str, asyncio.Lock] = {}
@@ -195,6 +199,12 @@ class VisionBudgetManager:
         # Pricing table
         self.pricing_table = get_pricing_table()
 
+        # One-time migration off the old all-users-in-one-file layout, which forced
+        # a full rewrite (+ 2 fsyncs) of every user's data on every single user's
+        # budget update. Per-user files below mean a spend event only ever touches
+        # the one file it needs. [PA]
+        self._migrate_legacy_budgets_file()
+
         logger.info(f"VisionBudgetManager initialized with data_dir: {self.data_dir}")
 
     def _get_user_lock(self, user_id: str) -> asyncio.Lock:
@@ -202,6 +212,36 @@ class VisionBudgetManager:
         if user_id not in self._user_locks:
             self._user_locks[user_id] = asyncio.Lock()
         return self._user_locks[user_id]
+
+    def _user_budget_path(self, user_id: str) -> Path:
+        """Filesystem-safe per-user budget file path [SFT].
+
+        Discord user IDs are numeric snowflakes, but stay defensive against any
+        caller passing something unexpected instead of trusting it directly in a path.
+        """
+        safe_id = "".join(c for c in str(user_id) if c.isalnum() or c in ("-", "_")) or "unknown"
+        return self.budgets_dir / f"{safe_id}.json"
+
+    def _migrate_legacy_budgets_file(self) -> None:
+        """Migrate data/vision/budgets.json (if it still exists) into per-user files.
+
+        Runs once per process start; cheap no-op once the legacy file is gone. [REH]
+        """
+        if not self.budgets_file.exists():
+            return
+        try:
+            with open(self.budgets_file) as f:
+                data = json.load(f)
+            migrated = 0
+            for user_id, budget_data in data.items():
+                dest = self._user_budget_path(user_id)
+                if not dest.exists():
+                    self._atomic_write_json(dest, budget_data)
+                    migrated += 1
+            self.budgets_file.rename(self.budgets_file.with_suffix(".json.migrated"))
+            logger.info(f"Migrated {migrated} user budget(s) from legacy budgets.json to per-user files")
+        except Exception as exc:
+            logger.warning(f"Legacy budgets.json migration failed (will retry next start): {exc}")
 
     def _atomic_write_json(self, file_path: Path, data: Any) -> None:
         """Atomic JSON write with temp file + fsync + rename [RM][REH].
@@ -221,12 +261,12 @@ class VisionBudgetManager:
             # Atomic rename (on same filesystem)
             os.replace(temp_path, file_path)
 
-            # Sync directory to ensure rename is persisted
-            dir_fd = os.open(file_path.parent, os.O_RDONLY)
-            try:
-                os.fsync(dir_fd)
-            finally:
-                os.close(dir_fd)
+            # NOTE: deliberately no directory-fsync here. That extra fsync
+            # defended against a crash-before-rename-is-durable edge case that
+            # budget tracking doesn't need (worst case on an unclean shutdown is
+            # losing the last few seconds of spend accounting, not corrupting
+            # anything) -- and it was doubling the physical write cost of every
+            # single budget update on HDD. [PA]
 
         except Exception as exc:
             # Clean up temp file on error
@@ -258,53 +298,35 @@ class VisionBudgetManager:
             f.flush()
             os.fsync(f.fileno())
 
-    async def _load_all_budgets(self) -> dict[str, UserBudget]:
-        """Load all user budgets from JSON [REH]."""
-        if not self.budgets_file.exists():
-            return {}
-
-        try:
-            with open(self.budgets_file) as f:
-                data = json.load(f)
-
-            budgets = {}
-            for user_id, budget_data in data.items():
-                budgets[user_id] = UserBudget.from_dict(budget_data)
-            return budgets
-
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.exception(f"Failed to load budgets: {e}")
-            return {}
-
-    async def _save_all_budgets(self, budgets: dict[str, UserBudget]) -> None:
-        """Save all user budgets atomically [RM]."""
-        data = {user_id: budget.to_dict() for user_id, budget in budgets.items()}
-        self._atomic_write_json(self.budgets_file, data)
-
     async def _load_user_budget(self, user_id: str) -> UserBudget:
-        """Load or create user budget [REH]."""
-        budgets = await self._load_all_budgets()
+        """Load or create this user's budget from its own file [REH][PA].
 
-        if user_id not in budgets:
-            # Create new budget with defaults from config
-            budget = UserBudget(
-                user_id=user_id,
-                daily_limit=str(self.config.get("VISION_DAILY_LIMIT", 5.0)),
-                weekly_limit=str(self.config.get("VISION_WEEKLY_LIMIT", 20.0)),
-                monthly_limit=str(self.config.get("VISION_MONTHLY_LIMIT", 50.0)),
-            )
-            budgets[user_id] = budget
-            await self._save_all_budgets(budgets)
+        Only ever touches the one file for `user_id` -- no other user's data is
+        read or rewritten, unlike the old all-users-in-one-file design.
+        """
+        path = self._user_budget_path(user_id)
+        if path.exists():
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+                return UserBudget.from_dict(data)
+            except (json.JSONDecodeError, KeyError, OSError) as e:
+                logger.exception(f"Failed to load budget for user {user_id}: {e}")
 
-        return budgets[user_id]
+        # Create new budget with defaults from config
+        budget = UserBudget(
+            user_id=user_id,
+            daily_limit=str(self.config.get("VISION_DAILY_LIMIT", 5.0)),
+            weekly_limit=str(self.config.get("VISION_WEEKLY_LIMIT", 20.0)),
+            monthly_limit=str(self.config.get("VISION_MONTHLY_LIMIT", 50.0)),
+        )
+        self._atomic_write_json(path, budget.to_dict())
+        return budget
 
     async def _save_user_budget(self, budget: UserBudget) -> None:
-        """Save user budget atomically [RM]."""
+        """Save this user's budget atomically to its own file [RM][PA]."""
         budget.updated_at = datetime.now(UTC).isoformat()
-
-        budgets = await self._load_all_budgets()
-        budgets[budget.user_id] = budget
-        await self._save_all_budgets(budgets)
+        self._atomic_write_json(self._user_budget_path(budget.user_id), budget.to_dict())
 
     def _reset_expired_periods(self, budget: UserBudget) -> None:
         """Reset budget periods that have expired [CMV]."""

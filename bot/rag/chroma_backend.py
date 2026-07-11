@@ -178,11 +178,14 @@ class ChromaRAGBackend:
 
         documents_text = [doc.chunk_text for doc in documents]
 
-        # Store in ChromaDB (run in thread pool to avoid blocking)
+        # Store in ChromaDB (run in thread pool to avoid blocking). upsert() rather
+        # than add() -- functionally identical for brand-new ids, but tolerates a
+        # caller re-adding a document that already exists (e.g. a retried batch)
+        # without raising on a duplicate id. [PA]
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
             None,
-            lambda: self.collection.add(
+            lambda: self.collection.upsert(
                 ids=ids,
                 embeddings=embeddings,
                 metadatas=metadatas,
@@ -191,6 +194,85 @@ class ChromaRAGBackend:
         )
 
         logger.debug(f"[RAG] Stored {len(documents)} documents in ChromaDB")
+
+    async def add_documents_batch(
+        self,
+        items: list[dict[str, Any]],
+    ) -> dict[str, list[VectorDocument]]:
+        """Chunk + embed multiple documents and commit them in a single ChromaDB
+        write transaction. [PA]
+
+        The indexing queue used to call add_document() once per document, which
+        meant one SQLite commit/fsync cycle per document even though
+        IndexingQueue already had a (previously unused) batch_size setting. This
+        lets the worker loop drain several queued documents and commit them
+        together -- one write instead of N.
+
+        Args:
+            items: dicts with keys source_id, text, metadata (optional), file_type
+                   (optional, defaults to "text")
+
+        Returns:
+            Mapping of source_id -> created VectorDocuments. An entry is an empty
+            list if that particular item was empty/failed to chunk -- it's
+            omitted from the combined write rather than aborting the whole
+            batch, so one bad document doesn't block the rest.
+
+        """
+        await self.initialize()
+
+        all_documents: list[VectorDocument] = []
+        per_source: dict[str, list[VectorDocument]] = {}
+
+        for item in items:
+            source_id = item["source_id"]
+            text = item.get("text") or ""
+            metadata = item.get("metadata")
+            file_type = item.get("file_type", "text")
+
+            if not text.strip():
+                logger.warning(f"[RAG] Empty document provided in batch: {source_id}")
+                per_source[source_id] = []
+                continue
+
+            try:
+                chunker = create_chunker(file_type, self.config)
+                chunking_result = chunker.chunk_text(text, metadata)
+
+                if not chunking_result.chunks:
+                    logger.warning(f"[RAG] No chunks generated for document in batch: {source_id}")
+                    per_source[source_id] = []
+                    continue
+
+                chunk_texts = list(chunking_result.chunks)
+                embeddings = await self.embedding_model.encode(chunk_texts)
+
+                chunk_metadata = dict(metadata or {})
+                chunk_metadata.update(chunking_result.metadata)
+
+                docs = [
+                    VectorDocument.create(
+                        source_id=source_id,
+                        chunk_text=chunk_text,
+                        embedding=embedding,
+                        chunk_index=i,
+                        metadata=chunk_metadata.copy(),
+                    )
+                    for i, (chunk_text, embedding) in enumerate(zip(chunk_texts, embeddings, strict=False))
+                ]
+                per_source[source_id] = docs
+                all_documents.extend(docs)
+
+            except Exception as e:
+                logger.exception(f"[RAG] Failed to prepare document {source_id} for batch: {e}")
+                per_source[source_id] = []
+
+        # One commit for every chunk from every document in this batch.
+        if all_documents:
+            await self._store_documents(all_documents)
+            logger.info(f"[RAG] Batch-added {len(items)} document(s) -> {len(all_documents)} chunks in one commit")
+
+        return per_source
 
     async def search(
         self,
@@ -422,6 +504,16 @@ class ChromaRAGBackend:
         Returns:
             List of new VectorDocument objects
 
+        NOTE [PA]: this is still delete-then-add (2 write transactions), not a
+        single upsert, because VectorDocument.create() assigns each chunk a
+        random uuid4() id rather than one derived from (source_id, chunk_index)
+        -- so a re-add of the same logical document never reuses the old chunk
+        ids for upsert() to match against. Collapsing this to one transaction
+        would mean switching to deterministic chunk ids, which is a real
+        correctness-sensitive change (anything persisting a chunk id across a
+        restart would need to keep working) rather than a same-behavior
+        write-count optimization, so it's left as a follow-up rather than bundled
+        here.
         """
         await self.initialize()
 

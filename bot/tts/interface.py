@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import inspect
 import os
 import re
@@ -30,7 +31,15 @@ logger = get_logger(__name__)
 
 
 def _default_cache_dir() -> Path:
-    return Path(os.getenv("TEMP_DIR", "temp")) / "tts"
+    """Default TTS scratch/cache directory.
+
+    Defaults to the system temp dir (tmpfs/RAM-backed on most hosts, confirmed on
+    this deployment) rather than a repo-relative "temp/" path -- these files are
+    synthesized, uploaded to Discord, and are disposable, so there's no reason for
+    them to ever touch the spinning-disk-backed project directory. [PA]
+    Set TTS_CACHE_DIR explicitly to opt back into a persistent, disk-backed cache.
+    """
+    return Path(os.getenv("TEMP_DIR") or tempfile.gettempdir()) / "discord-llm-chatbot-tts"
 
 
 class TTSManager:
@@ -171,6 +180,19 @@ class TTSManager:
             except Exception:
                 logger.debug("Failed to purge cache file %s", path, exc_info=True)
 
+    @staticmethod
+    def _cache_key(cleaned_text: str, voice: str, output_format: str) -> str:
+        """Deterministic cache key for (text, voice, format) so repeated phrases reuse
+        an existing rendered file instead of re-synthesizing and re-writing. [PA]
+        """
+        h = hashlib.sha256(usedforsecurity=False)
+        h.update(cleaned_text.encode("utf-8"))
+        h.update(b"\x00")
+        h.update(voice.encode("utf-8"))
+        h.update(b"\x00")
+        h.update(output_format.encode("utf-8"))
+        return h.hexdigest()[:24]
+
     def _load_backend(self) -> None:
         engine_cls = ENGINES.get(self.backend)
         if engine_cls is None:
@@ -294,6 +316,45 @@ class TTSManager:
             timeout = self.timeout_cold_s if not self._warmed_up else self.timeout_warm_s
 
         chosen_voice = voice or self.voice
+        output_format = (output_format or "wav").strip().lower()
+
+        # Cache-hit fast path: identical (text, voice, format) already rendered and
+        # still sitting in cache_dir -- skip synthesis and the disk write entirely.
+        # Only applies when the caller wants a cache-managed path (out_path is None);
+        # an explicit out_path means the caller owns that exact location and always
+        # wants a fresh write there. [PA]
+        cache_key: str | None = None
+        cached_path: Path | None = None
+        lock: asyncio.Lock | None = None
+        if out_path is None:
+            suffix = ".ogg" if output_format == "ogg" else ".wav"
+            cache_key = self._cache_key(cleaned, chosen_voice, output_format)
+            cached_path = self.cache_dir / f"tts_{cache_key}{suffix}"
+            lock = self._job_locks.setdefault(cache_key, asyncio.Lock())
+
+        if cached_path is not None and lock is not None:
+            async with lock:
+                if cached_path.exists():
+                    with contextlib.suppress(Exception):
+                        os.utime(cached_path, None)  # bump mtime so purge_old_cache sees it as fresh
+                    logger.debug("tts:cache_hit path=%s", cached_path)
+                    return cached_path
+
+                out_path = await self._synthesize_to_path(cleaned, chosen_voice, timeout, output_format, cached_path)
+                return out_path
+
+        out_path = Path(out_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        return await self._synthesize_to_path(cleaned, chosen_voice, timeout, output_format, out_path)
+
+    async def _synthesize_to_path(
+        self,
+        cleaned: str,
+        chosen_voice: str,
+        timeout: float | None,
+        output_format: str,
+        out_path: Path,
+    ) -> Path:
         old_voice = getattr(self._engine, "voice", None)
         if hasattr(self._engine, "voice"):
             with contextlib.suppress(Exception):
@@ -305,16 +366,6 @@ class TTSManager:
             if hasattr(self._engine, "voice") and old_voice is not None:
                 with contextlib.suppress(Exception):
                     self._engine.voice = old_voice
-
-        output_format = (output_format or "wav").strip().lower()
-        if out_path is None:
-            suffix = ".ogg" if output_format == "ogg" else ".wav"
-            fd, temp_name = tempfile.mkstemp(prefix="tts_", suffix=suffix, dir=str(self.cache_dir))
-            os.close(fd)
-            out_path = Path(temp_name)
-        else:
-            out_path = Path(out_path)
-            out_path.parent.mkdir(parents=True, exist_ok=True)
 
         if output_format == "ogg":
             # If the engine returned a valid WAV payload, transcode it; otherwise
