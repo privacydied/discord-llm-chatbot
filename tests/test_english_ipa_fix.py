@@ -34,7 +34,6 @@ def test_english_ipa_fix() -> bool | None:
 
         test_text = "Hello world, this is a test of English speech synthesis."
 
-
         # Capture log messages during synthesis
         log_messages = []
 
@@ -53,7 +52,6 @@ def test_english_ipa_fix() -> bool | None:
 
             result = asyncio.run(engine.synthesize(test_text))
 
-
             # Check log messages for expected behavior
             log_text = "\n".join(log_messages)
 
@@ -71,7 +69,6 @@ def test_english_ipa_fix() -> bool | None:
                 "libespeak-ng.so",  # espeak library issues
                 "No known tokenization methods found",  # Discovery noise
             ]
-
 
             for indicator in success_indicators:
                 if indicator in log_text:

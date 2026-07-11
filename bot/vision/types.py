@@ -513,7 +513,6 @@ class ProviderRequest:
     """Base class for provider-specific requests."""
 
 
-
 @dataclass
 class ProviderResponse:
     """Base class for provider-specific responses."""

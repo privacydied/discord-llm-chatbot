@@ -27,7 +27,6 @@ def clean_response(text: str) -> str:
     return text.strip()
 
 
-
 def is_text_file(file_path: str | Path) -> bool:
     """Check if a file is a text file based on its extension and content type."""
     if isinstance(file_path, str):
@@ -184,7 +183,6 @@ def extract_mentions(text: str) -> list[tuple[str, str]]:
 
     # Format as (type, id) tuples
     return [("user", uid) for uid in user_mentions] + [("role", rid) for rid in role_mentions]
-
 
 
 def format_duration(seconds: int) -> str:

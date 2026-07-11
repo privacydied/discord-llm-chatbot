@@ -85,9 +85,7 @@ def classify_message_case(message: discord.Message) -> str:
         return LONE_CASE
 
 
-async def _fetch_message_safely(
-    channel: discord.abc.Messageable, mid: int, timeout_s: float
-) -> discord.Message | None:
+async def _fetch_message_safely(channel: discord.abc.Messageable, mid: int, timeout_s: float) -> discord.Message | None:
     try:
         return await asyncio.wait_for(channel.fetch_message(mid), timeout=timeout_s)
     except (asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException):

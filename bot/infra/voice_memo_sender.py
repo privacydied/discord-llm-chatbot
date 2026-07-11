@@ -26,7 +26,6 @@ class VoiceMemoError(Exception):
     """Raised when voice memo creation or sending fails."""
 
 
-
 async def _probe_duration_async(path: Path) -> float | None:
     """Probe audio duration using ffprobe asynchronously. Returns seconds or None."""
     try:

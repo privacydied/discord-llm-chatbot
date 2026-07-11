@@ -276,7 +276,6 @@ class VideoIngestError(InferenceError):
     """Specific error for video ingestion failures."""
 
 
-
 class VideoIngestionManager:
     """Manages video URL ingestion, caching, and raw audio acquisition."""
 

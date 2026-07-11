@@ -128,11 +128,14 @@ class TestValidateRequiredEnv:
         from bot.config import validate_required_env
         from bot.exceptions import ConfigurationError
 
-        with patch.dict(
-            os.environ,
-            {"DISCORD_TOKEN": "", "PROMPT_FILE": "", "VL_PROMPT_FILE": ""},
-            clear=False,
-        ), pytest.raises(ConfigurationError):
+        with (
+            patch.dict(
+                os.environ,
+                {"DISCORD_TOKEN": "", "PROMPT_FILE": "", "VL_PROMPT_FILE": ""},
+                clear=False,
+            ),
+            pytest.raises(ConfigurationError),
+        ):
             validate_required_env()
 
     def test_validate_required_env_passes_when_set(self, monkeypatch) -> None:

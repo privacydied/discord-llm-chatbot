@@ -4,7 +4,6 @@ This module contains ONLY the Discord command cog and event handlers.
 Business logic is in admin_alert_manager.py, models in admin_alert_models.py.
 """
 
-
 import contextlib
 
 import discord

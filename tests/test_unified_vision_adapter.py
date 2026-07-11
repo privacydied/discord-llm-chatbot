@@ -512,5 +512,4 @@ if __name__ == "__main__":
         await gateway.startup()
         await gateway.shutdown()
 
-
     asyncio.run(smoke_test())

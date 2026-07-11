@@ -180,10 +180,13 @@ class TestMediaIngestionManager:
         """Test retry logic reaches max attempts."""
         url = "https://youtube.com/watch?v=test123"
 
-        with patch(
-            "bot.media_ingestion.hear_infer_from_url",
-            side_effect=Exception("Download failed"),
-        ), patch("asyncio.sleep"):  # Speed up test by mocking sleep
+        with (
+            patch(
+                "bot.media_ingestion.hear_infer_from_url",
+                side_effect=Exception("Download failed"),
+            ),
+            patch("asyncio.sleep"),
+        ):  # Speed up test by mocking sleep
             success, result, error = await manager._extract_media_with_retry(url)
 
         assert success is False
@@ -332,9 +335,12 @@ class TestMediaIngestionManager:
 
         tiered_fail = ExtractionResult(success=False, tier_used="A", error="no text extracted")
 
-        with patch("bot.web.process_url", return_value=mock_web_result), patch(
-            "bot.web_extraction_service.web_extractor.extract",
-            return_value=tiered_fail,
+        with (
+            patch("bot.web.process_url", return_value=mock_web_result),
+            patch(
+                "bot.web_extraction_service.web_extractor.extract",
+                return_value=tiered_fail,
+            ),
         ):
             result = await manager._process_fallback_path(url, mock_message, fallback_reason)
 
@@ -365,9 +371,12 @@ class TestMediaIngestionManager:
             error=None,
         )
 
-        with patch("bot.web.process_url", return_value=mock_web_result), patch(
-            "bot.web_extraction_service.web_extractor.extract",
-            return_value=tiered_ok,
+        with (
+            patch("bot.web.process_url", return_value=mock_web_result),
+            patch(
+                "bot.web_extraction_service.web_extractor.extract",
+                return_value=tiered_ok,
+            ),
         ):
             result = await manager._process_fallback_path(url, mock_message, fallback_reason)
 
@@ -398,13 +407,17 @@ class TestMediaIngestionManager:
 
         mock_bot_action = BotAction(content="Generated response")
 
-        with patch(
-            "bot.media_ingestion.media_detector.is_media_capable",
-            return_value=mock_probe_result,
-        ), patch.object(manager, "_process_media_path", return_value=mock_media_result), patch.object(
-            manager,
-            "_create_bot_action_from_media",
-            return_value=mock_bot_action,
+        with (
+            patch(
+                "bot.media_ingestion.media_detector.is_media_capable",
+                return_value=mock_probe_result,
+            ),
+            patch.object(manager, "_process_media_path", return_value=mock_media_result),
+            patch.object(
+                manager,
+                "_create_bot_action_from_media",
+                return_value=mock_bot_action,
+            ),
         ):
             result = await manager.process_url_smart(url, mock_message)
 
@@ -433,13 +446,18 @@ class TestMediaIngestionManager:
 
         mock_bot_action = BotAction(content="Fallback response")
 
-        with patch(
-            "bot.media_ingestion.media_detector.is_media_capable",
-            return_value=mock_probe_result,
-        ), patch.object(manager, "_process_media_path", return_value=mock_media_result), patch.object(manager, "_process_fallback_path", return_value=mock_fallback_result), patch.object(
-            manager,
-            "_create_bot_action_from_fallback",
-            return_value=mock_bot_action,
+        with (
+            patch(
+                "bot.media_ingestion.media_detector.is_media_capable",
+                return_value=mock_probe_result,
+            ),
+            patch.object(manager, "_process_media_path", return_value=mock_media_result),
+            patch.object(manager, "_process_fallback_path", return_value=mock_fallback_result),
+            patch.object(
+                manager,
+                "_create_bot_action_from_fallback",
+                return_value=mock_bot_action,
+            ),
         ):
             result = await manager.process_url_smart(url, mock_message)
 
@@ -466,13 +484,17 @@ class TestMediaIngestionManager:
 
         mock_bot_action = BotAction(content="Article response")
 
-        with patch(
-            "bot.media_ingestion.media_detector.is_media_capable",
-            return_value=mock_probe_result,
-        ), patch.object(manager, "_process_fallback_path", return_value=mock_fallback_result), patch.object(
-            manager,
-            "_create_bot_action_from_fallback",
-            return_value=mock_bot_action,
+        with (
+            patch(
+                "bot.media_ingestion.media_detector.is_media_capable",
+                return_value=mock_probe_result,
+            ),
+            patch.object(manager, "_process_fallback_path", return_value=mock_fallback_result),
+            patch.object(
+                manager,
+                "_create_bot_action_from_fallback",
+                return_value=mock_bot_action,
+            ),
         ):
             result = await manager.process_url_smart(url, mock_message)
 
@@ -489,10 +511,14 @@ class TestMediaIngestionManager:
 
         mock_fallback_result = MediaIngestionResult(success=False, error_message="Web scraping failed", fallback_triggered=True)
 
-        with patch(
-            "bot.media_ingestion.media_detector.is_media_capable",
-            return_value=mock_probe_result,
-        ), patch.object(manager, "_process_media_path", return_value=mock_media_result), patch.object(manager, "_process_fallback_path", return_value=mock_fallback_result):
+        with (
+            patch(
+                "bot.media_ingestion.media_detector.is_media_capable",
+                return_value=mock_probe_result,
+            ),
+            patch.object(manager, "_process_media_path", return_value=mock_media_result),
+            patch.object(manager, "_process_fallback_path", return_value=mock_fallback_result),
+        ):
             result = await manager.process_url_smart(url, mock_message)
 
         assert isinstance(result, BotAction)
@@ -529,9 +555,12 @@ class TestMediaIngestionManager:
 
         mock_contextual_response = "Contextual AI response"
 
-        with patch.dict(os.environ, {"USE_ENHANCED_CONTEXT": "true"}), patch(
-            "bot.media_ingestion.contextual_brain_infer_simple",
-            return_value=mock_contextual_response,
+        with (
+            patch.dict(os.environ, {"USE_ENHANCED_CONTEXT": "true"}),
+            patch(
+                "bot.media_ingestion.contextual_brain_infer_simple",
+                return_value=mock_contextual_response,
+            ),
         ):
             result = await manager._create_bot_action_from_media(media_result, mock_message)
 
@@ -645,14 +674,18 @@ class TestMediaIngestionIntegration:
         # Mock brain inference
         mock_brain_result = BotAction(content="This is the famous Rick Roll video!")
 
-        with patch(
-            "bot.media_ingestion.media_detector.is_media_capable",
-            return_value=mock_probe_result,
-        ), patch.object(
-            manager,
-            "_extract_media_with_retry",
-            return_value=(True, mock_extraction_result, None),
-        ), patch("bot.media_ingestion.brain_infer", return_value=mock_brain_result):
+        with (
+            patch(
+                "bot.media_ingestion.media_detector.is_media_capable",
+                return_value=mock_probe_result,
+            ),
+            patch.object(
+                manager,
+                "_extract_media_with_retry",
+                return_value=(True, mock_extraction_result, None),
+            ),
+            patch("bot.media_ingestion.brain_infer", return_value=mock_brain_result),
+        ):
             result = await manager.process_url_smart(url, integration_message)
 
         assert isinstance(result, BotAction)
@@ -683,10 +716,14 @@ class TestMediaIngestionIntegration:
         # Mock brain inference
         mock_brain_result = BotAction(content="This article discusses...")
 
-        with patch(
-            "bot.media_ingestion.media_detector.is_media_capable",
-            return_value=mock_probe_result,
-        ), patch("bot.web.process_url", return_value=mock_web_result), patch("bot.media_ingestion.brain_infer", return_value=mock_brain_result):
+        with (
+            patch(
+                "bot.media_ingestion.media_detector.is_media_capable",
+                return_value=mock_probe_result,
+            ),
+            patch("bot.web.process_url", return_value=mock_web_result),
+            patch("bot.media_ingestion.brain_infer", return_value=mock_brain_result),
+        ):
             result = await manager.process_url_smart(url, integration_message)
 
         assert isinstance(result, BotAction)

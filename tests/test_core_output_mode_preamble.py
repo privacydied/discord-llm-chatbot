@@ -32,9 +32,7 @@ class MockMessage:
         self.id = 112233
         self.content = f"<@{bot.user.id}> Hello bot!"
         self.author = MockUser(12345, "TestUser")
-        self.channel = MockTextChannel() if not is_dm else MagicMock(
-            id=789, type="dm", send=AsyncMock(), recipient=MockUser(12345, "TestUser")
-        )
+        self.channel = MockTextChannel() if not is_dm else MagicMock(id=789, type="dm", send=AsyncMock(), recipient=MockUser(12345, "TestUser"))
         self.guild = MagicMock(id=789, name="Test Guild")
         self.mentions = [bot.user]
         self.reference = None

@@ -363,7 +363,6 @@ class SLOMonitor:
             padding=(1, 2),
         )
 
-
     def get_current_slo_status(self) -> dict[str, Any]:
         """Get current SLO status summary [PA]."""
         status = {}

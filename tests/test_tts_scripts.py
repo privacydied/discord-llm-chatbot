@@ -33,7 +33,6 @@ async def main() -> bool | None:
         "TTS_CACHE_DIR": os.getenv("TTS_CACHE_DIR", "cache/tts"),
     }
 
-
     # Initialize TTS manager
     tts_manager = TTSManager(config)
 
@@ -41,14 +40,12 @@ async def main() -> bool | None:
     if not tts_manager.available:
         return False
 
-
     # Generate TTS for a test sentence
     text = "Hello! This is a test of the Kokoro-ONNX text-to-speech system."
 
     try:
         # Generate TTS
         output_path = await tts_manager.generate_tts(text, tts_manager.voice)
-
 
         # Optional: Play the audio if on Linux with aplay
         try:

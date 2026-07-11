@@ -95,7 +95,6 @@ def redact_secrets(text: str) -> str:
     return _PASSWORD_RE.sub(_replace_password, result)
 
 
-
 def make_preview(text: str, max_chars: int = 200) -> str:
     """Truncate and redact content for preview display.
 

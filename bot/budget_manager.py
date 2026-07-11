@@ -261,7 +261,6 @@ class BudgetManager:
         # Adaptive budget: max(baseline, 1.2×p95) within clamps
         return max(config.baseline_ms, min(config.max_clamp_ms, metrics.p95_latency_ms * 1.2))
 
-
     @asynccontextmanager
     async def execute_with_budget(self, family: BudgetFamily, operation_id: str, check_interval_ms: float = 100.0):
         """Context manager for budget-controlled execution. [CA][REH]."""

@@ -301,7 +301,7 @@ def atomic_save_json(
             # Create backup of existing file
             if create_backup and target_path.exists() and not _create_backup(target_path, backup_path):
                 logger.warning(f"Could not create backup for {target_path}")
-                    # Continue anyway - atomic write may still succeed
+                # Continue anyway - atomic write may still succeed
 
             # Atomic write
             if not _atomic_write_file(target_path, data, indent=indent, fsync=True):

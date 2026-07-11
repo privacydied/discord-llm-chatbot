@@ -83,7 +83,6 @@ class TTSSmokeTest(unittest.TestCase):
             rms = np.sqrt(np.mean(np.square(audio_data)))
             assert rms > 0.001, f"Audio is too quiet (RMS: {rms})"
 
-
         finally:
             # Clean up the test file
             if output_path.exists():

@@ -1199,14 +1199,10 @@ class ServerArchiveStore:
                 params: list[Any] = [channel_id]
 
                 if after_id:
-                    where_parts.append(
-                        "am.created_at > (SELECT created_at FROM archive_messages WHERE message_id = ?)"
-                    )
+                    where_parts.append("am.created_at > (SELECT created_at FROM archive_messages WHERE message_id = ?)")
                     params.append(after_id)
                 if before_id:
-                    where_parts.append(
-                        "am.created_at < (SELECT created_at FROM archive_messages WHERE message_id = ?)"
-                    )
+                    where_parts.append("am.created_at < (SELECT created_at FROM archive_messages WHERE message_id = ?)")
                     params.append(before_id)
 
                 where_sql = " AND ".join(where_parts)
@@ -1240,14 +1236,16 @@ class ServerArchiveStore:
                     ).fetchall()
                     for att in att_rows:
                         a = dict(att)
-                        attachments_by_msg.setdefault(a["message_id"], []).append({
-                            "id": a.get("attachment_id"),
-                            "filename": a.get("filename"),
-                            "content_type": a.get("content_type"),
-                            "size": a.get("size"),
-                            "url": a.get("url") or "",
-                            "proxy_url": a.get("proxy_url") or "",
-                        })
+                        attachments_by_msg.setdefault(a["message_id"], []).append(
+                            {
+                                "id": a.get("attachment_id"),
+                                "filename": a.get("filename"),
+                                "content_type": a.get("content_type"),
+                                "size": a.get("size"),
+                                "url": a.get("url") or "",
+                                "proxy_url": a.get("proxy_url") or "",
+                            }
+                        )
 
                 messages = []
                 for row in rows:
@@ -1262,23 +1260,25 @@ class ServerArchiveStore:
                             avatar = f"https://cdn.discordapp.com/embed/avatars/{int(uid) % 6}.png"
                         except (TypeError, ValueError):
                             pass
-                    messages.append({
-                        "discord_message_id": mid,
-                        "content": r.get("content") or "",
-                        "created_at": r.get("created_at"),
-                        "edited_at": r.get("edited_at"),
-                        "deleted_at": r.get("deleted_at"),
-                        "author_id": r.get("author_id"),
-                        "author_username": username,
-                        "author_display_name": display,
-                        "author_avatar_url": avatar,
-                        "author_is_bot": bool(r.get("bot")),
-                        "is_own_bot": bool(r.get("bot")),
-                        "reply_to_message_id": r.get("reply_to_message_id"),
-                        "attachments_json": attachments_by_msg.get(mid, []),
-                        "embeds_json": [],
-                        "metadata_json": r.get("metadata_json") or {},
-                    })
+                    messages.append(
+                        {
+                            "discord_message_id": mid,
+                            "content": r.get("content") or "",
+                            "created_at": r.get("created_at"),
+                            "edited_at": r.get("edited_at"),
+                            "deleted_at": r.get("deleted_at"),
+                            "author_id": r.get("author_id"),
+                            "author_username": username,
+                            "author_display_name": display,
+                            "author_avatar_url": avatar,
+                            "author_is_bot": bool(r.get("bot")),
+                            "is_own_bot": bool(r.get("bot")),
+                            "reply_to_message_id": r.get("reply_to_message_id"),
+                            "attachments_json": attachments_by_msg.get(mid, []),
+                            "embeds_json": [],
+                            "metadata_json": r.get("metadata_json") or {},
+                        }
+                    )
 
                 total_pages = max(1, (count + page_size - 1) // page_size)
                 return {

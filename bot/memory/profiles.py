@@ -210,7 +210,7 @@ def get_profile(user_id: str, username: str | None = None) -> dict:
                 user_cache[user_id] = profile
                 return profile.copy()
             logging.warning(f"Corrupted profile for user {user_id}: {error_msg}")
-                # Fall through to create new profile
+            # Fall through to create new profile
 
         # Create new profile if it doesn't exist or couldn't be loaded
         profile = default_profile(user_id, username)

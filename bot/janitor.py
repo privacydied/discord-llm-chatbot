@@ -493,9 +493,7 @@ class Janitor:
             compressed_count = await asyncio.to_thread(compress_old_logs, policy.path, LOG_COMPRESS_AGE_HOURS)
 
             # Prune old compressed logs
-            deleted_count, bytes_freed = await asyncio.to_thread(
-                prune_old_compressed_logs, policy.path, LOG_RETENTION_DAYS, LOG_TOTAL_CAP_MB
-            )
+            deleted_count, bytes_freed = await asyncio.to_thread(prune_old_compressed_logs, policy.path, LOG_RETENTION_DAYS, LOG_TOTAL_CAP_MB)
 
             after_bytes = await asyncio.to_thread(get_directory_size_bytes, policy.path)
 

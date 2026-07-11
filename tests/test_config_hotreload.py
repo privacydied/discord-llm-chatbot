@@ -15,6 +15,7 @@ class TestRetryManagerLadderRefresh:
     def _reload_modules(self) -> None:
         """Reload modules to clear import caches between tests."""
         import sys
+
         for mod in ("bot.config_reload", "bot.config", "bot.config._base"):
             if mod in sys.modules:
                 importlib.reload(sys.modules[mod])

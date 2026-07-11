@@ -142,12 +142,4 @@ class EvidenceBundle:
 
     def has_evidence(self) -> bool:
         """Check if bundle contains any evidence."""
-        return bool(
-            self.caption_text
-            or self.quoted_text
-            or self.media_transcript
-            or self.media_alt_text
-            or self.media_ocr_text
-            or self.media_vision_notes
-            or self.extra_sections
-        )
+        return bool(self.caption_text or self.quoted_text or self.media_transcript or self.media_alt_text or self.media_ocr_text or self.media_vision_notes or self.extra_sections)

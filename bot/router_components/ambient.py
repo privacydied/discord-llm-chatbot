@@ -87,6 +87,7 @@ def _in_quiet_hours(now: float, spec: str) -> bool:
     if parsed is None:
         return False
     import datetime
+
     hour = datetime.datetime.utcfromtimestamp(now).hour
     start, end = parsed
     if start <= end:

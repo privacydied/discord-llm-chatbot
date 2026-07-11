@@ -19,7 +19,6 @@ def main() -> None:
     model_path = os.environ.get("TTS_MODEL_FILE", "tts/onnx/kokoro-v1.0.onnx")
     voice_path = os.environ.get("TTS_VOICE_FILE", "tts/voices/voices-v1.0.bin")
 
-
     # Initialize KokoroDirect
     kokoro = KokoroDirect(model_path=model_path, voices_path=voice_path)
 
@@ -27,7 +26,6 @@ def main() -> None:
     voices = kokoro.get_voice_names()
     if not voices:
         return
-
 
     # Use the first available voice
     test_voice = voices[0]

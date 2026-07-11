@@ -38,17 +38,14 @@ async def test_twitter_url_routing() -> bool:
         "https://vm.tiktok.com/ZM8abc123/",
     ]
 
-
     # Test each URL
     for url in test_urls:
-
         # Check if URL matches video patterns
         video_match = False
         for pattern in SUPPORTED_PATTERNS:
             if re.search(pattern, url):
                 video_match = True
                 break
-
 
         # Test modality detection
         try:
@@ -75,7 +72,6 @@ async def test_twitter_url_routing() -> bool:
 
         except Exception as e:
             return False
-
 
     return True
 

@@ -109,7 +109,6 @@ def normalize_text(text: str) -> str:
     return number_to_words(t)
 
 
-
 def number_to_words(text: str) -> str:
     """Convert numbers to spoken words for natural TTS pronunciation.
 
@@ -888,7 +887,6 @@ def _normalize_text(text: str) -> str:
     return text.strip()
 
 
-
 def _expand_numbers(text: str) -> str:
     """Expand numbers and basic ordinals in text."""
     # Handle ordinals 1st-31st
@@ -1008,7 +1006,6 @@ def _expand_numbers(text: str) -> str:
         return hundreds_word + " " + expand_number(str(remainder))
 
     return re.sub(r"\b\d{1,3}\b", expand_number, text)
-
 
 
 def _strip_stress(phone: str) -> str:

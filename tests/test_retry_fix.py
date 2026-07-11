@@ -34,6 +34,5 @@ def test_retry_logic() -> None:
     assert not is_retryable_error(auth_error, VISION_RETRY_CONFIG), "Auth error should not be retryable"
 
 
-
 if __name__ == "__main__":
     test_retry_logic()

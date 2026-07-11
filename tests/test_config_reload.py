@@ -286,11 +286,7 @@ class TestReloadEnvTransactional:
         # Create .env with OpenAI backend but no API key
         with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
             f.write(
-                "DISCORD_TOKEN=new_token\n"
-                "PROMPT_FILE=prompts/prompt-yoroi-super-chill.txt\n"
-                "VL_PROMPT_FILE=prompts/vl-prompt.txt\n"
-                "TEXT_BACKEND=openai\n"
-                "# OPENAI_API_KEY is missing\n",
+                "DISCORD_TOKEN=new_token\nPROMPT_FILE=prompts/prompt-yoroi-super-chill.txt\nVL_PROMPT_FILE=prompts/vl-prompt.txt\nTEXT_BACKEND=openai\n# OPENAI_API_KEY is missing\n",
             )
             partial_path = Path(f.name)
 
@@ -419,11 +415,7 @@ class TestReloadEnvTransactional:
         try:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
                 f.write(
-                    "DISCORD_TOKEN=new_token\n"
-                    "PROMPT_FILE=prompts/prompt-yoroi-super-chill.txt\n"
-                    "VL_PROMPT_FILE=prompts/vl-prompt.txt\n"
-                    "OPENAI_API_KEY=new_key\n"
-                    "TEXT_BACKEND=openai\n",
+                    "DISCORD_TOKEN=new_token\nPROMPT_FILE=prompts/prompt-yoroi-super-chill.txt\nVL_PROMPT_FILE=prompts/vl-prompt.txt\nOPENAI_API_KEY=new_key\nTEXT_BACKEND=openai\n",
                 )
                 new_path = Path(f.name)
 
@@ -474,6 +466,8 @@ class TestReloadEnvTransactional:
                 os.unlink(bad_path)
         finally:
             remove_reload_callback(tracking_callback)
+
+
 class TestManualReloadCommand:
     """Test G: !reload command reports accurate status."""
 
@@ -561,6 +555,8 @@ class TestManualReloadCommand:
             # Immediate second call should be debounced
             result = manual_reload_command()
             assert "⏱️ Configuration reload debounced" in result
+
+
 class TestConfigCacheAndRollback:
     """Test config cache invalidation and rollback behavior."""
 

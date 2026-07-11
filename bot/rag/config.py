@@ -108,7 +108,6 @@ def get_rag_environment_info() -> dict:
     }
 
 
-
 def validate_rag_environment() -> tuple[bool, list[str]]:
     """Validate RAG environment configuration.
 

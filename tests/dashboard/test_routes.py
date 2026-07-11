@@ -192,8 +192,13 @@ async def test_dashboard_disabled_no_server(config: DashboardConfig) -> None:
     dm_store = DMStore(db_path="/tmp/test_disabled_dms.db", retention_days=90)
     services = DashboardServices(bot=None, config=disabled_config, audit_store=audit_store, dm_store=dm_store)
     server = DashboardServer(
-        config=disabled_config, services=services, audit_store=audit_store, dm_store=dm_store,
-        message_store=MagicMock(), backfill_store=MagicMock(), backfill_service=MagicMock(),
+        config=disabled_config,
+        services=services,
+        audit_store=audit_store,
+        dm_store=dm_store,
+        message_store=MagicMock(),
+        backfill_store=MagicMock(),
+        backfill_service=MagicMock(),
     )
 
     # Should not raise, just log and return
@@ -217,8 +222,13 @@ async def test_hot_reload_updates_rate_limit(
         max_message_chars=100,
     )
     server = DashboardServer(
-        config=cfg, services=services, audit_store=audit_store, dm_store=dm_store,
-        message_store=MagicMock(), backfill_store=MagicMock(), backfill_service=MagicMock(),
+        config=cfg,
+        services=services,
+        audit_store=audit_store,
+        dm_store=dm_store,
+        message_store=MagicMock(),
+        backfill_store=MagicMock(),
+        backfill_service=MagicMock(),
     )
 
     new_cfg = DashboardConfig(

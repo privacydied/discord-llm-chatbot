@@ -166,7 +166,7 @@ def should_auto_store_memory(
     min_temporary_importance: float = 0.6,
     max_chars: int = 140,
 ) -> MemoryDecision:
-    text = (context.raw_text or candidate.get("content") or candidate.get("document") or "")
+    text = context.raw_text or candidate.get("content") or candidate.get("document") or ""
     if not isinstance(text, str) or not text.strip():
         return MemoryDecision(allowed=False, reason="empty_text")
 
@@ -187,12 +187,12 @@ def should_auto_store_memory(
     confidence = float(candidate.get("confidence", 0.0) or 0.0)
     category = _classify_category(trimmed, context)
     if category == MemoryCategory.recurring_instruction and not _matches_any(trimmed, _FUTURE_DIRECTIVE_PATTERNS):
-            return MemoryDecision(
-                allowed=False,
-                reason="recurring_instruction_requires_explicit_future_marker",
-                category=category,
-                confidence=confidence,
-            )
+        return MemoryDecision(
+            allowed=False,
+            reason="recurring_instruction_requires_explicit_future_marker",
+            category=category,
+            confidence=confidence,
+        )
 
     is_temporary = category == MemoryCategory.temporary_context
     threshold = min_temporary_importance if is_temporary else min_importance
@@ -279,6 +279,7 @@ def select_memories_for_prompt(
     scored.sort(key=lambda entry: entry[0], reverse=True)
     selected = [item for _, item in scored[:max_items]]
     return selected
+
 
 # Compatibility alias for tests expecting earlier internal name
 _looks_like_diagnostic = any

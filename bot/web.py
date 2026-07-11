@@ -321,7 +321,6 @@ def extract_main_content(html: str, url: str) -> dict[str, str]:
             "word_count": len(data.get("text", "").split()),
         }
 
-
     except Exception as e:
         logging.exception(f"Error extracting text from HTML: {e}")
         return {"content": "", "text": ""}

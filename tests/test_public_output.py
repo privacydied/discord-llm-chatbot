@@ -85,7 +85,6 @@ class TestExtractPublicReplyText:
         result = extract_public_reply_text(text)
         assert result == "Hello.\n\nWorld."
 
-
     def test_strips_leading_mode_normal_preamble(self) -> None:
         """Leaked leading MODE: NORMAL preamble is stripped before send."""
         text = "MODE: NORMAL\n\nactual answer"

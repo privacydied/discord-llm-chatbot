@@ -376,10 +376,7 @@ def reload_env(env_path: Path | None = None) -> dict[str, Any]:
             try:
                 redacted_added = _redact_sensitive_values(changes.get("added", {}))
                 redacted_removed = _redact_sensitive_values(changes.get("removed", {}))
-                redacted_modified = {
-                    k: ("[REDACTED]" if any(s in k.upper() for s in SENSITIVE_KEYS) else v)
-                    for k, v in changes.get("modified", {}).items()
-                }
+                redacted_modified = {k: ("[REDACTED]" if any(s in k.upper() for s in SENSITIVE_KEYS) else v) for k, v in changes.get("modified", {}).items()}
                 logger.info(
                     "config.reload.diff",
                     extra={

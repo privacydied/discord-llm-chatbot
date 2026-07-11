@@ -141,7 +141,7 @@ class TestMessageStoreGetChannelMessages:
                 channel_id=2010,
                 content=f"Message {i}",
                 author_id=4010,
-                created_at=f"2024-01-0{i+1}T00:00:00.000Z",
+                created_at=f"2024-01-0{i + 1}T00:00:00.000Z",
             )
 
         # Page 1 with page_size=2
@@ -170,7 +170,7 @@ class TestMessageStoreGetDMThreadMessages:
                 channel_id=999001,  # DM channel
                 content=f"DM msg {i}",
                 author_id=5001,
-                created_at=f"2024-02-0{i+1}T00:00:00.000Z",
+                created_at=f"2024-02-0{i + 1}T00:00:00.000Z",
             )
 
         result = await msg_store.get_dm_thread_messages(999001, page=1, page_size=10)
@@ -526,7 +526,7 @@ class TestDMStoreGetThreadMessages:
                 author_id=7201,
                 content=f"Msg {i}",
                 clean_content=f"Msg {i}",
-                created_at=f"2025-01-0{i+1}T00:00:00.000Z",
+                created_at=f"2025-01-0{i + 1}T00:00:00.000Z",
             )
 
         r1 = await dm_store.get_thread_messages(7201, page=1, page_size=2)

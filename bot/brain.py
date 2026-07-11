@@ -1,6 +1,5 @@
 """Centralized text inference module (brain)."""
 
-
 import contextlib
 import re
 

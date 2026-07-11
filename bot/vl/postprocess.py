@@ -86,7 +86,6 @@ def sanitize_model_output(text: str) -> str:
     return cleaned.strip()
 
 
-
 def has_reasoning_content(text: str) -> bool:
     """Check if text contains reasoning content that should be sanitized.
 

@@ -18,7 +18,6 @@ async def test_exact_production_error_handling() -> bool | None:
     # The exact URL from user's production logs that failed
     problem_url = "https://x.com/avaricum777/status/1953657907964477640"
 
-
     # Create mock bot and router
     mock_bot = Mock()
     mock_bot.config = Mock()
@@ -35,16 +34,13 @@ async def test_exact_production_error_handling() -> bool | None:
     # The exact InferenceError message from the production traceback
     exact_production_error = InferenceError("Video transcription failed: Failed to download video: yt-dlp metadata extraction failed: ERROR: [twitter] 1953657907964477640: No video could be found in this tweet")
 
-
     # Test error pattern detection with exact production error
     error_str = str(exact_production_error).lower()
     is_twitter_url = ("twitter.com" in problem_url.lower() or "x.com" in problem_url.lower()) and "/status/" in problem_url.lower()
     no_video_found = "no video could be found" in error_str or "no video" in error_str or "video extraction failed" in error_str
 
-
     if not (is_twitter_url and no_video_found):
         return False
-
 
     # Test the full fallback chain with the exact production error
 
@@ -92,7 +88,6 @@ async def test_other_twitter_errors_no_fallback() -> bool:
     ]
 
     for error_msg in other_twitter_errors:
-
         error_str = error_msg.lower()
         is_twitter_url = ("twitter.com" in problem_url.lower() or "x.com" in problem_url.lower()) and "/status/" in problem_url.lower()
         no_video_found = "no video could be found" in error_str or "no video" in error_str or "video extraction failed" in error_str

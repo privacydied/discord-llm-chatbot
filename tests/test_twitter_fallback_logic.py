@@ -62,7 +62,6 @@ async def test_twitter_fallback_behavior() -> bool:
 
         # Test the video processing with mocked failures
         if case["should_fallback"]:
-
             # Mock hear_infer_from_url to simulate "No video found" error
             with patch("bot.router.hear_infer_from_url") as mock_hear:
                 mock_hear.side_effect = VideoIngestError("yt-dlp metadata extraction failed: ERROR: [twitter] 1953657907964477640: No video could be found in this tweet")
@@ -80,7 +79,6 @@ async def test_twitter_fallback_behavior() -> bool:
                     except Exception as e:
                         return False
         else:
-
             # Mock successful video processing
             with patch("bot.router.hear_infer_from_url") as mock_hear:
                 mock_hear.return_value = {
@@ -93,7 +91,6 @@ async def test_twitter_fallback_behavior() -> bool:
 
                 except Exception as e:
                     return False
-
 
     return True
 

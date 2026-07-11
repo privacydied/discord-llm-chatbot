@@ -53,12 +53,10 @@ async def test_novita_image_generation() -> bool | None:
     )
 
     try:
-
         # Test generation
         response = await adapter.generate(request, "qwen-image-txt2img")
 
         if response.success:
-
             for artifact in response.artifacts:
                 if artifact.exists():
                     size_mb = artifact.stat().st_size / (1024 * 1024)

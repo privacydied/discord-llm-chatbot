@@ -322,7 +322,7 @@ def select_tokenizer_for_language(language: str, available_tokenizers: dict[str,
                 "requested": env_tokenizer,
             },
         )
-            # Continue with auto-selection
+        # Continue with auto-selection
 
     # Get preferred tokenizers for this language
     lang_key = language[:2]  # Use first two chars (e.g., 'en' from 'en-us')

@@ -4,7 +4,6 @@ Provides comprehensive error handling for all bot commands following
 Clean Architecture (CA) and Robust Error Handling (REH) patterns.
 """
 
-
 import discord
 from discord.ext import commands
 from rich.console import Console
@@ -176,7 +175,7 @@ class CommandErrorHandler:
             prefix = prefix[0]
 
         content = ctx.message.content
-        attempted_command = content[len(prefix):].split()[0].lower() if content.startswith(prefix) else "unknown"
+        attempted_command = content[len(prefix) :].split()[0].lower() if content.startswith(prefix) else "unknown"
 
         # Generate smart suggestions using fuzzy matching
         suggestions = await self._generate_command_suggestions(attempted_command)
@@ -216,7 +215,6 @@ class CommandErrorHandler:
 
         # Find close matches
         return get_close_matches(attempted_command, all_commands, n=3, cutoff=0.6)
-
 
     async def _handle_missing_permissions(self, ctx: commands.Context, error: commands.MissingPermissions) -> None:
         """Handle missing user permissions."""

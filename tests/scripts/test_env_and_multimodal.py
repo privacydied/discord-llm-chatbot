@@ -43,7 +43,6 @@ class TestEnvironmentVariables:
         assert config.get("OPENAI_TEXT_MODEL") is not None, "OPENAI_TEXT_MODEL must be set"
         assert config.get("VL_MODEL") is not None, "VL_MODEL must be set"
 
-
     def test_prompt_files_exist(self) -> None:
         """Verify that prompt files exist and are readable."""
         config = load_config()
@@ -68,7 +67,6 @@ class TestEnvironmentVariables:
         with open(vl_prompt_path) as f:
             vl_prompt_content = f.read()
             assert len(vl_prompt_content.strip()) > 0, "VL prompt file is empty"
-
 
     def test_validate_required_env(self) -> None:
         """Test the validate_required_env function."""
@@ -156,7 +154,6 @@ class TestMultimodalLogic:
         assert result["backend"] == "openai_vl"
         assert result["usage"]["total_tokens"] == 75
 
-
     @patch("bot.ai_backend.generate_vl_response")
     @patch("bot.ai_backend.generate_response")
     async def test_hybrid_multimodal_routing(self, mock_generate_response, mock_generate_vl_response) -> None:
@@ -186,7 +183,6 @@ class TestMultimodalLogic:
         assert "VL analysis" in vl_result["text"]
         assert vl_result["backend"] == "openai_vl"
         assert text_result["backend"] == "openai"
-
 
 
 class TestVenvEnforcement:
@@ -236,7 +232,6 @@ def test_env_and_model_integration() -> None:
 
     assert text_model is not None, "Text model not configured"
     assert vl_model is not None, "VL model not configured"
-
 
 
 if __name__ == "__main__":

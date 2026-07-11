@@ -1,4 +1,5 @@
 """Focused tests for memory ingestion gate and relevance gating."""
+
 from __future__ import annotations
 
 import pytest

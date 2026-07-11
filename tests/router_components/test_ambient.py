@@ -77,8 +77,8 @@ class _FixedRng:
         return self._value
 
 
-_FIRE_RNG = _FixedRng(0.0)   # always fires
-_MISS_RNG = _FixedRng(1.0)   # never fires
+_FIRE_RNG = _FixedRng(0.0)  # always fires
+_MISS_RNG = _FixedRng(1.0)  # never fires
 
 
 def _decide(msg=None, config=None, cooldowns=None, guild_feat=True, now=1000.0, rng=None):
@@ -95,6 +95,7 @@ def _decide(msg=None, config=None, cooldowns=None, guild_feat=True, now=1000.0, 
 
 # ── feature flags ─────────────────────────────────────────────────────────────
 
+
 def test_disabled_globally():
     cfg = {**_BASE_CONFIG, "AMBIENT_REPLY_ENABLED": False}
     fire, reason = _decide(config=cfg)
@@ -110,6 +111,7 @@ def test_guild_feature_off():
 
 # ── author eligibility ────────────────────────────────────────────────────────
 
+
 def test_bot_author_suppressed():
     fire, reason = _decide(msg=_msg(bot_author=True))
     assert not fire
@@ -123,6 +125,7 @@ def test_system_message_suppressed():
 
 
 # ── content filters ───────────────────────────────────────────────────────────
+
 
 def test_command_suppressed():
     fire, reason = _decide(msg=_msg(content="!status"))
@@ -151,6 +154,7 @@ def test_exact_min_chars_passes():
 
 # ── channel allowlist ─────────────────────────────────────────────────────────
 
+
 def test_channel_not_in_allowlist():
     cfg = {**_BASE_CONFIG, "AMBIENT_REPLY_CHANNELS": "999,888"}
     fire, reason = _decide(msg=_msg(channel_id=111), config=cfg)
@@ -172,6 +176,7 @@ def test_empty_allowlist_allows_all():
 
 # ── quiet hours ───────────────────────────────────────────────────────────────
 
+
 def test_quiet_hours_simple():
     # 23:00–07:00 UTC; pick epoch at 00:00 UTC
     # epoch 0 = 1970-01-01T00:00:00Z → hour 0 → inside quiet window
@@ -186,6 +191,7 @@ def test_quiet_hours_simple():
 def test_quiet_hours_outside_range():
     # Hour 12 UTC is outside 23-7
     import datetime
+
     noon_utc = datetime.datetime(2024, 1, 1, 12, 0, 0).timestamp()
     fire, reason = _decide(
         config={**_BASE_CONFIG, "AMBIENT_REPLY_QUIET_HOURS": "23-7"},
@@ -208,6 +214,7 @@ def test_quiet_hours_invalid_format_ignored():
 
 
 # ── cooldowns ─────────────────────────────────────────────────────────────────
+
 
 def test_global_cooldown_suppresses():
     cfg = {**_BASE_CONFIG, "AMBIENT_REPLY_GLOBAL_COOLDOWN_S": 300}
@@ -241,7 +248,7 @@ def test_channel_cooldown_different_channels():
     cd = AmbientCooldowns()
     # Both channels last fired at t=0; now=2000 → 2000s elapsed > 1800s cooldown
     # Explicitly note channel 111 fired recently (t=1500) but channel 222 did not
-    cd._channel_last[111] = 1500.0   # channel 111 is cooling down (only 500s ago)
+    cd._channel_last[111] = 1500.0  # channel 111 is cooling down (only 500s ago)
     # channel 222 defaults to 0.0 → 2000s elapsed → clears cooldown
     fire, _ = _decide(config=cfg, cooldowns=cd, now=2000.0, msg=_msg(channel_id=222))
     assert fire
@@ -257,6 +264,7 @@ def test_cooldowns_updated_on_fire():
 
 
 # ── probability ───────────────────────────────────────────────────────────────
+
 
 def test_probability_zero_always_fires():
     cfg = {**_BASE_CONFIG, "AMBIENT_REPLY_PROBABILITY": 1.0}
@@ -283,6 +291,7 @@ def test_probability_boundary():
 
 # ── parse helpers ─────────────────────────────────────────────────────────────
 
+
 def test_parse_quiet_hours_valid():
     assert _parse_quiet_hours("23-7") == (23, 7)
     assert _parse_quiet_hours("0-8") == (0, 8)
@@ -302,8 +311,10 @@ def test_parse_channel_allowlist():
 
 # ── BoundedDict capacity ─────────────────────────────────────────────────────
 
+
 def test_bounded_dict_evicts_oldest():
     from bot.utils.bounded_lru import BoundedDict
+
     d: BoundedDict[int, int] = BoundedDict(maxsize=3)
     d[1] = 10
     d[2] = 20

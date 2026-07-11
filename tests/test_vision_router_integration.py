@@ -79,7 +79,6 @@ async def test_vision_router_integration() -> bool:
         # Test imports work
         from bot.router import Router
 
-
         # Create mock bot and router
         mock_bot = MockBot()
         router = Router(mock_bot)
@@ -116,7 +115,6 @@ async def test_vision_router_integration() -> bool:
 
             except Exception as e:
                 pass
-
 
         # Test _invoke_text_flow with vision intent
 
@@ -158,7 +156,6 @@ async def test_vision_router_integration() -> bool:
         if hasattr(router, "_create_progress_bar"):
             progress_bar = router._create_progress_bar(75)
             assert len(progress_bar) > 0, "Progress bar should not be empty"
-
 
     except Exception as e:
         import traceback

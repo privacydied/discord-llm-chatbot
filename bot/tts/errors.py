@@ -8,25 +8,20 @@ class TTSError(Exception):
     """Base class for TTS errors."""
 
 
-
 class EngineLoadError(TTSError):
     """Error loading TTS engine."""
-
 
 
 class SynthesisError(TTSError):
     """Error during audio synthesis."""
 
 
-
 class ConfigurationError(TTSError):
     """Invalid TTS configuration."""
 
 
-
 class TTSWriteError(Exception):
     """Exception raised when TTS fails to write output file."""
-
 
 
 class TTSGibberishError(Exception):
@@ -44,7 +39,6 @@ class TTSGibberishError(Exception):
 
 class TTSSynthesisError(Exception):
     """Exception raised when TTS synthesis fails (e.g., silent audio, model error)."""
-
 
 
 class MissingTokeniserError(Exception):

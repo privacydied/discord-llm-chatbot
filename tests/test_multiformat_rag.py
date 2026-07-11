@@ -128,13 +128,10 @@ def test_document_parsing(test_dir) -> None:
 
     for test_file in test_files:
         if test_file.exists():
-
             try:
                 parser = document_parser_factory.get_parser(test_file)
                 if parser:
-
                     content, metadata = document_parser_factory.parse_document(test_file)
-
 
                     # Show first 100 characters of content
                     preview = content[:100].replace("\n", " ")
@@ -173,16 +170,13 @@ def test_chunking_strategies() -> None:
     ]
 
     for file_type, content in test_cases:
-
         try:
             chunker = create_chunker(file_type, config)
             result = chunker.chunk_text(content)
 
-
             # Show first chunk preview
             if result.chunks:
                 preview = result.chunks[0][:80].replace("\n", " ")
-
 
         except Exception as e:
             pass
@@ -198,8 +192,6 @@ def main() -> None:
 
     # Test chunking strategies
     test_chunking_strategies()
-
-
 
 
 if __name__ == "__main__":

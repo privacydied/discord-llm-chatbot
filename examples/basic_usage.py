@@ -45,11 +45,9 @@ async def demo_chat() -> None:
     ]
 
     for message in messages:
-
         try:
             # Generate a response
             await generate_response(prompt=message, user_id=user_id, max_tokens=200, temperature=0.7)
-
 
         except Exception:
             pass

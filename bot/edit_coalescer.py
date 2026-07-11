@@ -381,7 +381,6 @@ if __name__ == "__main__":
         # Mock edit callback
         edit_callback = AsyncMock()
 
-
         # Simulate rapid edits
         await coalescer.request_edit(123, "Edit 1", edit_callback=edit_callback)
         await coalescer.request_edit(123, "Edit 2", edit_callback=edit_callback)

@@ -40,21 +40,19 @@ _COMPACT_AB_MODE_RE = re.compile(
 
 def _strip_wrappers(line: str) -> str:
     stripped = line.strip()
-    stripped = stripped.lstrip('>').strip()
-    while stripped.startswith('`') and stripped.endswith('`') and len(stripped) > 2:
+    stripped = stripped.lstrip(">").strip()
+    while stripped.startswith("`") and stripped.endswith("`") and len(stripped) > 2:
         stripped = stripped[1:-1].strip()
-    while (
-        stripped.startswith('**') and stripped.endswith('**') and len(stripped) > 4
-    ):
+    while stripped.startswith("**") and stripped.endswith("**") and len(stripped) > 4:
         stripped = stripped[2:-2].strip()
-    stripped = stripped.strip('*_~').strip()
+    stripped = stripped.strip("*_~").strip()
     return stripped
 
 
 def _is_mode_line(line: str) -> bool:
     return bool(
         re.match(
-            r'^mode:\s*(?:normal|political|contradiction)$',
+            r"^mode:\s*(?:normal|political|contradiction)$",
             _strip_wrappers(line),
             re.IGNORECASE,
         )
@@ -71,9 +69,9 @@ def _strip_leading_ab_mode_diagnostics(text: str) -> str:
     if len(stripped_lines) < 3:
         return text
 
-    if not re.match(r'^a:\s*(?:true|false)$', stripped_lines[0], re.IGNORECASE):
+    if not re.match(r"^a:\s*(?:true|false)$", stripped_lines[0], re.IGNORECASE):
         return text
-    if not re.match(r'^b:\s*(?:true|false)$', stripped_lines[1], re.IGNORECASE):
+    if not re.match(r"^b:\s*(?:true|false)$", stripped_lines[1], re.IGNORECASE):
         return text
 
     mode_start = 2
@@ -85,12 +83,12 @@ def _strip_leading_ab_mode_diagnostics(text: str) -> str:
         return text
 
     body_lines = lines[idx:]
-    body_text = '\n'.join(body_lines)
+    body_text = "\n".join(body_lines)
 
     if body_text.strip():
-        return body_text.lstrip('\r\n \t\u200b\u200c\u200d\ufeff')
+        return body_text.lstrip("\r\n \t\u200b\u200c\u200d\ufeff")
 
-    return '\n'.join(lines[:2]).rstrip('\r\n \t\u200b\u200c\u200d\ufeff')
+    return "\n".join(lines[:2]).rstrip("\r\n \t\u200b\u200c\u200d\ufeff")
 
 
 def _strip_compact_ab_mode(text: str) -> str:
@@ -103,7 +101,7 @@ def _strip_compact_ab_mode(text: str) -> str:
         return body.strip()
 
     ab_m = re.match(
-        r'^[>*_`~\s]*(A:\s*(?:true|false)\s+B:\s*(?:true|false))',
+        r"^[>*_`~\s]*(A:\s*(?:true|false)\s+B:\s*(?:true|false))",
         text,
         re.IGNORECASE,
     )
