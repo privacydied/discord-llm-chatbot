@@ -199,13 +199,24 @@ class KokoroDirect:
         return "espeak"
 
     def _init_session(self) -> None:
-        """Initialize ONNX session once with providers and options."""
+        """Initialize the ONNX session, reusing it across calls when possible.
+
+        Building an ``InferenceSession`` runs full graph optimization and is the
+        dominant per-synthesis cost. We therefore build it once and reuse it,
+        rebuilding only when the ``InferenceSession`` factory identity changes
+        (e.g. patched by tests) so test patches are still honored. [PA]
+        """
         if not Path(self.model_path).exists():
             msg = f"ONNX model not found: {self.model_path}"
             raise FileNotFoundError(msg)
 
-        # Configure session options for optimal performance
+        # Reuse the already-built session when the factory is unchanged.
         _ort_mod = _ort()
+        factory_id = id(_ort_mod.InferenceSession)
+        if getattr(self, "sess", None) is not None and getattr(self, "_sess_factory_id", None) == factory_id:
+            return
+
+        # Configure session options for optimal performance
         session_options = _ort_mod.SessionOptions()
         session_options.graph_optimization_level = _ort_mod.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
         session_options.enable_cpu_mem_arena = False
@@ -219,6 +230,7 @@ class KokoroDirect:
         try:
             self.sess = _ort_mod.InferenceSession(self.model_path, session_options, providers=providers)
             self.onnx_session = self.sess  # Alias for compatibility
+            self._sess_factory_id = factory_id
             logger.debug(f"Initialized ONNX session with providers: {[p[0] for p in providers]}")
         except Exception as e:
             msg = f"Failed to initialize ONNX session: {e}"

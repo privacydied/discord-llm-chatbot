@@ -29,6 +29,12 @@ ENGINES = {
 
 logger = get_logger(__name__)
 
+# Pre-compiled text-cleaning patterns, hoisted to module scope so they are
+# compiled once at import rather than on every _clean_text() call. [PA]
+_URL_RE = re.compile(r"https?://\S+")
+_MARKDOWN_RE = re.compile(r"[`*_>#~]|\[(.*?)\]\((.*?)\)")
+_WHITESPACE_RE = re.compile(r"\s+")
+
 
 def _default_cache_dir() -> Path:
     """Default TTS scratch/cache directory.
@@ -244,9 +250,9 @@ class TTSManager:
             raise SynthesisError(self.degraded_reason or "TTS backend unavailable")
 
     def _clean_text(self, text: str) -> str:
-        text = re.sub(r"https?://\S+", "", text or "")
-        text = re.sub(r"[`*_>#~]|\[(.*?)\]\((.*?)\)", " ", text)
-        return re.sub(r"\s+", " ", text).strip()
+        text = _URL_RE.sub("", text or "")
+        text = _MARKDOWN_RE.sub(" ", text)
+        return _WHITESPACE_RE.sub(" ", text).strip()
 
     async def synthesize(self, text: str, timeout: float | None = None) -> bytes:
         await self._ensure_engine()
@@ -261,15 +267,7 @@ class TTSManager:
             raise SynthesisError(msg)
 
         try:
-            result = engine.synthesize(cleaned)
-            if inspect.isawaitable(result):
-                if timeout is not None:
-                    result = await asyncio.wait_for(result, timeout=timeout)
-                else:
-                    result = await result
-            elif timeout is not None:
-                result = await asyncio.wait_for(asyncio.to_thread(lambda: result), timeout=timeout)
-
+            result = await self._run_engine_synthesize(engine, cleaned, timeout)
             audio_bytes = self._coerce_audio_bytes(result)
             self._warmed_up = True
             return audio_bytes
@@ -279,6 +277,27 @@ class TTSManager:
             self.degraded = True
             self.degraded_reason = str(exc)
             raise SynthesisError(str(exc)) from exc
+
+    @staticmethod
+    async def _run_engine_synthesize(engine: Any, cleaned: str, timeout: float | None) -> Any:
+        """Invoke engine.synthesize without blocking the event loop.
+
+        Async engines are awaited directly; synchronous engines are offloaded to a
+        worker thread via ``asyncio.to_thread`` (the previous ``to_thread(lambda: result)``
+        ran the synthesis inline first, so the offload was a no-op). ``timeout``, when
+        set, bounds the whole operation via ``asyncio.wait_for``. [PA][REH]
+        """
+        if inspect.iscoroutinefunction(engine.synthesize):
+            awaitable = engine.synthesize(cleaned)
+        else:
+            awaitable = asyncio.to_thread(engine.synthesize, cleaned)
+
+        result = await (asyncio.wait_for(awaitable, timeout=timeout) if timeout is not None else awaitable)
+
+        # A sync engine may still hand back a coroutine/future; resolve it too.
+        if inspect.isawaitable(result):
+            result = await (asyncio.wait_for(result, timeout=timeout) if timeout is not None else result)
+        return result
 
     def _coerce_audio_bytes(self, result: Any) -> bytes:
         if result is None:

@@ -4,6 +4,7 @@ import io
 import logging
 import os
 import re
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -74,6 +75,17 @@ class KokoroONNXEngine(BaseEngine):
         # Misaki G2P (only used when registry selects 'misaki')
         self._g2p_initialized = False
         self._g2p = None
+        # Cache of constructed KokoroDirect instances keyed by construction params.
+        # Building a KokoroDirect eagerly loads the ONNX session, official vocab and
+        # voices, so we build it once and reuse it across synthesis calls. [PA]
+        self._kd_cache: dict[tuple[Any, ...], Any] = {}
+        # Guards concurrent construction (double-checked) so two worker threads
+        # can't build duplicate sessions for the same key.
+        self._kd_construct_lock = threading.Lock()
+        # Serialises use of a shared KokoroDirect instance: KokoroDirect.create
+        # mutates per-call state (e.g. _last_matched_symbols), so concurrent
+        # synthesis on the same cached instance must not interleave.
+        self._kd_synth_lock = threading.Lock()
 
     def load(self) -> None:
         try:
@@ -222,8 +234,6 @@ class KokoroONNXEngine(BaseEngine):
             extra={"subsys": "tts", "event": "english_ipa.synthesis"},
         )
 
-        import threading
-
         def _normalize_token(token: str) -> str:
             return re.sub(r"[ˈˌ]", "", token or "")
 
@@ -238,17 +248,23 @@ class KokoroONNXEngine(BaseEngine):
 
             def synthesis_target() -> None:
                 try:
-                    path = kd.create(
-                        phonemes=ipa,
-                        voice=self.voice,
-                        lang="en",
-                        speed=kwargs.get("speed", 1.0),
-                        use_tokenizer=False,
-                        force_ipa=True,
-                        use_official_vocab=True,
-                        disable_autodiscovery=True,
-                    )
-                    result_container[0] = path
+                    # The cached KokoroDirect is shared across calls and create()
+                    # mutates per-call state, so serialise its use. Capturing the
+                    # matched symbols under the same lock keeps them consistent
+                    # with this call's result. [REH]
+                    with self._kd_synth_lock:
+                        path = kd.create(
+                            phonemes=ipa,
+                            voice=self.voice,
+                            lang="en",
+                            speed=kwargs.get("speed", 1.0),
+                            use_tokenizer=False,
+                            force_ipa=True,
+                            use_official_vocab=True,
+                            disable_autodiscovery=True,
+                        )
+                        matched = list(getattr(kd, "_last_matched_symbols", []))
+                    result_container[0] = (path, matched)
                 except Exception as exc:
                     exception_container[0] = exc
 
@@ -281,8 +297,7 @@ class KokoroONNXEngine(BaseEngine):
                 msg_0 = "English IPA synthesis failed: no result returned"
                 raise TTSError(msg_0)
 
-            wav_path = result_container[0]
-            matched_symbols = getattr(kd, "_last_matched_symbols", [])
+            wav_path, matched_symbols = result_container[0]
             normalized_first = _normalize_token(first_token)
             normalized_match = _normalize_token(matched_symbols[0]) if matched_symbols else ""
             first_token_ok = not normalized_first or (normalized_match and normalized_first.startswith(normalized_match))
@@ -323,14 +338,32 @@ class KokoroONNXEngine(BaseEngine):
         return audio_bytes
 
     def _get_kokoro_direct(self, use_tokenizer: bool = False, force_ipa: bool = True):
-        kd_cls = get_direct_wrapper()
-        return kd_cls(
-            model_path=self.model_path,
-            voices_path=self.voices_path,
-            language="en",
-            use_tokenizer=use_tokenizer,
-            force_ipa=force_ipa,
-        )
+        """Return a cached KokoroDirect instance, building it at most once per key.
+
+        Construction eagerly loads the ONNX session, official IPA vocab and voice
+        embeddings, so it is far too expensive to repeat on every synthesis. The
+        cache key includes the model/voices paths and the tokenizer/IPA flags,
+        which are the only construction inputs that can vary. [PA]
+        """
+        key = (self.model_path, self.voices_path, use_tokenizer, force_ipa)
+        cached = self._kd_cache.get(key)
+        if cached is not None:
+            return cached
+        with self._kd_construct_lock:
+            # Double-checked: another thread may have built it while we waited.
+            cached = self._kd_cache.get(key)
+            if cached is not None:
+                return cached
+            kd_cls = get_direct_wrapper()
+            kd = kd_cls(
+                model_path=self.model_path,
+                voices_path=self.voices_path,
+                language="en",
+                use_tokenizer=use_tokenizer,
+                force_ipa=force_ipa,
+            )
+            self._kd_cache[key] = kd
+            return kd
 
     @staticmethod
     def _normalize_ipa_symbols(ipa: str) -> tuple[str, dict[str, int]]:
