@@ -251,52 +251,98 @@ class SensitiveDataFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         try:
+            # Snapshot secret values once per record (cached, no per-record
+            # getenv loop). Key-based redaction below runs regardless. [PA]
+            secret_values = _get_secret_values()
             for _key, value in list(record.__dict__.items()):
                 if isinstance(value, dict):
-                    self._scrub_dict_inplace(value)
+                    self._scrub_dict_inplace(value, secret_values)
                 # Also scrub 'detail' if it's a dict-like stored as attribute
                 if hasattr(record, "detail") and isinstance(record.detail, dict):
-                    self._scrub_dict_inplace(record.detail)
+                    self._scrub_dict_inplace(record.detail, secret_values)
         except Exception:
             # Never block logging on scrubber errors
             return True
         return True
 
-    def _scrub_dict_inplace(self, obj: dict[str, Any]) -> None:
+    def _scrub_dict_inplace(self, obj: dict[str, Any], secret_values: list[str]) -> None:
         for k in list(obj.keys()):
             v = obj[k]
             if isinstance(v, dict):
-                self._scrub_dict_inplace(v)
+                self._scrub_dict_inplace(v, secret_values)
             elif isinstance(v, str):
                 if k in self.SECRET_KEYS:
                     obj[k] = "[REDACTED]"
-                else:
-                    # Also redact known secret values embedded in any string field [S7][SFT]
-                    obj[k] = redact_sensitive_values(v)
+                elif secret_values:
+                    # Redact configured secret values embedded in any string
+                    # field. Short-circuited when none configured. [S7][SFT]
+                    obj[k] = _redact_values_in_text(v, secret_values)
+
+
+# Env-var names whose non-empty values must be scrubbed from log/text output.
+SECRET_ENV_KEYS = (
+    "OPENAI_API_KEY",
+    "DISCORD_TOKEN",
+    "X_API_BEARER_TOKEN",
+    "VISION_API_KEY",
+    "SCREENSHOT_API_KEY",
+    "SEARCH_API_KEY",
+    "YOUTUBE_API_KEY",
+    "WHISPER_API_KEY",
+    "DDG_API_KEY",
+    "CUSTOM_SEARCH_API_KEY",
+)
+
+# Ignore trivially short values to avoid over-redacting common substrings.
+_MIN_SECRET_VALUE_LEN = 4
+
+# Cached snapshot of currently-configured secret values. Built lazily on first
+# use and reused across log records so the hot path avoids an os.getenv loop
+# per record. Refresh via refresh_secret_cache() when secrets change. [PA]
+_secret_values_cache: list[str] | None = None
+
+
+def _load_secret_values() -> list[str]:
+    """Read current non-empty secret env values (length >= min). [SFT]."""
+    values = []
+    for env_key in SECRET_ENV_KEYS:
+        val = os.getenv(env_key, "")
+        if val and len(val) >= _MIN_SECRET_VALUE_LEN:
+            values.append(val)
+    return values
+
+
+def refresh_secret_cache() -> None:
+    """Rebuild the cached secret-value snapshot from the environment.
+
+    Expose for config-reload to call after secrets change at runtime so the
+    logging hot path scrubs newly configured secrets. Not wired into
+    bot/config_reload.py here (separate module) — only exposed. [SFT]
+    """
+    global _secret_values_cache
+    _secret_values_cache = _load_secret_values()
+
+
+def _get_secret_values() -> list[str]:
+    """Return cached secret values, building the snapshot lazily once. [PA]."""
+    global _secret_values_cache
+    if _secret_values_cache is None:
+        _secret_values_cache = _load_secret_values()
+    return _secret_values_cache
+
+
+def _redact_values_in_text(text: str, secret_values: list[str]) -> str:
+    """Replace each secret value occurrence in text with '[REDACTED]'. [SFT]."""
+    for val in secret_values:
+        text = text.replace(val, "[REDACTED]")
+    return text
 
 
 def redact_sensitive_values(text: str) -> str:
     """Redact known sensitive env-var values from arbitrary text.
 
-    Scans for common secret env-var names and replaces their values
-    with '[REDACTED]' so log output or user-facing messages never
-    leak credentials. [SFT]
+    Reads the environment dynamically (public API used off the per-record
+    logging hot path, e.g. dashboard stores). Replaces secret values with
+    '[REDACTED]' so output never leaks credentials. [SFT]
     """
-    secret_env_keys = [
-        "OPENAI_API_KEY",
-        "DISCORD_TOKEN",
-        "X_API_BEARER_TOKEN",
-        "VISION_API_KEY",
-        "SCREENSHOT_API_KEY",
-        "SEARCH_API_KEY",
-        "YOUTUBE_API_KEY",
-        "WHISPER_API_KEY",
-        "DDG_API_KEY",
-        "CUSTOM_SEARCH_API_KEY",
-    ]
-    for env_key in secret_env_keys:
-        val = os.getenv(env_key, "")
-        if val and len(val) >= 4:
-            # Replace all occurrences of the full value [SFT]
-            text = text.replace(val, "[REDACTED]")
-    return text
+    return _redact_values_in_text(text, _load_secret_values())
