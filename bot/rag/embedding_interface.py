@@ -3,6 +3,7 @@
 import asyncio
 import os
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,13 @@ _rag_legacy_mode = False
 _model_locks: dict[str, asyncio.Lock] = {}
 _model_cache: dict[str, Any] = {}
 _initialization_status: dict[str, bool] = {}
+
+# Bounded LRU cache for single-text query embeddings [PA]. Identical query text
+# (same model) otherwise re-runs the full transformer forward pass every call.
+# Keyed on (model_name, exact stripped text) -- NOT lowercased, since some models
+# are case-sensitive and lowercasing would change embedding semantics.
+EMBED_CACHE_MAX = 2048
+_embed_single_cache: OrderedDict[tuple[str, str], np.ndarray] = OrderedDict()
 
 
 class EmbeddingInterface(ABC):
@@ -57,9 +65,29 @@ class EmbeddingInterface(ABC):
         return embeddings / norms
 
     async def encode_single(self, text: str) -> np.ndarray:
-        """Convenience method to encode a single text."""
+        """Encode a single text, backed by a bounded LRU cache [PA].
+
+        Returns a copy of the cached vector so callers that mutate the array in
+        place cannot corrupt the shared cache entry.
+        """
+        key = (self.model_name, text.strip())
+
+        cached = _embed_single_cache.get(key)
+        if cached is not None:
+            _embed_single_cache.move_to_end(key)  # mark most-recently used
+            return cached.copy()
+
+        # Miss: compute (concurrent identical misses may both compute -- harmless,
+        # the last write simply wins; the dict itself is never left inconsistent).
         result = await self.encode([text])
-        return result[0]
+        vector = result[0]
+
+        _embed_single_cache[key] = vector
+        _embed_single_cache.move_to_end(key)
+        while len(_embed_single_cache) > EMBED_CACHE_MAX:
+            _embed_single_cache.popitem(last=False)  # evict least-recently used
+
+        return vector.copy()
 
 
 class SentenceTransformerEmbedding(EmbeddingInterface):

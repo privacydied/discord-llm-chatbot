@@ -14,6 +14,10 @@ from .vector_schema import HybridSearchConfig, SearchResult, VectorDocument
 
 logger = get_logger(__name__)
 
+# Low-resource cap on ChromaDB result count. Read once at backend construction
+# (see __init__) rather than re-parsing config on every query. [PA][CMV]
+DEFAULT_CHROMADB_MAX_RESULTS = 5
+
 
 class ChromaRAGBackend:
     """ChromaDB-based RAG backend with hybrid search capabilities."""
@@ -49,8 +53,23 @@ class ChromaRAGBackend:
         self.collection = None
         self._initialized = False
 
+        # Resolve the low-resource result cap once, not per query [PA]. load_config
+        # is itself TTL-cached, but this still avoids the per-query import + dict work.
+        self._max_results = self._resolve_max_results()
+
         # Text chunker
         self.chunker = TextChunker(self.config)
+
+    @staticmethod
+    def _resolve_max_results() -> int:
+        """Read CHROMADB_MAX_RESULTS once, falling back to the default on error."""
+        try:
+            from bot.config import load_config
+
+            return int(load_config().get("CHROMADB_MAX_RESULTS", DEFAULT_CHROMADB_MAX_RESULTS))
+        except (ValueError, TypeError, OSError) as exc:
+            logger.debug(f"Failed to load CHROMADB_MAX_RESULTS: {exc}")
+            return DEFAULT_CHROMADB_MAX_RESULTS
 
     async def initialize(self) -> None:
         """Initialize ChromaDB client and collection."""
@@ -312,15 +331,8 @@ class ChromaRAGBackend:
             with contextlib.suppress(Exception):
                 effective_n = min(effective_n, self.config.max_vector_results)
 
-            # Additional low-resource cap [Phase 6-9]
-            try:
-                from bot.config import load_config as _chroma_load_config
-
-                _cc = _chroma_load_config()
-                chroma_max = int(_cc.get("CHROMADB_MAX_RESULTS", 5))
-                effective_n = min(effective_n, chroma_max)
-            except (ValueError, TypeError, OSError) as exc:
-                logger.debug(f"Failed to load CHROMADB_MAX_RESULTS: {exc}")
+            # Additional low-resource cap [Phase 6-9], resolved once at init [PA]
+            effective_n = min(effective_n, self._max_results)
 
             # Perform vector search (run in thread pool)
             loop = asyncio.get_event_loop()

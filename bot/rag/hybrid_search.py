@@ -1,9 +1,11 @@
 """Hybrid search integration that combines vector and keyword search with fallback logic."""
 
 import asyncio
+import copy
 import os
 import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -21,6 +23,13 @@ if TYPE_CHECKING:
     from .chroma_backend import ChromaRAGBackend
 
 logger = get_logger(__name__)
+
+# Short-TTL cache for full search results [PA]. Repeated identical queries (same
+# user/guild/type/limit) otherwise recompute vector search AND fire a fresh LIVE
+# web search on the keyword path every call. Monotonic clock is used for TTL so a
+# wall-clock adjustment can't wedge or prematurely expire entries.
+RAG_CACHE_TTL_S = 30.0
+RAG_CACHE_MAX = 256
 
 
 class IndexState(Enum):
@@ -83,6 +92,9 @@ class HybridRAGSearch:
 
         # Background indexing [RAG]
         self._indexing_queue: IndexingQueue | None = None
+
+        # Short-TTL result cache: key -> (monotonic_ts, results) [PA]
+        self._result_cache: OrderedDict[tuple, tuple[float, list[HybridSearchResult]]] = OrderedDict()
 
         # Performance tracking
         self.search_stats = {
@@ -313,47 +325,101 @@ class HybridRAGSearch:
             List of search results with provenance tracking
 
         """
-        search_start = time.time()
-
         # Ensure RAG system is initialized
         await self.initialize()
 
-        # Update search statistics
+        # Serve from the short-TTL cache when available (before touching stats) [PA]
+        cache_key = (query, user_id, guild_id, search_type, max_results)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            logger.debug(f"[RAG] Search cache hit: type={search_type}, results={len(cached)}")
+            return cached
+
+        results, cacheable = await self._run_search(query, user_id, guild_id, max_results, search_type)
+
+        # Only cache clean successes -- never results produced by the error/fallback
+        # path, so a transient failure isn't frozen in for the whole TTL window.
+        if cacheable:
+            self._cache_put(cache_key, results)
+        return self._copy_results(results)
+
+    @staticmethod
+    def _copy_results(results: list[HybridSearchResult]) -> list[HybridSearchResult]:
+        """Return an independent copy so in-place re-scoring can't corrupt the cache."""
+        return [copy.copy(r) for r in results]
+
+    def _cache_get(self, key: tuple) -> list[HybridSearchResult] | None:
+        """Fetch fresh cached results, evicting the entry if it has expired."""
+        entry = self._result_cache.get(key)
+        if entry is None:
+            return None
+        ts, results = entry
+        if time.monotonic() - ts > RAG_CACHE_TTL_S:
+            self._result_cache.pop(key, None)  # stale
+            return None
+        self._result_cache.move_to_end(key)
+        return self._copy_results(results)
+
+    def _cache_put(self, key: tuple, results: list[HybridSearchResult]) -> None:
+        """Store a copy of successful results and evict the oldest over capacity."""
+        self._result_cache[key] = (time.monotonic(), self._copy_results(results))
+        self._result_cache.move_to_end(key)
+        while len(self._result_cache) > RAG_CACHE_MAX:
+            self._result_cache.popitem(last=False)
+
+    async def _run_search(
+        self,
+        query: str,
+        user_id: str | None,
+        guild_id: str | None,
+        max_results: int,
+        search_type: str,
+    ) -> tuple[list[HybridSearchResult], bool]:
+        """Dispatch the search; return (results, cacheable). cacheable is False when
+        the results came from the error/fallback path.
+        """
+        search_start = time.time()
         self.search_stats["total_searches"] += 1
 
         try:
-            if search_type == "hybrid":
-                self.search_stats["hybrid_searches"] += 1
-                results = await self._hybrid_search(query, user_id, guild_id, max_results)
-            elif search_type == "vector":
-                self.search_stats["vector_searches"] += 1
-                results = await self._vector_search(query, user_id, guild_id, max_results)
-            elif search_type == "keyword":
-                self.search_stats["keyword_searches"] += 1
-                results = await self._keyword_search(query, user_id, guild_id, max_results)
-            else:
-                msg = f"Invalid search_type: {search_type}"
-                raise ValueError(msg)
-
+            results = await self._dispatch_search(query, user_id, guild_id, max_results, search_type)
             search_time = (time.time() - search_start) * 1000
-
-            # Log search completion with metrics [RAG]
             logger.debug(f"[RAG] Search completed: type={search_type}, results={len(results)}, time={search_time:.1f}ms, index_state={self._index_state.value}")
-
-            return results
+            return results, True
 
         except Exception as e:
             search_time = (time.time() - search_start) * 1000
             logger.exception(f"[RAG] Search failed: type={search_type}, time={search_time:.1f}ms, error={e}")
 
-            # Fallback to keyword search on error
+            # Fallback to keyword search on error (not cached -- transient failure)
             if search_type != "keyword":
                 logger.info("[RAG] Falling back to keyword search due to error")
                 self.search_stats["fallback_searches"] += 1
-                return await self._keyword_search(query, user_id, guild_id, max_results)
+                return await self._keyword_search(query, user_id, guild_id, max_results), False
 
             # If keyword search also failed, return empty results
-            return []
+            return [], False
+
+    async def _dispatch_search(
+        self,
+        query: str,
+        user_id: str | None,
+        guild_id: str | None,
+        max_results: int,
+        search_type: str,
+    ) -> list[HybridSearchResult]:
+        """Route to the concrete search implementation and update per-type stats."""
+        if search_type == "hybrid":
+            self.search_stats["hybrid_searches"] += 1
+            return await self._hybrid_search(query, user_id, guild_id, max_results)
+        if search_type == "vector":
+            self.search_stats["vector_searches"] += 1
+            return await self._vector_search(query, user_id, guild_id, max_results)
+        if search_type == "keyword":
+            self.search_stats["keyword_searches"] += 1
+            return await self._keyword_search(query, user_id, guild_id, max_results)
+        msg = f"Invalid search_type: {search_type}"
+        raise ValueError(msg)
 
     async def _hybrid_search(
         self,
@@ -610,7 +676,7 @@ class HybridRAGSearch:
                     logger.info(f"[RAG] Enqueued document for background indexing: {source_id}")
                     return True
                 logger.warning(f"[RAG] Indexing queue full, processing document synchronously: {source_id}")
-                    # Fall through to synchronous path
+                # Fall through to synchronous path
 
             # Synchronous processing (background disabled or enqueue failed)
             await self.rag_backend.add_document(source_id, text, metadata, file_type)
@@ -756,4 +822,3 @@ async def hybrid_search(
 
     # Convert to legacy format
     return [result.to_legacy_result() for result in hybrid_results]
-
