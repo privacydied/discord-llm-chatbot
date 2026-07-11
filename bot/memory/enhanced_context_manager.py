@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 import os
+from collections import OrderedDict
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,12 @@ from bot.config import load_config as _load_config
 from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Bounded LRU cache size for decrypted-content memoization. Fernet decrypt is
+# AES+HMAC (real sync CPU); the same ciphertext is decrypted repeatedly within
+# and across requests inside the history window, so a small bounded cache keyed
+# by ciphertext keeps repeat decrypts cheap without growing unboundedly. [PA]
+DECRYPT_CACHE_MAX_ENTRIES = 512
 
 
 def _load_int_config(key: str, default: int) -> int:
@@ -127,6 +134,11 @@ class EnhancedContextManager:
                 os.chmod(key_file, 0o600)  # Restrict permissions
                 self.cipher = Fernet(key)
 
+        # Bounded LRU memo for _decrypt_content, keyed by ciphertext. Avoids
+        # repeated AES+HMAC work when the same entry is decrypted multiple
+        # times per request and across requests within the history window. [PA]
+        self._decrypt_cache: OrderedDict[str, str] = OrderedDict()
+
         # Storage: {context_key: List[MessageEntry]}
         self.memory: dict[str, list[MessageEntry]] = {}
 
@@ -172,12 +184,22 @@ class EnhancedContextManager:
             return content  # Fallback to unencrypted
 
     def _decrypt_content(self, encrypted_content: str) -> str:
-        """Decrypt message content."""
+        """Decrypt message content (memoized by ciphertext, bounded LRU). [PA]."""
+        cached = self._decrypt_cache.get(encrypted_content)
+        if cached is not None:
+            self._decrypt_cache.move_to_end(encrypted_content)
+            return cached
+
         try:
-            return self.cipher.decrypt(encrypted_content.encode()).decode()
+            plaintext = self.cipher.decrypt(encrypted_content.encode()).decode()
         except (ValueError, TypeError, RuntimeError) as e:
             logger.debug(f"Decryption failed, assuming unencrypted: {e}")
-            return encrypted_content  # Assume it's unencrypted
+            plaintext = encrypted_content  # Assume it's unencrypted
+
+        self._decrypt_cache[encrypted_content] = plaintext
+        if len(self._decrypt_cache) > DECRYPT_CACHE_MAX_ENTRIES:
+            self._decrypt_cache.popitem(last=False)  # evict oldest [RM]
+        return plaintext
 
     def _load(self) -> None:
         """Load context from storage file."""
@@ -393,21 +415,23 @@ class EnhancedContextManager:
         total_tokens = 0
         total_chars = 0
 
+        # Decrypt each entry exactly once, then reuse the plaintext for both
+        # continuation filtering and formatting below. [PA]
+        decrypted_entries = [(entry, self._decrypt_content(entry.content)) for entry in entries]
+
         # Filter continuation chunks
         filtered = []
-        for entry in entries:
+        for entry, content in decrypted_entries:
             if self.ignore_continuation_chunks:
-                content = self._decrypt_content(entry.content)
                 stripped = content.strip()
                 if stripped in ("...", "…", "more", "**(continues)**", "(more)", "more..."):
                     continue
-            filtered.append(entry)
+            filtered.append((entry, content))
 
         # Process entries in reverse to prioritize recent messages
-        for entry in reversed(filtered):
+        for entry, content in reversed(filtered):
             try:
-                # Decrypt content
-                content = self._decrypt_content(entry.content)
+                # content already decrypted once above; reuse it
 
                 # Format line
                 if entry.role == "bot":
@@ -477,11 +501,14 @@ class EnhancedContextManager:
                 used_history = []
                 for entry in context_entries:
                     if not self.is_privacy_opted_out(entry.user_id):
+                        # Decrypt once, reuse for the length check and preview slice. [PA]
+                        decrypted = self._decrypt_content(entry.content)
+                        preview = decrypted[:100] + "..." if len(decrypted) > 100 else decrypted
                         history_entry = {
                             "user_id": entry.user_id,
                             "role": entry.role,
                             "timestamp": entry.timestamp,
-                            "content_preview": self._decrypt_content(entry.content)[:100] + "..." if len(self._decrypt_content(entry.content)) > 100 else self._decrypt_content(entry.content),
+                            "content_preview": preview,
                         }
                         used_history.append(history_entry)
 
