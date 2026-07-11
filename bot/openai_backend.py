@@ -1,5 +1,7 @@
 """OpenAI/OpenRouter Backend - Handles OpenAI API calls including OpenRouter."""
 
+import asyncio
+import atexit
 import base64
 import inspect
 import os
@@ -40,6 +42,29 @@ from bot.retry_utils import (
 from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+# --- Shared TLS context + client reuse (Fix 5) [PA][RM] ---
+# Building the SSL context parses the full certifi CA bundle from disk; do it
+# ONCE at import time and reuse the same context for every httpx client.
+_SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+
+# Cache of AsyncOpenAI clients keyed by (base_url, api_key, timeout, max_retries).
+# Reusing clients keeps httpx keep-alive / HTTP-2 connection pools warm across
+# requests and across the fallback ladder instead of a fresh TLS handshake each call.
+_OPENAI_CLIENT_CACHE: dict[tuple[Any, ...], Any] = {}
+
+# Cache of local OllamaClient instances keyed by base_url so the aiohttp session
+# (and its keep-alive pool) is reused across ladder attempts. [PA][RM]
+_OLLAMA_CLIENT_CACHE: dict[str, Any] = {}
+
+_HTTP2_SUPPORTED: bool | None = None
+
+# --- Prompt-file cache (Fix 7): re-read only when mtime changes. [PA] ---
+_PROMPT_CACHE: dict[str, tuple[float, str]] = {}
+
+# --- Shared image-download session (low-value cleanup) [PA][RM] ---
+_IMAGE_DOWNLOAD_TIMEOUT_SECONDS = 10
+_image_session: aiohttp.ClientSession | None = None
 
 if _openai is not None:
     OpenAIAuthenticationError = _openai.AuthenticationError
@@ -92,23 +117,56 @@ def _patch_openai_httpx_wrapper_destructor() -> None:
 _patch_openai_httpx_wrapper_destructor()
 
 
-def _make_openai_async_client(
+def _http2_supported() -> bool:
+    """Return True when the optional 'h2' dependency is importable. [REH]"""
+    global _HTTP2_SUPPORTED
+    if _HTTP2_SUPPORTED is None:
+        try:
+            import h2  # type: ignore  # noqa: F401
+
+            _HTTP2_SUPPORTED = True
+        except ImportError:
+            _HTTP2_SUPPORTED = False
+    return _HTTP2_SUPPORTED
+
+
+def _timeout_cache_key(timeout: httpx.Timeout) -> tuple[Any, ...]:
+    """Hashable key for an httpx.Timeout so clients can be cached by timeout."""
+    return (
+        getattr(timeout, "connect", None),
+        getattr(timeout, "read", None),
+        getattr(timeout, "write", None),
+        getattr(timeout, "pool", None),
+    )
+
+
+def _schedule_http_client_close(http_client: Any) -> None:
+    """Best-effort async close of a throwaway httpx client. [RM]"""
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(http_client.aclose())
+    except Exception as e:
+        logger.debug(f"Failed to schedule http_client close: {e}")
+
+
+def _build_openai_async_client(
     *,
     api_key: str | None,
     base_url: str | None,
     timeout: httpx.Timeout,
-    max_retries: int = 0,
+    max_retries: int,
 ) -> Any:
-    """Create AsyncOpenAI with certifi CA bundle and no inherited SSL env.
+    """Construct a fresh AsyncOpenAI backed by a keep-alive httpx client.
 
-    Passing our own httpx.AsyncClient avoids httpx consulting broken platform
-    cafile paths such as /etc/ssl/cert.pem on Synology. [REH]
+    Passing our own httpx.AsyncClient with the shared certifi-backed SSL context
+    avoids httpx consulting broken platform cafile paths such as
+    /etc/ssl/cert.pem on Synology. [REH]
     """
-    ssl_context = ssl.create_default_context(cafile=certifi.where())
     http_client = httpx.AsyncClient(
         timeout=timeout,
-        verify=ssl_context,
+        verify=_SSL_CONTEXT,
         trust_env=False,
+        http2=_http2_supported(),
     )
     try:
         openai = _require_openai()
@@ -120,14 +178,120 @@ def _make_openai_async_client(
             http_client=http_client,
         )
     except Exception:
-        try:
-            import asyncio
-
-            loop = asyncio.get_running_loop()
-            loop.create_task(http_client.aclose())
-        except Exception as e:
-            logger.debug(f"Failed to schedule http_client close: {e}")
+        _schedule_http_client_close(http_client)
         raise
+
+
+def _make_openai_async_client(
+    *,
+    api_key: str | None,
+    base_url: str | None,
+    timeout: httpx.Timeout,
+    max_retries: int = 0,
+) -> Any:
+    """Return a cached AsyncOpenAI client, building one on first use. [PA]
+
+    Reusing the client keeps the httpx connection pool (keep-alive / HTTP-2)
+    warm instead of a new TLS handshake per request. Cached clients must NOT be
+    closed per request; see _safe_aclose_openai_client / aclose_all_clients.
+
+    The AsyncOpenAI factory identity is part of the key: in production it is the
+    stable class (so clients are reused), while a patched factory (e.g. tests)
+    yields a distinct key and thus a freshly built client.
+    """
+    factory = getattr(_openai, "AsyncOpenAI", None) if _openai is not None else None
+    cache_key = (id(factory), base_url or "", api_key or "", _timeout_cache_key(timeout), max_retries)
+    client = _OPENAI_CLIENT_CACHE.get(cache_key)
+    if client is None:
+        client = _build_openai_async_client(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+            max_retries=max_retries,
+        )
+        _OPENAI_CLIENT_CACHE[cache_key] = client
+    return client
+
+
+def _is_cached_openai_client(client: Any) -> bool:
+    """True when `client` is a shared cached client that must stay open."""
+    return any(client is cached for cached in _OPENAI_CLIENT_CACHE.values())
+
+
+def _load_prompt_cached(path: str) -> str:
+    """Return prompt file contents, re-reading only when its mtime changes. [PA]
+
+    Raises FileNotFoundError/OSError to callers exactly like open() so existing
+    error handling continues to work.
+    """
+    mtime = os.path.getmtime(path)
+    cached = _PROMPT_CACHE.get(path)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+    with open(path, encoding="utf-8") as pf:
+        contents = pf.read().strip()
+    _PROMPT_CACHE[path] = (mtime, contents)
+    return contents
+
+
+def _get_image_session() -> aiohttp.ClientSession:
+    """Return a shared aiohttp session for image downloads, bound to this loop.
+
+    Recreates the session if it was never created, was closed, or belongs to a
+    different (e.g. restarted) event loop. Keeps the 10s total timeout. [RM]
+    """
+    global _image_session
+    loop = asyncio.get_running_loop()
+    session = _image_session
+    if session is not None and not session.closed and getattr(session, "_loop", None) is loop:
+        return session
+    timeout = aiohttp.ClientTimeout(total=_IMAGE_DOWNLOAD_TIMEOUT_SECONDS)
+    _image_session = aiohttp.ClientSession(timeout=timeout)
+    return _image_session
+
+
+async def _aclose_one(obj: Any) -> None:
+    """Await-or-call close on a client/session, swallowing errors. [RM]"""
+    closer = getattr(obj, "aclose", None) or getattr(obj, "close", None)
+    if closer is None:
+        return
+    try:
+        result = closer()
+        if inspect.isawaitable(result):
+            await result
+    except Exception as exc:
+        logger.debug(f"aclose failed | {type(exc).__name__}: {exc}")
+
+
+async def aclose_all_clients() -> None:
+    """Close every cached OpenAI/Ollama client + image session and clear caches.
+
+    Call on shutdown to release pooled connections cleanly. [RM]
+    """
+    openai_clients = list(_OPENAI_CLIENT_CACHE.values())
+    ollama_clients = list(_OLLAMA_CLIENT_CACHE.values())
+    _OPENAI_CLIENT_CACHE.clear()
+    _OLLAMA_CLIENT_CACHE.clear()
+    for client in (*openai_clients, *ollama_clients):
+        await _aclose_one(client)
+    global _image_session
+    if _image_session is not None:
+        await _aclose_one(_image_session)
+        _image_session = None
+
+
+def _atexit_close_clients() -> None:
+    """Best-effort synchronous cleanup of cached clients at interpreter exit."""
+    if not (_OPENAI_CLIENT_CACHE or _OLLAMA_CLIENT_CACHE or _image_session):
+        return
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        with contextlib.suppress(Exception):
+            asyncio.run(aclose_all_clients())
+
+
+atexit.register(_atexit_close_clients)
 
 
 def _resolve_openai_compatible_endpoint(provider_name: str | None, config: dict[str, Any]) -> tuple[str | None, str | None, str]:
@@ -170,10 +334,8 @@ def _ollama_coro_factory(
     """
 
     async def _run():
-        from .ollama import OllamaClient
-
         base_url = config.get("OLLAMA_HOST") or os.getenv("OLLAMA_HOST") or "http://localhost:11434"
-        ollama_client = OllamaClient(base_url=base_url)
+        ollama_client = _get_cached_ollama_client(base_url)
 
         # Convert OpenAI messages to a single prompt for Ollama
         user_parts = []
@@ -193,24 +355,34 @@ def _ollama_coro_factory(
             system_text = "\n".join(system_parts)
             prompt = f"System instructions: {system_text}\n\n{prompt}"
 
-        try:
-            result = await ollama_client.generate(
-                prompt=prompt,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                presence_penalty=presence_penalty if presence_penalty is not None else config.get("PRESENCE_PENALTY", 0.0),
-                **{k: v for k, v in kwargs.items() if k != "stream"},
-            )
-            text = result.get("response", "")
-            if not text:
-                msg_0 = f"Ollama returned empty response for model {model}"
-                raise APIError(msg_0)
-            return text
-        finally:
-            await ollama_client.close()
+        # Do NOT close the cached client here — the aiohttp session is shared
+        # across ladder attempts for keep-alive pooling; closed on shutdown. [RM]
+        result = await ollama_client.generate(
+            prompt=prompt,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            presence_penalty=presence_penalty if presence_penalty is not None else config.get("PRESENCE_PENALTY", 0.0),
+            **{k: v for k, v in kwargs.items() if k != "stream"},
+        )
+        text = result.get("response", "")
+        if not text:
+            msg_0 = f"Ollama returned empty response for model {model}"
+            raise APIError(msg_0)
+        return text
 
     return _run
+
+
+def _get_cached_ollama_client(base_url: str) -> Any:
+    """Return a cached OllamaClient for `base_url`, creating it on first use. [PA]"""
+    client = _OLLAMA_CLIENT_CACHE.get(base_url)
+    if client is None:
+        from .ollama import OllamaClient
+
+        client = OllamaClient(base_url=base_url)
+        _OLLAMA_CLIENT_CACHE[base_url] = client
+    return client
 
 
 async def _safe_aclose_openai_client(client: Any) -> None:
@@ -224,6 +396,10 @@ async def _safe_aclose_openai_client(client: Any) -> None:
     known close-only AttributeError if the wrapper is already malformed. [REH]
     """
     if client is None:
+        return
+    # Never tear down a shared/cached client — closing it would destroy the
+    # keep-alive connection pool that subsequent requests reuse. [PA][RM]
+    if _is_cached_openai_client(client):
         return
     closer = getattr(client, "aclose", None) or getattr(client, "close", None)
     if closer is None:
@@ -338,8 +514,7 @@ async def generate_openai_response(
                 msg = "PROMPT_FILE not configured in environment variables"
                 raise APIError(msg)
             try:
-                with open(prompt_file_path, encoding="utf-8") as pf:
-                    base_system_prompt = pf.read().strip()
+                base_system_prompt = _load_prompt_cached(prompt_file_path)
             except FileNotFoundError:
                 msg = f"Prompt file not found: {prompt_file_path}"
                 raise APIError(msg)
@@ -551,11 +726,18 @@ Server Context: {server_context}"""
                         total_time = getattr(rr, "total_time", 0.0)
                         err_str = str(base_err).lower()
                         _is_moderation = (
-                            ("flagged" in err_str or "moderation" in err_str or "self-harm" in err_str or "self_harm" in err_str or "content_filter" in err_str or "content filter" in err_str or "requires moderation" in err_str)
-                            and ("403" in err_str or "400" in err_str)
-                        )
+                            "flagged" in err_str
+                            or "moderation" in err_str
+                            or "self-harm" in err_str
+                            or "self_harm" in err_str
+                            or "content_filter" in err_str
+                            or "content filter" in err_str
+                            or "requires moderation" in err_str
+                        ) and ("403" in err_str or "400" in err_str)
                         _is_no_endpoints = "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str)
-                        _is_auth = ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str)
+                        _is_auth = ("401" in err_str or "403" in err_str) and (
+                            "authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str
+                        )
                         if _is_no_endpoints:
                             msg = (
                                 f"Text providers unavailable via OpenRouter (404 / no endpoints) after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
@@ -747,18 +929,17 @@ async def get_base64_image(image_url: str) -> str:
     # Handle HTTP/HTTPS URLs
     elif image_url.startswith(("http://", "https://")):
         try:
-            async with aiohttp.ClientSession() as session:
-                timeout = aiohttp.ClientTimeout(total=10)
-                async with session.get(image_url, timeout=timeout) as response:
-                    if response.status == 200:
-                        data = await response.read()
-                        base64_data = base64.b64encode(data).decode("utf-8")
-                        content_type = response.headers.get("Content-Type", "image/png")
-                        logger.debug(f"✅ Image downloaded: size={len(data)} bytes, type={content_type}")
-                        return f"data:{content_type};base64,{base64_data}"
-                    error_msg = f"Failed to download image: status={response.status}"
-                    logger.error(error_msg)
-                    raise APIError(error_msg)
+            session = _get_image_session()
+            async with session.get(image_url) as response:
+                if response.status == 200:
+                    data = await response.read()
+                    base64_data = base64.b64encode(data).decode("utf-8")
+                    content_type = response.headers.get("Content-Type", "image/png")
+                    logger.debug(f"✅ Image downloaded: size={len(data)} bytes, type={content_type}")
+                    return f"data:{content_type};base64,{base64_data}"
+                error_msg = f"Failed to download image: status={response.status}"
+                logger.error(error_msg)
+                raise APIError(error_msg)
         except Exception as e:
             error_msg = f"Failed to download image from URL: {e}"
             logger.error(error_msg, exc_info=True)
@@ -802,8 +983,7 @@ async def _generate_vl_response_with_retry(
         raise APIError(msg)
 
     try:
-        with open(vl_prompt_file_path, encoding="utf-8") as vpf:
-            vl_system_prompt = vpf.read().strip()
+        vl_system_prompt = _load_prompt_cached(vl_prompt_file_path)
     except FileNotFoundError as exc:
         msg = f"VL prompt file not found: {vl_prompt_file_path}"
         raise APIError(msg) from exc
@@ -982,12 +1162,13 @@ async def _generate_vl_response_with_retry(
                     attempts = getattr(rr, "attempts", 0)
                     total_time = getattr(rr, "total_time", 0.0)
                     err_str = str(base_err).lower()
-                    _is_mod = (
-                        ("flagged" in err_str or "moderation" in err_str or "self-harm" in err_str or "self_harm" in err_str or "requires moderation" in err_str or "content_filter" in err_str)
-                        and ("403" in err_str or "400" in err_str)
+                    _is_mod = ("flagged" in err_str or "moderation" in err_str or "self-harm" in err_str or "self_harm" in err_str or "requires moderation" in err_str or "content_filter" in err_str) and (
+                        "403" in err_str or "400" in err_str
                     )
                     _is_no_ep = "no endpoints found" in err_str or ("404" in err_str and "endpoint" in err_str)
-                    _is_auth = ("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str)
+                    _is_auth = ("401" in err_str or "403" in err_str) and (
+                        "authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str
+                    )
 
                     if _is_no_ep:
                         msg = f"Vision providers unavailable via OpenRouter (404 / no endpoints) after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"

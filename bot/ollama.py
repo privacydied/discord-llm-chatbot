@@ -1,6 +1,8 @@
 """Ollama API integration for the Discord bot."""
 
+import asyncio
 import json
+import os
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta
 from typing import Any
@@ -37,6 +39,29 @@ RATE_LIMIT_MAX_REQUESTS = 30  # Max requests per window
 # Track rate limits
 user_rate_limits = {}
 
+# Session timeouts (seconds)
+SESSION_TOTAL_TIMEOUT = 120
+SESSION_CONNECT_TIMEOUT = 10
+
+# Prompt-file cache (Fix 7): re-read only when the file's mtime changes. [PA]
+_PROMPT_CACHE: dict[str, tuple[float, str]] = {}
+
+
+def _load_prompt_cached(path: str) -> str:
+    """Return prompt file contents, re-reading only when its mtime changes. [PA]
+
+    Raises FileNotFoundError/OSError to callers exactly like open() so existing
+    error handling continues to work.
+    """
+    mtime = os.path.getmtime(path)
+    cached = _PROMPT_CACHE.get(path)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+    with open(path, encoding="utf-8") as pf:
+        contents = pf.read().strip()
+    _PROMPT_CACHE[path] = (mtime, contents)
+    return contents
+
 
 class OllamaClient:
     """Client for interacting with the Ollama API."""
@@ -54,10 +79,18 @@ class OllamaClient:
             self.headers["Authorization"] = f"Bearer {self.api_key}"
 
     async def ensure_session(self) -> None:
-        """Ensure we have an active aiohttp session."""
-        if self.session is None or self.session.closed:
-            timeout = aiohttp.ClientTimeout(total=120, connect=10)
-            self.session = aiohttp.ClientSession(headers=self.headers, timeout=timeout)
+        """Ensure we have an active aiohttp session bound to the current loop.
+
+        Recreates the session if missing, closed, or bound to a different
+        (e.g. restarted) event loop — important now that clients are cached and
+        reused across calls. [RM]
+        """
+        loop = asyncio.get_running_loop()
+        session = self.session
+        if session is not None and not session.closed and getattr(session, "_loop", None) is loop:
+            return
+        timeout = aiohttp.ClientTimeout(total=SESSION_TOTAL_TIMEOUT, connect=SESSION_CONNECT_TIMEOUT)
+        self.session = aiohttp.ClientSession(headers=self.headers, timeout=timeout)
 
     async def close(self) -> None:
         """Close the aiohttp session."""
@@ -393,8 +426,7 @@ async def generate_response(
                 msg = "PROMPT_FILE not configured in environment variables"
                 raise OllamaAPIError(msg)
             try:
-                with open(prompt_file_path, encoding="utf-8") as pf:
-                    base_system_prompt = pf.read().strip()
+                base_system_prompt = _load_prompt_cached(prompt_file_path)
             except FileNotFoundError:
                 msg = f"Prompt file not found: {prompt_file_path}"
                 raise OllamaAPIError(msg)
