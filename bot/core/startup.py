@@ -13,6 +13,18 @@ from discord.ext import commands
 from bot.config import ConfigurationError
 from bot.utils.logging import get_logger
 
+# When truthy, run the (slow, blocking) `playwright install chromium` on the
+# startup path if the browser is missing. Default OFF: a missing browser must
+# NOT delay first Discord connect by up to minutes — we check-and-warn instead
+# and let screenshot features degrade gracefully. [PA][CMV]
+PLAYWRIGHT_AUTO_INSTALL_ENV = "PLAYWRIGHT_AUTO_INSTALL"
+PLAYWRIGHT_INSTALL_TIMEOUT_S = 300
+
+
+def _is_truthy(value: str) -> bool:
+    """Return True for common truthy env-var spellings."""
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
 
 def _get_playwright_chromium_path() -> Path | None:
     """Checks for the Playwright Chromium executable and returns its path if found."""
@@ -84,6 +96,22 @@ def check_playwright_browsers(logger) -> None:
         logger.info("✅ Playwright Browser (Chromium) is installed.")
         return
 
+    # Browser is absent. A blocking `playwright install` here can delay first
+    # Discord connect by minutes, so we only run it when explicitly opted in.
+    if not _is_truthy(os.getenv(PLAYWRIGHT_AUTO_INSTALL_ENV, "")):
+        logger.warning(
+            "❌ Playwright Browser (Chromium) not found. Screenshot/web-scraping "
+            "features will be unavailable until installed. To auto-install at "
+            f"startup set {PLAYWRIGHT_AUTO_INSTALL_ENV}=1, or run manually: "
+            "`uv run playwright install chromium`.",
+        )
+        return
+
+    _install_playwright_chromium(logger)
+
+
+def _install_playwright_chromium(logger) -> None:
+    """Run the blocking `playwright install chromium` (opt-in only). [REH]."""
     logger.warning("❌ Playwright Browser (Chromium) not found. Attempting auto-installation...")
     try:
         result = subprocess.run(  # nosec B603, B607
@@ -91,7 +119,7 @@ def check_playwright_browsers(logger) -> None:
             capture_output=True,
             text=True,
             check=True,
-            timeout=300,
+            timeout=PLAYWRIGHT_INSTALL_TIMEOUT_S,
         )
         logger.info(f"Playwright auto-install successful: {result.stdout}")
         if _get_playwright_chromium_path():
