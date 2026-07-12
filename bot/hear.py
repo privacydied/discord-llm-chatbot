@@ -1925,10 +1925,14 @@ async def _transcribe_with_model(
                                 stt_language_source,
                                 getattr(info, "language_probability", 0.0),
                             )
-                    if not segments and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD:
+                    # faster-whisper exposes `no_speech_prob` per Segment, never on
+                    # TranscriptionInfo; and `no_speech_threshold` is already applied
+                    # inside the model (transcribe(no_speech_threshold=...)), so an
+                    # empty segment list already means "no speech detected". [REH]
+                    if not segments:
                         spans.end("whisper", ok=False, reason="no_speech")
                         logger.info("stt.no_speech_fast_exit")
-                        msg = f"No speech detected (prob={info.no_speech_prob:.3f})"
+                        msg = "No speech detected"
                         raise InferenceError(msg)
 
                 logger.info(
@@ -2006,10 +2010,14 @@ async def _transcribe_with_model(
                                     stt_language_source,
                                     getattr(info, "language_probability", 0.0),
                                 )
-                    if not segments and info.no_speech_prob >= NO_SPEECH_PROB_THRESHOLD:
+                    # faster-whisper exposes `no_speech_prob` per Segment, never on
+                    # TranscriptionInfo; and `no_speech_threshold` is already applied
+                    # inside the model (transcribe(no_speech_threshold=...)), so an
+                    # empty segment list already means "no speech detected". [REH]
+                    if not segments:
                         spans.end("whisper", ok=False, reason="no_speech")
                         logger.info("stt.no_speech_fast_exit")
-                        msg = f"No speech detected (prob={info.no_speech_prob:.3f})"
+                        msg = "No speech detected"
                         raise InferenceError(msg)
                     logger.debug(
                         "whisper.chunk idx=%s len_s=%.2f",
