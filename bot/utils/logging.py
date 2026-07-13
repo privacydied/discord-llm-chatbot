@@ -44,6 +44,33 @@ class LevelIconFilter(logging.Filter):
         return True
 
 
+# discord.py logs *every* transient gateway reconnect via _log.exception()
+# (discord/client.py: "Attempting a reconnect in %.2fs") at ERROR-with-traceback,
+# even though its own loop immediately retries and self-heals on the next attempt.
+# Fatal cases (bad token, 4014 privileged intents, non-1000 close codes) are raised
+# before that log call, so demoting *only* this record to a one-line WARNING keeps
+# real gateway failures loud while stopping benign network blips from crying wolf
+# on the ✖ ERROR channel [REH][CSD].
+_RECONNECT_NOISE_PREFIX = "Attempting a reconnect"
+
+
+class ReconnectNoiseFilter(logging.Filter):
+    """Demote discord.py's self-healing gateway-reconnect tracebacks to WARNING."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if (
+            record.name == "discord.client"
+            and record.levelno >= logging.ERROR
+            and isinstance(record.msg, str)
+            and record.msg.startswith(_RECONNECT_NOISE_PREFIX)
+        ):
+            record.levelno = logging.WARNING
+            record.levelname = "WARNING"
+            record.exc_info = None
+            record.exc_text = None
+        return True
+
+
 class JsonlFormatter(logging.Formatter):
     """Structured JSONL formatter with a frozen key set."""
 
@@ -183,6 +210,12 @@ def init_logging() -> None:
             logging.getLogger(name).setLevel(third_party_level)
     except Exception as exc:
         logging.getLogger(__name__).debug(f"third-party log level set failed: {exc}")
+
+    # Quiet discord.py's self-healing reconnect tracebacks. Attached to the logger
+    # (not the sinks) so it runs before LevelIconFilter -> the icon reflects the
+    # downgraded WARNING level. Leave the logger at INFO so genuine gateway events
+    # still surface [REH].
+    logging.getLogger("discord.client").addFilter(ReconnectNoiseFilter())
 
     logging.getLogger(__name__).info("✔ Logging initialized (dual-sink)", extra={"subsys": "logging"})
 
