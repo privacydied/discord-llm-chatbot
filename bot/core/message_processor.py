@@ -13,11 +13,11 @@ import time
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING
 
+import discord
+
 from bot.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    import discord
-
     from .bot import LLMBot
 
 logger = get_logger(__name__)
@@ -27,6 +27,9 @@ _DEDUP_MAX = 1000
 
 # Per-user queue idle timeout (seconds)
 _QUEUE_TIMEOUT = 300
+
+# How long to stop attempting the typing indicator on a channel after a failure
+_TYPING_SUPPRESS_SECONDS = 300.0
 
 
 class MessageProcessor:
@@ -207,9 +210,18 @@ class MessageProcessor:
             ctx = typing_factory()
             await ctx.__aenter__()
             entered = True
-        except (discord.HTTPException, discord.NotFound, discord.Forbidden, asyncio.TimeoutError, ConnectionError):
-            # Catch transient exceptions (network, DNS, HTTP) to suppress typing
-            self._typing_suppressed_until[channel_key] = now + 300.0
+        except (discord.DiscordException, asyncio.TimeoutError, OSError) as exc:
+            # The typing indicator is cosmetic: never let it break message
+            # processing.  Back off on this channel so a sustained outage
+            # doesn't cost an HTTP round-trip on every message.
+            # DiscordException covers HTTPException (and thus NotFound /
+            # Forbidden / DiscordServerError); OSError covers ConnectionError.
+            logger.debug(
+                "typing.suppress | channel=%s reason=%s",
+                channel_key,
+                type(exc).__name__,
+            )
+            self._typing_suppressed_until[channel_key] = now + _TYPING_SUPPRESS_SECONDS
             yield
             return
 
