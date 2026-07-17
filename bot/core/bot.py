@@ -849,36 +849,26 @@ class LLMBot(commands.Bot):
             except (AttributeError, TypeError, discord.HTTPException, discord.NotFound, discord.Forbidden):
                 is_command = False
             if not is_command and getattr(message, "content", "").strip():
+                # No pre-filter here: MemoryCurator.curate_inferred_candidate owns the
+                # raw-text policy (too_short / sensitive / internal_noise / denylist,
+                # durability classification, then computed importance+confidence against
+                # min_importance).  Gating here as well is what broke ingestion: the
+                # scored gate was handed unscored text, so importance defaulted to 0.0
+                # and every message was denied "below_threshold".  Let the curator decide.
                 with suppress(Exception):
-                    from bot.memory.gates import MemoryIngestionContext, should_auto_store_memory
-
-                    ingestion_ctx = MemoryIngestionContext(
-                        source_user_id=str(message.author.id),
-                        source_channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
-                        source_guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
-                        source_message_id=str(message.id),
-                        is_explicit_command=False,
-                        guild_only=bool(getattr(message, "guild", None)),
-                        raw_text=message.content,
-                    )
-                    decision = should_auto_store_memory(
-                        {"content": message.content},
-                        context=ingestion_ctx,
-                    )
-                    if decision.allowed:
-                        self._track_background_task(
-                            asyncio.create_task(
-                                enqueue_inferred_memory(
-                                    user_id=str(message.author.id),
-                                    text=message.content,
-                                    guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
-                                    channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
-                                    thread_id=str(message.channel.id) if isinstance(message.channel, discord.Thread) else None,
-                                    source_message_id=str(message.id),
-                                    metadata={"source": "bot_message_pipeline"},
-                                ),
+                    self._track_background_task(
+                        asyncio.create_task(
+                            enqueue_inferred_memory(
+                                user_id=str(message.author.id),
+                                text=message.content,
+                                guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
+                                channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
+                                thread_id=str(message.channel.id) if isinstance(message.channel, discord.Thread) else None,
+                                source_message_id=str(message.id),
+                                metadata={"source": "bot_message_pipeline"},
                             ),
-                        )
+                        ),
+                    )
 
             # Demoted from .info() -- pure per-message tracing breadcrumb, fires on every
             # single message the bot sees; dispatch:pre/attempt/ok already cover the
