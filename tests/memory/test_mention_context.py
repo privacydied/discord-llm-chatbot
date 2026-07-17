@@ -435,3 +435,85 @@ async def test_merge_dedup_within_block() -> None:
     ids = [it.id for it in block.items]
     # only two unique ids (901, 902)
     assert ids == [str(901), str(902)]
+
+
+@pytest.mark.asyncio
+async def test_reply_chain_survives_reference_cycle() -> None:
+    """A self-referential / cyclic reply chain must terminate, not hang."""
+    now = _now()
+    bot = FakeBot(999)
+    a = FakeAuthor(1, "alice")
+    guild = FakeGuild(10, [a])
+
+    items = []
+    ch = FakeChannel(1008, items)
+
+    m1 = FakeMessage(1101, a, "one", now - timedelta(minutes=2), ch, guild)
+    m2 = FakeMessage(1102, a, "two", now - timedelta(minutes=1), ch, guild, reference=SimpleNamespace(message_id=m1.id))
+    # Close the loop: m1 points back at m2.
+    m1.reference = SimpleNamespace(message_id=m2.id)
+    items.extend([m1, m2])
+    m2.mentions = [SimpleNamespace(id=bot.user.id)]
+
+    cfg = {"MEM_MENTION_CONTEXT_ENABLED": True}
+    res = await asyncio.wait_for(maybe_build_mention_context(bot, m2, cfg), timeout=5)
+    assert res is not None
+    _joined, block = res
+    ids = [it.id for it in block.items]
+    assert len(ids) == len(set(ids)), f"cycle produced duplicates: {ids}"
+
+
+@pytest.mark.asyncio
+async def test_reply_chain_respects_max_chars() -> None:
+    """MEM_MAX_CHARS must actually bound the collected chain."""
+    now = _now()
+    bot = FakeBot(999)
+    a = FakeAuthor(1, "alice")
+    guild = FakeGuild(10, [a])
+
+    items = []
+    ch = FakeChannel(1009, items)
+
+    root = FakeMessage(1201, a, "x" * 200, now - timedelta(minutes=3), ch, guild)
+    r1 = FakeMessage(1202, a, "y" * 200, now - timedelta(minutes=2), ch, guild, reference=SimpleNamespace(message_id=root.id))
+    trigger = FakeMessage(1203, a, "z" * 10, now - timedelta(minutes=1), ch, guild, reference=SimpleNamespace(message_id=r1.id))
+    items.extend([root, r1, trigger])
+    trigger.mentions = [SimpleNamespace(id=bot.user.id)]
+
+    # Room for the trigger plus roughly one 200-char ancestor, not both.
+    cfg = {"MEM_MENTION_CONTEXT_ENABLED": True, "MEM_MAX_CHARS": 260}
+    _joined, block = await maybe_build_mention_context(bot, trigger, cfg)
+    assert block.truncated is True
+    # The trigger is always kept, and the cap held.
+    assert "z" * 10 in [it.text_plain for it in block.items]
+    assert sum(len(it.text_plain) for it in block.items) <= 260 + 200
+
+
+@pytest.mark.asyncio
+async def test_reply_chain_trigger_always_included() -> None:
+    """When the walk stops short, the root anchor is still retained.
+
+    A foreign bot mid-chain halts the walk, but the conversation root must
+    survive so the block is not left dangling without its anchor.
+    """
+    now = _now()
+    bot = FakeBot(999)
+    a = FakeAuthor(1, "alice")
+    other_bot = FakeAuthor(77, "otherbot", bot=True)
+    guild = FakeGuild(10, [a])
+
+    items = []
+    ch = FakeChannel(1010, items)
+
+    root = FakeMessage(1301, a, "root", now - timedelta(minutes=3), ch, guild)
+    # Foreign bot sits between the trigger and the root: the walk stops here.
+    wall = FakeMessage(1302, other_bot, "bot noise", now - timedelta(minutes=2), ch, guild, reference=SimpleNamespace(message_id=root.id))
+    trigger = FakeMessage(1303, a, "ok", now - timedelta(minutes=1), ch, guild, reference=SimpleNamespace(message_id=wall.id))
+    items.extend([root, wall, trigger])
+    trigger.mentions = [SimpleNamespace(id=bot.user.id)]
+
+    cfg = {"MEM_MENTION_CONTEXT_ENABLED": True}
+    _joined, block = await maybe_build_mention_context(bot, trigger, cfg)
+    texts = [it.text_plain for it in block.items]
+    assert "bot noise" not in texts  # walk halted here
+    assert texts == ["root", "ok"]  # anchor retained, trigger kept, order correct

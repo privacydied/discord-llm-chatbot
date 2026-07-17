@@ -284,6 +284,89 @@ async def _collect_thread_context(
     return uniq, truncated
 
 
+async def _reply_parent_of(
+    msg: discord.Message,
+    channel: discord.abc.Messageable,
+    timeout_s: float,
+) -> discord.Message | None:
+    """Resolve the message `msg` is replying to, or None if there is none."""
+    ref = getattr(msg, "reference", None)
+    if ref is None:
+        return None
+    resolved = getattr(ref, "resolved", None)
+    if isinstance(resolved, discord.Message):
+        return resolved
+    # `resolved` may be a DeletedReferencedMessage (or absent): fall back to a fetch.
+    rid = getattr(ref, "message_id", None)
+    if rid is None:
+        return None
+    return await _fetch_message_safely(channel, rid, timeout_s)
+
+
+def _admit_to_chain(
+    parent: discord.Message,
+    *,
+    anchor_id: int | None,
+    bot_user_id: int,
+    max_age_min: int,
+    now: datetime,
+) -> bool:
+    """Whether `parent` may join the reply chain.
+
+    The anchor is the conversation root and is exempt from the age cap
+    (mirrors the allowance in _collect_thread_context).
+    """
+    if not _include_message(parent, bot_user_id):
+        return False
+    if anchor_id is not None and getattr(parent, "id", None) == anchor_id:
+        return True
+    return _within_age(parent, max_age_min, now)
+
+
+async def _walk_reply_chain(
+    bot: discord.Client,
+    message: discord.Message,
+    anchor_id: int | None,
+    *,
+    max_msgs: int,
+    max_chars: int,
+    max_age_min: int,
+    timeout_s: float,
+) -> tuple[list[discord.Message], set[int | None], bool]:
+    """Walk `reference` links from the trigger toward the root, newest first.
+
+    Returns (chain, seen_ids, truncated).  Best-effort: on any fetch error the
+    walk stops and whatever it reached so far is returned.
+    """
+    now = _now_utc()
+    bot_user_id = int(getattr(bot.user, "id", 0) or 0)
+    chain: list[discord.Message] = [message]
+    seen: set[int | None] = {getattr(message, "id", None)}
+    total_chars = len(message.content or "")
+    truncated = False
+    cur = message
+
+    try:
+        while True:
+            parent = await _reply_parent_of(cur, message.channel, timeout_s)
+            if parent is None or getattr(parent, "id", None) in seen:
+                break  # end of chain, unresolvable, or a reference cycle
+            if not _admit_to_chain(parent, anchor_id=anchor_id, bot_user_id=bot_user_id, max_age_min=max_age_min, now=now):
+                break
+            txt = parent.content or ""
+            if len(chain) + 1 > max_msgs or total_chars + len(txt) > max_chars:
+                truncated = True
+                break
+            seen.add(getattr(parent, "id", None))
+            chain.append(parent)
+            total_chars += len(txt)
+            cur = parent
+    except (AttributeError, TypeError, ValueError, asyncio.TimeoutError, asyncio.CancelledError, discord.NotFound, discord.Forbidden, discord.HTTPException):
+        pass  # keep whatever the walk reached
+
+    return chain, seen, truncated
+
+
 async def _collect_reply_chain(
     bot: discord.Client,
     message: discord.Message,
@@ -295,55 +378,29 @@ async def _collect_reply_chain(
     timeout_s: float,
 ) -> tuple[list[discord.Message], bool]:
     """Collect a bounded tail of the reply chain nearest to the triggering message.
-    Returns (messages, truncated) where messages are in chronological order (oldest first).
+
+    Walks `reference` links from the trigger toward the chain root, so replies
+    on sibling branches are never pulled in.  The trigger is always included;
+    the anchor (chain root) is always included and bypasses the age cap.
+    Returns (messages, truncated) in chronological order (oldest first).
     """
-    now = _now_utc()
-    collected: list[discord.Message] = []
-    total_chars = 0
-    truncated = False
+    anchor_id = getattr(anchor, "id", None)
+    chain, seen, truncated = await _walk_reply_chain(
+        bot,
+        message,
+        anchor_id,
+        max_msgs=max_msgs,
+        max_chars=max_chars,
+        max_age_min=max_age_min,
+        timeout_s=timeout_s,
+    )
 
-    try:
-        parent = anchor
-        if parent is None:
-            ref = getattr(message, "reference", None)
-            if ref:
-                resolved = getattr(ref, "resolved", None)
-                if isinstance(resolved, discord.Message):
-                    parent = resolved
-                else:
-                    ref_id = getattr(ref, "message_id", None)
-                    if ref_id:
-                        parent = await _fetch_message_safely(message.channel, ref_id, timeout_s)
+    # The root anchors the conversation: keep it even if the walk stopped short.
+    if anchor is not None and anchor_id not in seen:
+        chain.append(anchor)
 
-        if parent is not None:
-            collected.append(parent)
-            total_chars += len(parent.content or "")
-
-        cur = message
-        while getattr(cur, "reference", None) is not None:
-            if len(collected) >= max_msgs:
-                truncated = True
-                break
-            ref = cur.reference
-            rid = getattr(ref, "message_id", None)
-            if rid is None:
-                break
-            next_msg = await _fetch_message_safely(message.channel, rid, timeout_s)
-            if not next_msg:
-                break
-            if not _include_message(next_msg, int(getattr(bot.user, "id", 0) or 0)):
-                break
-            if not _within_age(next_msg, max_age_min, now):
-                break
-            collected.append(next_msg)
-            total_chars += len(next_msg.content or "")
-            cur = next_msg
-    except (AttributeError, TypeError, ValueError, asyncio.TimeoutError, asyncio.CancelledError, discord.NotFound, discord.Forbidden, discord.HTTPException):
-        # Best-effort fallback
-        pass
-
-    collected.reverse()  # Reverse to chronological order
-    return collected, truncated
+    chain.reverse()  # oldest first
+    return chain, truncated
 
 
 def _package(
@@ -475,7 +532,7 @@ async def maybe_build_mention_context(
                 timeout_s=timeout_s,
             )
         else:
-            messages, _truncated = await _collect_reply_chain(
+            messages, truncated = await _collect_reply_chain(
                 bot,
                 message,
                 anchor,
@@ -520,7 +577,9 @@ async def maybe_build_mention_context(
         return None
 
     block = _package(bot, message, case, anchor, messages)
-    block.truncated = bool(block.truncated or (len(messages) >= tail_k))
+    # Honour the collector's flag: it knows about the char/age caps, which a
+    # bare count check cannot see.
+    block.truncated = bool(block.truncated or truncated or (len(messages) >= tail_k))
 
     # Telemetry
     try:
