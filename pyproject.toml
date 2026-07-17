@@ -80,7 +80,16 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["F", "W"]
+# TC004/TC005/TC010 only -- NOT the whole flake8-type-checking family.
+# TC004 catches a name imported under `if TYPE_CHECKING:` but dereferenced at
+# runtime.  With `from __future__ import annotations` this is invisible until
+# the line executes, and it bites hardest in `except` clauses: Python evaluates
+# the whole except-tuple before matching, so a stray TYPE_CHECKING import there
+# turns *every* exception the handler claims to catch into a NameError, on the
+# error path, in production.  Fixed three such landmines; keeping the rule on.
+# TC001/TC002/TC003 are deliberately excluded: they push imports *into*
+# TYPE_CHECKING blocks, which is the pattern that caused those bugs.
+select = ["F", "W", "TC004", "TC005", "TC010"]
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]

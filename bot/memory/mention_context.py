@@ -9,19 +9,14 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import discord
 
 from ..utils.logging import get_logger
 
-if TYPE_CHECKING:
-    pass
 
 logger = get_logger(__name__)
-
-if TYPE_CHECKING:
-    pass
 
 
 # Case classification constants

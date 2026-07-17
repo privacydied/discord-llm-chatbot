@@ -10,10 +10,11 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any, NamedTuple
 
+import discord
+
 from bot.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    import discord
     from discord.ext.commands import Bot as DiscordBot
 
 logger = get_logger(__name__)

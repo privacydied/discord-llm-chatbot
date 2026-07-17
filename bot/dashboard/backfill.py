@@ -20,10 +20,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import discord
+
 from bot.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    import discord
     from discord.ext.commands import Bot as DiscordBot
 
     from .audit_store import AuditStore

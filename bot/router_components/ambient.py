@@ -12,12 +12,10 @@ import logging
 import random
 import re
 import time
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
 from bot.utils.bounded_lru import BoundedDict
 
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger("bot.ambient")
 
