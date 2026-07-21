@@ -551,7 +551,17 @@ Server Context: {server_context}"""
         def _normalize_nonstream_response(response_obj, used_model: str) -> dict[str, Any]:
             try:
                 if not getattr(response_obj, "choices", None):
-                    msg_0 = "No choices returned in OpenAI response"
+                    # OpenRouter (esp. free models) returns HTTP 200 with an
+                    # embedded error object and no choices when rate-limited
+                    # upstream — surface it so logs show the real cause and the
+                    # retry classifier can see status codes like 429. [REH]
+                    embedded = getattr(response_obj, "error", None)
+                    if embedded is None:
+                        extra = getattr(response_obj, "model_extra", None)
+                        if isinstance(extra, dict):
+                            embedded = extra.get("error")
+                    detail = f" (provider error: {str(embedded)[:300]})" if embedded else ""
+                    msg_0 = f"No choices returned in OpenAI response{detail}"
                     raise APIError(msg_0)
                 first = response_obj.choices[0]
                 content = getattr(getattr(first, "message", None), "content", "") or ""
