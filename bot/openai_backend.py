@@ -74,6 +74,22 @@ else:
     OpenAIAuthenticationError = OpenAIRateLimitError = OpenAIAPIError = Exception
 
 
+def _embedded_provider_error_detail(response_obj: Any) -> str:
+    """Extract the provider error OpenRouter embeds in 200-responses. [REH]
+
+    Free models return HTTP 200 with an `error` object and no usable choices
+    when rate-limited/saturated upstream. Returns a ' (provider error: ...)'
+    suffix for exception messages (so logs show the real cause and embedded
+    status codes like 429/502 feed the retry classifier), or '' if absent.
+    """
+    embedded = getattr(response_obj, "error", None)
+    if embedded is None:
+        extra = getattr(response_obj, "model_extra", None)
+        if isinstance(extra, dict):
+            embedded = extra.get("error")
+    return f" (provider error: {str(embedded)[:300]})" if embedded else ""
+
+
 def _require_openai() -> Any:
     if _openai is None:
         msg = "OpenAI backend is unavailable because the 'openai' package is not installed"
@@ -555,13 +571,7 @@ Server Context: {server_context}"""
                     # embedded error object and no choices when rate-limited
                     # upstream — surface it so logs show the real cause and the
                     # retry classifier can see status codes like 429. [REH]
-                    embedded = getattr(response_obj, "error", None)
-                    if embedded is None:
-                        extra = getattr(response_obj, "model_extra", None)
-                        if isinstance(extra, dict):
-                            embedded = extra.get("error")
-                    detail = f" (provider error: {str(embedded)[:300]})" if embedded else ""
-                    msg_0 = f"No choices returned in OpenAI response{detail}"
+                    msg_0 = f"No choices returned in OpenAI response{_embedded_provider_error_detail(response_obj)}"
                     raise APIError(msg_0)
                 first = response_obj.choices[0]
                 content = getattr(getattr(first, "message", None), "content", "") or ""
@@ -1110,7 +1120,11 @@ async def _generate_vl_response_with_retry(
                         msg_1 = "VL API returned None response"
                         raise APIError(msg_1)
                     if not (hasattr(response, "choices") and response.choices and hasattr(response.choices[0], "message") and response.choices[0].message):
-                        msg_1 = "Invalid VL API response structure"
+                        # Surface the embedded provider error (OpenRouter returns
+                        # HTTP 200 + error body when free VL models are saturated)
+                        # so logs show the cause and embedded status codes like
+                        # 429/502 make the failure correctly retryable. [REH]
+                        msg_1 = f"Invalid VL API response structure{_embedded_provider_error_detail(response)}"
                         raise APIError(msg_1)
 
                     logger.debug("[VL] ✅ Received response from API")
