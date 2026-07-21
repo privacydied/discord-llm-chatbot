@@ -131,6 +131,7 @@ class TestEmbeddingInterface:
 
     async def test_sentence_transformer_mock(self) -> None:
         """Test sentence transformer with mocking."""
+        pytest.importorskip("sentence_transformers")  # optional since fastembed became primary [PA]
         with patch("sentence_transformers.SentenceTransformer") as mock_st:
             # Mock the model
             mock_model = MagicMock()
@@ -153,6 +154,7 @@ class TestEmbeddingInterface:
 
     async def test_embedding_normalization(self) -> None:
         """Test L2 normalization of embeddings."""
+        pytest.importorskip("sentence_transformers")  # optional since fastembed became primary [PA]
         with patch("sentence_transformers.SentenceTransformer") as mock_st:
             # Create unnormalized embeddings
             unnormalized = np.array([[3.0, 4.0, 0.0], [1.0, 1.0, 1.0]], dtype=np.float32)
@@ -192,9 +194,16 @@ class TestEmbeddingInterface:
         assert seen["args"] == ()
         assert seen["kwargs"] == {}
 
-    def test_embedding_factory(self) -> None:
+    def test_embedding_factory(self, monkeypatch) -> None:
         """Test embedding model factory function."""
-        # Test sentence-transformers creation
+        from bot.rag.fastembed_embedding import FastEmbedEmbedding
+
+        # Default: torch-free fastembed backend preferred when available [PA]
+        model = create_embedding_model("sentence-transformers")
+        assert isinstance(model, (FastEmbedEmbedding, SentenceTransformerEmbedding))
+
+        # Explicit opt-out returns the torch-backed implementation
+        monkeypatch.setenv("RAG_EMBEDDING_BACKEND", "sentence-transformers")
         model = create_embedding_model("sentence-transformers")
         assert isinstance(model, SentenceTransformerEmbedding)
 

@@ -428,6 +428,26 @@ class OpenAIEmbedding(EmbeddingInterface):
         return self.embedding_dim
 
 
+def _resolve_local_backend(model_type: str, model_name: str | None) -> EmbeddingInterface | None:
+    """Prefer the torch-free fastembed backend for local embedding models. [PA]
+
+    Returns a FastEmbedEmbedding when fastembed is installed and supports the
+    requested model; otherwise None so the caller falls back to
+    SentenceTransformerEmbedding (which pulls in torch). Opt out entirely with
+    RAG_EMBEDDING_BACKEND=sentence-transformers.
+    """
+    preferred = os.getenv("RAG_EMBEDDING_BACKEND", "fastembed").strip().lower()
+    if model_type != "fastembed" and preferred != "fastembed":
+        return None
+    from bot.rag.fastembed_embedding import FastEmbedEmbedding, fastembed_supports
+
+    name = model_name or "sentence-transformers/all-MiniLM-L6-v2"
+    if not fastembed_supports(name):
+        logger.warning(f"[RAG] fastembed unavailable or lacks {name}; falling back to sentence-transformers (torch)")
+        return None
+    return FastEmbedEmbedding(model_name=name)
+
+
 def create_embedding_model(model_type: str = "sentence-transformers", **kwargs) -> EmbeddingInterface | None:
     """Factory function to create embedding models with graceful fallback.
 
@@ -444,7 +464,10 @@ def create_embedding_model(model_type: str = "sentence-transformers", **kwargs) 
     """
     global _rag_misconfig_warned, _rag_legacy_mode
 
-    if model_type == "sentence-transformers":
+    if model_type in ("sentence-transformers", "fastembed"):
+        backend = _resolve_local_backend(model_type, kwargs.get("model_name"))
+        if backend is not None:
+            return backend
         return SentenceTransformerEmbedding(**kwargs)
     if model_type == "openai":
         return OpenAIEmbedding(**kwargs)

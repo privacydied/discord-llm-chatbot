@@ -3817,12 +3817,14 @@ class Router:
                                 except Exception as exc:
                                     self.logger.debug(f"stt.ok logging failed: {exc}")
                                 self.logger.info(f"🎯 Route: stt_from_x_video | msg_id={message.id}")
+                                # Stitched context: transcript (audio) + VL still (visual) [PA]
+                                visual_notes = await self._maybe_video_still_notes(stt_res, message)
                                 with suppress(Exception):
                                     self.logger.info(
                                         "route.final",
                                         extra={
                                             "event": "route.final",
-                                            "detail": {"kind": "video"},
+                                            "detail": {"kind": "video", "visual_notes": bool(visual_notes)},
                                             "msg_id": message.id,
                                         },
                                     )
@@ -3830,6 +3832,7 @@ class Router:
                                     content=formatted,
                                     context=context_str,
                                     message=message,
+                                    perception_notes=visual_notes,
                                 )
                             except TimeoutError:
                                 self._emit_stt_fail_event(
@@ -3850,10 +3853,16 @@ class Router:
                                     error=True,
                                 )
                             except Exception as e:
+                                from bot.exceptions import NoAudioStreamError
+
                                 reason = "extract_error"
+                                _is_no_audio = isinstance(e, NoAudioStreamError)
                                 try:
                                     es = str(e).lower()
-                                    if "403" in es or "forbidden" in es:
+                                    _is_no_audio = _is_no_audio or "no audio stream" in es
+                                    if _is_no_audio:
+                                        reason = "no_audio"
+                                    elif "403" in es or "forbidden" in es:
                                         reason = "403"
                                     elif "format" in es or "no video formats" in es or "no such format" in es:
                                         reason = "no_formats"
@@ -3863,6 +3872,24 @@ class Router:
                                         reason = "whisper_error"
                                 except Exception as exc:
                                     self.logger.debug(f"error classification failed: {exc}")
+                                if _is_no_audio:
+                                    # Silent video: nothing to transcribe, but the still
+                                    # frame can still provide visual context. [REH][IV]
+                                    self.logger.info(
+                                        "x.video.no_audio",
+                                        extra={"event": "x.video.no_audio", "msg_id": message.id},
+                                    )
+                                    silent_notes = await self._silent_video_still_notes(e, message)
+                                    if silent_notes:
+                                        return await self._flow_process_text(
+                                            content=("The user shared a video that has no audio track (silent video). Respond based on the visual context from its still frame."),
+                                            context=context_str,
+                                            message=message,
+                                            perception_notes=silent_notes,
+                                        )
+                                    return BotAction(
+                                        content=("🔇 This video has no audio track, so there's nothing for me to transcribe."),
+                                    )
                                 with suppress(Exception):
                                     self.logger.info(
                                         "x.video.url_fail",
@@ -3999,10 +4026,19 @@ class Router:
                                 "detail": {"seconds": total_budget},
                             },
                         )
-                    result_action = await asyncio.wait_for(
-                        self._process_multimodal_message_internal(message, context_str),
-                        timeout=total_budget,
-                    )
+                    # Arm the ambient deadline so downstream stages (e.g. the text
+                    # fallback ladder) clamp their sub-budgets to what's actually
+                    # left of this wait_for, instead of overrunning it. [PA][REH]
+                    from bot.time_budget import clear_deadline, set_deadline
+
+                    _deadline_token = set_deadline(total_budget)
+                    try:
+                        result_action = await asyncio.wait_for(
+                            self._process_multimodal_message_internal(message, context_str),
+                            timeout=total_budget,
+                        )
+                    finally:
+                        clear_deadline(_deadline_token)
                 except TimeoutError:
                     # Fail-fast with user-friendly message; typing context will exit afterwards
                     self.logger.exception(f"multimodal.total_timeout | msg_id={message.id} budget={total_budget}s")
@@ -7245,6 +7281,65 @@ class Router:
         except Exception:
             # Fallback hard cut
             return (text or "")[:max_chars].rstrip() + ("…" if len(text or "") > max_chars else "")
+
+    async def _maybe_video_still_notes(self, stt_res: Any, message: Message) -> str | None:
+        """VL-describe a still from a just-transcribed video for stitched context. [PA][REH]
+
+        Best-effort: returns perception notes ("what the video looks like") to
+        accompany the STT transcript ("what the video sounds like"), or None on
+        any failure/config-off — never blocks or fails the STT flow.
+        """
+        try:
+            if not self.config.get("VIDEO_STILL_VL_ENABLED", True):
+                return None
+            meta = (stt_res or {}).get("metadata") or {}
+            media_path = meta.get("media_path")
+            if not media_path or not Path(media_path).exists():
+                return None
+            from bot.video_frame import describe_video_still
+
+            duration = float(meta.get("original_duration_s") or 0.0) or None
+            notes = await describe_video_still(Path(media_path), duration_s=duration)
+            if not notes:
+                return None
+            self.logger.info(
+                "video.still.vl_ok",
+                extra={"event": "video.still.vl_ok", "msg_id": message.id, "detail": {"chars": len(notes)}},
+            )
+            return f"Video still frame (visual context): {notes}"
+        except Exception as exc:
+            self.logger.debug(f"video still perception skipped: {exc}")
+            return None
+
+    async def _silent_video_still_notes(self, error: Exception, message: Message) -> str | None:
+        """Visual context for a video with no audio track. [REH]
+
+        Recovers the cached media path from the NoAudioStreamError (walking the
+        __cause__ chain in case of wrapping) and runs the still-frame VL flow.
+        """
+        try:
+            if not self.config.get("VIDEO_STILL_VL_ENABLED", True):
+                return None
+            media_path = None
+            err: BaseException | None = error
+            while err is not None and media_path is None:
+                media_path = getattr(err, "media_path", None)
+                err = err.__cause__
+            if not media_path or not Path(media_path).exists():
+                return None
+            from bot.video_frame import describe_video_still
+
+            notes = await describe_video_still(Path(media_path))
+            if not notes:
+                return None
+            self.logger.info(
+                "video.still.vl_ok",
+                extra={"event": "video.still.vl_ok", "msg_id": message.id, "detail": {"chars": len(notes), "silent": True}},
+            )
+            return f"Video still frame (visual context; the video has NO audio): {notes}"
+        except Exception as exc:
+            self.logger.debug(f"silent video still perception skipped: {exc}")
+            return None
 
     async def _run_perception_notes(self, message: Message, text_instruction: str) -> tuple[str | None, str | None]:
         """Run silent perception on reply-image context and return sanitized/capped VL notes.

@@ -129,7 +129,9 @@ def _file_digest(p: Path) -> str | None:
     try:
         data = p.read_bytes()
         return hashlib.sha256(data).hexdigest()
-    except (OSError, IOError):
+    except (OSError, IOError, TypeError):
+        # TypeError: read_bytes() returned non-bytes (e.g. a mocked/duck-typed
+        # Path in tests) -- treat as "no digest" rather than crash reload. [REH]
         return None
 
 

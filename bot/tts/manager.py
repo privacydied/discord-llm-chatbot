@@ -12,6 +12,7 @@ import contextlib
 import logging
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -68,6 +69,7 @@ class TTSManager:
         # Internal state
         self.kokoro: KokoroDirect | None = None
         self._warmup_status: str = "not_started"
+        self._last_used: float = time.monotonic()
 
         # Best‑effort tokenizer registry init (safe if patched in tests)
         try:
@@ -263,6 +265,26 @@ class TTSManager:
             extra={"subsys": "tts", "event": "manager.available"},
         )
 
+    def unload_if_idle(self, idle_seconds: float) -> bool:
+        """Release the Kokoro ONNX session after prolonged idle. [PA]
+
+        The ~310 MB model + session buffers otherwise stay resident forever
+        after the first TTS request. `generate_speech` lazily reloads on next
+        use (a few seconds). In-flight synthesis holds its own reference to
+        the session, so this never breaks active work. Returns True if unloaded.
+        """
+        if idle_seconds <= 0 or self.kokoro is None:
+            return False
+        if time.monotonic() - self._last_used < idle_seconds:
+            return False
+        self.kokoro = None
+        logger.info(
+            "tts.model.unload_idle | idle_s=%.0f",
+            idle_seconds,
+            extra={"subsys": "tts", "event": "tts.model.unload_idle"},
+        )
+        return True
+
     def generate_speech(self, text: str, voice: str | None = None, *, out_path: Path | None = None) -> Path:
         """Generate speech synchronously using KokoroDirect.create.
 
@@ -275,9 +297,14 @@ class TTSManager:
             Path to generated WAV file
 
         """
+        self._last_used = time.monotonic()
         if self.kokoro is None:
             self.load_model()
-        if not self.kokoro:
+        # Local strong reference: idle-TTL unload may null self.kokoro from the
+        # event loop while this runs in a worker thread; the captured ref keeps
+        # the session alive for the duration of this synthesis. [REH][PA]
+        kokoro = self.kokoro
+        if not kokoro:
             msg = "TTS engine not available"
             raise RuntimeError(msg)  # [REH]
 
@@ -303,7 +330,7 @@ class TTSManager:
             f"Generating speech (voice={chosen_voice})",
             extra={"subsys": "tts", "event": "manager.generate"},
         )
-        return self.kokoro.create(text, chosen_voice, out_path=out_path)
+        return kokoro.create(text, chosen_voice, out_path=out_path)
 
 
 # Lazy re-export for KokoroDirect so external modules can still do

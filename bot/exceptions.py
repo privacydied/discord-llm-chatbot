@@ -115,6 +115,15 @@ class InferenceError(BotError):
     """Raised for errors during model inference (text, vision, etc.)."""
 
 
+class NoAudioStreamError(InferenceError):
+    """Raised when media has no audio track to transcribe. [IV]
+
+    Distinct from transient STT failures: retrying can never succeed, so
+    callers should surface a "this video is silent" message instead of a
+    "try again later" one, and skip any transcription fallbacks.
+    """
+
+
 class MemoryError(BotError):
     """Raised for memory subsystem failures."""
 

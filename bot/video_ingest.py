@@ -762,7 +762,12 @@ class VideoIngestionManager:
         except TimeoutError:
             with contextlib.suppress(Exception):
                 proc.kill()
-            logger.exception("stt.fail reason=download_timeout stage=%s", label)
+            # Per-attempt subprocess timeout: WARNING without a traceback and WITHOUT the
+            # pipeline-level stt.fail marker. This generic helper can't know whether the
+            # caller recovers -- the metadata probe falls back to direct media, and the
+            # download stage retries. The authoritative stt.fail is the structured event
+            # the router emits once the whole STT op is genuinely exhausted [REH][CSD].
+            logger.warning("⚠️ subprocess timeout stage=%s after=%.0fs", label, timeout_s)
             msg = f"{label} timed out after {timeout_s:.0f}s"
             raise VideoIngestError(msg)
         if proc.returncode != 0:

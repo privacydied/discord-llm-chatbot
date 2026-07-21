@@ -35,7 +35,7 @@ from typing import (
 import psutil
 
 from .config import load_config
-from .exceptions import InferenceError
+from .exceptions import InferenceError, NoAudioStreamError
 from .stt_module.multimodal_fallback import multimodal_fallback_provider
 from .utils.logging import get_logger
 from .video_ingest import (
@@ -1029,12 +1029,22 @@ async def _ffprobe(path: Path) -> tuple[float, int, int]:
         try:
             info = json.loads(stdout.decode())
             duration = float(info.get("format", {}).get("duration") or 0.0)
-            stream = (info.get("streams") or [{}])[0]
-            sample_rate = int(stream.get("sample_rate") or SAMPLE_RATE)
-            channels = int(stream.get("channels") or 1)
+            streams = info.get("streams") or []
         except Exception as exc:
             msg = f"Failed to parse ffprobe output: {exc}"
             raise InferenceError(msg) from exc
+        if not streams:
+            # -select_streams a:0 returned nothing: the media has NO audio track
+            # (e.g. a silent Twitter video). Previously this silently fell back
+            # to default sr/channels and let ffmpeg fail later with the cryptic
+            # "Output file does not contain any stream". [IV][REH]
+            msg = f"No audio stream in media: {path.name}"
+            err = NoAudioStreamError(msg)
+            err.media_path = str(path)  # lets the router still-frame the silent video
+            raise err
+        stream = streams[0]
+        sample_rate = int(stream.get("sample_rate") or SAMPLE_RATE)
+        channels = int(stream.get("channels") or 1)
         return duration, sample_rate, channels
 
     # Fallback: use ffmpeg -i to probe (parses stderr output) [REH]
@@ -1044,6 +1054,13 @@ async def _ffprobe(path: Path) -> tuple[float, int, int]:
     proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     _, stderr = await proc.communicate()
     stderr_text = stderr.decode(errors="ignore")
+
+    # No "Audio:" stream line in the probe output → silent media. [IV][REH]
+    if "Audio:" not in stderr_text and "Stream" in stderr_text:
+        msg = f"No audio stream in media: {path.name}"
+        err = NoAudioStreamError(msg)
+        err.media_path = str(path)  # lets the router still-frame the silent video
+        raise err
 
     # Parse duration from "Duration: HH:MM:SS.ms" or "Duration: N/A"
     duration = 0.0
@@ -2430,6 +2447,12 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False, language: s
                 transcript_text=transcript.text,
             )
 
+            # Expose the cached media file so the router can extract a still
+            # frame for VL-enhanced (audio + visual) context. Best-effort. [PA]
+            with contextlib.suppress(Exception):
+                if isinstance(result, dict) and download.raw_path:
+                    result.setdefault("metadata", {})["media_path"] = str(download.raw_path)
+
             return await job.finish_success(result)
     except RAMGuardExceeded as exc:
         await _stt_pipeline()["abort_and_finish_failure"](
@@ -2480,6 +2503,13 @@ async def _run_whisper_with_fallback(
         # Check if multimodal fallback should be attempted
         config = load_config()
         fallback_enabled = config.get("STT_MULTIMODAL_FALLBACK_ENABLED", False)
+
+        if isinstance(primary_error, NoAudioStreamError):
+            # Silent media is not a transient failure: no fallback can ever
+            # transcribe it, and wrapping it in a "temporarily unavailable"
+            # message would tell the user to retry something unretryable. [REH]
+            logger.info("[STT] Media has no audio stream; re-raising as-is")
+            raise
 
         if not fallback_enabled:
             logger.info("[STT] Multimodal fallback is disabled, re-raising primary error")

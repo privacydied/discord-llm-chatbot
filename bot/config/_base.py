@@ -258,6 +258,9 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         # RESOURCE / MEMORY MANAGEMENT — health-check RSS warning + reclaim
         "MEMORY_WARNING_THRESHOLD": _safe_int(env_getter("MEMORY_WARNING_THRESHOLD", None), "1200", "MEMORY_WARNING_THRESHOLD"),
         "MEMORY_EVICT_STT_CACHE_ON_WARNING": _parse_bool_str(_clean_env_value(env_getter("MEMORY_EVICT_STT_CACHE_ON_WARNING", None)), True),
+        # Unload STT/TTS model weights after this many seconds of no use (0 disables).
+        # Reload on next use costs a few seconds; idle RSS drops by hundreds of MB. [PA]
+        "MODEL_IDLE_UNLOAD_SECONDS": _safe_int(env_getter("MODEL_IDLE_UNLOAD_SECONDS", None), "900", "MODEL_IDLE_UNLOAD_SECONDS"),
         # SILENCE GATE - SPEAK ONLY WHEN SPOKEN TO
         "BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO": _parse_bool_str(_clean_env_value(env_getter("BOT_SPEAKS_ONLY_WHEN_SPOKEN_TO", None)), True),
         "REQUIRE_MENTION_IN_GUILDS": _parse_bool_str(_clean_env_value(env_getter("REQUIRE_MENTION_IN_GUILDS", None)), True),
@@ -601,6 +604,9 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "STREAMING_ENABLE_MEDIA": _parse_bool_str(_clean_env_value(env_getter("STREAMING_ENABLE_MEDIA", None)), True),
         "STT_ENABLE": _parse_bool_str(_clean_env_value(env_getter("STT_ENABLE", None)), True),
         "VISION_ENABLED": _ve,
+        # Stitched video context: extract a still frame from transcribed videos
+        # and describe it via the VL flow (audio + visual context). [PA]
+        "VIDEO_STILL_VL_ENABLED": _parse_bool_str(_clean_env_value(env_getter("VIDEO_STILL_VL_ENABLED", None)), True),
         "VISION_T2I_ENABLED": _t2i,
         "VISION_REPLY_IMAGE_FORCE_VL": _parse_bool_str(_clean_env_value(env_getter("VISION_REPLY_IMAGE_FORCE_VL", None)), True),
         "VISION_REPLY_IMAGE_SILENT": _parse_bool_str(_clean_env_value(env_getter("VISION_REPLY_IMAGE_SILENT", None)), True),

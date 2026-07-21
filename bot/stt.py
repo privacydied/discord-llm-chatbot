@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 import gc
 import os
+import sys
 import threading
+import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from functools import lru_cache
@@ -50,10 +52,17 @@ with _THREAD_LOCK:
 
 
 def _preload_cpu_threads() -> None:
-    """Apply torch.set_num_threads once torch is available."""
-    try:
-        import torch
+    """Apply torch.set_num_threads IF torch is already in the process. [PA]
 
+    faster-whisper runs on ctranslate2 and does not need torch at all; importing
+    torch here just to set a thread count used to pin ~300-400 MB of RSS for the
+    process lifetime. Only touch it when some other subsystem already paid that
+    cost (checked via sys.modules — never triggers the import ourselves).
+    """
+    torch = sys.modules.get("torch")
+    if torch is None:
+        return
+    try:
         torch.set_num_threads(_CPU_THREADS)
     except Exception as exc:
         logger.debug(f"torch thread setting failed: {exc}")
@@ -114,11 +123,16 @@ def _resolve_spec(declaration: str, default_compute: str) -> ModelSpec:
 
 
 def _device_for_runtime() -> str:
-    # Even though optimised for CPU, keep CUDA detection for environments that may supply GPUs.
-    try:
-        import torch
+    """CUDA detection via ctranslate2 (the actual inference runtime). [PA]
 
-        if torch.cuda.is_available():
+    Previously probed torch.cuda, which imported the full torch runtime
+    (~300-400 MB RSS) even on CPU-only hosts. ctranslate2 is already a hard
+    dependency of faster-whisper, so this adds nothing to the footprint.
+    """
+    try:
+        import ctranslate2
+
+        if ctranslate2.get_cuda_device_count() > 0:
             return "cuda"
     except Exception as exc:
         logger.debug(f"CUDA detection failed: {exc}")
@@ -164,6 +178,7 @@ class STTManager:
         self._default_spec = _resolve_spec(_DEFAULT_MODEL_DECL, _COMPUTE_TYPE_DECL)
         self._available = False
         self._init_thread: threading.Thread | None = None
+        self._last_used = time.monotonic()
         self._warm_default_async()
 
     # ------------------------------------------------------------------ Utils
@@ -232,6 +247,7 @@ class STTManager:
     def _load_model(self, spec: ModelSpec) -> WhisperModel:
         from faster_whisper import WhisperModel
 
+        self._last_used = time.monotonic()
         lock = self._get_lock_for(spec)
         with lock:
             model = self._model_cache.get(spec)
@@ -319,6 +335,38 @@ class STTManager:
                 "stt.model_cache.evict_idle | count=%s",
                 evicted,
                 extra={"event": "stt.model_cache.evict_idle", "subsys": "stt"},
+            )
+        return evicted
+
+    def evict_if_idle(self, idle_seconds: float) -> int:
+        """Drop ALL cached models — including the default — after prolonged idle. [PA]
+
+        Unlike `evict_idle_models` (memory-pressure path, spares the default
+        spec), this is the idle-TTL path: when no STT request has touched the
+        manager for `idle_seconds`, every resident model's weights are released.
+        The next request lazily reloads via `_load_model` at the cost of a few
+        seconds. An in-flight transcription keeps its own strong reference to
+        the model object, so eviction here never invalidates active work — the
+        memory is simply reclaimed once that call finishes. Returns count evicted.
+        """
+        if idle_seconds <= 0 or not self._model_cache:
+            return 0
+        if time.monotonic() - self._last_used < idle_seconds:
+            return 0
+        evicted = 0
+        for spec in list(self._model_cache):
+            with self._get_lock_for(spec):
+                model = self._model_cache.pop(spec, None)
+            if model is not None:
+                del model
+                evicted += 1
+        if evicted:
+            gc.collect()
+            logger.info(
+                "stt.model_cache.evict_idle_ttl | count=%s idle_s=%.0f",
+                evicted,
+                idle_seconds,
+                extra={"event": "stt.model_cache.evict_idle_ttl", "subsys": "stt"},
             )
         return evicted
 

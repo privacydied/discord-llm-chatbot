@@ -8,7 +8,7 @@ import os
 import random
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -92,6 +92,22 @@ class ProviderConfig:
     jitter: bool = True
 
 
+def _default_circuit_cooldown_s() -> float:
+    """Breaker cooldown (seconds), env-tunable via CIRCUIT_COOLDOWN_S. [CMV]
+
+    Was hardcoded to 2.0s, which made the breaker decorative: a provider whose
+    attempts time out at 45s would "cool down" long before the ladder even
+    finished its next pass, so every message re-paid the full timeout. 60s means
+    a provider that just burned its attempts is skipped by the immediately
+    following requests, and the near-expiry probe window still lets it back in
+    without a thundering herd.
+    """
+    try:
+        return max(0.0, float(os.getenv("CIRCUIT_COOLDOWN_S", "60")))
+    except (ValueError, TypeError):
+        return 60.0
+
+
 @dataclass
 class CircuitBreakerState:
     """Circuit breaker state for a provider."""
@@ -99,7 +115,7 @@ class CircuitBreakerState:
     status: ProviderStatus = ProviderStatus.HEALTHY
     failure_count: int = 0
     last_failure_time: float = 0.0
-    cooldown_duration: float = 2.0  # Much faster cooldown recovery
+    cooldown_duration: float = field(default_factory=_default_circuit_cooldown_s)
     failure_threshold: int = 2  # Trigger circuit breaker faster
 
 

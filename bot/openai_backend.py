@@ -710,6 +710,22 @@ Server Context: {server_context}"""
                 return _run
 
             per_item_budget = float(config.get("TEXT_PER_ITEM_BUDGET", 120.0))
+            # Clamp to the ambient request deadline (multimodal total budget):
+            # earlier stages (video/STT/VL) may have eaten most of it, and a
+            # full fixed ladder budget here would overrun the outer wait_for and
+            # surface as a user-facing total_timeout. Keep a dispatch reserve so
+            # the reply can still be delivered, and a small floor so at least
+            # one fast attempt runs. [PA][REH]
+            from bot.time_budget import remaining_seconds
+
+            _DEADLINE_DISPATCH_RESERVE_S = 10.0  # [CMV]
+            _LADDER_MIN_BUDGET_S = 8.0  # [CMV]
+            ambient_remaining = remaining_seconds()
+            if ambient_remaining is not None:
+                clamped = max(_LADDER_MIN_BUDGET_S, ambient_remaining - _DEADLINE_DISPATCH_RESERVE_S)
+                if clamped < per_item_budget:
+                    logger.info(f"[OpenAI] text.budget clamped to deadline: {per_item_budget:.0f}s -> {clamped:.0f}s (ambient_remaining={ambient_remaining:.0f}s)")
+                    per_item_budget = clamped
             with contextlib.suppress(Exception):
                 logger.info(f"[OpenAI] text.budget seconds={per_item_budget}")
             try:
@@ -752,8 +768,13 @@ Server Context: {server_context}"""
                             msg = f"Text fallback ladder failed after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}): {type(base_err).__name__}: {base_err}"
                         api_err = APIError(msg)
                         try:
-                            if _is_no_endpoints or _is_auth or _is_moderation:
-                                api_err.retryable = False
+                            # Ladder exhaustion is ALWAYS non-retryable at this level:
+                            # run_with_fallback has already walked every provider with
+                            # per-provider retries and backoff. Letting the outer
+                            # @with_retry re-run the whole ladder (~90s of known-bad
+                            # timeouts) after a ~1s delay just burns the caller's total
+                            # budget and turns one failure into a user-facing timeout. [REH][PA]
+                            api_err.retryable = False
                             if _is_moderation:
                                 api_err.content_moderation = True
                         except Exception as e:
@@ -765,7 +786,9 @@ Server Context: {server_context}"""
                     # handled without dumping a full traceback in logs. [REH]
                     raise api_err
                 msg_0 = "All text providers exhausted"
-                raise APIError(msg_0)
+                exhausted_err = APIError(msg_0)
+                exhausted_err.retryable = False  # same rationale as above [REH]
+                raise exhausted_err
             return rr.result
 
         # Non-streaming single-provider path (OpenAI base or when ladder disabled)

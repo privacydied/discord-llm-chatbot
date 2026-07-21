@@ -58,6 +58,14 @@ def _reclaim_memory(cfg: dict[str, Any]) -> float:
         except Exception as exc:
             logger.debug(f"STT cache eviction during memory reclaim skipped: {exc}")
 
+    _malloc_trim()
+
+    after_mb = process.memory_info().rss / 1024 / 1024
+    return max(0.0, before_mb - after_mb)
+
+
+def _malloc_trim() -> None:
+    """Ask glibc to return freed arena pages to the OS. Cheap; never raises. [PA]"""
     try:
         import ctypes
 
@@ -65,8 +73,38 @@ def _reclaim_memory(cfg: dict[str, Any]) -> float:
     except (OSError, AttributeError):
         pass
 
-    after_mb = process.memory_info().rss / 1024 / 1024
-    return max(0.0, before_mb - after_mb)
+
+def _unload_idle_models(bot: commands.Bot, cfg: dict[str, Any]) -> None:
+    """Idle-TTL unload of STT/TTS model weights, run every health tick. [PA][REH]
+
+    Complements `_reclaim_memory` (which only fires above the RSS warning
+    threshold and spares the default whisper model): after
+    MODEL_IDLE_UNLOAD_SECONDS with no STT/TTS use, ALL whisper models and the
+    Kokoro ONNX session are released — several hundred MB while the bot idles.
+    Both reload lazily on next use. Never raises.
+    """
+    ttl = float(cfg.get("MODEL_IDLE_UNLOAD_SECONDS", 900))
+    if ttl <= 0:
+        return
+    freed = False
+    try:
+        from .stt import get_stt_manager_if_initialized
+
+        manager = get_stt_manager_if_initialized()
+        if manager is not None:
+            freed = manager.evict_if_idle(ttl) > 0
+    except Exception as exc:
+        logger.debug(f"Idle STT unload skipped: {exc}")
+    try:
+        tts_manager = getattr(bot, "tts_manager", None)
+        if tts_manager is not None and hasattr(tts_manager, "unload_if_idle"):
+            freed = tts_manager.unload_if_idle(ttl) or freed
+    except Exception as exc:
+        logger.debug(f"Idle TTS unload skipped: {exc}")
+    if freed:
+        import gc
+
+        gc.collect()
 
 
 def _persist_profiles_sync() -> tuple[bool, bool]:
@@ -403,6 +441,11 @@ class TaskManager:
                 # Check guild count
                 guild_count = len(self.bot.guilds)
                 logger.debug(f"Health check: Connected to {guild_count} guilds")
+
+                # Idle model unload + arena trim every tick, not just under
+                # pressure -- freed pages otherwise sit in glibc arenas. [PA]
+                _unload_idle_models(self.bot, current_cfg)
+                _malloc_trim()
 
                 # Check memory usage
                 import psutil

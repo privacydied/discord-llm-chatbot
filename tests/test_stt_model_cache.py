@@ -9,6 +9,7 @@ slow and exactly what these tests must avoid touching.
 from __future__ import annotations
 
 import threading
+import time
 from collections import OrderedDict
 from unittest.mock import MagicMock
 
@@ -26,6 +27,7 @@ def _bare_manager(default_spec: ModelSpec) -> STTManager:
     manager._default_spec = default_spec
     manager._available = False
     manager._init_thread = None
+    manager._last_used = time.monotonic()
     return manager
 
 
@@ -143,3 +145,50 @@ def test_get_stt_manager_if_initialized_returns_existing_manager(monkeypatch) ->
     result = stt_module.get_stt_manager_if_initialized()
 
     assert result is sentinel
+
+
+class TestEvictIfIdle:
+    """Idle-TTL eviction drops ALL cached models, including the default. [PA]"""
+
+    def test_evicts_everything_including_default_when_idle(self) -> None:
+        default = ModelSpec("base", "int8")
+        manager = _bare_manager(default)
+        manager._model_cache[default] = MagicMock(name="base_model")
+        manager._model_cache[ModelSpec("tiny", "int8")] = MagicMock(name="tiny_model")
+        manager._last_used = time.monotonic() - 1000
+
+        evicted = manager.evict_if_idle(idle_seconds=900)
+
+        assert evicted == 2
+        assert not manager._model_cache
+
+    def test_noop_when_recently_used(self) -> None:
+        default = ModelSpec("base", "int8")
+        manager = _bare_manager(default)
+        manager._model_cache[default] = MagicMock(name="base_model")
+        manager._last_used = time.monotonic()
+
+        assert manager.evict_if_idle(idle_seconds=900) == 0
+        assert default in manager._model_cache
+
+    def test_noop_when_disabled_or_empty(self) -> None:
+        default = ModelSpec("base", "int8")
+        manager = _bare_manager(default)
+        manager._last_used = time.monotonic() - 1000
+
+        assert manager.evict_if_idle(idle_seconds=900) == 0  # empty cache
+
+        manager._model_cache[default] = MagicMock(name="base_model")
+        assert manager.evict_if_idle(idle_seconds=0) == 0  # disabled
+        assert default in manager._model_cache
+
+    def test_load_model_refreshes_last_used(self, monkeypatch) -> None:
+        """A cache hit through _load_model must reset the idle clock."""
+        default = ModelSpec("base", "int8")
+        manager = _bare_manager(default)
+        manager._model_cache[default] = MagicMock(name="base_model")
+        manager._last_used = time.monotonic() - 1000
+
+        manager._load_model(default)
+
+        assert manager.evict_if_idle(idle_seconds=900) == 0
