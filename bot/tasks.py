@@ -101,6 +101,15 @@ def _unload_idle_models(bot: commands.Bot, cfg: dict[str, Any]) -> None:
             freed = tts_manager.unload_if_idle(ttl) or freed
     except Exception as exc:
         logger.debug(f"Idle TTS unload skipped: {exc}")
+    try:
+        import sys
+
+        # Only touch embedders that were actually created (module imported).
+        fe_mod = sys.modules.get("bot.rag.fastembed_embedding")
+        if fe_mod is not None:
+            freed = fe_mod.unload_idle_models(ttl) > 0 or freed
+    except Exception as exc:
+        logger.debug(f"Idle fastembed unload skipped: {exc}")
     if freed:
         import gc
 
