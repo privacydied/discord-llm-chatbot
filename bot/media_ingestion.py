@@ -154,7 +154,14 @@ class MediaIngestionManager:
                 last_error = f"Media extraction timeout after {MEDIA_DOWNLOAD_TIMEOUT}s"
                 self.logger.warning(f"⏰ {last_error} for {url}")
 
-            except (OSError, RuntimeError, ValueError, asyncio.TimeoutError) as e:
+            except Exception as e:
+                # Boundary contract: this helper NEVER raises — it returns
+                # (False, None, error) so callers can fall back gracefully.
+                # A lint-driven sweep (3abb61e) narrowed this to typed
+                # exceptions, silently excluding the ones hear_infer_from_url
+                # actually raises (InferenceError, VideoIngestError,
+                # NoAudioStreamError), so real STT failures escaped the retry
+                # loop and crashed the caller instead. [REH]
                 last_error = str(e)
                 self.logger.warning(f"❌ Media extraction attempt {attempt + 1} failed for {url}: {last_error}")
 
