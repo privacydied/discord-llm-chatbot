@@ -83,6 +83,9 @@ _INIT_TIMEOUT = float(os.getenv("STT_INIT_TIMEOUT", "8"))
 # previously stacked indefinitely. Cap how many distinct specs stay resident
 # at once -- the default model always counts as one slot. [PA][CMV]
 _MODEL_CACHE_MAX = max(1, int(os.getenv("STT_MODEL_CACHE_MAX", "2")))
+# Eagerly load the default whisper model at manager init (legacy behavior).
+# Default off: lazy-load on first STT request instead. [PA][CMV]
+_WARM_LOAD = os.getenv("STT_WARM_LOAD", "0").strip().lower() in ("1", "true", "yes", "y")
 
 
 @dataclass(frozen=True)
@@ -197,6 +200,22 @@ class STTManager:
             logger.warning("Unsupported STT engine: %s", self.engine)
             self._available = False
             self._ready_event.set()
+            return
+
+        if not _WARM_LOAD:
+            # Lazy mode (default): don't pin ~200 MB of whisper weights at boot
+            # for a bot that may never receive a voice/video message. The first
+            # STT request loads via ensure_model() at the cost of a few seconds;
+            # the idle-TTL eviction then reclaims it, so the boot-time high-water
+            # mark (and its glibc arena fragmentation) never happens. Opt back
+            # into eager loading with STT_WARM_LOAD=1. [PA][CMV]
+            self._available = True
+            self._ready_event.set()
+            logger.info(
+                "✅ STT lazy mode: faster-whisper model=%s compute_type=%s loads on first request",
+                self._default_spec.size,
+                self._default_spec.compute_type,
+            )
             return
 
         def _loader() -> None:

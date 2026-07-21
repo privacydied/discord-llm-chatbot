@@ -192,3 +192,34 @@ class TestEvictIfIdle:
         manager._load_model(default)
 
         assert manager.evict_if_idle(idle_seconds=900) == 0
+
+
+class TestLazyInit:
+    """Default init must NOT load whisper at boot (STT_WARM_LOAD off). [PA]"""
+
+    def test_init_is_lazy_and_ready_without_model(self, monkeypatch) -> None:
+        import sys
+
+        monkeypatch.delenv("STT_WARM_LOAD", raising=False)
+        monkeypatch.setattr(stt_module, "_WARM_LOAD", False)
+        sys.modules.pop("faster_whisper", None)
+
+        manager = STTManager()
+
+        assert manager.available is True  # ready for lazy first-use load
+        assert manager._ready_event.is_set()
+        assert not manager._model_cache  # no weights pinned at boot
+        assert manager._init_thread is None  # no loader thread spawned
+        assert "faster_whisper" not in sys.modules  # heavy import deferred
+
+    def test_warm_load_env_restores_eager_thread(self, monkeypatch) -> None:
+        monkeypatch.setattr(stt_module, "_WARM_LOAD", True)
+        loaded = []
+        monkeypatch.setattr(STTManager, "_load_model", lambda self, spec: loaded.append(spec))
+
+        manager = STTManager()
+        assert manager._init_thread is not None
+        manager._init_thread.join(timeout=10)
+
+        assert loaded == [manager.default_spec]
+        assert manager.available is True
