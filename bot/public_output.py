@@ -179,6 +179,29 @@ def _compute_text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
+# Minimum characters that must survive line-level leak stripping for the
+# salvaged reply to be sent instead of the safe fallback. [CMV]
+_MIN_SALVAGE_CHARS = 40
+
+_REASONING_BLOCK_RE = re.compile(
+    r"<(thinking|reasoning|scratchpad|analysis)>.*?</\1>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _strip_leaking_lines(text: str) -> str:
+    """Remove reasoning-leak lines/blocks, preserving the rest of the reply. [REH]
+
+    A single leaked phrase (e.g. a reasoning model echoing 'MODE GATE' from
+    the system prompt) used to discard entire, otherwise-good replies. Strip
+    tag-delimited reasoning blocks first, then drop only the individual lines
+    that match a leak pattern.
+    """
+    text = _REASONING_BLOCK_RE.sub("", text)
+    kept = [line for line in text.splitlines() if not _reasoning_pattern.search(line)]
+    return "\n".join(kept).strip()
+
+
 def _matches_reasoning_pattern(text: str) -> tuple[bool, str]:
     """Check if text matches any reasoning leak pattern.
     Returns (matched, matched_pattern_or_empty).
@@ -280,6 +303,28 @@ def extract_public_reply_text(
     # true content that will be sent.
     cleaned = strip_leading_mode_preamble(cleaned)
     has_leak, matched_pattern = _matches_reasoning_pattern(cleaned)
+
+    if has_leak:
+        # Salvage first: strip only the leaking lines/blocks. If a substantive,
+        # leak-free reply remains, send that instead of nuking the whole
+        # response — a reasoning model echoing one system-prompt phrase used to
+        # cost users an entire good answer. [REH]
+        salvaged = _strip_leaking_lines(cleaned)
+        if len(salvaged) >= _MIN_SALVAGE_CHARS and not _matches_reasoning_pattern(salvaged)[0]:
+            logger.info(
+                "Reasoning leak stripped: pattern='%s' removed=%d kept=%d",
+                matched_pattern[:50] if matched_pattern else "",
+                len(cleaned) - len(salvaged),
+                len(salvaged),
+                extra={
+                    "event": "public_output.reasoning_stripped",
+                    "pattern_matched": matched_pattern[:50] if matched_pattern else "",
+                    "removed_chars": len(cleaned) - len(salvaged),
+                    "kept_chars": len(salvaged),
+                },
+            )
+            cleaned = salvaged
+            has_leak = False
 
     if has_leak:
         # Log the leak with metadata (not the full content)
