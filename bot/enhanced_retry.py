@@ -459,6 +459,31 @@ class EnhancedRetryManager:
             self.circuit_breakers[provider_key] = CircuitBreakerState()
         return self.circuit_breakers[provider_key]
 
+    def _ensure_probe_when_all_circuits_open(self, providers: list[ProviderConfig]) -> None:
+        """Guarantee at least one attempt when EVERY provider's circuit is open. [REH]
+
+        With a meaningful cooldown (60s), a burst that opens all breakers would
+        otherwise make every request inside the window fail instantly with
+        "0 attempts / All providers exhausted" — the bot goes mute. Instead,
+        half-open the provider whose cooldown expires soonest: it gets exactly
+        one probe attempt per request, and reopens immediately on failure
+        (failure_count is left one below the threshold).
+        """
+        keys = [f"{pc.name}:{pc.model}" for pc in providers]
+        if not keys or any(self._is_provider_available(k) for k in keys):
+            return
+        now = time.time()
+
+        def _cooldown_remaining(key: str) -> float:
+            breaker = self._get_circuit_breaker(key)
+            return max(0.0, float(breaker.cooldown_duration or 0.0) - (now - breaker.last_failure_time))
+
+        probe_key = min(keys, key=_cooldown_remaining)
+        breaker = self._get_circuit_breaker(probe_key)
+        breaker.status = ProviderStatus.DEGRADED
+        breaker.failure_count = max(0, breaker.failure_threshold - 1)
+        logger.warning(f"⚡ All circuits open — half-open probe on {probe_key} (remaining was {_cooldown_remaining(probe_key):.1f}s)")
+
     def _is_provider_available(self, provider_key: str) -> bool:
         """Check if provider is available (circuit breaker check)."""
         breaker = self._get_circuit_breaker(provider_key)
@@ -594,6 +619,8 @@ class EnhancedRetryManager:
         fallback_occurred = False
         last_exception: Exception | None = None
         budget_exhausted = False
+
+        self._ensure_probe_when_all_circuits_open(providers)
 
         for provider_idx, provider_config in enumerate(providers):
             provider_key = f"{provider_config.name}:{provider_config.model}"
