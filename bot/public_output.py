@@ -31,6 +31,11 @@ REASONING_LEAK_PATTERNS = [
     r"MODE\s*GATE",
     r"POLITICAL\s*MODE",
     r"NORMAL\s*MODE",
+    # CoT narration of the mode-decision procedure (observed leaking from
+    # reasoning models restating the system prompt's gate logic) [REH]
+    r"\bMODE\s*=",
+    r"let\s+me\s+re-?read",
+    r"→\s*MODE\b",
     r"EXPLICIT_LENS_REQUEST",
     r"POLITICS_CORE_TOPIC",
     r"chain-of-thought",
@@ -190,15 +195,21 @@ _REASONING_BLOCK_RE = re.compile(
 
 
 def _strip_leaking_lines(text: str) -> str:
-    """Remove reasoning-leak lines/blocks, preserving the rest of the reply. [REH]
+    """Remove the reasoning-leak REGION, preserving the rest of the reply. [REH]
 
-    A single leaked phrase (e.g. a reasoning model echoing 'MODE GATE' from
-    the system prompt) used to discard entire, otherwise-good replies. Strip
-    tag-delimited reasoning blocks first, then drop only the individual lines
-    that match a leak pattern.
+    Reasoning leaks are contiguous: chain-of-thought runs as one block with
+    pattern-matching lines interleaved among narration lines that match
+    nothing ('So MODE = ... ? Wait, let me re-read...'). Dropping only the
+    matching lines shipped the narration between them. Instead, remove the
+    whole span from the FIRST leak-matching line through the LAST one — lines
+    before and after the region (the actual reply) survive.
     """
     text = _REASONING_BLOCK_RE.sub("", text)
-    kept = [line for line in text.splitlines() if not _reasoning_pattern.search(line)]
+    lines = text.splitlines()
+    match_idx = [i for i, line in enumerate(lines) if _reasoning_pattern.search(line)]
+    if not match_idx:
+        return text.strip()
+    kept = lines[: match_idx[0]] + lines[match_idx[-1] + 1 :]
     return "\n".join(kept).strip()
 
 

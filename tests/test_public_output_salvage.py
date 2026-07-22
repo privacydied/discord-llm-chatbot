@@ -43,3 +43,35 @@ class TestLeakSalvage:
     def test_clean_content_untouched(self) -> None:
         content = "Here's a normal helpful reply with plenty of substance in it."
         assert extract_public_reply_text(content) == content
+
+
+class TestContiguousLeakRegion:
+    """Regression: interleaved CoT narration between pattern-matching lines
+    must not survive salvage (2026-07-22 leak: 'So MODE = "POLITICAL" ...
+    Wait, let me re-read')."""
+
+    def test_interleaved_narration_removed_with_region(self) -> None:
+        content = (
+            "Checking the MODE GATE for this request.\n"
+            'So MODE = "POLITICAL" since B is true but A is false?\n'
+            'Wait, let me re-read: "if A true AND B true → MODE = \'POLITICAL\'"\n'
+            "POLITICAL MODE it is then.\n"
+            "the actual answer is that the election result was certified last week and turnout hit a record."
+        )
+        result = extract_public_reply_text(content)
+        assert result != SAFE_FALLBACK_MESSAGE
+        assert "MODE" not in result
+        assert "re-read" not in result
+        assert "certified last week" in result
+
+    def test_pure_interleaved_reasoning_falls_back(self) -> None:
+        # The 2026-07-22 leak shape: narration with no real answer at all
+        content = 'So MODE = "POLITICAL" since B is true but A is false? Wait, let me re-read: "if A true AND B true → MODE = \'POLITICAL\'" — so B alone is not enough, right.'
+        result = extract_public_reply_text(content)
+        assert result == SAFE_FALLBACK_MESSAGE
+
+    def test_mode_equals_pattern_now_caught(self) -> None:
+        content = 'Some intro text that is fine and long enough to keep here.\nMODE = "NORMAL" applies to this.\nAnd a closing line with genuine content for the user.'
+        result = extract_public_reply_text(content)
+        assert "MODE" not in result
+        assert "genuine content" in result
