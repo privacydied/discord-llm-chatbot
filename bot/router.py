@@ -944,6 +944,51 @@ class Router:
             logger.debug(f"Failed to hydrate syndication payload: {exc}")
         return fallback_text
 
+    async def _hydrate_media_from_fxtwitter(self, tweet_id: str, syn: Any) -> Any:
+        """Backfill media into a sparse syndication payload via fxtwitter. [REH]
+
+        The syndication CDN often returns only {text, user} for tweets that DO
+        have photos/video; downstream routing then sees photos=0 and degrades
+        to text flow. fxtwitter's API still exposes the media, so merge it in
+        using syndication-shaped keys (photos list, video.variants). Payloads
+        that already carry any media hint are returned untouched. Never raises.
+        """
+        try:
+            if isinstance(syn, dict) and any(k in syn for k in syndication_media_hint_keys()):
+                return syn
+            http_client = await get_http_client()
+            cfg = self._build_x_syn_quick_request_config()
+            resp = await http_client.get(f"https://api.fxtwitter.com/status/{tweet_id}", config=cfg)
+            if resp.status_code != 200:
+                return syn
+            tnode = self._extract_fxtwitter_tweet_node(resp.json())
+            media = (tnode or {}).get("media") or {}
+            photos = [{"url": p.get("url")} for p in (media.get("photos") or []) if p.get("url")]
+            videos = [v for v in (media.get("videos") or []) if v.get("url")]
+            if not (photos or videos):
+                return syn
+            out = dict(syn) if isinstance(syn, dict) else {}
+            if photos and not out.get("photos"):
+                out["photos"] = photos
+            if videos and not out.get("video"):
+                out["video"] = {"variants": [{"src": v["url"], "type": v.get("format") or "video/mp4"} for v in videos]}
+            if not out.get("text"):
+                out["text"] = str((tnode or {}).get("text") or "")
+            self.logger.info(
+                "x.syndication.fx_media_hydrated | photos=%d videos=%d tweet_id=%s",
+                len(photos),
+                len(videos),
+                tweet_id,
+                extra={
+                    "event": "x.syndication.fx_media_hydrated",
+                    "detail": {"photos": len(photos), "videos": len(videos), "tweet_id": tweet_id},
+                },
+            )
+            return out
+        except Exception as exc:
+            self.logger.debug(f"fxtwitter media hydration skipped: {exc}")
+            return syn
+
     async def _resolve_twitter_caption_text(self, status_id: str | None) -> str:
         """Resolve tweet caption via syndication first, then fx/vx fallback."""
         if not status_id:
@@ -1186,6 +1231,12 @@ class Router:
                     self._syn_cache[tweet_id] = build_syndication_negative_cache_entry(time.time())
                     self._metric_inc("x.syndication.neg_store", None)
                     return None
+
+                # Sparse-payload media hydration: the syndication CDN increasingly
+                # returns text/user-only payloads for tweets that DO have media,
+                # silently degrading them to text flow ("photos=0"). Backfill
+                # photos/video from the fxtwitter API before caching. [REH]
+                data = await self._hydrate_media_from_fxtwitter(tweet_id, data)
 
                 # Cache and return
                 self._syn_cache[tweet_id] = build_syndication_cache_entry(
