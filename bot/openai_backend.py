@@ -90,6 +90,29 @@ def _embedded_provider_error_detail(response_obj: Any) -> str:
     return f" (provider error: {str(embedded)[:300]})" if embedded else ""
 
 
+def _reasoning_exclude_extra_body(provider_or_base: str | None, config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """extra_body telling OpenRouter to strip reasoning tokens from content. [REH][CMV]
+
+    Reasoning models (nemotron, r1-style) emit chain-of-thought into message
+    content, leaking system-prompt scaffolding (e.g. MODE GATE narration) that
+    the output sanitizer then has to catch. OpenRouter's `reasoning.exclude`
+    keeps thinking tokens out of the response entirely — in principle.
+    DEFAULT OFF: live A/B against nemotron-3-super (2026-07-22) showed
+    exclude=true made the provider dump CoT (or <unk> spam) INTO content,
+    while omitting the param kept reasoning in the separate `reasoning` field
+    with clean content. Opt in per-deployment with
+    OPENROUTER_REASONING_EXCLUDE=true if your providers handle it correctly.
+    Gated to OpenRouter endpoints; returns the extra_body value or {}.
+    """
+    target = (provider_or_base or "").lower()
+    if "openrouter" not in target:
+        return {}
+    cfg = config if config is not None else load_config()
+    if not cfg.get("OPENROUTER_REASONING_EXCLUDE", False):
+        return {}
+    return {"reasoning": {"exclude": True}}
+
+
 def _require_openai() -> Any:
     if _openai is None:
         msg = "OpenAI backend is unavailable because the 'openai' package is not installed"
@@ -600,6 +623,11 @@ Server Context: {server_context}"""
                 msg_0 = f"Response normalization failed: {type(norm_error).__name__}: {norm_error}"
                 raise APIError(msg_0)
 
+        _single_kwargs = dict(kwargs)
+        _single_reasoning_eb = _reasoning_exclude_extra_body(api_base, config)
+        if _single_reasoning_eb:
+            _single_kwargs["extra_body"] = {**_single_reasoning_eb, **(_single_kwargs.get("extra_body") or {})}
+
         if stream:
             logger.debug("[OpenAI] 🔄 Sending request to API (streaming)...")
             response = await client.chat.completions.create(
@@ -609,7 +637,7 @@ Server Context: {server_context}"""
                 presence_penalty=presence_penalty,
                 max_tokens=max_tokens,
                 stream=True,
-                **kwargs,
+                **_single_kwargs,
             )
             logger.debug("[OpenAI] ✅ Received response from API (streaming)")
             logger.debug("[OpenAI] 🌊 Processing streaming response...")
@@ -670,6 +698,10 @@ Server Context: {server_context}"""
                     try:
                         logger.debug(f"[OpenAI] 🔄 Sending request to {attempt_provider} with model: {selected_model}")
                         t0 = time.monotonic()
+                        _call_kwargs = dict(kwargs)
+                        _reasoning_eb = _reasoning_exclude_extra_body(attempt_provider, config)
+                        if _reasoning_eb:
+                            _call_kwargs["extra_body"] = {**_reasoning_eb, **(_call_kwargs.get("extra_body") or {})}
                         resp = await attempt_client.chat.completions.create(
                             model=selected_model,
                             messages=messages,
@@ -677,7 +709,7 @@ Server Context: {server_context}"""
                             presence_penalty=presence_penalty,
                             max_tokens=max_tokens,
                             stream=False,
-                            **kwargs,
+                            **_call_kwargs,
                         )
                         logger.debug("[OpenAI] ✅ Received response from API")
                         return _normalize_nonstream_response(resp, selected_model)
@@ -823,7 +855,7 @@ Server Context: {server_context}"""
                     presence_penalty=presence_penalty,
                     max_tokens=max_tokens,
                     stream=False,
-                    **kwargs,
+                    **_single_kwargs,
                 )
             except Exception as e:
                 if "timeout" in str(e).lower() or "TimeoutError" in str(type(e).__name__):
@@ -1110,6 +1142,9 @@ async def _generate_vl_response_with_retry(
                 }
                 # Filter to allowed params
                 api_params = {k: v for k, v in api_params.items() if k in OPENROUTER_ALLOWED_PARAMS}
+                _vl_reasoning_eb = _reasoning_exclude_extra_body(attempt_provider, config)
+                if _vl_reasoning_eb:
+                    api_params["extra_body"] = _vl_reasoning_eb
 
                 t0 = time.monotonic()
                 try:
@@ -1298,6 +1333,9 @@ async def _generate_vl_response_with_retry(
         "max_tokens": max_tokens,
     }
     api_params = {k: v for k, v in api_params.items() if k in OPENROUTER_ALLOWED_PARAMS}
+    _vl_single_reasoning_eb = _reasoning_exclude_extra_body(single_base_url)
+    if _vl_single_reasoning_eb:
+        api_params["extra_body"] = _vl_single_reasoning_eb
 
     start = time.monotonic()
     try:

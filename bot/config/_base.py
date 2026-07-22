@@ -607,6 +607,10 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         # Stitched video context: extract a still frame from transcribed videos
         # and describe it via the VL flow (audio + visual context). [PA]
         "VIDEO_STILL_VL_ENABLED": _parse_bool_str(_clean_env_value(env_getter("VIDEO_STILL_VL_ENABLED", None)), True),
+        # Ask OpenRouter to keep reasoning tokens out of message content.
+        # Default OFF: live-tested 2026-07-22, exclude=true made nemotron dump
+        # CoT/<unk> INTO content; without it reasoning stays in its own field.
+        "OPENROUTER_REASONING_EXCLUDE": _parse_bool_str(_clean_env_value(env_getter("OPENROUTER_REASONING_EXCLUDE", None)), False),
         "VISION_T2I_ENABLED": _t2i,
         "VISION_REPLY_IMAGE_FORCE_VL": _parse_bool_str(_clean_env_value(env_getter("VISION_REPLY_IMAGE_FORCE_VL", None)), True),
         "VISION_REPLY_IMAGE_SILENT": _parse_bool_str(_clean_env_value(env_getter("VISION_REPLY_IMAGE_SILENT", None)), True),
