@@ -560,7 +560,11 @@ class EnhancedRetryManager:
             # Some OpenRouter/free-tier providers return HTTP 200 with no assistant
             # text. That provider attempt is unusable, but the request itself can
             # still succeed on a retry or fallback model, so keep laddering.
+            # Keep every phrasing the backends raise in sync here — the VL path
+            # says "empty completion", the text path "empty text response". [REH]
             "empty text response",
+            "empty completion",
+            "empty response",
             "response normalization failed",
         ]
 
@@ -699,7 +703,10 @@ class EnhancedRetryManager:
                     # Treat OpenRouter 404 / no-endpoints as permanent provider unavailability [REH]
                     msg_lower = f"{type(e).__name__}: {e}".lower()
                     if "404" in msg_lower and "no endpoints found" in msg_lower:
-                        logger.exception(f"❌ Provider unavailable (404 no endpoints) for {provider_key}: {type(e).__name__}: {e}")
+                        # Also handled: bench this model and keep laddering, so
+                        # WARNING rather than an ERROR traceback. [REH]
+                        logger.warning(f"⛔ Provider unavailable (404 no endpoints), benching {provider_key}: {type(e).__name__}: {e}")
+                        logger.debug(f"Provider-unavailable detail for {provider_key}", exc_info=True)
                         last_exception = e
                         self._record_failure(provider_key)
                         breaker = self._get_circuit_breaker(provider_key)
@@ -741,7 +748,12 @@ class EnhancedRetryManager:
                     last_exception = e
 
                     if not self._is_retryable_error(e):
-                        logger.exception(f"❌ Non-retryable error, skipping remaining attempts for {provider_key}: {type(e).__name__}: {e}")
+                        # Handled routing decision, not a crash: this provider is
+                        # done, but the ladder still falls through to the next one.
+                        # WARNING (no traceback) keeps it from reading as fatal in
+                        # the console; the traceback stays available at DEBUG. [REH]
+                        logger.warning(f"⏭️ Non-retryable error, skipping remaining attempts for {provider_key}: {type(e).__name__}: {e}")
+                        logger.debug(f"Non-retryable error detail for {provider_key}", exc_info=True)
                         break
 
                     # Record failure for circuit breaker
