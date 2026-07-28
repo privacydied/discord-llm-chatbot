@@ -108,6 +108,18 @@ def _default_circuit_cooldown_s() -> float:
         return 60.0
 
 
+def _timeout_skips_provider_retry() -> bool:
+    """Whether a timeout ends this provider's attempts. Env: LADDER_TIMEOUT_SKIPS_RETRY. [CMV]
+
+    A timeout has already spent the provider's whole attempt window (45s on the
+    text ladder). Retrying the same model on the same route is the least likely
+    of all remaining options to answer, yet it costs another full window out of
+    the shared per-item budget — budget that untried rungs never get. Default on;
+    set to 0 to restore the old retry-the-hung-model behaviour.
+    """
+    return os.getenv("LADDER_TIMEOUT_SKIPS_RETRY", "1").strip().lower() not in ("0", "false", "no")
+
+
 @dataclass
 class CircuitBreakerState:
     """Circuit breaker state for a provider."""
@@ -533,6 +545,20 @@ class EnhancedRetryManager:
             breaker.status = ProviderStatus.CIRCUIT_OPEN
             logger.warning(f"⚡ Circuit breaker opened for {provider_key} (failures: {breaker.failure_count})")
 
+    def _is_timeout_error(self, error: Exception) -> bool:
+        """Did this attempt fail by exhausting its time window (vs failing fast)?
+
+        Covers the normalized ``TimeoutError`` raised above, plus transport-level
+        timeouts that arrive as their own types (``httpx.ReadTimeout``,
+        ``openai.APITimeoutError``). A fast 429/5xx is NOT a timeout: it costs
+        ~0.1s, so retrying it in place is cheap and often works. [PA]
+        """
+        if isinstance(error, (asyncio.TimeoutError, TimeoutError)):
+            return True
+        if "timeout" in type(error).__name__.lower():
+            return True
+        return "timed out" in str(error).lower()
+
     def _is_retryable_error(self, error: Exception) -> bool:
         """Check if error is retryable."""
         error_str = str(error).lower()
@@ -622,6 +648,7 @@ class EnhancedRetryManager:
         total_attempts = 0
         fallback_occurred = False
         last_exception: Exception | None = None
+        last_provider_key: str | None = None
         budget_exhausted = False
 
         self._ensure_probe_when_all_circuits_open(providers)
@@ -660,6 +687,7 @@ class EnhancedRetryManager:
                     provider_attempts += 1
 
                     logger.info(f"🔄 Attempt {attempt + 1}/{provider_config.max_attempts} with {provider_key} (timeout: {attempt_timeout:.1f}s)")
+                    last_provider_key = provider_key
 
                     # Create and run the coroutine with timeout
                     coro = coro_factory(provider_config)()
@@ -759,6 +787,17 @@ class EnhancedRetryManager:
                     # Record failure for circuit breaker
                     self._record_failure(provider_key)
 
+                    # A timeout already consumed this provider's full attempt
+                    # window out of the shared budget. Spending a second window on
+                    # the same hung model starves every untried rung below it, so
+                    # fall through instead. The last rung keeps its retries —
+                    # there is nothing left to fall through to. [PA][REH]
+                    if has_next_provider and attempt < provider_config.max_attempts - 1 and self._is_timeout_error(e) and _timeout_skips_provider_retry():
+                        logger.warning(
+                            f"⏭️ Timeout on {provider_key} after {attempt_timeout:.1f}s; skipping its remaining attempts to leave budget for the next provider",
+                        )
+                        break
+
                     # Calculate delay for next attempt (if not last attempt)
                     if attempt < provider_config.max_attempts - 1:
                         use_retry_after = False
@@ -804,13 +843,23 @@ class EnhancedRetryManager:
         # All providers exhausted
         total_time = time.time() - start_time
         if budget_exhausted and (last_exception is None or "budget" not in str(last_exception).lower()):
-            last_exception = TimeoutError(f"Per-item budget of {per_item_budget}s exceeded")
+            # Keep the real cause and the provider attribution. Synthesizing a
+            # bare TimeoutError here dropped both, which is why callers logged
+            # "last_provider=unknown" with no hint of what actually failed. [REH]
+            prior = last_exception
+            detail = f" (last error: {type(prior).__name__}: {prior})" if prior is not None else ""
+            budget_err = TimeoutError(f"Per-item budget of {per_item_budget}s exceeded{detail}")
+            prior_key = getattr(prior, "provider_key", None) if prior is not None else None
+            if prior_key or last_provider_key:
+                budget_err.provider_key = prior_key or last_provider_key
+            budget_err.__cause__ = prior
+            last_exception = budget_err
         return RetryResult(
             success=False,
             error=last_exception or Exception("All providers exhausted"),
             attempts=total_attempts,
             total_time=total_time,
-            provider_used=getattr(last_exception, "provider_key", None) if last_exception is not None else None,
+            provider_used=(getattr(last_exception, "provider_key", None) if last_exception is not None else None) or last_provider_key,
             fallback_occurred=fallback_occurred,
         )
 
