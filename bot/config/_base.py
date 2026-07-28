@@ -668,6 +668,15 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         ),
         "VL_NOTES_TIMEOUT_S": _safe_float(env_getter("VL_NOTES_TIMEOUT_S", None), "120.0", "VL_NOTES_TIMEOUT_S"),
         "VISION_PER_ITEM_BUDGET": _safe_float(env_getter("VISION_PER_ITEM_BUDGET", None), "120.0", "VISION_PER_ITEM_BUDGET"),
+        # Sibling budgets. These are read via config.get() by openai_backend
+        # (text ladder) and router (multimodal dispatch + ambient deadline), but
+        # were never registered here — and this dict is an allowlist, so every
+        # lookup silently fell through to its call-site default and the .env
+        # values were dead. Defaults below MUST match those call sites so
+        # unset behaviour is unchanged. [REH][CMV]
+        "TEXT_PER_ITEM_BUDGET": _safe_float(env_getter("TEXT_PER_ITEM_BUDGET", None), "120.0", "TEXT_PER_ITEM_BUDGET"),
+        "MULTIMODAL_PER_ITEM_BUDGET": _safe_float(env_getter("MULTIMODAL_PER_ITEM_BUDGET", None), "30.0", "MULTIMODAL_PER_ITEM_BUDGET"),
+        "MULTIMODAL_TOTAL_BUDGET_S": _safe_float(env_getter("MULTIMODAL_TOTAL_BUDGET_S", None), "240.0", "MULTIMODAL_TOTAL_BUDGET_S"),
         "VL_REQUEST_TIMEOUT": _safe_float(env_getter("VL_REQUEST_TIMEOUT", None), "30.0", "VL_REQUEST_TIMEOUT"),
         "VISION_PROGRESS_UPDATE_INTERVAL_S": _safe_int(
             env_getter("VISION_PROGRESS_UPDATE_INTERVAL_S", None),
@@ -790,6 +799,20 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
             True,
         ),
     }
+
+    # Presence-sensitive budgets: injected ONLY when actually set. enhanced_retry
+    # derives the media timeout by branching on `is not None` (MEDIA_PROVIDER_TIMEOUT
+    # wins, else derive from MEDIA_PER_ITEM_BUDGET, else 100s), so registering a
+    # synthetic default here would silently change the unset path. A None value is
+    # not an option either: call sites do float(config.get(key, "120.0")), which a
+    # stored None would turn into a TypeError rather than the intended default. [REH]
+    for _budget_key in ("MEDIA_PROVIDER_TIMEOUT", "MEDIA_PER_ITEM_BUDGET"):
+        _raw = _clean_env_value(env_getter(_budget_key, None))
+        if _raw:
+            try:
+                config[_budget_key] = float(_raw)
+            except (TypeError, ValueError):
+                logger.warning("Invalid %s value '%s', ignoring", _budget_key, _raw)
 
     # Deprecation warnings for legacy config keys [SFT]
     if env_getter("TEXT_MODEL", None):
