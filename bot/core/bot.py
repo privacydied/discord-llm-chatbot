@@ -599,6 +599,97 @@ class LLMBot(commands.Bot):
                         "Conversational (mention/reply) image-edit invocations",
                         labels=["outcome"],
                     )
+                    # X/Vision image-only-tweet counters [CMV][REH]
+                    self.metrics.define_counter(
+                        "x.tweet_image_only.syndication",
+                        "Image-only tweet detected via syndication",
+                        labels=["photos", "source"],
+                    )
+                    self.metrics.define_counter(
+                        "x.tweet_image_only.api",
+                        "Image-only tweet detected via API",
+                        labels=["photos"],
+                    )
+                    self.metrics.define_counter(
+                        "vision.image_only_tweet.start",
+                        "Image-only tweet: Vision/OCR processing started",
+                        labels=["source", "images"],
+                    )
+                    self.metrics.define_counter(
+                        "vision.image_only_tweet.success",
+                        "Image-only tweet: per-image analysis success",
+                        labels=["image_idx"],
+                    )
+                    self.metrics.define_counter(
+                        "vision.image_only_tweet.failure",
+                        "Image-only tweet: per-image analysis unavailable",
+                        labels=["image_idx"],
+                    )
+                    self.metrics.define_counter(
+                        "vision.image_only_tweet.error",
+                        "Image-only tweet: per-image analysis raised an exception",
+                        labels=["image_idx"],
+                    )
+                    self.metrics.define_counter(
+                        "vision.image_only_tweet.complete",
+                        "Image-only tweet: processing complete",
+                        labels=["source", "images", "ocr_found", "safety_flags"],
+                    )
+                    self.metrics.define_counter(
+                        "vision.route.skipped",
+                        "Vision route skipped",
+                        labels=["reason"],
+                    )
+                    self.metrics.define_counter(
+                        "vision.route.dry_run",
+                        "Vision route dry-run short-circuit",
+                        labels=["path"],
+                    )
+                    self.metrics.define_counter(
+                        "vision.intent.error",
+                        "Vision intent routing raised an exception",
+                    )
+                    # Inline search provider counters [CMV][REH]
+                    self.metrics.define_counter(
+                        "inline_search.start",
+                        "Inline search provider invocation started",
+                        labels=["category", "provider"],
+                    )
+                    self.metrics.define_counter(
+                        "inline_search.success",
+                        "Inline search provider invocation succeeded",
+                        labels=["category", "provider"],
+                    )
+                    self.metrics.define_counter(
+                        "inline_search.error",
+                        "Inline search provider invocation raised an exception",
+                        labels=["category", "provider"],
+                    )
+                    # Input-item routing precedence counters [CMV][REH]
+                    self.metrics.define_counter(
+                        "routing.vision.precedence",
+                        "Vision precedence check short-circuited routing",
+                        labels=["stage"],
+                    )
+                    self.metrics.define_counter(
+                        "routing.twitter.thumb_suppressed",
+                        "Twitter/X thumbnail attachment suppressed from routing",
+                    )
+                    self.metrics.define_counter(
+                        "routing.url.precedence.selected",
+                        "URL items selected under routing precedence",
+                        labels=["count"],
+                    )
+                    self.metrics.define_counter(
+                        "routing.vl.default_bare_image.selected",
+                        "Bare image attachments selected for default VL routing",
+                        labels=["count"],
+                    )
+                    self.metrics.define_counter(
+                        "vision.image_only_tweet.fatal_error",
+                        "Image-only tweet: processing failed with an unhandled exception",
+                        labels=["source"],
+                    )
                     # Ambient reply gate counters [CMV][REH]
                     self.metrics.define_counter(
                         "ambient_reply_fired_total",
