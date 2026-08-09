@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse, urlunparse
 
+from . import ytdlp_probe_cache
 from .http_client import RequestConfig, get_http_client
 from .utils.logging import get_logger
 
@@ -415,6 +416,14 @@ def _apply_cookie_args(cmd: list[str]) -> None:
         cmd.extend(["--cookies", cookie_file])
 
 
+def _probe_cookie_signature() -> str:
+    """Cookie identity of this module's probes, mirroring _apply_cookie_args."""
+    return ytdlp_probe_cache.cookie_signature(
+        browser=(os.getenv("VIDEO_COOKIES_FROM_BROWSER") or "").strip(),
+        cookie_file=(os.getenv("VIDEO_COOKIES_FILE") or "").strip(),
+    )
+
+
 def _parse_json_object(stdout: str) -> dict[str, Any] | None:
     body = (stdout or "").strip()
     if not body:
@@ -440,10 +449,24 @@ def _parse_json_object(stdout: str) -> dict[str, Any] | None:
     return None
 
 
+def _probe_cache_identity(url: str) -> str:
+    video_id = extract_youtube_video_id(url)
+    return ytdlp_probe_cache.key_for_youtube_id(video_id) if video_id else ""
+
+
 async def _run_ytdlp_probe(url: str, timeout_s: float) -> dict[str, Any] | None:
     ytdlp_bin = _find_ytdlp_bin()
     if not ytdlp_bin:
         return None
+
+    # Share the payload with the audio-ingest probe downstream: without this the
+    # same video is dumped twice per STT job, seconds apart. [PA]
+    identity = _probe_cache_identity(url)
+    signature = _probe_cookie_signature()
+    cached = ytdlp_probe_cache.get(identity, signature)
+    if cached is not None:
+        logger.info("yt.transcript.ytdlp_probe.reuse identity=%s", identity[:60])
+        return cached
 
     cmd: list[str] = [
         ytdlp_bin,
@@ -453,6 +476,9 @@ async def _run_ytdlp_probe(url: str, timeout_s: float) -> dict[str, Any] | None:
         "--quiet",
         "--no-warnings",
     ]
+    # NOTE: --no-playlist is load-bearing. On a watch?v=..&list=.. URL yt-dlp
+    # would otherwise enumerate the whole playlist -- slow, and the payload
+    # carries entries instead of captionTracks. [PA][REH]
     _apply_cookie_args(cmd)
     cmd.extend(["--", url])
 
@@ -489,7 +515,9 @@ async def _run_ytdlp_probe(url: str, timeout_s: float) -> dict[str, Any] | None:
         return None
 
     stdout_text = (stdout_bytes or b"").decode("utf-8", errors="ignore")
-    return _parse_json_object(stdout_text)
+    payload = _parse_json_object(stdout_text)
+    ytdlp_probe_cache.put(identity, signature, payload)
+    return payload
 
 
 def _entry_ext_rank(ext: str) -> int:

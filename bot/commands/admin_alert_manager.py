@@ -12,6 +12,7 @@ from bot.commands.admin_alert_models import (
     AlertSessionStatus,
 )
 from bot.config import load_config
+from bot.core.output import safe_send
 from bot.utils.logging import get_logger
 
 
@@ -302,9 +303,9 @@ class AdminAlertManager:
                     results["failed_sends"] += 1
                     continue
                 if embed:
-                    msg = await channel.send(content=alert_content, embed=embed)
+                    msg = await safe_send(channel, alert_content, embed=embed)
                 else:
-                    msg = await channel.send(content=alert_content)
+                    msg = await safe_send(channel, alert_content)
                 results["send_results"].append({"channel_id": dest.channel_id, "success": True, "message_id": msg.id})
                 results["successful_sends"] += 1
             except Exception as e:

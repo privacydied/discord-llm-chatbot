@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -55,18 +56,36 @@ async def try_youtube_transcript_first(
     resolver: Callable[..., Awaitable[Any]],
     logger: Any,
 ) -> dict[str, Any] | None:
-    """Resolve transcript-first payload for YouTube URLs, fail-open on resolver errors."""
+    """Resolve transcript-first payload for YouTube URLs, fail-open on resolver errors.
+
+    Misses are logged at INFO with their cost: this stage can spend tens of seconds
+    on an HTML fetch plus a yt-dlp caption probe before giving up, and when it only
+    logged on success that time was invisible in the log -- it read as dead air
+    between stt.job.start and the next stage. [REH]
+    """
+    started = time.monotonic()
+
+    def _elapsed_ms() -> int:
+        return int((time.monotonic() - started) * 1000)
+
     try:
         yt = await resolver(url, force_refresh=force_refresh)
     except Exception as exc:
-        logger.debug(
-            "stt.youtube_transcript.fail_open url=%s err=%s",
+        logger.info(
+            "stt.youtube_transcript.miss reason=error elapsed_ms=%d url=%s err=%s",
+            _elapsed_ms(),
             url[:120] if url else "none",
             exc,
         )
         return None
 
     if not (yt and getattr(yt, "text", "")):
+        logger.info(
+            "stt.youtube_transcript.miss reason=%s elapsed_ms=%d url=%s",
+            "no_transcript" if yt else "unresolved",
+            _elapsed_ms(),
+            url[:120] if url else "none",
+        )
         return None
 
     result = build_youtube_transcript_result(
@@ -80,12 +99,13 @@ async def try_youtube_transcript_first(
         language=yt.language,
     )
     logger.info(
-        "stt.youtube_transcript.ok video_id=%s lang=%s source=%s chars=%d cache_hit=%s",
+        "stt.youtube_transcript.ok video_id=%s lang=%s source=%s chars=%d cache_hit=%s elapsed_ms=%d",
         yt.video_id,
         yt.language or "unknown",
         yt.source,
         len(yt.text),
         str(bool(yt.cache_hit)).lower(),
+        _elapsed_ms(),
     )
     log_stt_job_complete(
         logger=logger,

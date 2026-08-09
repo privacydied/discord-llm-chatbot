@@ -114,9 +114,12 @@ async def test_try_youtube_transcript_first_fail_open_on_error() -> None:
     )
 
     assert result is None
-    assert logger.info_calls == []
-    assert len(logger.debug_calls) == 1
-    assert logger.debug_calls[0][0] == "stt.youtube_transcript.fail_open url=%s err=%s"
+    # A resolver blow-up still fails open, but it is logged at INFO with its cost:
+    # this stage can burn tens of seconds of the item budget, and at DEBUG that
+    # time was invisible in production logs. [REH]
+    assert len(logger.info_calls) == 1
+    assert logger.info_calls[0][0].startswith("stt.youtube_transcript.miss reason=error")
+    assert logger.debug_calls == []
 
 
 @pytest.mark.asyncio
@@ -134,5 +137,7 @@ async def test_try_youtube_transcript_first_ignores_empty_text() -> None:
     )
 
     assert result is None
-    assert logger.info_calls == []
+    assert len(logger.info_calls) == 1
+    assert logger.info_calls[0][0].startswith("stt.youtube_transcript.miss reason=%s")
+    assert logger.info_calls[0][1][0] == "no_transcript"
     assert logger.debug_calls == []

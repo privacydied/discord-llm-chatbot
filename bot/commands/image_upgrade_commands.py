@@ -8,6 +8,8 @@ from typing import Any
 import discord
 from discord.ext import commands
 
+from bot.core.output import safe_edit, safe_send
+from bot.core.text_chunking import DISCORD_MAX_CONTENT_LEN
 from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -497,12 +499,14 @@ class ImageUpgradeCommands(commands.Cog):
                     # Append the expansion
                     new_content = f"{current_content}\n\n---\n\n{expanded_content}"
 
-                    # Discord message limit check
-                    if len(new_content) > 2000:
-                        # Send as separate message if too long
-                        await channel.send(expanded_content)
+                    # Discord message limit check. safe_send batches the expansion when
+                    # it is itself over the limit -- VL captions and OCR dumps regularly
+                    # are, and sending one raw was a guaranteed 50035. [REH]
+                    if len(new_content) > DISCORD_MAX_CONTENT_LEN:
+                        # Send as separate message(s) if too long
+                        await safe_send(channel, expanded_content)
                     else:
-                        await message.edit(content=new_content)
+                        await safe_edit(message, new_content)
 
                     logger.info(f"✅ Applied upgrade reaction {payload.emoji} to message {payload.message_id}")
 

@@ -12,6 +12,10 @@ logger = get_logger(__name__)
 
 IMPLICIT_ACK_THOUGHTS_PROMPT = "The user provided a file or media item without explicit text. Acknowledge the content, then share thoughtful observations grounded in the processed evidence below."
 
+# Cap per-failure error text in the processing note so an exhausted provider
+# ladder's stack-trace-length error cannot crowd out real content. [CMV][PA]
+FAILURE_REASON_MAX_CHARS = 200
+
 
 @dataclass
 class ProcessedResult:
@@ -241,6 +245,26 @@ class ResultAggregator:
                 parts.append("(No content extracted)")
 
             parts.append("")  # Empty line between items
+
+        # Tell the model *why* content is missing. Failed items are excluded from
+        # truly_successful above, so without this note the prompt looks like the
+        # link was never processed and the model invents a refusal ("can't open
+        # x/twitter links") instead of reporting the real failure. [REH]
+        # Scoped to the total-failure case on purpose: when something succeeded the
+        # model already has real content to answer from, and error strings must not
+        # be mixed in as if they were evidence (see
+        # tests/test_vl_exhaustion_regression.py::test_result_aggregator_mixed_success_failure).
+        failures = [r for r in self.results if not (r.success and r.result_text.strip())] if not truly_successful else []
+        if failures:
+            parts.append(f"### Processing note ({len(failures)} of {total_items} inputs could not be processed)")
+            parts.append("")
+            for result in failures:
+                label = self._get_modality_display_name(result.modality)
+                reason = ((result.result_text or "").strip() or "unknown error")[:FAILURE_REASON_MAX_CHARS]
+                parts.append(f"- {label}: {result.item_name} — {reason}")
+            parts.append("")
+            parts.append("Tell the user this content could not be retrieved and why. Do NOT claim you are unable to open or access links in general.")
+            parts.append("")
 
         # Add original text content if present
         if original_text and original_text.strip():

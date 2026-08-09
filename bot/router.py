@@ -157,6 +157,7 @@ from .utils.attachment_text import read_attachment_text
 from .utils.file_utils import download_file
 from .utils.logging import get_logger
 from .vision.types import VisionError, VisionErrorType
+from .core.output import safe_reply
 from .vl.postprocess import sanitize_model_output, sanitize_vl_reply_text
 from .web import process_url
 from .web_extraction_service import web_extractor
@@ -4348,7 +4349,9 @@ class Router:
                 except Exception as exc:
                     try:
                         mod_label = getattr(modality, "name", "input").lower()
-                        await message.reply(f"⚠️ An error occurred while processing {mod_label}: {exc}")
+                        # safe_reply batches: media handlers wrap yt-dlp/ffmpeg stderr,
+                        # which can exceed Discord's limit on its own. [REH]
+                        await safe_reply(message, f"⚠️ An error occurred while processing {mod_label}: {exc}")
                     except Exception as exc2:
                         self.logger.debug(f"error reply failed: {exc2}")
                     handler_res = None
@@ -5004,10 +5007,21 @@ class Router:
 
             Never raises: extraction failures and provider-ladder exhaustion are
             recorded as failed results, matching the prior per-item handling. [REH]
+
+            The per-item budget is published as a narrowed ambient deadline so
+            nested provider ladders (notably the VL ladder inside the general-URL
+            handler) clamp themselves to the guard that will actually cancel them,
+            instead of re-granting a longer budget and dying with zero fallbacks. [PA]
             """
-            if modality in _EXTRACTION_ONLY_MODALITIES:
-                return await _exec_extraction(item, modality, selected_budget, i)
-            return await self._execute_ladder_item(item, modality, retry_manager, message, retry_modality, selected_budget, i)
+            from bot.time_budget import clear_deadline, narrow_deadline
+
+            _item_token = narrow_deadline(selected_budget)
+            try:
+                if modality in _EXTRACTION_ONLY_MODALITIES:
+                    return await _exec_extraction(item, modality, selected_budget, i)
+                return await self._execute_ladder_item(item, modality, retry_manager, message, retry_modality, selected_budget, i)
+            finally:
+                clear_deadline(_item_token)
 
         if has_x_url:
             # X/Twitter batches mutate order-sensitive shared dedup/allow-vision state

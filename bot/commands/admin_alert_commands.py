@@ -12,6 +12,7 @@ from discord.ext import commands
 from bot.commands.admin_alert_manager import AdminAlertManager
 from bot.commands.admin_alert_models import AlertDestination, AlertSessionStatus
 from bot.config import load_config
+from bot.core.output import safe_send
 from bot.public_output import sanitize_public_text
 from bot.utils.logging import get_logger
 
@@ -150,7 +151,7 @@ class AdminAlertCommands(commands.Cog):
 
             # Send alert to this guild [REH]
             try:
-                await target_channel.send(content)
+                await safe_send(target_channel, content)
                 guilds_success += 1
                 self.logger.debug(f"alert:sent guild_id={guild.id} channel_id={target_channel.id}")
             except (discord.HTTPException, discord.Forbidden, discord.NotFound) as e:
@@ -706,9 +707,9 @@ class AdminAlertCommands(commands.Cog):
                 description=session.embed_description,
                 color=0x1F8B4C,
             )
-            await user.send(content=f"**PREVIEW:** {session.content}", embed=alert_embed)
+            await safe_send(user, f"**PREVIEW:** {session.content}", embed=alert_embed)
         else:
-            await user.send(f"**PREVIEW:** {session.content}")
+            await safe_send(user, f"**PREVIEW:** {session.content}")
 
         session.current_step = "confirm_send"
         try:

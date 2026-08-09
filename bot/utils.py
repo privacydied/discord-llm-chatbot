@@ -5,7 +5,6 @@ import mimetypes
 import os
 import re
 from pathlib import Path
-from typing import Any
 
 import aiohttp
 
@@ -72,100 +71,6 @@ def is_text_file(file_path: str | Path) -> bool:
         return True
     except (OSError, UnicodeDecodeError):
         return False
-
-
-async def send_in_chunks(channel, text: str, reference=None, chunk_size: int = 2000) -> list[Any]:
-    """Send a long message in chunks to avoid Discord's 2000 character limit.
-
-    Args:
-        channel: The Discord channel to send the message to
-        text: The text to send
-        reference: Optional message to reply to
-        chunk_size: Maximum size of each chunk (default: 2000)
-
-    Returns:
-        List of sent message objects
-
-    """
-    if not text:
-        return []
-
-    # Split into chunks, trying to preserve paragraphs
-    chunks = []
-    current_chunk = ""
-
-    # First, try to split on double newlines
-    paragraphs = text.split("\n\n")
-
-    for paragraph in paragraphs:
-        # If adding this paragraph would exceed the chunk size, save current chunk
-        if len(current_chunk) + len(paragraph) + 2 > chunk_size and current_chunk:
-            chunks.append(current_chunk)
-            current_chunk = ""
-
-        # Add paragraph to current chunk
-        if current_chunk:
-            current_chunk += "\n\n" + paragraph
-        else:
-            current_chunk = paragraph
-
-    # Add the last chunk if not empty
-    if current_chunk:
-        chunks.append(current_chunk)
-
-    # If we still have chunks that are too long, split by lines
-    new_chunks = []
-    for chunk in chunks:
-        if len(chunk) <= chunk_size:
-            new_chunks.append(chunk)
-            continue
-
-        # Split by lines
-        lines = chunk.split("\n")
-        current_line_chunk = ""
-
-        for line in lines:
-            if len(current_line_chunk) + len(line) + 1 > chunk_size and current_line_chunk:
-                new_chunks.append(current_line_chunk)
-                current_line_chunk = ""
-
-            if current_line_chunk:
-                current_line_chunk += "\n" + line
-            else:
-                current_line_chunk = line
-
-        if current_line_chunk:
-            new_chunks.append(current_line_chunk)
-
-    chunks = new_chunks
-
-    # If we still have chunks that are too long, split by character
-    final_chunks = []
-    for chunk in chunks:
-        if len(chunk) <= chunk_size:
-            final_chunks.append(chunk)
-        else:
-            # Split by character
-            for i in range(0, len(chunk), chunk_size):
-                final_chunks.append(chunk[i : i + chunk_size])
-
-    # Send each chunk
-    sent_messages = []
-    for i, chunk in enumerate(final_chunks):
-        try:
-            if i == 0 and reference is not None:
-                msg = await channel.send(chunk, reference=reference)
-            else:
-                msg = await channel.send(chunk)
-            sent_messages.append(msg)
-        except Exception as e:
-            logging.exception(f"Error sending message chunk {i + 1}/{len(final_chunks)}: {e}")
-
-    return sent_messages
-
-
-# Alias for backward compatibility with main.py import
-send_chunks = send_in_chunks
 
 
 def extract_mentions(text: str) -> list[tuple[str, str]]:

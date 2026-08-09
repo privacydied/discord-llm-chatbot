@@ -768,16 +768,12 @@ Server Context: {server_context}"""
             # surface as a user-facing total_timeout. Keep a dispatch reserve so
             # the reply can still be delivered, and a small floor so at least
             # one fast attempt runs. [PA][REH]
-            from bot.time_budget import remaining_seconds
+            from bot.time_budget import clamp_to_deadline
 
-            _DEADLINE_DISPATCH_RESERVE_S = 10.0  # [CMV]
-            _LADDER_MIN_BUDGET_S = 8.0  # [CMV]
-            ambient_remaining = remaining_seconds()
-            if ambient_remaining is not None:
-                clamped = max(_LADDER_MIN_BUDGET_S, ambient_remaining - _DEADLINE_DISPATCH_RESERVE_S)
-                if clamped < per_item_budget:
-                    logger.info(f"[OpenAI] text.budget clamped to deadline: {per_item_budget:.0f}s -> {clamped:.0f}s (ambient_remaining={ambient_remaining:.0f}s)")
-                    per_item_budget = clamped
+            clamped, ambient_remaining = clamp_to_deadline(per_item_budget)
+            if clamped < per_item_budget:
+                logger.info(f"[OpenAI] text.budget clamped to deadline: {per_item_budget:.0f}s -> {clamped:.0f}s (ambient_remaining={ambient_remaining:.0f}s)")
+                per_item_budget = clamped
             with contextlib.suppress(Exception):
                 logger.info(f"[OpenAI] text.budget seconds={per_item_budget}")
             try:
@@ -1230,8 +1226,19 @@ async def _generate_vl_response_with_retry(
         except Exception as exc:
             logger.debug(f"Failed to parse VISION_PER_ITEM_BUDGET: {exc}")
             per_item_budget = 45.0
+        # Clamp to the ambient deadline, exactly as the text ladder does. This VL
+        # ladder runs nested inside the router's per-item asyncio.wait_for; without
+        # the clamp it re-grants itself a full VISION_PER_ITEM_BUDGET (and a first
+        # attempt longer than the enclosing guard), so the outer timeout cancels
+        # attempt 1 and no fallback rung ever runs. [PA][REH]
+        from bot.time_budget import clamp_to_deadline
+
+        per_item_budget, ambient_remaining = clamp_to_deadline(per_item_budget)
         with contextlib.suppress(Exception):
-            logger.info(f"[VL] vision.budget seconds={per_item_budget}")
+            if ambient_remaining is not None:
+                logger.info(f"[VL] vision.budget seconds={per_item_budget} (ambient_remaining={ambient_remaining:.0f}s)")
+            else:
+                logger.info(f"[VL] vision.budget seconds={per_item_budget}")
 
         rr = await retry_mgr.run_with_fallback("vision", _coro_factory, per_item_budget=per_item_budget)
 

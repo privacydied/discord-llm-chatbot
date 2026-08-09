@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import discord
@@ -299,6 +300,144 @@ async def test_send_chunked_long_message_is_sequential_and_ordered(bot_stub) -> 
 
     # Continuation messages should not reply to bot's previous chunks.
     sent_messages[0].reply.assert_not_awaited()
+
+
+# ===================== chunking: delivery order =====================
+
+
+@pytest.mark.asyncio
+async def test_send_chunked_parts_are_sent_in_order_one_at_a_time(bot_stub) -> None:
+    """Parts must leave in chunk order, and each send must complete before the next starts.
+
+    The older ordering test inspects `reply_calls + channel_send_calls`, which is
+    ordered by *call type* rather than by time -- it cannot observe a reordering.
+    This test records one shared timeline across both APIs, and makes each send
+    await a real event-loop turn so any concurrency (gather/create_task) would
+    interleave and be caught. Discord assigns snowflakes in receipt order, so a
+    later-but-shorter part overtaking an earlier one is only possible if the sends
+    are in flight together.
+    """
+    # Deliberately lopsided: a long first part and a tiny trailing part, the exact
+    # shape where a short chunk could overtake a long one if sends raced.
+    content = ("A" * 3000) + "\n\ntail"
+    action = BotAction(content=content, embeds=[])
+
+    message = MagicMock(spec=discord.Message)
+    message.id = 123
+    message.content = "hi"
+    message.reference = None
+    message.guild = MagicMock(id=456)
+    message.author = MagicMock(id=111, bot=False, mention="<@111>")
+    message.channel = MagicMock(spec=discord.TextChannel)
+    message.channel.id = 789
+
+    timeline: list[tuple[str, str]] = []
+    in_flight = 0
+    overlaps: list[str] = []
+
+    async def _record(api: str, **kwargs):
+        nonlocal in_flight
+        body = kwargs.get("content", "") or ""
+        in_flight += 1
+        if in_flight > 1:
+            overlaps.append(body[:20])
+        timeline.append(("start", body))
+        # Yield control: a concurrent implementation would start the next send here.
+        await asyncio.sleep(0)
+        timeline.append(("end", body))
+        in_flight -= 1
+        return _FakeSentMessage(content=body, embeds=kwargs.get("embeds") or [], files=kwargs.get("files") or [])
+
+    async def _reply(**kwargs):
+        return await _record("reply", **kwargs)
+
+    async def _send(**kwargs):
+        return await _record("send", **kwargs)
+
+    reply_target = MagicMock(spec=discord.Message)
+    reply_target.reply = AsyncMock(side_effect=_reply)
+    message.channel.send = AsyncMock(side_effect=_send)
+    reply_target.channel = message.channel
+
+    chunks = LLMBot._chunk_message_content(bot_stub, content)
+    assert len(chunks) == 2, "fixture must produce exactly two parts"
+
+    await LLMBot._send_chunked_reply(
+        bot_stub,
+        message=message,
+        action=action,
+        base_extra={"msg_id": message.id},
+        force_reply_target=reply_target,
+        target_message=None,
+        dispatch_meta={"trigger_message_id": message.id},
+        content=content,
+        files=None,
+        chunks=chunks,
+    )
+
+    assert overlaps == [], f"sends overlapped, delivery order is not guaranteed: {overlaps}"
+
+    # Strict alternation start/end/start/end proves one-at-a-time sequencing.
+    assert [phase for phase, _ in timeline] == ["start", "end", "start", "end"]
+
+    # The wire order must match the chunk order, not length order.
+    wire_order = [body for phase, body in timeline if phase == "start"]
+    assert wire_order[0].endswith(chunks[0]), "first part on the wire must be chunk 1"
+    assert wire_order[1] == chunks[1], "second part on the wire must be chunk 2"
+    assert len(wire_order[0]) > len(wire_order[1]), "fixture should have a long part then a short one"
+
+
+@pytest.mark.asyncio
+async def test_send_chunked_stops_after_a_failed_part(bot_stub) -> None:
+    """A mid-sequence failure must not let later parts through out of context.
+
+    Emitting part 3 after part 2 was lost would present the user with text that
+    reads as continuous but silently skips a section.
+    """
+    content = ("A" * 1900) + "\n\n" + ("B" * 1900) + "\n\n" + ("C" * 1900)
+    action = BotAction(content=content, embeds=[])
+
+    message = MagicMock(spec=discord.Message)
+    message.id = 123
+    message.content = "hi"
+    message.reference = None
+    message.guild = MagicMock(id=456)
+    message.author = MagicMock(id=111, bot=False, mention="<@111>")
+    message.channel = MagicMock(spec=discord.TextChannel)
+    message.channel.id = 789
+
+    sent_bodies: list[str] = []
+
+    async def _reply(**kwargs):
+        sent_bodies.append(kwargs.get("content", ""))
+        return _FakeSentMessage(content=kwargs.get("content", ""))
+
+    async def _send(**kwargs):
+        sent_bodies.append(kwargs.get("content", ""))
+        raise discord.errors.HTTPException(MagicMock(status=500), {"code": 0, "message": "boom"})
+
+    reply_target = MagicMock(spec=discord.Message)
+    reply_target.reply = AsyncMock(side_effect=_reply)
+    message.channel.send = AsyncMock(side_effect=_send)
+    reply_target.channel = message.channel
+
+    chunks = LLMBot._chunk_message_content(bot_stub, content)
+    assert len(chunks) >= 3, "fixture must produce at least three parts"
+
+    await LLMBot._send_chunked_reply(
+        bot_stub,
+        message=message,
+        action=action,
+        base_extra={"msg_id": message.id},
+        force_reply_target=reply_target,
+        target_message=None,
+        dispatch_meta={"trigger_message_id": message.id},
+        content=content,
+        files=None,
+        chunks=chunks,
+    )
+
+    assert len(sent_bodies) == 2, f"must stop at the failed part, attempted {len(sent_bodies)}"
 
 
 # ===================== on_message: no self-reply loop =====================

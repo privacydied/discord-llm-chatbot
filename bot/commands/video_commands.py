@@ -8,6 +8,7 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import BucketType, cooldown
 
+from bot.core.output import safe_edit
 from bot.exceptions import InferenceError
 from bot.hear import hear_infer_from_url
 from bot.utils.logging import get_logger
@@ -154,8 +155,9 @@ class VideoCommands(commands.Cog):
                 )
 
         except InferenceError as e:
-            # User-friendly error message
-            await processing_msg.edit(content=f"❌ **Transcription Failed**\n{e!s}")
+            # User-friendly error message. InferenceError often wraps yt-dlp/ffmpeg
+            # stderr, so the text can exceed Discord's limit -- safe_edit batches. [REH]
+            await safe_edit(processing_msg, f"❌ **Transcription Failed**\n{e!s}")
             logger.warning(
                 f"Video transcription failed: {e}",
                 extra={

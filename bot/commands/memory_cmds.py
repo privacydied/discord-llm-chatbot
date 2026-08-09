@@ -11,6 +11,7 @@ from discord.ext import commands
 
 # Import bot modules
 from bot.config import load_config
+from bot.core.output import safe_send
 from bot.logger import log_command
 from bot.memory import add_explicit_memory, delete_memory, get_memory_distiller, get_profile, get_server_profile, list_user_memories, save_profile, save_server_profile, search_user_memories, wipe_user_memories
 
@@ -241,7 +242,7 @@ class MemoryCommands(commands.Cog):
                 await ctx.send(embed=done_embed)
             except Exception as exc:
                 logger.exception("Background memory distillation failed")
-                await ctx.send(f"❌ Memory distillation failed: `{exc}`")
+                await safe_send(ctx, f"❌ Memory distillation failed: `{exc}`")
             finally:
                 task = self._distill_once_tasks.get(guild_id)
                 if task is not None and task.done():

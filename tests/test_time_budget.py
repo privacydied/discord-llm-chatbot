@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import asyncio
 
-from bot.time_budget import clear_deadline, remaining_seconds, set_deadline
+from bot.time_budget import (
+    DISPATCH_RESERVE_S,
+    LADDER_MIN_BUDGET_S,
+    clamp_to_deadline,
+    clear_deadline,
+    narrow_deadline,
+    remaining_seconds,
+    set_deadline,
+)
 
 
 class TestDeadlineBasics:
@@ -59,3 +67,81 @@ class TestDeadlineTaskPropagation:
 
         token = await asyncio.wait_for(make_token(), timeout=5)
         clear_deadline(token)  # token from a dead task context — must not raise
+
+
+class TestNarrowDeadline:
+    """narrow_deadline must only tighten — a nested guard can never buy more time."""
+
+    def test_narrows_when_shorter(self) -> None:
+        outer = set_deadline(240.0)
+        try:
+            inner = narrow_deadline(120.0)
+            try:
+                rem = remaining_seconds()
+                assert rem is not None
+                assert 110.0 < rem <= 120.0
+            finally:
+                clear_deadline(inner)
+            rem_after = remaining_seconds()
+            assert rem_after is not None
+            assert rem_after > 120.0
+        finally:
+            clear_deadline(outer)
+
+    def test_does_not_widen(self) -> None:
+        outer = set_deadline(30.0)
+        try:
+            inner = narrow_deadline(300.0)
+            try:
+                rem = remaining_seconds()
+                assert rem is not None
+                assert rem <= 30.0
+            finally:
+                clear_deadline(inner)
+        finally:
+            clear_deadline(outer)
+
+    def test_arms_when_no_ambient_deadline(self) -> None:
+        token = narrow_deadline(45.0)
+        try:
+            rem = remaining_seconds()
+            assert rem is not None
+            assert 35.0 < rem <= 45.0
+        finally:
+            clear_deadline(token)
+
+
+class TestClampToDeadline:
+    """The clamp both ladders share: sub-budget must fit inside the ambient guard."""
+
+    def test_untouched_without_deadline(self) -> None:
+        budget, ambient = clamp_to_deadline(300.0)
+        assert budget == 300.0
+        assert ambient is None
+
+    def test_clamps_vision_budget_to_item_guard(self) -> None:
+        """The live bug: VISION_PER_ITEM_BUDGET=300 nested in a 120s item wait_for."""
+        token = narrow_deadline(120.0)
+        try:
+            budget, ambient = clamp_to_deadline(300.0)
+            assert ambient is not None
+            assert budget <= 120.0 - DISPATCH_RESERVE_S + 1.0
+            assert budget >= LADDER_MIN_BUDGET_S
+        finally:
+            clear_deadline(token)
+
+    def test_does_not_inflate_smaller_budget(self) -> None:
+        token = set_deadline(240.0)
+        try:
+            budget, _ = clamp_to_deadline(45.0)
+            assert budget == 45.0
+        finally:
+            clear_deadline(token)
+
+    def test_floor_respected_when_nearly_expired(self) -> None:
+        token = set_deadline(1.0)
+        try:
+            budget, _ = clamp_to_deadline(300.0)
+            assert budget == LADDER_MIN_BUDGET_S
+        finally:
+            clear_deadline(token)

@@ -48,9 +48,24 @@ from bot.utils.logging import get_logger
 from bot.voice import VoiceMessagePublisher
 
 from .message_processor import MessageProcessor
+from .text_chunking import (
+    DISCORD_ERR_INVALID_FORM_BODY,
+    DISCORD_ERR_UNKNOWN_MESSAGE,
+    DISCORD_MAX_CONTENT_LEN,
+    split_for_discord,
+)
 
-# Discord hard limit is 2000; use 1950 to leave headroom for mentions/overhead [REH][PA]
-_DISCORD_MAX_CONTENT_LEN = 1950
+# Re-exported from the shared splitter; kept as module names because tests and
+# call sites already import them from here. [CA]
+# Discord hard limit is 2000; 1950 leaves headroom for mentions/overhead [REH][PA]
+_DISCORD_MAX_CONTENT_LEN = DISCORD_MAX_CONTENT_LEN
+
+# These two codes were previously conflated under one branch labelled "Unknown
+# Message", which is 10008 -- 50035 is Invalid Form Body, what Discord returns for
+# an oversize payload. The mislabel meant the deleted-trigger-message fallback
+# never fired, and an oversize send was retried with the identical body. [CMV][REH]
+_DISCORD_ERR_UNKNOWN_MESSAGE = DISCORD_ERR_UNKNOWN_MESSAGE
+_DISCORD_ERR_INVALID_FORM_BODY = DISCORD_ERR_INVALID_FORM_BODY
 
 if TYPE_CHECKING:
     from bot.router import BotAction, Router
@@ -1562,11 +1577,13 @@ class LLMBot(commands.Bot):
             except (AttributeError, TypeError, ValueError) as exc:
                 self.logger.debug(f"dispatch.chunked logging failed: {exc}")
 
-        # Discord has a 2000 character limit: attach overflow as file for operators while
-        # still sending the full content via multi-part messages when needed.
-        if content and len(content) > 2000:
+        # Oversize content is normally delivered in full as ordered multi-part
+        # messages, so the full_response.txt attachment would just duplicate it on
+        # every long reply. Attach it only when chunking did NOT cover the content --
+        # i.e. the splitter returned a single oversize part. [REH][PA]
+        if content and len(content) > _DISCORD_MAX_CONTENT_LEN and not needs_chunking:
             self.logger.warning(
-                f"dispatch:overflow | length={len(content)}",
+                f"dispatch:overflow | length={len(content)} reason=unchunkable",
                 extra={**base_extra, "event": "dispatch.content.overflow"},
             )
             file_content = io.BytesIO(content.encode("utf-8"))
@@ -1848,8 +1865,8 @@ class LLMBot(commands.Bot):
                         if self.enhanced_context_manager and sent_message:
                             await self.enhanced_context_manager.append_message(sent_message, role="bot")
             except discord.errors.HTTPException as e:
-                # If replying fails (e.g., original message deleted), send a normal message instead.
-                if e.code == 50035:  # Unknown Message
+                if e.code == _DISCORD_ERR_UNKNOWN_MESSAGE:
+                    # Trigger message was deleted: degrade to a plain channel message.
                     self.logger.warning(
                         "dispatch:fallback | reason=unknown_message",
                         extra={**base_extra, "event": "dispatch.send.reply_fallback"},
@@ -1868,6 +1885,11 @@ class LLMBot(commands.Bot):
                     if self.enhanced_context_manager and sent_message:
                         await self.enhanced_context_manager.append_message(sent_message, role="bot")
                 else:
+                    # Everything else, including _DISCORD_ERR_INVALID_FORM_BODY: log and
+                    # propagate. Content-length 50035 cannot reach here (every chunk is
+                    # capped at _DISCORD_MAX_CONTENT_LEN before sending), so a 50035 here
+                    # means a malformed embed or file -- re-sending the identical payload,
+                    # as this branch used to, could only fail the same way. [REH]
                     self.logger.error(
                         f"dispatch:error | code={e.code} status={getattr(e, 'status', 'n/a')} details={e!s}",
                         extra={**base_extra, "event": "dispatch.send.error"},
@@ -2154,101 +2176,10 @@ class LLMBot(commands.Bot):
     def _chunk_message_content(self, content: str) -> list[str]:
         """Split a text payload into Discord-safe chunks.
 
-        Requirements:
-        - Preserve all original content ("".join(chunks) == text).
-        - Prefer paragraph boundaries, then line breaks, then sentence endings,
-          then whitespace; hard cut only as last resort within max_len.
-        - Avoid empty/whitespace-only chunks where possible without dropping content.
-        - Respect code-fence parity when choosing a split point if feasible.
+        Thin delegate to the shared splitter so every outbound path -- this one and
+        ``bot.core.output`` -- applies the same policy and limit. [CA]
         """
-        try:
-            if content is None:
-                return []
-            text = str(content)
-        except (TypeError, ValueError):
-            text = content or ""
-
-        if not text:
-            return []
-
-        max_len = _DISCORD_MAX_CONTENT_LEN
-        if len(text) <= max_len:
-            return [text]
-
-        chunks: list[str] = []
-        n = len(text)
-        start = 0
-
-        while start < n:
-            remaining = n - start
-            if remaining <= max_len:
-                # Final chunk: take everything left; preserves exact content.
-                chunks.append(text[start:])
-                break
-
-            window = text[start : start + max_len]
-
-            # Candidate split positions (relative to start), in priority order.
-            candidates: list[int] = []
-
-            para_idx = window.rfind("\n\n")
-            if para_idx != -1:
-                candidates.append(para_idx + 2)
-
-            line_idx = window.rfind("\n")
-            if line_idx != -1:
-                candidates.append(line_idx + 1)
-
-            sentence_idx = max(
-                window.rfind(". "),
-                window.rfind("! "),
-                window.rfind("? "),
-            )
-            if sentence_idx != -1:
-                candidates.append(sentence_idx + 2)
-
-            space_idx = max(window.rfind(" "), window.rfind("\t"))
-            if space_idx != -1:
-                candidates.append(space_idx + 1)
-
-            # Deduplicate while preserving order.
-            seen: set[int] = set()
-            uniq_candidates: list[int] = []
-            for c in candidates:
-                if c not in seen and c > 0:
-                    seen.add(c)
-                    uniq_candidates.append(c)
-
-            best_break: int | None = None
-
-            # Prefer boundaries that keep us outside of fenced code blocks when possible.
-            for candidate in sorted(uniq_candidates, reverse=True):
-                segment = text[start : start + candidate]
-                if segment.count("```") % 2 == 0:
-                    best_break = candidate
-                    break
-
-            # If none chosen by code-fence logic, take the last viable candidate.
-            if best_break is None:
-                best_break = max(uniq_candidates) if uniq_candidates else max_len
-
-            # Safety clamp: never exceed max_len.
-            if best_break <= 0 or (start + best_break > n):
-                best_break = min(max_len, n - start)
-
-            # Take this chunk as-is (no rstrip/trimming that loses content).
-            chunk = text[start : start + best_break]
-
-            # If the chunk is empty/whitespace-only and there's more content ahead,
-            # extend it by one character to avoid producing an effectively empty message.
-            if not chunk.strip() and (start + best_break < n):
-                extra = min(1, n - (start + best_break))
-                chunk = text[start : start + best_break + extra]
-
-            chunks.append(chunk)
-            start += best_break
-
-        return chunks
+        return split_for_discord(content, _DISCORD_MAX_CONTENT_LEN)
 
     def _is_long_running_admin_command(self, message: discord.Message) -> bool:
         """Check if this is a long-running admin command that should run out-of-band."""

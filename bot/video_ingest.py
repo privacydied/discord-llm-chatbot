@@ -18,8 +18,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import ParseResult, urlparse, urlunparse
 
+from . import ytdlp_probe_cache
 from .config import load_config
 from .exceptions import InferenceError
+from .time_budget import remaining_seconds
 from .utils.external_api import _is_private_hostname
 from .utils.logging import get_logger
 
@@ -39,6 +41,23 @@ CACHE_EXPIRY_DAYS = int(os.getenv("VIDEO_CACHE_EXPIRY_DAYS", "7"))
 YTDLP_COOKIES_FROM_BROWSER = os.getenv("VIDEO_COOKIES_FROM_BROWSER")
 YTDLP_COOKIES_FILE = os.getenv("VIDEO_COOKIES_FILE")
 YTDLP_COOKIES_SITES = {s.strip().lower() for s in os.getenv("VIDEO_COOKIES_SITES", "tiktok").split(",") if s.strip()}
+
+# yt-dlp stage timeouts. YTDLP_METADATA_TIMEOUT_S / YTDLP_DOWNLOAD_TIMEOUT_S are
+# the *no-deadline defaults*; when a request deadline is armed the stages are
+# sized from the time actually left instead, because killing a probe at 10s while
+# 200s of request budget sits unused is a self-inflicted failure -- and there is
+# no retry behind it. Ceilings keep a wedged yt-dlp from eating the whole
+# request; the reserve leaves room to still transcribe and reply. [CMV][REH][PA]
+YTDLP_METADATA_TIMEOUT_DEFAULT_S = 10.0
+YTDLP_DOWNLOAD_TIMEOUT_DEFAULT_S = 25.0
+YTDLP_METADATA_CEILING_DEFAULT_S = 45.0
+YTDLP_DOWNLOAD_CEILING_DEFAULT_S = 90.0
+YTDLP_METADATA_FLOOR_S = 5.0
+YTDLP_DOWNLOAD_FLOOR_S = 15.0
+YTDLP_METADATA_BUDGET_SHARE = 0.25
+YTDLP_STAGE_RESERVE_S = 10.0
+MEDIA_BUDGET_FLOOR_S = 15.0
+VXINSTAGRAM_RESOLVE_TIMEOUT_S = 10.0
 
 # Supported URL patterns - must match MEDIA_CAPABLE_DOMAINS from media_capability.py
 SUPPORTED_PATTERNS = [
@@ -180,6 +199,63 @@ SUPPORTED_PATTERNS = [
 
 # Global semaphore for download concurrency
 _download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _available_stage_seconds() -> float | None:
+    """Seconds the yt-dlp stages may actually spend, or None if unbounded. [PA]
+
+    The binding constraint is whichever is tighter: the ambient request deadline
+    (what the caller's ``wait_for`` will really allow) or the configured per-item
+    media budget. Read live so hot-reloads via ``reload_env`` take effect.
+    """
+    limits: list[float] = []
+    ambient = remaining_seconds()
+    if ambient is not None:
+        limits.append(ambient)
+    budget_cfg = load_config().get("MEDIA_PER_ITEM_BUDGET")
+    if budget_cfg is not None:
+        try:
+            limits.append(max(MEDIA_BUDGET_FLOOR_S, float(budget_cfg)))
+        except (TypeError, ValueError) as exc:
+            logger.debug(f"budget timeout calc failed: {exc}")
+    if not limits:
+        return None
+    return max(0.0, min(limits) - YTDLP_STAGE_RESERVE_S)
+
+
+def _resolve_ytdlp_stage_timeouts() -> tuple[float, float]:
+    """Resolve ``(metadata_timeout, download_timeout)`` for one ingest. [REH][PA]
+
+    With no budget in play the env defaults stand. With a budget, the probe gets a
+    fixed share of what is left and the download gets the remainder, each clamped
+    between a floor (so a fast attempt always runs) and a ceiling (so a wedged
+    yt-dlp can't consume the request).
+    """
+    metadata_timeout = _env_float("YTDLP_METADATA_TIMEOUT_S", YTDLP_METADATA_TIMEOUT_DEFAULT_S)
+    download_timeout = _env_float("YTDLP_DOWNLOAD_TIMEOUT_S", YTDLP_DOWNLOAD_TIMEOUT_DEFAULT_S)
+    available = _available_stage_seconds()
+    if available is None:
+        return metadata_timeout, download_timeout
+
+    metadata_ceiling = _env_float("YTDLP_METADATA_TIMEOUT_CEILING_S", YTDLP_METADATA_CEILING_DEFAULT_S)
+    download_ceiling = _env_float("YTDLP_DOWNLOAD_TIMEOUT_CEILING_S", YTDLP_DOWNLOAD_CEILING_DEFAULT_S)
+    metadata_timeout = min(metadata_ceiling, max(YTDLP_METADATA_FLOOR_S, available * YTDLP_METADATA_BUDGET_SHARE))
+    download_timeout = min(download_ceiling, max(YTDLP_DOWNLOAD_FLOOR_S, available - metadata_timeout))
+    logger.info(
+        "stt.ytdlp.budget available=%.1fs metadata=%.1fs download=%.1fs",
+        available,
+        metadata_timeout,
+        download_timeout,
+    )
+    return metadata_timeout, download_timeout
+
 
 # Domain-to-extractor mapping for metadata validation and identity canonicalization [CMV]
 _DOMAIN_EXTRACTOR_MAP: dict[str, str] = {
@@ -826,7 +902,37 @@ class VideoIngestionManager:
 
         return temp_path, content_length
 
+    def _probe_cookie_signature(self, url: str) -> str:
+        """Cookie identity of a probe, so cached payloads aren't cross-served."""
+        if not self._should_apply_cookies(url):
+            return ytdlp_probe_cache.NO_COOKIES
+        return ytdlp_probe_cache.cookie_signature(
+            browser=YTDLP_COOKIES_FROM_BROWSER,
+            cookie_file=YTDLP_COOKIES_FILE,
+        )
+
+    @staticmethod
+    def _log_probe_resolution(metadata: dict[str, Any]) -> None:
+        # Log the resolved URL from yt-dlp for debugging [REH]
+        resolved_id = metadata.get("id") or "unknown"
+        resolved_webpage = metadata.get("webpage_url") or metadata.get("url") or "none"
+        logger.info(
+            "stt.ytdlp.resolved id=%s webpage_url=%s",
+            resolved_id[:40] if resolved_id else "none",
+            resolved_webpage[:80] if resolved_webpage else "none",
+        )
+
     async def _probe_metadata(self, url: str, timeout_s: float) -> dict[str, Any]:
+        # The transcript-first path may already have dumped this exact video
+        # seconds ago; reuse it rather than paying a second cold probe. [PA]
+        identity = self._canonicalize_video_identity(url)
+        signature = self._probe_cookie_signature(url)
+        cached = ytdlp_probe_cache.get(identity, signature)
+        if cached is not None:
+            logger.info("stt.ytdlp.probe.reuse identity=%s", identity[:60])
+            self._log_probe_resolution(cached)
+            return cached
+
         # Log the exact URL being probed for STT debugging [REH]
         logger.info(
             "stt.ytdlp.probe url=%s",
@@ -841,14 +947,8 @@ class VideoIngestionManager:
             msg = f"Failed to parse yt-dlp metadata: {exc}"
             raise VideoIngestError(msg)
 
-        # Log the resolved URL from yt-dlp for debugging [REH]
-        resolved_id = metadata.get("id") or "unknown"
-        resolved_webpage = metadata.get("webpage_url") or metadata.get("url") or "none"
-        logger.info(
-            "stt.ytdlp.resolved id=%s webpage_url=%s",
-            resolved_id[:40] if resolved_id else "none",
-            resolved_webpage[:80] if resolved_webpage else "none",
-        )
+        ytdlp_probe_cache.put(identity, signature, metadata)
+        self._log_probe_resolution(metadata)
         return metadata
 
     async def _download_audio(
@@ -923,20 +1023,12 @@ class VideoIngestionManager:
             raise VideoIngestError(msg)
 
         async with _download_semaphore:
-            metadata_timeout = float(os.getenv("YTDLP_METADATA_TIMEOUT_S", "10"))
-            download_timeout = float(os.getenv("YTDLP_DOWNLOAD_TIMEOUT_S", "25"))
-            # Use live config so hot-reloads via reload_env take effect [REH][PA]
-            cfg = load_config()
-            budget_limit_cfg = cfg.get("MEDIA_PER_ITEM_BUDGET")
-            if budget_limit_cfg is not None:
-                try:
-                    budget_s = max(15.0, float(budget_limit_cfg))
-                    metadata_timeout = min(metadata_timeout, max(5.0, budget_s * 0.25))
-                    download_timeout = min(download_timeout, max(15.0, budget_s - 5.0))
-                except Exception as exc:
-                    logger.debug(f"budget timeout calc failed: {exc}")
+            metadata_timeout, download_timeout = _resolve_ytdlp_stage_timeouts()
 
-            vx_direct_media_url = await self._resolve_vxinstagram_direct_media_url(url, min(metadata_timeout, 10.0))
+            vx_direct_media_url = await self._resolve_vxinstagram_direct_media_url(
+                url,
+                min(metadata_timeout, VXINSTAGRAM_RESOLVE_TIMEOUT_S),
+            )
             if vx_direct_media_url:
                 parsed_direct = urlparse(vx_direct_media_url)
                 return await self._direct_media_fallback(

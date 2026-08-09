@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 
 from bot.config_reload import get_config_for_debug, get_config_version, manual_reload_command
+from bot.core.output import safe_reply
 from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -26,7 +27,9 @@ class ConfigCommands(commands.Cog):
             async with ctx.typing():
                 result_message = manual_reload_command()
 
-            await ctx.reply(result_message, mention_author=False)
+            # manual_reload_command joins every missing env var name and can interpolate
+            # raw exception text, so this is unbounded -- safe_reply batches. [REH]
+            await safe_reply(ctx.message, result_message)
             logger.info(f"✅ Manual config reload completed for {ctx.author.id}")
 
         except commands.MissingPermissions:
