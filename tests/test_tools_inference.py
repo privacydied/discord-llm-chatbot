@@ -19,8 +19,13 @@ def _call(name, arguments, call_id="c1"):
     return SimpleNamespace(id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
 
 
-def _response(content=None, tool_calls=None):
-    message = SimpleNamespace(content=content, tool_calls=tool_calls)
+def _response(content=None, tool_calls=None, reasoning=None, reasoning_details=None):
+    message = SimpleNamespace(
+        content=content,
+        tool_calls=tool_calls,
+        reasoning=reasoning,
+        reasoning_details=reasoning_details,
+    )
     return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
 
@@ -198,6 +203,137 @@ async def test_context_and_system_prompt_are_sent(monkeypatch):
     system_text = " ".join(m["content"] for m in messages if m["role"] == "system")
     assert "earlier chat" in system_text
     assert "do not think out loud" in system_text.lower()
+
+
+# --------------------------------------------------------------------------
+# Reasoning leakage
+#
+# Verified live: when the model deliberates without concluding, the provider
+# duplicates `reasoning` into `content` verbatim, and the user sees the model
+# thinking out loud instead of an answer.
+# --------------------------------------------------------------------------
+
+CHAIN_OF_THOUGHT = (
+    "The user asks: summarise the last few posts. I need to interpret what they mean. "
+    "Typically that could mean posts 3, 4 and 5. Or maybe 4 and 5? Wait, let me check the "
+    "tool description again. It said posts_ago is the smaller number. Hmm, but I called it "
+    "with 5. Let me reconsider what the labels mean and whether they are off by one."
+)
+
+
+def test_leak_detected_when_content_equals_reasoning():
+    assert inference._is_reasoning_leak(CHAIN_OF_THOUGHT, CHAIN_OF_THOUGHT)
+
+
+def test_leak_detected_when_content_is_truncated_reasoning():
+    assert inference._is_reasoning_leak(CHAIN_OF_THOUGHT[:300], CHAIN_OF_THOUGHT)
+
+
+def test_clean_answer_is_not_a_leak():
+    assert not inference._is_reasoning_leak("Frank asked about lunch.", CHAIN_OF_THOUGHT)
+
+
+def test_no_reasoning_field_means_no_leak():
+    assert not inference._is_reasoning_leak("some answer", "")
+
+
+def test_short_answer_matching_its_reasoning_is_not_a_leak():
+    """A terse reply that coincides with its reasoning must still be delivered."""
+    assert not inference._is_reasoning_leak("Yes.", "Yes.")
+    assert not inference._is_reasoning_leak("PINEAPPLE BELONGS ON PIZZA", "PINEAPPLE BELONGS ON PIZZA")
+
+
+async def test_short_matching_answer_is_returned_not_retried(monkeypatch):
+    client = _install(monkeypatch, [_response(content="Yes.", reasoning="Yes.")])
+    assert await inference.run_tool_conversation(prompt="x", ctx=ToolContext(), cfg=CFG) == "Yes."
+    assert len(client.chat.completions.calls) == 1
+
+
+def test_extract_reads_reasoning_details_fallback():
+    response = _response(
+        content="answer",
+        reasoning_details=[{"type": "reasoning.text", "text": "thinking hard"}],
+    )
+    content, reasoning = inference._extract(response)
+    assert content == "answer"
+    assert "thinking hard" in reasoning
+
+
+async def test_leaked_reasoning_triggers_forced_answer(monkeypatch):
+    """The user must get the answer, not the deliberation."""
+    client = _install(
+        monkeypatch,
+        [
+            _response(content=CHAIN_OF_THOUGHT, reasoning=CHAIN_OF_THOUGHT),
+            _response(content="Frank asked about lunch and Dave reported a green deploy."),
+        ],
+    )
+    out = await inference.run_tool_conversation(prompt="summarise", ctx=ToolContext(), cfg=CFG)
+    assert out == "Frank asked about lunch and Dave reported a green deploy."
+    assert CHAIN_OF_THOUGHT not in (out or "")
+
+    retry = client.chat.completions.calls[1]
+    assert "tools" not in retry, "tools must be withheld so it cannot stall again"
+    assert "Stop deliberating" in retry["messages"][-1]["content"]
+
+
+async def test_empty_content_also_triggers_forced_answer(monkeypatch):
+    """reasoning.exclude-style empty content is the same failure."""
+    _install(
+        monkeypatch,
+        [
+            _response(content="", reasoning=CHAIN_OF_THOUGHT),
+            _response(content="recovered answer"),
+        ],
+    )
+    out = await inference.run_tool_conversation(prompt="x", ctx=ToolContext(), cfg=CFG)
+    assert out == "recovered answer"
+
+
+async def test_forced_answer_that_still_leaks_returns_none(monkeypatch):
+    """Two strikes and we fall back rather than show chain of thought."""
+    _install(
+        monkeypatch,
+        [
+            _response(content=CHAIN_OF_THOUGHT, reasoning=CHAIN_OF_THOUGHT),
+            _response(content=CHAIN_OF_THOUGHT, reasoning=CHAIN_OF_THOUGHT),
+        ],
+    )
+    assert await inference.run_tool_conversation(prompt="x", ctx=ToolContext(), cfg=CFG) is None
+
+
+async def test_forced_answer_api_failure_returns_none(monkeypatch):
+    _install(
+        monkeypatch,
+        [
+            _response(content="", reasoning=CHAIN_OF_THOUGHT),
+            RuntimeError("upstream down"),
+        ],
+    )
+    assert await inference.run_tool_conversation(prompt="x", ctx=ToolContext(), cfg=CFG) is None
+
+
+async def test_forced_answer_runs_after_tool_use(monkeypatch):
+    """Recovery must retain the tool results already gathered."""
+    client = _install(
+        monkeypatch,
+        [
+            _response(tool_calls=[_call("get_current_time", "{}")]),
+            _response(content=CHAIN_OF_THOUGHT, reasoning=CHAIN_OF_THOUGHT),
+            _response(content="It is currently midday."),
+        ],
+    )
+    out = await inference.run_tool_conversation(prompt="time?", ctx=ToolContext(), cfg=CFG)
+    assert out == "It is currently midday."
+
+    retry_messages = client.chat.completions.calls[2]["messages"]
+    assert any(m["role"] == "tool" for m in retry_messages), "tool results must survive into the retry"
+
+
+async def test_clean_answer_never_triggers_a_retry(monkeypatch):
+    client = _install(monkeypatch, [_response(content="clean", reasoning="some thinking")])
+    assert await inference.run_tool_conversation(prompt="x", ctx=ToolContext(), cfg=CFG) == "clean"
+    assert len(client.chat.completions.calls) == 1
 
 
 # --------------------------------------------------------------------------

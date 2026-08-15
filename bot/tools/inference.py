@@ -75,15 +75,20 @@ def _default_system_prompt(cfg: dict[str, Any]) -> str | None:
         return None
 
 
-# Reasoning models narrate their deliberation into `content` when a request is
-# ambiguous -- observed live on nemotron-3-super with a range query. OpenRouter's
-# reasoning.exclude is deliberately off here (see _reasoning_exclude_extra_body:
-# it made this same model dump CoT into content), so steer with an instruction
-# instead. [REH][CMV]
+# First of three layers against chain-of-thought reaching the user. This one
+# just reduces how often the model deliberates instead of answering; the real
+# guarantees are _is_reasoning_leak (detection) and _force_answer (recovery)
+# below, because a prompt directive alone cannot be relied upon. [REH][CMV]
 TOOL_OUTPUT_DIRECTIVE = (
     "You have tools available. Call them when they help, then reply to the user directly.\n"
     "Give only the final answer. Do not narrate your reasoning, do not restate the question, "
     "do not describe which tools you called or quote their parameters, and do not think out loud."
+)
+
+# Sent when the model deliberated without producing an answer. Forcing a
+# tool-free turn stops it re-entering the same loop of indecision. [REH]
+FORCE_ANSWER_DIRECTIVE = (
+    "Stop deliberating and answer now, using only the information already gathered above. Reply with the final answer only, in at most three sentences. If the information is insufficient, say so plainly in one sentence."
 )
 
 
@@ -119,23 +124,65 @@ def _tool_calls_of(response: Any) -> list[Any]:
     return list(getattr(message, "tool_calls", None) or [])
 
 
-def _content_of(response: Any) -> str:
-    """Final assistant text, with reasoning traces stripped.
+def _reasoning_of(message: Any) -> str:
+    """The provider's separate chain-of-thought field, if any."""
+    reasoning = getattr(message, "reasoning", None) or ""
+    if reasoning:
+        return str(reasoning).strip()
+    details = getattr(message, "reasoning_details", None) or []
+    if isinstance(details, list):
+        parts = [str(d.get("text", "")) for d in details if isinstance(d, dict)]
+        return " ".join(p for p in parts if p).strip()
+    return ""
 
-    Reasoning models otherwise emit their chain of thought as the answer; the
-    ordinary text path strips it via sanitize_model_output, and this parallel
-    path must do the same or users see the model thinking out loud. [REH]
+
+def _extract(response: Any) -> tuple[str, str]:
+    """Return (content, reasoning) for the assistant turn.
+
+    Reasoning normally lands in its own field with clean content. But when the
+    model deliberates without ever concluding, the provider duplicates the
+    chain of thought into `content` verbatim -- that is the leak users see.
+    Both values are returned so the caller can detect it exactly. [REH]
     """
     try:
-        raw = getattr(response.choices[0].message, "content", "") or ""
+        message = response.choices[0].message
     except (AttributeError, IndexError):
-        return ""
+        return "", ""
+    raw = getattr(message, "content", "") or ""
     try:
         from bot.vl.postprocess import sanitize_model_output
 
-        return sanitize_model_output(raw) or ""
+        content = sanitize_model_output(raw) or ""
     except Exception:  # [REH] sanitiser must never cost us the answer
-        return raw
+        content = raw
+    return content.strip(), _reasoning_of(message)
+
+
+# How much of the reasoning must prefix the content before we call it a leak.
+# Verified live: the duplicate is byte-identical, so this is a safety margin
+# for providers that append a partial trailer rather than an exact copy. [CMV]
+_LEAK_PREFIX_CHARS = 200
+
+# A dumped transcript is long; a real answer that merely coincides with a terse
+# reasoning field is short. Requiring length removes the false positive where a
+# brief reply like "Yes." equals its own reasoning. Observed leaks ran to
+# ~1400 characters. [CMV]
+_MIN_LEAK_CHARS = 200
+
+
+def _is_reasoning_leak(content: str, reasoning: str) -> bool:
+    """True when `content` is the model's deliberation rather than its answer.
+
+    Exact, not heuristic: the provider emits the same text in both fields.
+    """
+    if not content or not reasoning:
+        return False
+    if len(content) < _MIN_LEAK_CHARS:
+        return False
+    if content == reasoning:
+        return True
+    head = reasoning[:_LEAK_PREFIX_CHARS]
+    return len(head) >= _LEAK_PREFIX_CHARS and content.startswith(head)
 
 
 def _reasoning_extra_body(cfg: dict[str, Any]) -> dict[str, Any]:
@@ -190,6 +237,42 @@ async def _run_tool_calls(tool_calls: list[Any], ctx: ToolContext) -> list[dict[
             }
         )
     return turns
+
+
+async def _force_answer(
+    client: Any,
+    model: str,
+    messages: list[dict[str, Any]],
+    max_tokens: int,
+    extra_body: dict[str, Any],
+) -> str | None:
+    """One tool-free retry to make an indecisive model commit. [REH]
+
+    Tools are withheld entirely (not merely tool_choice="none") so the model
+    cannot answer with another call, and the nudge caps the length so the reply
+    cannot become another wall of deliberation.
+    """
+    attempt = [*messages, {"role": "system", "content": FORCE_ANSWER_DIRECTIVE}]
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": attempt,
+        "max_tokens": max_tokens,
+        "stream": False,
+    }
+    if extra_body:
+        kwargs["extra_body"] = extra_body
+    try:
+        response = await client.chat.completions.create(**kwargs)
+    except Exception as exc:  # [REH]
+        logger.warning("tools.force_answer_failed error=%s", exc)
+        return None
+
+    content, reasoning = _extract(response)
+    if content and not _is_reasoning_leak(content, reasoning):
+        logger.info("tools.force_answer_ok chars=%d", len(content))
+        return content
+    logger.warning("tools.force_answer_still_deliberating")
+    return None
 
 
 async def run_tool_conversation(
@@ -251,12 +334,19 @@ async def run_tool_conversation(
 
         tool_calls = _tool_calls_of(response)
         if not tool_calls:
-            text = _content_of(response).strip()
-            if text:
+            content, reasoning = _extract(response)
+            if content and not _is_reasoning_leak(content, reasoning):
                 logger.info("tools.answered iterations=%d", iteration)
-                return text
-            logger.info("tools.empty_answer iteration=%d", iteration)
-            return None
+                return content
+            # Either empty, or the provider echoed the chain of thought as the
+            # answer. Both mean "deliberated, never concluded" -- ask once more
+            # with tools withheld so it must commit. [REH]
+            logger.info(
+                "tools.no_conclusion iteration=%d leak=%s",
+                iteration,
+                bool(content),
+            )
+            return await _force_answer(client, model, messages, max_tokens, extra_body)
 
         messages.append(_assistant_turn(tool_calls))
         messages.extend(await _run_tool_calls(tool_calls, ctx))
