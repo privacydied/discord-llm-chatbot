@@ -503,6 +503,20 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "ALERT_ENABLE": _clean_env_value(env_getter("ALERT_ENABLE", "false")),
         "ALERT_SESSION_TIMEOUT_S": _clean_env_value(env_getter("ALERT_SESSION_TIMEOUT_S", "1800")),
         "ALERT_ADMIN_USER_IDS": _clean_env_value(env_getter("ALERT_ADMIN_USER_IDS", "")),
+        # URL EXTRACTION BUDGETS [CMV][REH]
+        # Read by Router._handle_general_url. Registered here because an
+        # unregistered key can never be read back from config. [CMV]
+        "URL_PROCESS_TIMEOUT_S": _safe_float(env_getter("URL_PROCESS_TIMEOUT_S", None), "25.0", "URL_PROCESS_TIMEOUT_S"),
+        "WEB_EXTRACT_TIMEOUT_S": _safe_float(env_getter("WEB_EXTRACT_TIMEOUT_S", None), "30.0", "WEB_EXTRACT_TIMEOUT_S"),
+        # LICENSED NEWS FALLBACK [CA][CMV][REH]
+        # When generic extraction returns a subscription stub, re-resolve the
+        # article through publisher-sanctioned channels (content APIs, feeds).
+        "NEWS_FALLBACK_ENABLED": _parse_bool_str(_clean_env_value(env_getter("NEWS_FALLBACK_ENABLED", None)), True),
+        "NEWS_RSS_ENABLED": _parse_bool_str(_clean_env_value(env_getter("NEWS_RSS_ENABLED", None)), True),
+        "NEWS_MIN_ARTICLE_CHARS": _safe_int(env_getter("NEWS_MIN_ARTICLE_CHARS", None), "800", "NEWS_MIN_ARTICLE_CHARS"),
+        "NEWS_MAX_BODY_CHARS": _safe_int(env_getter("NEWS_MAX_BODY_CHARS", None), "6000", "NEWS_MAX_BODY_CHARS"),
+        "NEWS_FETCH_TIMEOUT_S": _safe_float(env_getter("NEWS_FETCH_TIMEOUT_S", None), "8.0", "NEWS_FETCH_TIMEOUT_S"),
+        "GUARDIAN_API_KEY": _clean_env_value(env_getter("GUARDIAN_API_KEY", None)),
         # SEARCH SUBSYSTEM [CA][CMV][IV]
         "SEARCH_PROVIDER": env_getter("SEARCH_PROVIDER", "ddg").lower(),
         "SEARCH_MAX_RESULTS": _safe_int(env_getter("SEARCH_MAX_RESULTS", None), "5", "SEARCH_MAX_RESULTS"),

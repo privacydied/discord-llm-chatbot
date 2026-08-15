@@ -1,0 +1,1 @@
+"""News provider implementations. [CA]."""

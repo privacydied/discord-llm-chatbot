@@ -5707,6 +5707,67 @@ class Router:
         # TODO: Implement OCR-specific logic
         return await self._handle_pdf(item)
 
+    async def _finalize_web_content(
+        self,
+        url: str,
+        content: str | None,
+        author: str | None = None,
+    ) -> str | None:
+        """Render extracted web content, recovering stubs from licensed sources.
+
+        Generic extraction reports success for any recovered text, including a
+        headline plus a subscription prompt. When the text is too thin to be an
+        article, re-resolve it through a publisher-sanctioned channel (content
+        API or syndication feed) before giving up. Returns None when nothing
+        usable was obtained, so the caller can raise. [CA][REH]
+        """
+        from bot.news import resolve_article, thin_content
+        from bot.url_safety import wrap_untrusted_content
+
+        cfg = self.config or {}
+        min_chars = cfg.get("NEWS_MIN_ARTICLE_CHARS", thin_content.DEFAULT_MIN_ARTICLE_CHARS)
+        verdict = thin_content.assess(content, min_chars=min_chars)
+
+        if not verdict.is_thin:
+            wrapped = wrap_untrusted_content(content or "", source=url)
+            return f"Web content from {url}:\n{wrapped}"
+
+        self.logger.info(
+            f"url.thin_content url={url[:120]} reason={verdict.reason} chars={verdict.char_count}",
+            extra={
+                "subsys": "url",
+                "event": "url.thin_content",
+                "detail": {"url": url[:200], "reason": verdict.reason, "chars": verdict.char_count},
+            },
+        )
+
+        article = await resolve_article(url, cfg=cfg, min_chars=min_chars)
+        if article is not None:
+            rendered = article.to_message(max_chars=cfg.get("NEWS_MAX_BODY_CHARS", 6000))
+            wrapped = wrap_untrusted_content(rendered, source=article.url)
+            return f"Web content from {article.url} (via {article.provider}):\n{wrapped}"
+
+        if content and content.strip():
+            # Partial text is still worth passing on -- but label it, so the
+            # model does not present a subscription stub as the full story.
+            wrapped = wrap_untrusted_content(content, source=url)
+            note = f"[Partial content only ({verdict.char_count} chars, {verdict.reason}); the full article was not retrievable.]"
+            if author:
+                note = f"{note}\nAuthor: {author}"
+            return f"Web content from {url}:\n{note}\n{wrapped}"
+
+        return None
+
+    async def _finalize_extraction(self, url: str, extract_res: Any) -> str | None:
+        """Adapt a tiered-extractor result onto _finalize_web_content. [CA]"""
+        if not (extract_res and getattr(extract_res, "success", False)):
+            return await self._finalize_web_content(url, None)
+        return await self._finalize_web_content(
+            getattr(extract_res, "canonical_url", None) or url,
+            getattr(extract_res, "text", None),
+            author=getattr(extract_res, "author", None),
+        )
+
     async def _handle_general_url(self, item: InputItem, message: Message | None = None) -> str:
         """Handle general URL input items.
         Returns extracted content for further processing.
@@ -6514,7 +6575,9 @@ class Router:
             url_result, _ = await _bounded(process_url(url), url_process_timeout, "url.process", {"url": url})
 
             if isinstance(url_result, str):
-                return f"Web content from {url}:\n{url_result}"
+                # Never fall through here -- the branches below assume a dict.
+                finalized = await self._finalize_web_content(url, url_result)
+                return finalized or f"Web content from {url}:\n{url_result}"
 
             # Handle errors: before giving up, try tiered extractor (A/B) [REH]
             if not url_result or url_result.get("error"):
@@ -6525,14 +6588,9 @@ class Router:
                     "url.extract",
                     {"url": url},
                 )
-                if extract_res and extract_res.success:
-                    from bot.url_safety import wrap_untrusted_content
-
-                    wrapped = wrap_untrusted_content(
-                        extract_res.to_message(),
-                        source=extract_res.canonical_url or url,
-                    )
-                    return f"Web content from {extract_res.canonical_url or url}:\n{wrapped}"
+                recovered = await self._finalize_extraction(url, extract_res)
+                if recovered:
+                    return recovered
                 # Both process_url and tiered extractor failed — propagate as real failure [REH][PA]
                 err_detail = url_result.get("error", "none") if url_result else "none"
                 self.logger.warning(
@@ -6562,14 +6620,9 @@ class Router:
                     "url.extract",
                     {"url": url},
                 )
-                if extract_res and extract_res.success:
-                    from bot.url_safety import wrap_untrusted_content
-
-                    wrapped = wrap_untrusted_content(
-                        extract_res.to_message(),
-                        source=extract_res.canonical_url or url,
-                    )
-                    return f"Web content from {extract_res.canonical_url or url}:\n{wrapped}"
+                recovered = await self._finalize_extraction(url, extract_res)
+                if recovered:
+                    return recovered
                 # process_url returned empty/no-text AND tiered extractor also failed — real failure [REH][PA]
                 self.logger.warning(
                     f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', 'no_result')}",
@@ -6615,10 +6668,9 @@ class Router:
             # Prefer text from process_url when available.
             content = url_result.get("text", "")
             if content and content.strip():
-                from bot.url_safety import wrap_untrusted_content
-
-                wrapped = wrap_untrusted_content(content, source=url)
-                return f"Web content from {url}: {wrapped}"
+                finalized = await self._finalize_web_content(url, content)
+                if finalized:
+                    return finalized
 
             # If no text was extracted (and no media route), use tiered extractor (no screenshots)
             self.logger.info(f"🧭 Falling back to tiered extractor for {url} (no auto-screenshot)")
@@ -6628,14 +6680,9 @@ class Router:
                 "url.extract",
                 {"url": url},
             )
-            if extract_res and extract_res.success:
-                from bot.url_safety import wrap_untrusted_content
-
-                wrapped = wrap_untrusted_content(
-                    extract_res.to_message(),
-                    source=extract_res.canonical_url or url,
-                )
-                return f"Web content from {extract_res.canonical_url or url}:\n{wrapped}"
+            recovered = await self._finalize_extraction(url, extract_res)
+            if recovered:
+                return recovered
             # Both tiered extraction tiers failed — propagate as real failure [REH][PA]
             self.logger.warning(
                 f"url.extract.all_failed url={url[:120]} error={getattr(extract_res, 'error', 'no_result')}",
