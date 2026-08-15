@@ -517,6 +517,13 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "NEWS_MAX_BODY_CHARS": _safe_int(env_getter("NEWS_MAX_BODY_CHARS", None), "6000", "NEWS_MAX_BODY_CHARS"),
         "NEWS_FETCH_TIMEOUT_S": _safe_float(env_getter("NEWS_FETCH_TIMEOUT_S", None), "8.0", "NEWS_FETCH_TIMEOUT_S"),
         "GUARDIAN_API_KEY": _clean_env_value(env_getter("GUARDIAN_API_KEY", None)),
+        # MODEL-CALLABLE TOOLS [CA][CMV][SFT]
+        # Off by default: enabling lets the model request the tools registered
+        # in bot/tools/registry.ALLOWED_TOOL_NAMES (all read-only).
+        "TOOLS_ENABLED": _parse_bool_str(_clean_env_value(env_getter("TOOLS_ENABLED", None)), False),
+        "TOOLS_MODEL": _clean_env_value(env_getter("TOOLS_MODEL", None)),
+        "TOOLS_MAX_ITERATIONS": _safe_int(env_getter("TOOLS_MAX_ITERATIONS", None), "3", "TOOLS_MAX_ITERATIONS"),
+        "TOOLS_TIMEOUT_S": _safe_float(env_getter("TOOLS_TIMEOUT_S", None), "30.0", "TOOLS_TIMEOUT_S"),
         # NEWS DIGEST -- "what's happening in the news today" [CA][CMV][PA]
         "NEWS_DIGEST_ENABLED": _parse_bool_str(_clean_env_value(env_getter("NEWS_DIGEST_ENABLED", None)), True),
         "NEWS_DIGEST_LIMIT": _safe_int(env_getter("NEWS_DIGEST_LIMIT", None), "8", "NEWS_DIGEST_LIMIT"),

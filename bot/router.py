@@ -4919,6 +4919,12 @@ class Router:
             # current licensed headlines instead of stale training data. [CA]
             context_str = await self._maybe_add_news_digest(original_text, message, context_str)
 
+            # Let the model fetch what it needs (channel scrollback, the clock)
+            # before answering. No-op unless TOOLS_ENABLED. [CA]
+            tool_action = await self._maybe_answer_with_tools(original_text, message, context_str)
+            if tool_action is not None:
+                return tool_action
+
             response_action = await self._invoke_text_flow(original_text, message, context_str)
             if response_action and response_action.has_payload:
                 self.logger.info(f"✅ Text-only response generated successfully (msg_id: {message.id})")
@@ -5710,6 +5716,42 @@ class Router:
         # For now, delegate to regular PDF handler
         # TODO: Implement OCR-specific logic
         return await self._handle_pdf(item)
+
+    async def _maybe_answer_with_tools(self, text: str, message: Message | None, context_str: str) -> BotAction | None:
+        """Answer via the tool loop, or return None to use the ordinary flow.
+
+        Returns None whenever tools are disabled, unavailable, or produced no
+        answer -- the caller then proceeds exactly as before. [CA][REH]
+        """
+        cfg = self.config or {}
+        if not cfg.get("TOOLS_ENABLED", False):
+            return None
+
+        from bot.tools import ToolContext
+        from bot.tools.inference import run_tool_conversation
+
+        try:
+            answer = await run_tool_conversation(
+                prompt=text,
+                ctx=ToolContext(message=message, bot=self.bot, config=cfg),
+                context=context_str,
+                cfg=cfg,
+            )
+        except Exception as exc:  # [REH] never let the tool path swallow a turn
+            self.logger.warning(
+                f"tools.flow_failed error={exc}",
+                extra={"subsys": "tools", "event": "tools.flow_failed"},
+            )
+            return None
+
+        if not answer:
+            return None
+
+        self.logger.info(
+            f"tools.answered chars={len(answer)}",
+            extra={"subsys": "tools", "event": "tools.answered", "detail": {"chars": len(answer)}},
+        )
+        return BotAction(content=answer)
 
     async def _maybe_add_news_digest(self, text: str, message: Message | None, context_str: str) -> str:
         """Append current headlines to the context when the user asks for news.
