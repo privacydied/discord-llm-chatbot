@@ -4915,6 +4915,10 @@ class Router:
             except Exception as exc:
                 self.logger.debug(f"text_default logging failed: {exc}")
 
+            # "What's happening in the news today?" -- ground the answer in
+            # current licensed headlines instead of stale training data. [CA]
+            context_str = await self._maybe_add_news_digest(original_text, message, context_str)
+
             response_action = await self._invoke_text_flow(original_text, message, context_str)
             if response_action and response_action.has_payload:
                 self.logger.info(f"✅ Text-only response generated successfully (msg_id: {message.id})")
@@ -5706,6 +5710,76 @@ class Router:
         # For now, delegate to regular PDF handler
         # TODO: Implement OCR-specific logic
         return await self._handle_pdf(item)
+
+    async def _maybe_add_news_digest(self, text: str, message: Message | None, context_str: str) -> str:
+        """Append current headlines to the context when the user asks for news.
+
+        Returns ``context_str`` unchanged whenever this is not a news question,
+        the user is on cooldown, or the lookup yields nothing -- the ordinary
+        text flow then proceeds untouched. [CA][REH][PA]
+        """
+        from bot.news.cooldown import digest_cooldown
+        from bot.news.headlines import fetch_headlines, render_digest
+        from bot.news.intent import detect_news_intent
+        from bot.url_safety import wrap_untrusted_content
+
+        cfg = self.config or {}
+        if not cfg.get("NEWS_DIGEST_ENABLED", True):
+            return context_str
+
+        query = detect_news_intent(text)
+        if query is None:
+            return context_str
+
+        user_id = getattr(getattr(message, "author", None), "id", None)
+        if not digest_cooldown.allow(user_id, cfg.get("NEWS_DIGEST_COOLDOWN_S", 30.0)):
+            self.logger.info(
+                f"news.digest.cooldown user={user_id} topic={query.topic}",
+                extra={"subsys": "news", "event": "news.digest.cooldown", "detail": {"topic": query.topic}},
+            )
+            return context_str
+
+        self.logger.info(
+            f"news.digest.intent topic={query.topic} days={query.days}",
+            extra={
+                "subsys": "news",
+                "event": "news.digest.intent",
+                "detail": {"topic": query.topic, "days": query.days},
+            },
+        )
+
+        try:
+            headlines = await asyncio.wait_for(
+                fetch_headlines(
+                    query.topic,
+                    cfg=cfg,
+                    days=query.days,
+                    limit=cfg.get("NEWS_DIGEST_LIMIT", 8),
+                ),
+                timeout=cfg.get("NEWS_DIGEST_TIMEOUT_S", 12.0),
+            )
+        except TimeoutError:
+            self.logger.warning(f"news.digest.timeout topic={query.topic}")
+            return context_str
+        except Exception as exc:  # [REH] never break the text flow over a digest
+            self.logger.warning(f"news.digest.failed topic={query.topic} error={exc}")
+            return context_str
+
+        if not headlines:
+            self.logger.info(f"news.digest.empty topic={query.topic}")
+            return context_str
+
+        digest = render_digest(headlines, query.topic, query.days)
+        wrapped = wrap_untrusted_content(digest, source="content.guardianapis.com")
+        self.logger.info(
+            f"news.digest.attached count={len(headlines)} topic={query.topic}",
+            extra={
+                "subsys": "news",
+                "event": "news.digest.attached",
+                "detail": {"count": len(headlines), "topic": query.topic},
+            },
+        )
+        return f"{context_str}\n\n{wrapped}" if context_str else wrapped
 
     async def _finalize_web_content(
         self,

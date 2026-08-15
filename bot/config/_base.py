@@ -517,6 +517,11 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "NEWS_MAX_BODY_CHARS": _safe_int(env_getter("NEWS_MAX_BODY_CHARS", None), "6000", "NEWS_MAX_BODY_CHARS"),
         "NEWS_FETCH_TIMEOUT_S": _safe_float(env_getter("NEWS_FETCH_TIMEOUT_S", None), "8.0", "NEWS_FETCH_TIMEOUT_S"),
         "GUARDIAN_API_KEY": _clean_env_value(env_getter("GUARDIAN_API_KEY", None)),
+        # NEWS DIGEST -- "what's happening in the news today" [CA][CMV][PA]
+        "NEWS_DIGEST_ENABLED": _parse_bool_str(_clean_env_value(env_getter("NEWS_DIGEST_ENABLED", None)), True),
+        "NEWS_DIGEST_LIMIT": _safe_int(env_getter("NEWS_DIGEST_LIMIT", None), "8", "NEWS_DIGEST_LIMIT"),
+        "NEWS_DIGEST_COOLDOWN_S": _safe_float(env_getter("NEWS_DIGEST_COOLDOWN_S", None), "30.0", "NEWS_DIGEST_COOLDOWN_S"),
+        "NEWS_DIGEST_TIMEOUT_S": _safe_float(env_getter("NEWS_DIGEST_TIMEOUT_S", None), "12.0", "NEWS_DIGEST_TIMEOUT_S"),
         # SEARCH SUBSYSTEM [CA][CMV][IV]
         "SEARCH_PROVIDER": env_getter("SEARCH_PROVIDER", "ddg").lower(),
         "SEARCH_MAX_RESULTS": _safe_int(env_getter("SEARCH_MAX_RESULTS", None), "5", "SEARCH_MAX_RESULTS"),

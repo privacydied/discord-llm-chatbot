@@ -2624,6 +2624,7 @@ class LLMBot(commands.Bot):
             ("video_commands", "VideoCommands"),
             ("rag_commands", "RAGCommands"),
             ("search_commands", "SearchCommands"),
+            ("news_commands", "NewsCommands"),
             ("screenshot_commands", "ScreenshotCommands"),
             ("image_upgrade_commands", "ImageUpgradeCommands"),
             ("admin_alert_commands", "AdminAlertCommands"),
