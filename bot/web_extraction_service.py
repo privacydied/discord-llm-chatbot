@@ -30,6 +30,29 @@ ENABLE_TIER_B = os.getenv("WEBEX_ENABLE_TIER_B", "1").strip() not in {
 }
 ACCEPT_LANGUAGE = os.getenv("WEBEX_ACCEPT_LANGUAGE", "en-US,en;q=0.9")
 
+# Tier C: server-side reader proxy that bypasses soft paywalls and returns
+# clean article text. Default r.jina.ai; override WEBEX_TIER_C_READER to point
+# at a self-hosted reader (e.g. a local r.jina.ai or mercure instance).
+# This is the headless-safe substitute for a browser paywall-bypass extension,
+# which the Playwright/Chrome-for-Testing 145 build cannot load via
+# --load-extension. [PAY]
+ENABLE_TIER_C = os.getenv("WEBEX_ENABLE_TIER_C", "1").strip() not in {
+    "0",
+    "false",
+    "False",
+}
+TIER_C_TIMEOUT_S = float(os.getenv("WEBEX_TIER_C_TIMEOUT_S", "15.0"))
+TIER_C_READER_BASE = os.getenv(
+    "WEBEX_TIER_C_READER",
+    "https://r.jina.ai/",
+).rstrip("/") + "/"
+# Reader proxies can be slow/flaky; only use them for clearly article-like URLs.
+TIER_C_MAX_TEXT_CHARS = int(os.getenv("WEBEX_TIER_C_MAX_CHARS", "60000"))
+# Below this many chars, a Tier A (httpx) result is treated as a thin teaser
+# (typical paywall behavior: HTTP 200 with only a headline + prompt) and the
+# extraction cascades to Tier B/C instead of being returned as "success".
+TIER_A_MIN_CHARS = int(os.getenv("WEBEX_TIER_A_MIN_CHARS", "800"))
+
 
 @dataclass
 class ExtractionResult:
@@ -131,7 +154,23 @@ class WebExtractionService:
         try:
             res = await self._tier_a_httpx(url)
             if res.success:
-                return res
+                # A paywalled page often returns HTTP 200 with only a short
+                # teaser (e.g. 122 chars). Treat a thin Tier A result as a soft
+                # failure so we cascade to Tier B (Playwright) and Tier C
+                # (reader proxy) instead of handing the LLM an empty article.
+                from bot.news import thin_content
+
+                if thin_content.assess(res.text, min_chars=TIER_A_MIN_CHARS).is_thin:
+                    logger.info(
+                        f"Tier A success but thin ({len(res.text or '')} chars) for {url}; cascading to B/C"
+                    )
+                    res = ExtractionResult(
+                        success=False,
+                        tier_used="A",
+                        error=f"thin_content:{len(res.text or '')}",
+                    )
+                else:
+                    return res
             last_error = res.error
             last_tier = "A"
             logger.info(f"Tier A failed for {url}: {res.error}")
@@ -168,6 +207,21 @@ class WebExtractionService:
                 if self._is_playwright_fatal_error(str(e)):
                     self._tier_b_available = False
                     logger.warning("🛑 Disabling Tier B (Playwright) due to runtime/launch failure.")
+
+        # Tier C: server-side reader proxy (paywall bypass) — headless-safe
+        # substitute for a browser extension the automation Chromium can't load.
+        if ENABLE_TIER_C:
+            try:
+                res_c = await self._tier_c_reader(url)
+                if res_c is not None:
+                    if res_c.success:
+                        return res_c
+                    last_error = res_c.error or last_error
+                    last_tier = "C"
+            except Exception as e:
+                last_error = f"exception:{e.__class__.__name__}"
+                last_tier = "C"
+                logger.info(f"Tier C exception for {url}: {str(e)[:200]}")
 
         return ExtractionResult(
             success=False,
@@ -260,6 +314,77 @@ class WebExtractionService:
         except Exception as exc:
             logger.warning(f"Tier B Playwright failed for {url}: {exc}")
             raise
+
+    async def _tier_c_reader(self, url: str) -> ExtractionResult | None:
+        """Tier C: fetch the article through a server-side reader proxy.
+
+        The proxy (default r.jina.ai) strips paywalls and returns cleaned
+        article text. This is the headless-safe stand-in for a browser
+        paywall-bypass extension, which the automation Chromium build cannot
+        load via --load-extension. [PAY]
+        """
+        # Build the reader URL. Two common jina.ai shapes exist depending on
+        # egress/anti-abuse: the bare form  r.jina.ai/<url>  (pass the original
+        # https:// URL through) and the  r.jina.ai/http/<url>  form (which
+        # requires the target scheme to be http://). Detect which the configured
+        # base expects so we don't get 422/403 from a mismatched scheme.
+        from urllib.parse import urlsplit, urlunsplit
+
+        parts = urlsplit(url)
+        if TIER_C_READER_BASE.rstrip("/").endswith("/http"):
+            target = urlunsplit(("http", parts.netloc, parts.path, parts.query, parts.fragment))
+        else:
+            target = url
+        reader_url = f"{TIER_C_READER_BASE}{target}"
+        timeout = httpx.Timeout(TIER_C_TIMEOUT_S, connect=10.0)
+        # Fresh client for the reader hop. NOTE: send NO custom User-Agent and
+        # NO restrictive Accept header -- jina.ai returns 403 when it sees a
+        # browser-like UA (e.g. Chrome) or an Accept of text/plain/markdown.
+        # The default python-httpx UA is accepted. [PAY]
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=timeout,
+        ) as rc:
+            r = await rc.get(reader_url)
+        r.raise_for_status()
+        raw = r.text or ""
+        if not raw.strip():
+            return ExtractionResult(success=False, tier_used="C", error="empty reader response")
+        text = self._strip_reader_wrapper(raw)
+        text = text.strip()[:TIER_C_MAX_TEXT_CHARS]
+        if len(text) < 40:
+            return ExtractionResult(success=False, tier_used="C", error="reader returned no article body")
+        return ExtractionResult(
+            success=True,
+            tier_used="C",
+            canonical_url=url,
+            text=text,
+            author=None,
+            raw_json_present=False,
+        )
+
+    @staticmethod
+    def _strip_reader_wrapper(raw: str) -> str:
+        """Extract the article body from a reader-proxy response.
+
+        r.jina.ai returns markdown that begins with metadata lines ('Title:',
+        'URL Source:', 'Published Time:') and often a 'Markdown Content:'
+        label, followed by the rendered page (which still includes the site's
+        nav menu using '## ' H2 links). The actual article starts at its H1
+        title ('# Heading'). So we trim from the first single-'# ' heading line
+        (after any nav), which is the article body -- this works whether or not
+        the 'Markdown Content:' label is present. Line-ending tolerant.
+        """
+        # First single-'# ' H1 heading line = article start (nav uses '## ').
+        for i in range(len(raw)):
+            if raw[i] in ("\n", "\r") and raw[i + 1 : i + 3] == "# ":
+                return raw[i + 1:].strip()
+        # Fallback: drop everything up to and including a 'Markdown Content:' label.
+        marker = "Markdown Content:"
+        idx = raw.find(marker)
+        if idx != -1:
+            return raw[idx + len(marker):].strip()
+        return raw.strip()
 
     # --- Parsers --- [CSD]
     @staticmethod
