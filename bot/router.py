@@ -157,7 +157,7 @@ from .utils.attachment_text import read_attachment_text
 from .utils.file_utils import download_file
 from .utils.logging import get_logger
 from .vision.types import VisionError, VisionErrorType
-from .core.output import safe_reply
+from .core.output import safe_edit, safe_reply, safe_send
 from .vl.postprocess import sanitize_model_output, sanitize_vl_reply_text
 from .web import process_url
 from .web_extraction_service import web_extractor
@@ -6753,6 +6753,31 @@ class Router:
                 msg = f"Could not extract content from URL: {url}"
                 raise DispatchEmptyError(msg)
 
+            # Thin-content recovery: a paywalled page returns HTTP 200 with only
+            # a short teaser (e.g. 122 chars). process_url treats that as success,
+            # so the tiered extractor (Tier C reader proxy) would never run via the
+            # error/empty fallbacks above. When the recovered text is below the
+            # thinness bar, retry through web_extractor.extract(), which cascades
+            # Tier A -> B -> C and can pull the full article via a reader proxy. [PAY]
+            from bot.news import thin_content
+
+            if thin_content.assess(content, min_chars=thin_content.DEFAULT_MIN_ARTICLE_CHARS).is_thin:
+                self.logger.info(
+                    f"🧭 Thin content ({len(content)} chars) from process_url; "
+                    f"trying tiered extractor (reader proxy) for {url}"
+                )
+                extract_res, _ = await _bounded(
+                    web_extractor.extract(url),
+                    web_extract_timeout,
+                    "url.extract",
+                    {"url": url},
+                )
+                recovered = await self._finalize_extraction(url, extract_res)
+                if recovered:
+                    return recovered
+                # Tier C also came back thin/empty; fall through to the partial-content
+                # path below so the model still gets the teaser (labelled). [REH]
+
             # Check if smart routing detected media and should route to yt-dlp
             route_to_ytdlp = url_result.get("route_to_ytdlp", False)
             if route_to_ytdlp:
@@ -8893,7 +8918,7 @@ class Router:
                 user=message.author,
                 prompt=job.request.prompt if hasattr(job.request, "prompt") else "",
             )
-            progress_msg = await message.channel.send(embed=initial_embed)
+            progress_msg = await safe_send(message.channel, embed=initial_embed)
 
             # Monitor job progress and update message
             return await self._monitor_vision_job(job, progress_msg, message)
@@ -8973,7 +8998,7 @@ class Router:
         except Exception as e:
             self.logger.error(f"❌ Vision job monitoring failed: {e}", exc_info=True)
             try:
-                await progress_msg.edit(content=f"❌ **Monitoring Error**\nJob ID: `{job.job_id[:8]}`\nLost connection to job status. Please check back later.")
+                await safe_edit(progress_msg, content=f"❌ **Monitoring Error**\nJob ID: `{job.job_id[:8]}`\nLost connection to job status. Please check back later.")
             except Exception as exc:
                 self.logger.debug(f"progress message edit failed: {exc}")  # Don't fail if message edit fails
             return BotAction(content="Job monitoring failed", error=True)
@@ -9258,7 +9283,7 @@ class Router:
             embed.add_field(name="Instruction", value=f"`{instruction_display}`", inline=False)
 
         # Post working card
-        working_msg = await message.channel.send(embed=embed)
+        working_msg = await safe_send(message.channel, embed=embed)
 
         try:
             # Process first image (respect provider limits - using first image for simplicity)
@@ -9328,7 +9353,7 @@ class Router:
                             inline=False,
                         )
 
-                    await working_msg.edit(embed=embed)
+                    await safe_edit(working_msg, embed=embed)
                     return BotAction(
                         content="Vision analysis completed",
                         meta={"discord_msg": working_msg},
@@ -9373,7 +9398,7 @@ class Router:
                 embed.set_footer(text=footer_text)
 
             try:
-                await working_msg.edit(embed=embed)
+                await safe_edit(working_msg, embed=embed)
             except Exception as exc:
                 self.logger.debug(f"error embed edit failed: {exc}")  # Don't fail if edit fails
 
@@ -9580,7 +9605,7 @@ class Router:
             )
 
             # Update progress message and upload files
-            await progress_msg.edit(content=None, embed=success_embed)
+            await safe_edit(progress_msg, content=None, embed=success_embed)
 
             if files_to_upload:
                 # Log filenames and sizes before upload [PA]
@@ -9645,10 +9670,10 @@ class Router:
                     response=None,
                     error_reason=f"Upload failed: {str(e)[:200]}...",
                 )
-                await progress_msg.edit(content=None, embed=failure_embed)
+                await safe_edit(progress_msg, content=None, embed=failure_embed)
             except Exception as card_e:
                 self.logger.error(f"❌ Failed to update failure card: {card_e}", exc_info=True)
-                await progress_msg.edit(content="❌ Vision generation failed")
+                await safe_edit(progress_msg, content="❌ Vision generation failed")
             return BotAction(content="Generation completed with upload issues", error=True)
 
     async def _handle_vision_failure(self, job, progress_msg) -> BotAction:
@@ -9668,13 +9693,13 @@ class Router:
             )
 
             # Edit the progress message to show failure card
-            await progress_msg.edit(content=None, embed=failure_embed)
+            await safe_edit(progress_msg, content=None, embed=failure_embed)
             return BotAction(content="Vision generation failed", error=True)
 
         except Exception as e:
             self.logger.error(f"❌ Failed to update failure card: {e}", exc_info=True)
             # Fallback to simple text edit if card update fails
-            await progress_msg.edit(content="❌ Vision generation failed")
+            await safe_edit(progress_msg, content="❌ Vision generation failed")
             return BotAction(content="Vision generation failed", error=True)
 
     def _create_progress_bar(self, percent: int, length: int = 10) -> str:
