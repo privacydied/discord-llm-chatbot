@@ -16,7 +16,7 @@ from bot.ai_backend import generate_vl_response  # noqa: E402
 from bot.see import see_infer  # noqa: E402
 
 # Stable, public, small.
-IMAGE_URL = "https://picsum.photos/id/237/320/240"  # deterministic photo of a dog
+IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Cat_November_2010-1a.jpg/320px-Cat_November_2010-1a.jpg"  # Wikimedia 403s a library UA
 
 
 async def main() -> None:

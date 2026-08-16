@@ -17,6 +17,7 @@ never touches the filesystem. [SFT]
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from bot.utils.logging import get_logger
 
@@ -119,8 +120,58 @@ async def _find_image(channel: Any, anchor: Any, posts_ago: int | None) -> tuple
     return f"no image found in the last {len(history)} messages"
 
 
+# Discord re-signs CDN URLs, so these query parameters change for the same
+# image and must not enter the cache key. [CMV]
+_VOLATILE_QUERY_KEYS = frozenset({"ex", "is", "hm"})
+
+
+def cache_identity(url: str) -> str:
+    """A stable identity for an image URL, ignoring expiring signatures.
+
+    Discord CDN links carry ``?ex=&is=&hm=`` parameters that are refreshed
+    periodically, so the raw URL is a useless cache key -- the same picture
+    would miss every time. Other query parameters are kept, because hosts do
+    use them to select a rendition (``?format=png&size=4096``).
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return url
+    kept = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k.lower() not in _VOLATILE_QUERY_KEYS]
+    return urlunparse(parsed._replace(query=urlencode(sorted(kept)), fragment=""))
+
+
+class _VisionUnavailable(RuntimeError):
+    """Raised inside the cached computation so failures are never stored."""
+
+
+async def _run_vl(url: str, question: str) -> str:
+    """Call the vision model. Raises _VisionUnavailable rather than returning None.
+
+    ``see_infer`` requires a local path, but the layer beneath it fetches
+    http(s) directly, so no temp file is needed. [PA]
+    """
+    from bot.ai_backend import generate_vl_response
+
+    try:
+        result = await generate_vl_response(image_url=url, user_prompt=question)
+    except Exception as exc:  # [REH]
+        logger.warning("tool.view_image.vl_failed error=%s", exc)
+        raise _VisionUnavailable(str(exc)) from exc
+
+    text = (result or {}).get("text") if isinstance(result, dict) else None
+    cleaned = str(text).strip() if text else ""
+    if not cleaned:
+        raise _VisionUnavailable("empty description")
+    return cleaned
+
+
 async def _describe(url: str, question: str, cfg: dict[str, Any]) -> str | None:
-    """Run vision inference on an image URL. Returns None on failure. [REH]"""
+    """Describe an image, reusing a cached description when possible. [PA][REH]
+
+    Returns None on any failure, and failures are never cached -- the compute
+    raises so get_or_compute stores nothing, with negative caching off.
+    """
     from bot.url_safety import UrlSafetyError, validate_url_with_dns
 
     # Embedded images can point anywhere a user linked, so validate. [SFT]
@@ -134,15 +185,34 @@ async def _describe(url: str, question: str, cfg: dict[str, Any]) -> str | None:
         return None
 
     try:
-        from bot.ai_backend import generate_vl_response
+        from bot.single_flight_cache import CacheFamily, get_cache
 
-        result = await generate_vl_response(image_url=url, user_prompt=question)
+        cache = get_cache(cfg)
+    except Exception as exc:  # [REH] cache must never be load-bearing
+        logger.debug("tool.view_image.cache_unavailable error=%s", exc)
+        try:
+            return await _run_vl(url, question)
+        except _VisionUnavailable:
+            return None
+
+    # The question is part of the key: a cached "describe this" is the wrong
+    # answer to "what colour is the car?". [CMV]
+    key_parts = [cache_identity(url), question.strip().lower()]
+    try:
+        description, was_hit = await cache.get_or_compute(
+            CacheFamily.VL_DESCRIPTION,
+            key_parts,
+            lambda: _run_vl(url, question),
+            negative_on_exception=False,
+        )
+    except _VisionUnavailable:
+        return None
     except Exception as exc:  # [REH]
-        logger.warning("tool.view_image.vl_failed error=%s", exc)
+        logger.warning("tool.view_image.cache_failed error=%s", exc)
         return None
 
-    text = (result or {}).get("text") if isinstance(result, dict) else None
-    return str(text).strip() if text else None
+    logger.info("tool.view_image.described cache_hit=%s", was_hit)
+    return description
 
 
 def _provenance(message: Any, position: int, ref: Any) -> str:

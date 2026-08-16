@@ -64,6 +64,23 @@ _PROMPT_CACHE: dict[str, tuple[float, str]] = {}
 
 # --- Shared image-download session (low-value cleanup) [PA][RM] ---
 _IMAGE_DOWNLOAD_TIMEOUT_SECONDS = 10
+
+# Headers for image fetches. aiohttp's default User-Agent identifies itself as
+# a library and some hosts refuse it outright -- Wikimedia answers it with a
+# "respect our robot policy" 403, so an image embedded from such a site could
+# never be described.
+#
+# Deliberately descriptive rather than a spoofed browser string: Wikimedia
+# rejects browser-spoofing UAs under the same policy, and identifying honestly
+# is what lets an operator be contacted instead of rate-limited. Override
+# IMAGE_DOWNLOAD_UA to add your own contact address. [CMV][REH][SFT]
+IMAGE_DOWNLOAD_HEADERS = {
+    "User-Agent": os.getenv(
+        "IMAGE_DOWNLOAD_UA",
+        "discord-llm-chatbot/1.0 (+https://github.com/privacydied/discord-llm-chatbot)",
+    ),
+    "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+}
 _image_session: aiohttp.ClientSession | None = None
 
 if _openai is not None:
@@ -278,6 +295,11 @@ def _get_image_session() -> aiohttp.ClientSession:
 
     Recreates the session if it was never created, was closed, or belongs to a
     different (e.g. restarted) event loop. Keeps the 10s total timeout. [RM]
+
+    Sends a browser User-Agent: aiohttp's default identifies itself as a
+    library, and several image hosts reject that outright -- Wikimedia returns
+    403, so an image embedded from Wikipedia could never be described. Discord's
+    own CDN does not care, so this only ever mattered for external hosts. [REH]
     """
     global _image_session
     loop = asyncio.get_running_loop()
@@ -285,7 +307,7 @@ def _get_image_session() -> aiohttp.ClientSession:
     if session is not None and not session.closed and getattr(session, "_loop", None) is loop:
         return session
     timeout = aiohttp.ClientTimeout(total=_IMAGE_DOWNLOAD_TIMEOUT_SECONDS)
-    _image_session = aiohttp.ClientSession(timeout=timeout)
+    _image_session = aiohttp.ClientSession(timeout=timeout, headers=IMAGE_DOWNLOAD_HEADERS)
     return _image_session
 
 

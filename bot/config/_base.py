@@ -524,6 +524,10 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "TOOLS_MODEL": _clean_env_value(env_getter("TOOLS_MODEL", None)),
         "TOOLS_MAX_ITERATIONS": _safe_int(env_getter("TOOLS_MAX_ITERATIONS", None), "3", "TOOLS_MAX_ITERATIONS"),
         "TOOLS_TIMEOUT_S": _safe_float(env_getter("TOOLS_TIMEOUT_S", None), "90.0", "TOOLS_TIMEOUT_S"),
+        # How long a vision description of an image stays reusable. An image's
+        # content never changes, so this is bounded by how long people keep
+        # referring to it, not by staleness. [CMV][PA]
+        "VL_DESCRIPTION_TTL_S": _safe_int(env_getter("VL_DESCRIPTION_TTL_S", None), "86400", "VL_DESCRIPTION_TTL_S"),
         # NEWS DIGEST -- "what's happening in the news today" [CA][CMV][PA]
         "NEWS_DIGEST_ENABLED": _parse_bool_str(_clean_env_value(env_getter("NEWS_DIGEST_ENABLED", None)), True),
         "NEWS_DIGEST_LIMIT": _safe_int(env_getter("NEWS_DIGEST_LIMIT", None), "8", "NEWS_DIGEST_LIMIT"),

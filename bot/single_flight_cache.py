@@ -42,6 +42,7 @@ class CacheFamily(Enum):
     STT_RESULT = "stt_result"  # Speech-to-text: 7 days TTL
     SCREENSHOT = "screenshot"  # Screenshot URLs: 1h TTL
     WEB_EXTRACTION = "web_extraction"  # General web extraction: 2h TTL
+    VL_DESCRIPTION = "vl_description"  # Vision descriptions of images: 24h TTL
 
 
 @dataclass
@@ -240,6 +241,9 @@ class SingleFlightCache:
             CacheFamily.STT_RESULT: float(self.config.get("STT_CACHE_TTL_S", 604800)),  # 7 days
             CacheFamily.SCREENSHOT: 3600.0,  # 1 hour
             CacheFamily.WEB_EXTRACTION: 7200.0,  # 2 hours
+            # An image's content never changes, so a description stays valid
+            # for as long as anyone is plausibly still talking about it.
+            CacheFamily.VL_DESCRIPTION: float(self.config.get("VL_DESCRIPTION_TTL_S", 86400)),  # 24 hours
         }
 
         # Enable/disable features
