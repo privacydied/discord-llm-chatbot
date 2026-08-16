@@ -100,13 +100,44 @@ async def test_extract_falls_through_to_tier_c_when_a_and_b_fail() -> None:
         svc, "_tier_c_reader"
     ) as mock_c:
         mock_c.return_value = ExtractionResult(
-            success=True, tier_used="C", canonical_url=_TIMES_URL, text="article body here"
+            success=True, tier_used="C", canonical_url=_TIMES_URL,
+            text="x" * 900,  # non-thin so it is returned
         )
         res = await svc.extract(_TIMES_URL)
 
     assert res.success is True
     assert res.tier_used == "C"
     mock_c.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_extract_prefers_tier_c_over_tier_b() -> None:
+    # Tier C (reader proxy) is the paywall-bypass specialist and must be tried
+    # BEFORE Tier B (Playwright). When both succeed, the non-thin Tier C result
+    # wins so a paywalled page rendered by Playwright doesn't block the bypass.
+    svc = WebExtractionService()
+    svc._tier_b_available = True
+    svc._tier_a_httpx = AsyncMock(
+        return_value=ExtractionResult(success=False, tier_used="A", error="no text")
+    )
+    import bot.web_extraction_service as wes
+
+    with patch.object(wes, "ENABLE_TIER_C", True), patch.object(
+        svc, "_tier_c_reader"
+    ) as mock_c, patch.object(svc, "_tier_b_playwright") as mock_b:
+        mock_c.return_value = ExtractionResult(
+            success=True, tier_used="C", canonical_url=_TIMES_URL, text="x" * 900
+        )
+        mock_b.return_value = ExtractionResult(
+            success=True, tier_used="B", canonical_url=_TIMES_URL,
+            text="paywalled page rendered by chromium with the wall still up",
+        )
+        res = await svc.extract(_TIMES_URL)
+
+    assert res.success is True
+    assert res.tier_used == "C"
+    mock_c.assert_awaited_once()
+    mock_b.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -127,7 +158,7 @@ async def test_extract_cascades_to_tier_c_on_thin_tier_a_success() -> None:
         svc, "_tier_c_reader"
     ) as mock_c:
         mock_c.return_value = ExtractionResult(
-            success=True, tier_used="C", canonical_url=_TIMES_URL, text="full article body here"
+            success=True, tier_used="C", canonical_url=_TIMES_URL, text="x" * 900
         )
         res = await svc.extract(_TIMES_URL)
 

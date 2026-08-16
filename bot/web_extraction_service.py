@@ -192,6 +192,27 @@ class WebExtractionService:
             last_tier = "A"
             logger.debug(f"Tier A exception for {url}: {str(e)[:200]}")
 
+        # Tier C first: the reader proxy is the paywall-bypass specialist. A
+        # paywalled page renders fine in headless Chromium (Tier B) but still
+        # shows the wall, so returning Tier B's result would block the bypass.
+        # Prefer Tier C whenever it yields real article text; fall back to
+        # Tier B (Playwright) for URLs the reader proxy can't handle. [PAY]
+        if ENABLE_TIER_C:
+            try:
+                res_c = await self._tier_c_reader(url)
+                if res_c is not None and res_c.success:
+                    from bot.news import thin_content
+
+                    if not thin_content.assess(res_c.text, min_chars=TIER_A_MIN_CHARS).is_thin:
+                        return res_c
+                    last_error = res_c.error or last_error
+                    last_tier = "C"
+                    logger.info(f"Tier C returned thin content for {url}; trying Tier B")
+            except Exception as e:
+                last_error = f"exception:{e.__class__.__name__}"
+                last_tier = "C"
+                logger.info(f"Tier C exception for {url}: {str(e)[:200]}")
+
         if self._tier_b_available:
             try:
                 res_b = await self._tier_b_playwright(url)
@@ -207,21 +228,6 @@ class WebExtractionService:
                 if self._is_playwright_fatal_error(str(e)):
                     self._tier_b_available = False
                     logger.warning("🛑 Disabling Tier B (Playwright) due to runtime/launch failure.")
-
-        # Tier C: server-side reader proxy (paywall bypass) — headless-safe
-        # substitute for a browser extension the automation Chromium can't load.
-        if ENABLE_TIER_C:
-            try:
-                res_c = await self._tier_c_reader(url)
-                if res_c is not None:
-                    if res_c.success:
-                        return res_c
-                    last_error = res_c.error or last_error
-                    last_tier = "C"
-            except Exception as e:
-                last_error = f"exception:{e.__class__.__name__}"
-                last_tier = "C"
-                logger.info(f"Tier C exception for {url}: {str(e)[:200]}")
 
         return ExtractionResult(
             success=False,
