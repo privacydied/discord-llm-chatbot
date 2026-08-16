@@ -18,8 +18,8 @@ _JINA_BODY = (
     "URL Source: http://www.thetimes.com/...\n\n"
     "Published Time: 2026-08-10\n\n"
     "Markdown Content:\n"
-    "Male friends I know say they feel cornered by women wanting to settle down "
-    "and they're tired of being painted as the bad guys."
+    + "Male friends I know say they feel cornered by women wanting to settle down "
+    "and they're tired of being painted as the bad guys. " * 40
 )
 
 
@@ -56,7 +56,7 @@ async def test_tier_c_reader_passes_raw_url_through() -> None:
         ctx = AsyncMock()
         def fake_get(url):
             captured["url"] = url
-            return httpx.Response(200, text="Markdown Content:\nhello world body with enough words to pass the minimum length guard",
+            return httpx.Response(200, text="Markdown Content:\n" + ("hello world body with enough words to pass the minimum length guard. " * 40),
                                   request=httpx.Request("GET", url))
         ctx.__aenter__.return_value.get.side_effect = fake_get
         mock_client.return_value = ctx
@@ -93,7 +93,7 @@ async def test_tier_c_reader_accepts_long_article_with_subscribe_cta() -> None:
     svc = WebExtractionService()
     body = (
         "Markdown Content:\n"
-        + ("Male friends I know say they feel cornered by women wanting to settle down. " * 20)
+        + ("Male friends I know say they feel cornered by women wanting to settle down. " * 40)
         + "\n\n[Subscribe now](https://www.thetimes.com/subscribe) for unlimited access."
     )
     with patch.object(svc, "_get_client", AsyncMock()), patch(

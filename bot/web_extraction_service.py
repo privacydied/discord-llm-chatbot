@@ -56,22 +56,13 @@ TIER_C_READER_FALLBACK = os.getenv(
 ).rstrip("/") + "/"
 # jina.ai intermittently returns the paywalled landing page instead of the
 # article; retry the endpoint set this many times (the article usually comes
-# through on a later attempt). [PAY]
-TIER_C_RETRIES = int(os.getenv("WEBEX_TIER_C_RETRIES", "3"))
-TIER_C_RETRY_DELAY_S = float(os.getenv("WEBEX_TIER_C_RETRY_DELAY_S", "1.0"))
-# Substrings that indicate a reader-proxy response is still the paywalled
-# landing page rather than the article body. [PAY]
-TIER_C_PAYWALL_MARKERS = (
-    "subscribe to read",
-    "subscribe now",
-    "start your free trial",
-    "become a member to read",
-    "this article is for subscribers",
-    "you've reached your limit",
-    "create an account to continue",
-    "subscription required",
-    "subscribe for full access",
-)
+# through on a later attempt). Sustained wall phases happen, so allow several.
+TIER_C_RETRIES = int(os.getenv("WEBEX_TIER_C_RETRIES", "5"))
+TIER_C_RETRY_DELAY_S = float(os.getenv("WEBEX_TIER_C_RETRY_DELAY_S", "1.5"))
+# Minimum word count for a reader-proxy response to count as a real article.
+# Landing pages / teasers have very few words of body and fail this gate so the
+# retry/fallback chain can recover the actual article. [PAY]
+TIER_C_MIN_WORDS = int(os.getenv("WEBEX_TIER_C_MIN_WORDS", "250"))
 # Reader proxies can be slow/flaky; only use them for clearly article-like URLs.
 TIER_C_MAX_TEXT_CHARS = int(os.getenv("WEBEX_TIER_C_MAX_CHARS", "60000"))
 # Below this many chars, a Tier A (httpx) result is treated as a thin teaser
@@ -385,14 +376,18 @@ class WebExtractionService:
             text = self._strip_reader_wrapper(raw).strip()[:TIER_C_MAX_TEXT_CHARS]
             if len(text) < 40:
                 return ExtractionResult(success=False, tier_used="C", error="reader returned no article body")
-            # A genuine paywall landing page is short (~teaser + CTA) with no
-            # article body; a real article is long and merely ends with a
-            # "[Subscribe now]" CTA. Only treat paywall markers as failure when
-            # the response is also short, so we don't reject valid articles that
-            # happen to mention subscriptions. [PAY]
-            low = text.lower()
-            if len(text) < 900 and any(m in low for m in TIER_C_PAYWALL_MARKERS):
-                return ExtractionResult(success=False, tier_used="C", error="reader returned paywall landing page")
+            # A reader-proxy response is only useful if it carries a real article
+            # body. jina.ai intermittently returns the paywalled landing page
+            # (teaser + nav + "[Subscribe now]" CTA) instead of the article; that
+            # response has very few words of body. Gate success on a minimum word
+            # count so landing pages fail and the retry/fallback chain can recover
+            # the real article. Real articles (which may end with a subscribe CTA)
+            # easily clear the threshold. [PAY]
+            if len(text.split()) < TIER_C_MIN_WORDS:
+                return ExtractionResult(
+                    success=False, tier_used="C",
+                    error="reader returned paywall/teaser (insufficient body)",
+                )
             return ExtractionResult(success=True, tier_used="C", canonical_url=url, text=text, author=None, raw_json_present=False)
 
         # jina.ai is flaky per egress IP: it intermittently returns the paywalled
