@@ -63,6 +63,11 @@ class ToolResult:
 ToolHandler = Callable[[ToolContext, dict[str, Any]], Awaitable[ToolResult]]
 
 
+# Default per-invocation wall clock. Tools that call a model need far longer
+# and override it; see ToolSpec.timeout_s. [CMV]
+DEFAULT_TOOL_TIMEOUT_S = 10.0
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     """A registered tool: its contract and its implementation."""
@@ -71,6 +76,9 @@ class ToolSpec:
     description: str
     parameters: dict[str, Any]
     handler: ToolHandler
+    # Per-tool budget. A vision tool re-running inference cannot complete in
+    # the default 10s, and would otherwise always time out. [PA]
+    timeout_s: float = DEFAULT_TOOL_TIMEOUT_S
 
     def to_openai_schema(self) -> dict[str, Any]:
         """Render as an OpenAI-style function-tool definition."""

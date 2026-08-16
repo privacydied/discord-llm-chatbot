@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 DEFAULT_MAX_ITERATIONS = 3
 
 # Whole-loop wall clock. [CMV]
-DEFAULT_TIMEOUT_S = 30.0
+DEFAULT_TIMEOUT_S = 90.0
 
 # Tool results are appended to the conversation; stop growing it past this. [PA]
 MAX_TRANSCRIPT_CHARS = 24000

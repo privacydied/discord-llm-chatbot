@@ -219,6 +219,91 @@ async def test_empty_message_content_is_labelled():
 
 
 # --------------------------------------------------------------------------
+# Attachments — the model must be able to see that an image was posted
+# --------------------------------------------------------------------------
+
+
+class _FakeAttachment:
+    def __init__(self, filename, content_type=None):
+        self.filename = filename
+        self.content_type = content_type
+
+
+class _FakeEmbedMedia:
+    def __init__(self, url):
+        self.url = url
+
+
+class _FakeEmbed:
+    def __init__(self, image_url=None, thumbnail_url=None):
+        self.image = _FakeEmbedMedia(image_url) if image_url else None
+        self.thumbnail = _FakeEmbedMedia(thumbnail_url) if thumbnail_url else None
+
+
+def _msg_with(attachments=(), embeds=(), content=""):
+    msg = _FakeMessage(content, author="alice")
+    msg.attachments = list(attachments)
+    msg.embeds = list(embeds)
+    return msg
+
+
+async def test_image_only_post_is_not_reported_as_empty():
+    """The goldfish case: a post that is just an image must be visible."""
+    channel = _FakeChannel([_msg_with(attachments=[_FakeAttachment("sunset.png", "image/png")])])
+    result = await read_channel_history(_ctx(channel), {"posts_ago": 1})
+    assert result.ok
+    assert "image: sunset.png" in result.content
+    assert "no text content" not in result.content
+
+
+async def test_caption_and_image_both_shown():
+    channel = _FakeChannel([_msg_with(attachments=[_FakeAttachment("cat.jpg", "image/jpeg")], content="look at this")])
+    result = await read_channel_history(_ctx(channel), {"posts_ago": 1})
+    assert "look at this" in result.content
+    assert "image: cat.jpg" in result.content
+
+
+@pytest.mark.parametrize(
+    ("filename", "content_type", "expected"),
+    [
+        ("a.png", "image/png", "image"),
+        ("a.mp4", "video/mp4", "video"),
+        ("a.mp3", "audio/mpeg", "audio"),
+        ("a.pdf", "application/pdf", "file"),
+        ("a.jpeg", None, "image"),  # content_type missing -> extension fallback
+        ("a.webm", None, "video"),
+        ("a.flac", None, "audio"),
+        ("a.bin", None, "file"),
+    ],
+)
+async def test_media_kind_detection(filename, content_type, expected):
+    channel = _FakeChannel([_msg_with(attachments=[_FakeAttachment(filename, content_type)])])
+    result = await read_channel_history(_ctx(channel), {"posts_ago": 1})
+    assert f"{expected}: {filename}" in result.content
+
+
+async def test_embedded_image_is_noted():
+    channel = _FakeChannel([_msg_with(embeds=[_FakeEmbed(image_url="https://example.com/x.png")])])
+    result = await read_channel_history(_ctx(channel), {"posts_ago": 1})
+    assert "embedded image" in result.content
+
+
+async def test_embed_without_image_is_ignored():
+    channel = _FakeChannel([_msg_with(embeds=[_FakeEmbed()], content="a link")])
+    result = await read_channel_history(_ctx(channel), {"posts_ago": 1})
+    assert "embedded image" not in result.content
+
+
+async def test_attachment_flood_is_capped():
+    from bot.tools.builtins.history import MAX_MEDIA_NOTED
+
+    attachments = [_FakeAttachment(f"f{i}.png", "image/png") for i in range(12)]
+    channel = _FakeChannel([_msg_with(attachments=attachments)])
+    result = await read_channel_history(_ctx(channel), {"posts_ago": 1})
+    assert result.content.count("image: f") == MAX_MEDIA_NOTED
+
+
+# --------------------------------------------------------------------------
 # Untrusted-content handling [SFT]
 # --------------------------------------------------------------------------
 

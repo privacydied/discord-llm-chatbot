@@ -76,7 +76,9 @@ async def test_tools_are_offered_to_the_model(monkeypatch):
     await inference.run_tool_conversation(prompt="hi", ctx=ToolContext(), cfg=CFG)
     sent = client.chat.completions.calls[0]
     names = {t["function"]["name"] for t in sent["tools"]}
-    assert names == {"read_channel_history", "get_current_time"}
+    from bot.tools.registry import ALLOWED_TOOL_NAMES
+
+    assert names == set(ALLOWED_TOOL_NAMES)
     assert sent["tool_choice"] == "auto"
 
 
@@ -431,7 +433,8 @@ def _getter(values):
     [
         ("TOOLS_ENABLED", False),
         ("TOOLS_MAX_ITERATIONS", 3),
-        ("TOOLS_TIMEOUT_S", 30.0),
+        # Must exceed the slowest tool's own budget (view_image, 45s). [PA]
+        ("TOOLS_TIMEOUT_S", 90.0),
     ],
 )
 def test_tools_config_defaults(key, expected):

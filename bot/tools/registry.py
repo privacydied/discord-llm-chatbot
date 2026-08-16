@@ -23,7 +23,7 @@ from typing import Any
 
 from bot.utils.logging import get_logger
 
-from .types import ToolContext, ToolResult, ToolSpec
+from .types import DEFAULT_TOOL_TIMEOUT_S, ToolContext, ToolResult, ToolSpec
 
 logger = get_logger(__name__)
 
@@ -34,11 +34,12 @@ ALLOWED_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "read_channel_history",
         "get_current_time",
+        "view_image",
     }
 )
 
-# Per-invocation wall clock for any single tool. [CMV][PA]
-TOOL_TIMEOUT_S = 10.0
+# Fallback wall clock when a tool declares no budget of its own. [CMV][PA]
+TOOL_TIMEOUT_S = DEFAULT_TOOL_TIMEOUT_S
 
 
 class ToolRegistrationError(RuntimeError):
@@ -106,7 +107,8 @@ async def execute_tool(name: str, arguments: dict[str, Any], ctx: ToolContext) -
         return ToolResult.failure("arguments must be an object")
 
     try:
-        return await asyncio.wait_for(spec.handler(ctx, arguments), timeout=TOOL_TIMEOUT_S)
+        budget = getattr(spec, "timeout_s", None) or TOOL_TIMEOUT_S
+        return await asyncio.wait_for(spec.handler(ctx, arguments), timeout=budget)
     except TimeoutError:
         logger.warning("tool.timeout name=%s", name)
         return ToolResult.failure(f"{name} timed out")

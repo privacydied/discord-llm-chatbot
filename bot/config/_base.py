@@ -523,7 +523,7 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "TOOLS_ENABLED": _parse_bool_str(_clean_env_value(env_getter("TOOLS_ENABLED", None)), False),
         "TOOLS_MODEL": _clean_env_value(env_getter("TOOLS_MODEL", None)),
         "TOOLS_MAX_ITERATIONS": _safe_int(env_getter("TOOLS_MAX_ITERATIONS", None), "3", "TOOLS_MAX_ITERATIONS"),
-        "TOOLS_TIMEOUT_S": _safe_float(env_getter("TOOLS_TIMEOUT_S", None), "30.0", "TOOLS_TIMEOUT_S"),
+        "TOOLS_TIMEOUT_S": _safe_float(env_getter("TOOLS_TIMEOUT_S", None), "90.0", "TOOLS_TIMEOUT_S"),
         # NEWS DIGEST -- "what's happening in the news today" [CA][CMV][PA]
         "NEWS_DIGEST_ENABLED": _parse_bool_str(_clean_env_value(env_getter("NEWS_DIGEST_ENABLED", None)), True),
         "NEWS_DIGEST_LIMIT": _safe_int(env_getter("NEWS_DIGEST_LIMIT", None), "8", "NEWS_DIGEST_LIMIT"),

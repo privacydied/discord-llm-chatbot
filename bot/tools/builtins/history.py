@@ -27,6 +27,10 @@ MAX_POSTS_AGO = 200
 MAX_COUNT = 10
 MAX_CHARS_PER_MESSAGE = 500
 
+# Cap on attachments named per message, so a 10-file dump cannot flood the
+# prompt. [CMV][PA]
+MAX_MEDIA_NOTED = 4
+
 # Collapse pings so retrieved text cannot re-ping anyone via the model. [SFT]
 _MENTION_RE = re.compile(r"<@!?(\d+)>|<@&(\d+)>|@everyone|@here")
 
@@ -90,6 +94,45 @@ def _author_name(msg: Any) -> str:
     return str(getattr(author, "display_name", None) or getattr(author, "name", None) or "unknown")
 
 
+def _media_kind(content_type: str, filename: str) -> str:
+    ctype = (content_type or "").lower()
+    if ctype.startswith("image/"):
+        return "image"
+    if ctype.startswith("video/"):
+        return "video"
+    if ctype.startswith("audio/"):
+        return "audio"
+    # Fall back to the extension: content_type is often absent on old messages.
+    lowered = (filename or "").lower()
+    if lowered.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")):
+        return "image"
+    if lowered.endswith((".mp4", ".mov", ".webm", ".mkv")):
+        return "video"
+    if lowered.endswith((".mp3", ".wav", ".ogg", ".m4a", ".flac")):
+        return "audio"
+    return "file"
+
+
+def _describe_media(msg: Any) -> str:
+    """Summarise attachments and embedded images on a message.
+
+    Without this, a post that is nothing but an image renders as "no text
+    content" and the model cannot tell there is an image to look at. [CA]
+    """
+    parts: list[str] = []
+    for attachment in getattr(msg, "attachments", None) or []:
+        filename = str(getattr(attachment, "filename", "") or "file")
+        kind = _media_kind(str(getattr(attachment, "content_type", "") or ""), filename)
+        parts.append(f"{kind}: {filename}")
+
+    for embed in getattr(msg, "embeds", None) or []:
+        has_image = getattr(getattr(embed, "image", None), "url", None) or getattr(getattr(embed, "thumbnail", None), "url", None)
+        if has_image:
+            parts.append("embedded image")
+
+    return "; ".join(parts[:MAX_MEDIA_NOTED])
+
+
 def _render(messages: list[Any], start_offset: int) -> str:
     lines: list[str] = []
     for index, msg in enumerate(messages):
@@ -97,8 +140,11 @@ def _render(messages: list[Any], start_offset: int) -> str:
         stamp = getattr(msg, "created_at", None)
         when = stamp.strftime("%Y-%m-%d %H:%M UTC") if stamp else "unknown time"
         body = _sanitize(getattr(msg, "content", "") or "")
-        if not body:
-            body = "[no text content — may be an attachment or embed]"
+        media = _describe_media(msg)
+        if media:
+            body = f"{body}\n[attached — {media}]" if body else f"[{media}]"
+        elif not body:
+            body = "[no text content]"
         lines.append(f"[{position} posts ago] {_author_name(msg)} — {when}\n{body}")
     return "\n\n".join(lines)
 
