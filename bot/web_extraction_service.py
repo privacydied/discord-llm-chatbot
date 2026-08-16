@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import asyncio
 import html
 import json
 import os
@@ -46,6 +47,31 @@ TIER_C_READER_BASE = os.getenv(
     "WEBEX_TIER_C_READER",
     "https://r.jina.ai/",
 ).rstrip("/") + "/"
+# Alternate reader endpoint tried when the primary returns a paywall landing
+# page or fails (jina.ai is flaky/rate-limited per egress IP). The /http/ form
+# sometimes succeeds where the bare form is blocked. [PAY]
+TIER_C_READER_FALLBACK = os.getenv(
+    "WEBEX_TIER_C_READER_FALLBACK",
+    "https://r.jina.ai/http/",
+).rstrip("/") + "/"
+# jina.ai intermittently returns the paywalled landing page instead of the
+# article; retry the endpoint set this many times (the article usually comes
+# through on a later attempt). [PAY]
+TIER_C_RETRIES = int(os.getenv("WEBEX_TIER_C_RETRIES", "3"))
+TIER_C_RETRY_DELAY_S = float(os.getenv("WEBEX_TIER_C_RETRY_DELAY_S", "1.0"))
+# Substrings that indicate a reader-proxy response is still the paywalled
+# landing page rather than the article body. [PAY]
+TIER_C_PAYWALL_MARKERS = (
+    "subscribe to read",
+    "subscribe now",
+    "start your free trial",
+    "become a member to read",
+    "this article is for subscribers",
+    "you've reached your limit",
+    "create an account to continue",
+    "subscription required",
+    "subscribe for full access",
+)
 # Reader proxies can be slow/flaky; only use them for clearly article-like URLs.
 TIER_C_MAX_TEXT_CHARS = int(os.getenv("WEBEX_TIER_C_MAX_CHARS", "60000"))
 # Below this many chars, a Tier A (httpx) result is treated as a thin teaser
@@ -327,47 +353,68 @@ class WebExtractionService:
         The proxy (default r.jina.ai) strips paywalls and returns cleaned
         article text. This is the headless-safe stand-in for a browser
         paywall-bypass extension, which the automation Chromium build cannot
-        load via --load-extension. [PAY]
+        load via --load-extension. jina.ai is flaky per egress IP, so we try
+        the primary endpoint, then a fallback endpoint, and reject responses
+        that still look like the paywalled landing page. [PAY]
         """
-        # Build the reader URL. Two common jina.ai shapes exist depending on
-        # egress/anti-abuse: the bare form  r.jina.ai/<url>  (pass the original
-        # https:// URL through) and the  r.jina.ai/http/<url>  form (which
-        # requires the target scheme to be http://). Detect which the configured
-        # base expects so we don't get 422/403 from a mismatched scheme.
         from urllib.parse import urlsplit, urlunsplit
 
         parts = urlsplit(url)
-        if TIER_C_READER_BASE.rstrip("/").endswith("/http"):
-            target = urlunsplit(("http", parts.netloc, parts.path, parts.query, parts.fragment))
-        else:
-            target = url
-        reader_url = f"{TIER_C_READER_BASE}{target}"
+        # Two jina.ai shapes exist: bare r.jina.ai/<url> (pass https:// through)
+        # and r.jina.ai/http/<url> (target scheme must be http://). Build the
+        # target per-base so we don't get 422/403 from a mismatched scheme.
+        def _target_for(base: str) -> str:
+            if base.rstrip("/").endswith("/http"):
+                return urlunsplit(("http", parts.netloc, parts.path, parts.query, parts.fragment))
+            return url
+
         timeout = httpx.Timeout(TIER_C_TIMEOUT_S, connect=10.0)
         # Fresh client for the reader hop. NOTE: send NO custom User-Agent and
         # NO restrictive Accept header -- jina.ai returns 403 when it sees a
         # browser-like UA (e.g. Chrome) or an Accept of text/plain/markdown.
         # The default python-httpx UA is accepted. [PAY]
-        async with httpx.AsyncClient(
-            follow_redirects=True,
-            timeout=timeout,
-        ) as rc:
-            r = await rc.get(reader_url)
-        r.raise_for_status()
-        raw = r.text or ""
-        if not raw.strip():
-            return ExtractionResult(success=False, tier_used="C", error="empty reader response")
-        text = self._strip_reader_wrapper(raw)
-        text = text.strip()[:TIER_C_MAX_TEXT_CHARS]
-        if len(text) < 40:
-            return ExtractionResult(success=False, tier_used="C", error="reader returned no article body")
-        return ExtractionResult(
-            success=True,
-            tier_used="C",
-            canonical_url=url,
-            text=text,
-            author=None,
-            raw_json_present=False,
-        )
+
+        async def _try(base: str) -> ExtractionResult | None:
+            reader_url = f"{base}{_target_for(base)}"
+            async with httpx.AsyncClient(follow_redirects=True, timeout=timeout) as rc:
+                r = await rc.get(reader_url)
+            r.raise_for_status()
+            raw = r.text or ""
+            if not raw.strip():
+                return ExtractionResult(success=False, tier_used="C", error="empty reader response")
+            text = self._strip_reader_wrapper(raw).strip()[:TIER_C_MAX_TEXT_CHARS]
+            if len(text) < 40:
+                return ExtractionResult(success=False, tier_used="C", error="reader returned no article body")
+            # A genuine paywall landing page is short (~teaser + CTA) with no
+            # article body; a real article is long and merely ends with a
+            # "[Subscribe now]" CTA. Only treat paywall markers as failure when
+            # the response is also short, so we don't reject valid articles that
+            # happen to mention subscriptions. [PAY]
+            low = text.lower()
+            if len(text) < 900 and any(m in low for m in TIER_C_PAYWALL_MARKERS):
+                return ExtractionResult(success=False, tier_used="C", error="reader returned paywall landing page")
+            return ExtractionResult(success=True, tier_used="C", canonical_url=url, text=text, author=None, raw_json_present=False)
+
+        # jina.ai is flaky per egress IP: it intermittently returns the paywalled
+        # landing page instead of the article. Retry the endpoint set a few times
+        # (the article usually comes through on a later attempt). [PAY]
+        last_err = "reader proxy not attempted"
+        for attempt in range(max(1, int(TIER_C_RETRIES))):
+            for base in (TIER_C_READER_BASE, TIER_C_READER_FALLBACK):
+                if base == TIER_C_READER_BASE and base == TIER_C_READER_FALLBACK:
+                    continue  # avoid double-trying identical endpoints
+                try:
+                    res = await _try(base)
+                    if res is not None and res.success:
+                        return res
+                    last_err = (res.error if res else "no response") or last_err
+                    logger.info(f"Tier C endpoint {base} failed (attempt {attempt + 1}) for {url}: {last_err}")
+                except Exception as e:
+                    last_err = f"exception:{e.__class__.__name__}"
+                    logger.info(f"Tier C endpoint {base} exception (attempt {attempt + 1}) for {url}: {str(e)[:160]}")
+            if attempt < max(1, int(TIER_C_RETRIES)) - 1:
+                await asyncio.sleep(TIER_C_RETRY_DELAY_S)
+        return ExtractionResult(success=False, tier_used="C", error=last_err)
 
     @staticmethod
     def _strip_reader_wrapper(raw: str) -> str:

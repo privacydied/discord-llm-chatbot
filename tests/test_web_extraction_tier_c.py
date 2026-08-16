@@ -87,6 +87,31 @@ async def test_tier_c_reader_empty_body_is_failure() -> None:
 
 
 @pytest.mark.asyncio
+async def test_tier_c_reader_accepts_long_article_with_subscribe_cta() -> None:
+    # Regression: a real article ends with a "[Subscribe now]" CTA. The paywall
+    # marker must not reject a long article that merely mentions subscriptions.
+    svc = WebExtractionService()
+    body = (
+        "Markdown Content:\n"
+        + ("Male friends I know say they feel cornered by women wanting to settle down. " * 20)
+        + "\n\n[Subscribe now](https://www.thetimes.com/subscribe) for unlimited access."
+    )
+    with patch.object(svc, "_get_client", AsyncMock()), patch(
+        "httpx.AsyncClient"
+    ) as mock_client:
+        ctx = AsyncMock()
+        ctx.__aenter__.return_value.get.return_value = httpx.Response(
+            200, text=body, request=httpx.Request("GET", "https://r.jina.ai/http/x")
+        )
+        mock_client.return_value = ctx
+        res = await svc._tier_c_reader(_TIMES_URL)
+
+    assert res is not None
+    assert res.success is True
+    assert "Subscribe now" in res.text
+
+
+@pytest.mark.asyncio
 async def test_extract_falls_through_to_tier_c_when_a_and_b_fail() -> None:
     svc = WebExtractionService()
     svc._tier_b_available = False
