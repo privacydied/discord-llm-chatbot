@@ -16,22 +16,41 @@ load_dotenv("/volume1/py/discord-llm-chatbot/.env")
 from bot.single_flight_cache import CacheFamily, get_cache  # noqa: E402
 from bot.tools.builtins.vision import _describe, cache_identity  # noqa: E402
 
+
+class _Ref:
+    def __init__(self, url, filename="pic.png"):
+        self.url = url
+        self.filename = filename
+
+
+class _Msg:
+    def __init__(self, id_):
+        self.id = id_
+
+
 # Same image, different expiring signature — exactly what Discord does.
 IMAGE_A = "https://picsum.photos/id/237/320/240?ex=aaaa&is=bbbb&hm=cccc"
 IMAGE_B = "https://picsum.photos/id/237/320/240?ex=zzzz&is=yyyy&hm=xxxx"
 QUESTION = "What animal is this? Answer in one short sentence."
 
 
+MESSAGE = _Msg(123456789)
+
+
 async def timed(url: str, question: str) -> tuple[str | None, float]:
+    """Describe via the same identity path view_image uses."""
+    identity = cache_identity(MESSAGE, _Ref(url))
     start = time.monotonic()
-    result = await _describe(url, question, {})
+    result = await _describe(url, question, {}, identity)
     return result, time.monotonic() - start
 
 
 async def main() -> None:
-    print(f"identity A: {cache_identity(IMAGE_A)}")
-    print(f"identity B: {cache_identity(IMAGE_B)}")
-    print(f"identities match: {cache_identity(IMAGE_A) == cache_identity(IMAGE_B)}\n")
+    ident_a = cache_identity(MESSAGE, _Ref(IMAGE_A))
+    ident_b = cache_identity(MESSAGE, _Ref(IMAGE_B))
+    print(f"identity A: {ident_a}")
+    print(f"identity B: {ident_b}")
+    print(f"identities match: {ident_a == ident_b}\n")
 
     first, t1 = await timed(IMAGE_A, QUESTION)
     print(f"1st call (cold)          {t1:6.2f}s -> {str(first)[:90]}")

@@ -11,45 +11,108 @@ import pytest
 
 from bot.single_flight_cache import CacheFamily, SingleFlightCache
 from bot.tools.builtins import vision
-from bot.tools.builtins.vision import cache_identity
+from bot.tools.builtins.vision import attachment_token, cache_identity, normalize_url
 
 # --------------------------------------------------------------------------
-# Cache key identity
+# Cache key identity — keyed on (message_id, attachment_id)
 # --------------------------------------------------------------------------
 
-DISCORD_A = "https://cdn.discordapp.com/attachments/1/2/cat.png?ex=aaa&is=bbb&hm=ccc&"
-DISCORD_B = "https://cdn.discordapp.com/attachments/1/2/cat.png?ex=zzz&is=yyy&hm=xxx&"
+# Same attachment (id 2222), different expiring signature.
+DISCORD_A = "https://cdn.discordapp.com/attachments/1111/2222/cat.png?ex=aaa&is=bbb&hm=ccc&"
+DISCORD_B = "https://cdn.discordapp.com/attachments/1111/2222/cat.png?ex=zzz&is=yyy&hm=xxx&"
 
 
-def test_expiring_discord_signature_ignored():
-    """Discord re-signs URLs; the same image must still hit the cache."""
-    assert cache_identity(DISCORD_A) == cache_identity(DISCORD_B)
+class _Ref:
+    def __init__(self, url, filename="cat.png"):
+        self.url = url
+        self.filename = filename
 
 
-def test_different_images_keep_different_identities():
-    other = "https://cdn.discordapp.com/attachments/1/2/dog.png?ex=aaa&is=bbb&hm=ccc"
-    assert cache_identity(DISCORD_A) != cache_identity(other)
+class _Msg:
+    def __init__(self, id_=99):
+        self.id = id_
 
 
-def test_meaningful_query_params_are_preserved():
-    """Hosts use query params to pick a rendition — those must not be dropped."""
-    small = "https://media.discordapp.net/x/y.png?format=png&size=512"
-    large = "https://media.discordapp.net/x/y.png?format=png&size=4096"
-    assert cache_identity(small) != cache_identity(large)
+def test_attachment_id_extracted_from_discord_url():
+    assert attachment_token(DISCORD_A) == "2222"
 
 
-def test_query_order_does_not_matter():
-    one = "https://example.com/i.png?b=2&a=1"
-    two = "https://example.com/i.png?a=1&b=2"
-    assert cache_identity(one) == cache_identity(two)
+def test_attachment_token_falls_back_to_filename():
+    token = attachment_token("https://example.com/some/path/img.png", "img.png")
+    assert token == "img.png"
 
 
-def test_fragment_ignored():
-    assert cache_identity("https://example.com/i.png#top") == cache_identity("https://example.com/i.png")
+def test_attachment_token_falls_back_to_url_without_filename():
+    token = attachment_token("https://example.com/some/path/img.png", None)
+    assert token.startswith("https://example.com")
+
+
+def test_identity_uses_message_and_attachment_ids():
+    identity = cache_identity(_Msg(777), _Ref(DISCORD_A))
+    assert identity == "m777:2222"
+
+
+def test_resigned_url_yields_the_same_identity():
+    """Discord re-signs URLs; the same attachment must still hit."""
+    assert cache_identity(_Msg(5), _Ref(DISCORD_A)) == cache_identity(_Msg(5), _Ref(DISCORD_B))
+
+
+def test_identity_survives_a_completely_rotated_url():
+    """The whole point of message+attachment keying over URL keying."""
+    rotated = "https://cdn.discordapp.com/attachments/1111/2222/cat.png?totally=different&params=here"
+    assert cache_identity(_Msg(5), _Ref(DISCORD_A)) == cache_identity(_Msg(5), _Ref(rotated))
+
+
+def test_different_attachments_differ():
+    other = "https://cdn.discordapp.com/attachments/1111/3333/dog.png?ex=aaa"
+    assert cache_identity(_Msg(5), _Ref(DISCORD_A)) != cache_identity(_Msg(5), _Ref(other))
+
+
+def test_same_attachment_in_different_messages_differs():
+    assert cache_identity(_Msg(1), _Ref(DISCORD_A)) != cache_identity(_Msg(2), _Ref(DISCORD_A))
+
+
+def test_two_images_on_one_message_differ():
+    """A message with several attachments must not collapse to one entry."""
+    first = _Ref("https://cdn.discordapp.com/attachments/1/10/a.png", "a.png")
+    second = _Ref("https://cdn.discordapp.com/attachments/1/11/b.png", "b.png")
+    assert cache_identity(_Msg(5), first) != cache_identity(_Msg(5), second)
+
+
+def test_external_embed_images_on_one_message_differ_by_filename():
+    first = _Ref("https://example.com/a.png", "a.png")
+    second = _Ref("https://example.com/b.png", "b.png")
+    assert cache_identity(_Msg(5), first) != cache_identity(_Msg(5), second)
+
+
+def test_falls_back_to_url_when_message_has_no_id():
+    identity = cache_identity(object(), _Ref(DISCORD_A))
+    assert identity.startswith("u:")
 
 
 def test_malformed_url_does_not_raise():
-    assert cache_identity("not a url") is not None
+    assert cache_identity(_Msg(1), _Ref("not a url", None)) is not None
+
+
+# --- URL normalisation, still used as the fallback key ---------------------
+
+
+def test_normalize_strips_expiring_params():
+    assert normalize_url(DISCORD_A) == normalize_url(DISCORD_B)
+
+
+def test_normalize_keeps_rendition_params():
+    small = "https://media.discordapp.net/x/y.png?format=png&size=512"
+    large = "https://media.discordapp.net/x/y.png?format=png&size=4096"
+    assert normalize_url(small) != normalize_url(large)
+
+
+def test_normalize_is_query_order_insensitive():
+    assert normalize_url("https://example.com/i.png?b=2&a=1") == normalize_url("https://example.com/i.png?a=1&b=2")
+
+
+def test_normalize_drops_fragment():
+    assert normalize_url("https://example.com/i.png#top") == normalize_url("https://example.com/i.png")
 
 
 # --------------------------------------------------------------------------
@@ -83,16 +146,34 @@ def _count_calls(monkeypatch, result="a description", fail=False):
     return calls
 
 
+IDENTITY = "m777:2222"
+
+
 async def test_second_identical_request_is_served_from_cache(_fresh_cache, monkeypatch):
     calls = _count_calls(monkeypatch)
-    first = await vision._describe(DISCORD_A, "describe this", {})
-    second = await vision._describe(DISCORD_A, "describe this", {})
+    first = await vision._describe(DISCORD_A, "describe this", {}, IDENTITY)
+    second = await vision._describe(DISCORD_A, "describe this", {}, IDENTITY)
     assert first == second
     assert calls["n"] == 1, "the second ask must not re-run inference"
 
 
-async def test_resigned_discord_url_still_hits(_fresh_cache, monkeypatch):
-    """The real-world case: same image, refreshed signature."""
+async def test_same_identity_hits_even_when_the_url_changed(_fresh_cache, monkeypatch):
+    """The real-world case: same attachment, entirely different URL."""
+    calls = _count_calls(monkeypatch)
+    await vision._describe(DISCORD_A, "describe this", {}, IDENTITY)
+    await vision._describe("https://cdn.discordapp.com/totally/other?x=1", "describe this", {}, IDENTITY)
+    assert calls["n"] == 1
+
+
+async def test_different_identity_recomputes(_fresh_cache, monkeypatch):
+    calls = _count_calls(monkeypatch)
+    await vision._describe(DISCORD_A, "describe this", {}, "m1:aaa")
+    await vision._describe(DISCORD_A, "describe this", {}, "m2:bbb")
+    assert calls["n"] == 2
+
+
+async def test_url_fallback_still_caches_without_identity(_fresh_cache, monkeypatch):
+    """Synthetic contexts with no message id must still benefit."""
     calls = _count_calls(monkeypatch)
     await vision._describe(DISCORD_A, "describe this", {})
     await vision._describe(DISCORD_B, "describe this", {})
@@ -102,15 +183,15 @@ async def test_resigned_discord_url_still_hits(_fresh_cache, monkeypatch):
 async def test_different_question_recomputes(_fresh_cache, monkeypatch):
     """A cached 'describe this' is the wrong answer to a specific question."""
     calls = _count_calls(monkeypatch)
-    await vision._describe(DISCORD_A, "describe this", {})
-    await vision._describe(DISCORD_A, "what colour is the car?", {})
+    await vision._describe(DISCORD_A, "describe this", {}, IDENTITY)
+    await vision._describe(DISCORD_A, "what colour is the car?", {}, IDENTITY)
     assert calls["n"] == 2
 
 
 async def test_question_matching_is_case_insensitive(_fresh_cache, monkeypatch):
     calls = _count_calls(monkeypatch)
-    await vision._describe(DISCORD_A, "Describe This", {})
-    await vision._describe(DISCORD_A, "describe this", {})
+    await vision._describe(DISCORD_A, "Describe This", {}, IDENTITY)
+    await vision._describe(DISCORD_A, "describe this", {}, IDENTITY)
     assert calls["n"] == 1
 
 
@@ -166,6 +247,76 @@ async def test_cache_outage_falls_back_to_direct_inference(monkeypatch):
     monkeypatch.setattr("bot.single_flight_cache.get_cache", _boom)
     assert await vision._describe(DISCORD_A, "q", {}) is not None
     assert calls["n"] == 1
+
+
+# --------------------------------------------------------------------------
+# End to end through view_image, so the identity really is wired up
+# --------------------------------------------------------------------------
+
+
+class _E2EAuthor:
+    display_name = "alice"
+    name = "alice"
+
+
+class _E2EMessage:
+    def __init__(self, id_, url):
+        self.id = id_
+        self.author = _E2EAuthor()
+        self.created_at = None
+        self.content = ""
+        self._url = url
+
+
+class _E2EChannel:
+    def __init__(self, messages):
+        self._messages = messages
+
+    def history(self, limit=None, before=None):
+        messages = self._messages[:limit]
+
+        async def _gen():
+            for m in messages:
+                yield m
+
+        return _gen()
+
+
+async def test_view_image_twice_runs_inference_once(_fresh_cache, monkeypatch):
+    """The goldfish fix must not pay twice for the same picture."""
+    from bot.tools import ToolContext
+    from bot.tools.builtins.vision import view_image
+
+    calls = _count_calls(monkeypatch)
+    monkeypatch.setattr(vision, "_image_refs", lambda msg: [_Ref(msg._url)])
+
+    posted = _E2EMessage(4242, DISCORD_A)
+    current = _E2EMessage(1, "")
+    current.channel = _E2EChannel([posted])
+    ctx = ToolContext(message=current, bot=None, config={})
+
+    first = await view_image(ctx, {})
+    second = await view_image(ctx, {})
+    assert first.ok and second.ok
+    assert calls["n"] == 1, "the repeat look must be served from cache"
+
+
+async def test_view_image_hits_cache_after_discord_resigns_the_url(_fresh_cache, monkeypatch):
+    from bot.tools import ToolContext
+    from bot.tools.builtins.vision import view_image
+
+    calls = _count_calls(monkeypatch)
+    urls = iter([DISCORD_A, DISCORD_B])
+    monkeypatch.setattr(vision, "_image_refs", lambda msg: [_Ref(next(urls))])
+
+    posted = _E2EMessage(4242, DISCORD_A)
+    current = _E2EMessage(1, "")
+    current.channel = _E2EChannel([posted])
+    ctx = ToolContext(message=current, bot=None, config={})
+
+    await view_image(ctx, {})
+    await view_image(ctx, {})
+    assert calls["n"] == 1, "a re-signed URL is the same attachment"
 
 
 # --------------------------------------------------------------------------

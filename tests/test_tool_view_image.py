@@ -70,7 +70,7 @@ def _stub_dependencies(monkeypatch):
     """Harvest images off our fakes, allow all URLs, and stub the VL call."""
     monkeypatch.setattr(vision, "_image_refs", lambda msg: list(getattr(msg, "_images", []) or []))
 
-    async def _describe(url, question, cfg):
+    async def _describe(url, question, cfg, identity=None):
         return f"a description of {url} answering '{question}'"
 
     monkeypatch.setattr(vision, "_describe", _describe)
@@ -208,7 +208,7 @@ async def test_no_channel():
 
 
 async def test_vision_failure_is_reported_not_raised(monkeypatch):
-    async def _fail(url, question, cfg):
+    async def _fail(url, question, cfg, identity=None):
         return None
 
     monkeypatch.setattr(vision, "_describe", _fail)
@@ -224,7 +224,7 @@ async def test_ref_without_url_is_rejected(monkeypatch):
 
 
 async def test_long_description_truncated(monkeypatch):
-    async def _huge(url, question, cfg):
+    async def _huge(url, question, cfg, identity=None):
         return "x" * 9000
 
     monkeypatch.setattr(vision, "_describe", _huge)

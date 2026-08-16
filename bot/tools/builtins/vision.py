@@ -121,17 +121,19 @@ async def _find_image(channel: Any, anchor: Any, posts_ago: int | None) -> tuple
 
 
 # Discord re-signs CDN URLs, so these query parameters change for the same
-# image and must not enter the cache key. [CMV]
+# image and must not enter a URL-derived cache key. [CMV]
 _VOLATILE_QUERY_KEYS = frozenset({"ex", "is", "hm"})
 
+# Discord attachment URLs are /attachments/<channel_id>/<attachment_id>/<name>.
+_ATTACHMENTS_SEGMENT = "attachments"
 
-def cache_identity(url: str) -> str:
-    """A stable identity for an image URL, ignoring expiring signatures.
 
-    Discord CDN links carry ``?ex=&is=&hm=`` parameters that are refreshed
-    periodically, so the raw URL is a useless cache key -- the same picture
-    would miss every time. Other query parameters are kept, because hosts do
-    use them to select a rendition (``?format=png&size=4096``).
+def normalize_url(url: str) -> str:
+    """A URL stripped of expiring signatures, for use as a last-resort key.
+
+    Discord CDN links carry ``?ex=&is=&hm=`` parameters refreshed periodically,
+    so the raw URL is a poor key. Other query parameters are kept, because
+    hosts use them to select a rendition (``?format=png&size=4096``).
     """
     try:
         parsed = urlparse(url)
@@ -139,6 +141,41 @@ def cache_identity(url: str) -> str:
         return url
     kept = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k.lower() not in _VOLATILE_QUERY_KEYS]
     return urlunparse(parsed._replace(query=urlencode(sorted(kept)), fragment=""))
+
+
+def attachment_token(url: str, filename: str | None = None) -> str:
+    """The attachment id from a Discord CDN URL, else a stable stand-in.
+
+    The id is the third path segment after ``attachments`` and is permanent,
+    unlike the signed query string wrapped around it.
+    """
+    try:
+        segments = [s for s in (urlparse(url).path or "").split("/") if s]
+    except ValueError:
+        segments = []
+    if _ATTACHMENTS_SEGMENT in segments:
+        index = segments.index(_ATTACHMENTS_SEGMENT)
+        if len(segments) > index + 2:
+            return segments[index + 2]
+    # Embedded/external images have no attachment id; the filename distinguishes
+    # multiple images on one message, and the normalised URL is the backstop.
+    return (filename or "").strip() or normalize_url(url)
+
+
+def cache_identity(message: Any, ref: Any) -> str:
+    """Stable identity for an image, keyed on message and attachment.
+
+    Preferred over any URL-derived key: a host can rotate an entire URL path
+    for the same picture, but ``(message_id, attachment_id)`` is permanent for
+    as long as the message exists. Falls back to the normalised URL only when
+    the message carries no id (in practice, tests and synthetic contexts).
+    """
+    url = str(getattr(ref, "url", "") or "")
+    token = attachment_token(url, getattr(ref, "filename", None))
+    message_id = getattr(message, "id", None)
+    if message_id:
+        return f"m{message_id}:{token}"
+    return f"u:{normalize_url(url)}"
 
 
 class _VisionUnavailable(RuntimeError):
@@ -166,8 +203,12 @@ async def _run_vl(url: str, question: str) -> str:
     return cleaned
 
 
-async def _describe(url: str, question: str, cfg: dict[str, Any]) -> str | None:
+async def _describe(url: str, question: str, cfg: dict[str, Any], identity: str | None = None) -> str | None:
     """Describe an image, reusing a cached description when possible. [PA][REH]
+
+    ``identity`` is the cache key source -- normally ``(message_id,
+    attachment_id)`` from :func:`cache_identity`, which survives a host
+    rotating the URL entirely. Falls back to the normalised URL when absent.
 
     Returns None on any failure, and failures are never cached -- the compute
     raises so get_or_compute stores nothing, with negative caching off.
@@ -197,7 +238,7 @@ async def _describe(url: str, question: str, cfg: dict[str, Any]) -> str | None:
 
     # The question is part of the key: a cached "describe this" is the wrong
     # answer to "what colour is the car?". [CMV]
-    key_parts = [cache_identity(url), question.strip().lower()]
+    key_parts = [identity or f"u:{normalize_url(url)}", question.strip().lower()]
     try:
         description, was_hit = await cache.get_or_compute(
             CacheFamily.VL_DESCRIPTION,
@@ -247,8 +288,9 @@ async def view_image(ctx: ToolContext, arguments: dict[str, Any]) -> ToolResult:
     if not url:
         return ToolResult.failure("image reference had no usable URL")
 
-    logger.info("tool.view_image.describing position=%d", position)
-    description = await _describe(url, question, ctx.config or {})
+    identity = cache_identity(message, ref)
+    logger.info("tool.view_image.describing position=%d identity=%s", position, identity[:60])
+    description = await _describe(url, question, ctx.config or {}, identity)
     if not description:
         return ToolResult.failure("could not read that image")
 
