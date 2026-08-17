@@ -10,6 +10,7 @@ from typing import Any
 import discord
 from discord.ext import commands
 
+from bot.core.output import safe_reply
 from bot.server_archive import (
     get_server_archive_service,
     get_server_archive_status,
@@ -154,9 +155,11 @@ class ArchiveCommands(commands.Cog):
             url = result.jump_url or ""
             lines.append(f"[{self._short_time(result.created_at)}] {channel_name} · {author_name}\n{snippet}" + (f"\n{url}" if url else ""))
         payload = "\n\n".join(lines)
-        if len(payload) > 1900:
-            payload = payload[:1890] + "…"
-        await ctx.reply(payload, mention_author=False)
+        # Batch instead of truncating -- a hard cut here silently dropped whichever
+        # search results didn't fit in one message. `ctx` duck-types as the `message`
+        # safe_reply expects: it has .reply() (first part) and .channel.send()
+        # (continuations), same as commands.Context already offers callers. [REH]
+        await safe_reply(ctx, payload, mention_author=False)
 
     @commands.guild_only()
     @commands.command(name="archive-sync")

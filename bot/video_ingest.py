@@ -29,6 +29,12 @@ logger = get_logger(__name__)
 
 # Configuration from environment
 MAX_DURATION_SECONDS = int(os.getenv("VIDEO_MAX_DURATION", "600"))  # 10 minutes default
+# YouTube is streamable/low-risk and has transcript-first paths (summarize CLI,
+# caption resolver) that handle arbitrary lengths without touching the audio
+# download path. A long YouTube that falls through to audio decode should not be
+# rejected by the 10m audio cap. Raise/disable with VIDEO_MAX_DURATION_YOUTUBE
+# (0 disables the ceiling entirely for YouTube). [REH][IV]
+MAX_DURATION_SECONDS_YOUTUBE = int(os.getenv("VIDEO_MAX_DURATION_YOUTUBE", "3600"))  # 1h default
 MAX_CONCURRENT_DOWNLOADS = int(os.getenv("VIDEO_MAX_CONCURRENT", "3"))
 CACHE_DIR = Path(os.getenv("VIDEO_CACHE_DIR", "cache/video_audio"))
 CACHE_EXPIRY_DAYS = int(os.getenv("VIDEO_CACHE_EXPIRY_DAYS", "7"))
@@ -1130,8 +1136,17 @@ class VideoIngestionManager:
             fmt_id = str(selected.get("format_id") or selected.get("format"))
             ext = (selected.get("ext") or "m4a").lower()
             duration = float(metadata.get("duration") or 0.0)
-            if duration and duration > MAX_DURATION_SECONDS:
-                msg = f"Video too long: {duration:.1f}s (max {MAX_DURATION_SECONDS}s)"
+            # YouTube transcript-first paths (summarize CLI, caption resolver in
+            # hear.py) already handle arbitrary lengths before this gate runs.
+            # Even when they miss and we fall through to audio decode, YouTube is
+            # streamable and low-risk, so it gets a much higher ceiling than the
+            # 10m audio cap that applies to TikTok / direct-media URLs. [REH][IV]
+            is_youtube = (expected_extractor == "youtube")
+            duration_ceiling = (
+                MAX_DURATION_SECONDS_YOUTUBE if is_youtube else MAX_DURATION_SECONDS
+            )
+            if duration and duration_ceiling and duration > duration_ceiling:
+                msg = f"Video too long: {duration:.1f}s (max {duration_ceiling}s)"
                 raise VideoIngestError(msg)
             title = metadata.get("title", "Unknown Title")
             uploader = metadata.get("uploader", "Unknown")

@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 from bs4 import BeautifulSoup
+from urllib.parse import urlsplit, urlunsplit
 
 from .utils.logging import get_logger
 from .utils.playwright_helpers import connect_browser as _pw_connect_browser
@@ -47,18 +48,13 @@ TIER_C_READER_BASE = os.getenv(
     "WEBEX_TIER_C_READER",
     "https://r.jina.ai/",
 ).rstrip("/") + "/"
-# Alternate reader endpoint tried when the primary returns a paywall landing
-# page or fails (jina.ai is flaky/rate-limited per egress IP). The /http/ form
-# sometimes succeeds where the bare form is blocked. [PAY]
-TIER_C_READER_FALLBACK = os.getenv(
-    "WEBEX_TIER_C_READER_FALLBACK",
-    "https://r.jina.ai/http/",
-).rstrip("/") + "/"
-# jina.ai intermittently returns the paywalled landing page instead of the
-# article; retry the endpoint set this many times (the article usually comes
-# through on a later attempt). Sustained wall phases happen, so allow several.
-TIER_C_RETRIES = int(os.getenv("WEBEX_TIER_C_RETRIES", "5"))
-TIER_C_RETRY_DELAY_S = float(os.getenv("WEBEX_TIER_C_RETRY_DELAY_S", "1.5"))
+# jina.ai is per-IP rate-limited: rapid repeated requests push it into a
+# sustained "paywall landing page" phase, which is WORSE than a single request.
+# So we do few retries with spacing -- hammering defeats the purpose. The bare
+# r.jina.ai/<url> form is the reliable one; the /http/ form 422s from this host
+# and is intentionally not used. [PAY]
+TIER_C_RETRIES = int(os.getenv("WEBEX_TIER_C_RETRIES", "1"))
+TIER_C_RETRY_DELAY_S = float(os.getenv("WEBEX_TIER_C_RETRY_DELAY_S", "2.0"))
 # Minimum word count for a reader-proxy response to count as a real article.
 # Landing pages / teasers have very few words of body and fail this gate so the
 # retry/fallback chain can recover the actual article. [PAY]
@@ -70,6 +66,107 @@ TIER_C_MAX_TEXT_CHARS = int(os.getenv("WEBEX_TIER_C_MAX_CHARS", "60000"))
 # extraction cascades to Tier B/C instead of being returned as "success".
 TIER_A_MIN_CHARS = int(os.getenv("WEBEX_TIER_A_MIN_CHARS", "800"))
 
+# ---------------------------------------------------------------------------
+# Bot-wall / challenge-page detection [PAY][REH]
+# ---------------------------------------------------------------------------
+# Substrings (lowercased) that identify a "security check" / CAPTCHA interstitial
+# rather than article content. When any tier fetches a body containing one of
+# these, the page is a bot-wall and there is no point launching heavier tiers
+# (Playwright) or retrying -- skip straight to a clear failure message. [PAY]
+BOT_WALL_MARKERS: tuple[str, ...] = (
+    "one more step",
+    "complete the security check",
+    "verify you are a human",
+    "just a moment",
+    "checking your browser",
+    "enable javascript and cookies to continue",
+    "please verify you are a human",
+)
+
+# Known capture / archive mirrors that hard-block automated access from this
+# server's egress IP (HTTP 429 + "One more step" interstitial). Surfacing a
+# specific, actionable message beats the generic extraction-failure text. [PAY]
+BLOCKED_HOST_SUFFIXES: tuple[str, ...] = (
+    "archive.is",
+    "archive.ph",
+    "archive.today",
+    "archive.fo",
+    "archive.li",
+    "archive.vn",
+)
+
+# Human-facing messages for bot-wall failures. [PAY]
+BOT_WALL_GENERIC_MSG = (
+    "This page is behind a bot-check (security challenge / CAPTCHA) that this "
+    "server can't pass automatically."
+)
+BOT_WALL_BLOCKED_HOST_MSG = (
+    "this capture host blocks automated access from this server; try the "
+    "original source URL or web.archive.org if a public snapshot exists"
+)
+
+# Optional Wayback fallback: when the tiered extractor fails and archive.org has
+# a public snapshot of the target, fetch that instead. Gated by env so it can be
+# disabled; only ever runs on the failure path (one availability API call + one
+# fetch, both bounded). [PAY]
+ENABLE_WAYBACK_FALLBACK = os.getenv("WEBEX_ENABLE_WAYBACK_FALLBACK", "1").strip() not in {
+    "0",
+    "false",
+    "False",
+}
+WAYBACK_AVAILABILITY_URL = "https://archive.org/wayback/available"
+WAYBACK_FETCH_TIMEOUT_S = float(os.getenv("WEBEX_WAYBACK_TIMEOUT_S", "10.0"))
+
+
+def is_bot_wall(text: str | None) -> str | None:
+    """Return the matched challenge marker (lowercased) if ``text`` looks like a
+    bot-wall interstitial, else None. Cheap, body-only, no network. [PAY]"""
+    if not text:
+        return None
+    lowered = (text or "").lower()
+    for marker in BOT_WALL_MARKERS:
+        if marker in lowered:
+            return marker
+    return None
+
+
+def _host_of(url: str) -> str:
+    try:
+        return (urlsplit(url).hostname or "").lower()
+    except Exception:
+        return ""
+
+
+def is_blocked_host(url: str) -> bool:
+    """True when ``url`` points at a known bot-wall capture host. [PAY]"""
+    host = _host_of(url)
+    return any(host == s or host.endswith("." + s) for s in BLOCKED_HOST_SUFFIXES)
+
+
+def _bot_wall_marker_from_error(error: str | None) -> str | None:
+    if not error or not error.startswith("bot_wall:"):
+        return None
+    return error[len("bot_wall:"):] or "challenge"
+
+
+async def _wayback_snapshot(url: str) -> str | None:
+    """Return the closest public Wayback snapshot URL for ``url``, or None.
+
+    Uses the archive.org availability API (one bounded GET). Never raises. [PAY]
+    """
+    api = f"{WAYBACK_AVAILABILITY_URL}?url={url}"
+    try:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as c:
+            r = await c.get(api)
+            r.raise_for_status()
+            data = r.json()
+        snap = (data.get("archived_snapshots") or {}).get("closest") or {}
+        if snap.get("available") and snap.get("url"):
+            return str(snap["url"])
+    except Exception as exc:  # noqa: BLE001 - best-effort fallback
+        logger.debug(f"Wayback availability lookup failed for {url}: {exc!r}")
+    return None
+
 
 @dataclass
 class ExtractionResult:
@@ -80,9 +177,22 @@ class ExtractionResult:
     author: str | None = None
     raw_json_present: bool = False
     error: str | None = None
+    # Set when the failure is a bot-wall/challenge page; carries the matched
+    # marker so callers can surface a specific message instead of the generic
+    # extraction-failure text. [PAY]
+    bot_wall_marker: str | None = None
 
     def to_message(self) -> str:
         if not self.success:
+            if self.bot_wall_marker is not None:
+                if is_blocked_host(self.canonical_url or ""):
+                    return (
+                        f"⚠️ Extraction failed ({self.tier_used}): "
+                        f"{BOT_WALL_BLOCKED_HOST_MSG}"
+                    )
+                return (
+                    f"⚠️ Extraction failed ({self.tier_used}): {BOT_WALL_GENERIC_MSG}"
+                )
             return f"⚠️ Extraction failed ({self.tier_used}): {self.error or 'unknown error'}"
         text_snippet = (self.text or "").strip()
         if len(text_snippet) > 800:
@@ -152,6 +262,18 @@ class WebExtractionService:
             await self._client.aclose()
             self._client = None
 
+    @staticmethod
+    def _bot_wall_result(url: str, tier: str, marker: str) -> ExtractionResult:
+        """Build a bot-wall failure result for ``url`` (host is the original
+        target, so the blocklist message logic keys off it). [PAY]"""
+        return ExtractionResult(
+            success=False,
+            tier_used=tier,
+            canonical_url=url,
+            error=f"bot_wall:{marker}",
+            bot_wall_marker=marker,
+        )
+
     async def extract(self, url: str) -> ExtractionResult:
         from bot.url_safety import (
             UrlSafetyError,
@@ -165,11 +287,43 @@ class WebExtractionService:
             logger.warning("URL safety blocked extraction: %s", exc)
             return ExtractionResult(success=False, tier_used="none", error=f"URL blocked: {exc}")
 
+        res = await self._extract_via(url)
+
+        # Optional Wayback fallback: only on a hard failure and only when a public
+        # snapshot exists. One bounded availability API call + one bounded fetch;
+        # if the snapshot extractor also fails we return the ORIGINAL result so the
+        # user still gets the (specific) bot-wall message rather than a Wayback error. [PAY]
+        if not res.success and ENABLE_WAYBACK_FALLBACK and not res.bot_wall_marker:
+            snap = await _wayback_snapshot(url)
+            if snap:
+                logger.info(f"🌐 Wayback snapshot found for {url}: {snap}; trying it")
+                snap_res = await self._extract_via(snap, original_url=url)
+                if snap_res.success:
+                    logger.info(f"🌐 Wayback fallback succeeded for {url}")
+                    return snap_res
+                # Snapshot was also unreadable -- keep the original failure so the
+                # message reflects the requested URL, not the snapshot.
+                logger.info(f"🌐 Wayback fallback also failed for {url}: {snap_res.error}")
+
+        return res
+
+    async def _extract_via(self, url: str, original_url: str | None = None) -> ExtractionResult:
+        """Run the tier cascade (A -> C -> B) for ``url``.
+
+        ``original_url`` is the user-facing target (kept on bot-wall results so
+        the blocklist message keys off the requested host, not a Wayback mirror).
+        Fast-fails the whole cascade the moment any tier returns a bot-wall
+        interstitial instead of spending ~26s on a doomed Playwright launch. [PAY]
+        """
         last_error: str | None = None
         last_tier = "none"
 
         try:
             res = await self._tier_a_httpx(url)
+            marker = is_bot_wall(res.text)
+            if marker is not None:
+                logger.info(f"🛑 Tier A returned a bot-wall interstitial ({marker}) for {url}; skipping B/C")
+                return self._bot_wall_result(original_url or url, "A", marker)
             if res.success:
                 # A paywalled page often returns HTTP 200 with only a short
                 # teaser (e.g. 122 chars). Treat a thin Tier A result as a soft
@@ -217,6 +371,10 @@ class WebExtractionService:
         if ENABLE_TIER_C:
             try:
                 res_c = await self._tier_c_reader(url)
+                marker = is_bot_wall(res_c.text if res_c is not None else None)
+                if marker is not None:
+                    logger.info(f"🛑 Tier C returned a bot-wall interstitial ({marker}) for {url}; skipping B")
+                    return self._bot_wall_result(original_url or url, "C", marker)
                 if res_c is not None and res_c.success:
                     from bot.news import thin_content
 
@@ -234,6 +392,10 @@ class WebExtractionService:
             try:
                 res_b = await self._tier_b_playwright(url)
                 if res_b is not None:
+                    marker = is_bot_wall(res_b.text)
+                    if marker is not None:
+                        logger.info(f"🛑 Tier B returned a bot-wall interstitial ({marker}) for {url}")
+                        return self._bot_wall_result(original_url or url, "B", marker)
                     if res_b.success:
                         return res_b
                     last_error = res_b.error or last_error
@@ -249,6 +411,7 @@ class WebExtractionService:
         return ExtractionResult(
             success=False,
             tier_used=last_tier,
+            canonical_url=original_url or url,
             error=last_error or "all tiers failed",
         )
 
@@ -348,7 +511,7 @@ class WebExtractionService:
         the primary endpoint, then a fallback endpoint, and reject responses
         that still look like the paywalled landing page. [PAY]
         """
-        from urllib.parse import urlsplit, urlunsplit
+        from urllib.parse import urlsplit
 
         parts = urlsplit(url)
         # Two jina.ai shapes exist: bare r.jina.ai/<url> (pass https:// through)
@@ -395,18 +558,15 @@ class WebExtractionService:
         # (the article usually comes through on a later attempt). [PAY]
         last_err = "reader proxy not attempted"
         for attempt in range(max(1, int(TIER_C_RETRIES))):
-            for base in (TIER_C_READER_BASE, TIER_C_READER_FALLBACK):
-                if base == TIER_C_READER_BASE and base == TIER_C_READER_FALLBACK:
-                    continue  # avoid double-trying identical endpoints
-                try:
-                    res = await _try(base)
-                    if res is not None and res.success:
-                        return res
-                    last_err = (res.error if res else "no response") or last_err
-                    logger.info(f"Tier C endpoint {base} failed (attempt {attempt + 1}) for {url}: {last_err}")
-                except Exception as e:
-                    last_err = f"exception:{e.__class__.__name__}"
-                    logger.info(f"Tier C endpoint {base} exception (attempt {attempt + 1}) for {url}: {str(e)[:160]}")
+            try:
+                res = await _try(TIER_C_READER_BASE)
+                if res is not None and res.success:
+                    return res
+                last_err = (res.error if res else "no response") or last_err
+                logger.info(f"Tier C endpoint failed (attempt {attempt + 1}) for {url}: {last_err}")
+            except Exception as e:
+                last_err = f"exception:{e.__class__.__name__}"
+                logger.info(f"Tier C endpoint exception (attempt {attempt + 1}) for {url}: {str(e)[:160]}")
             if attempt < max(1, int(TIER_C_RETRIES)) - 1:
                 await asyncio.sleep(TIER_C_RETRY_DELAY_S)
         return ExtractionResult(success=False, tier_used="C", error=last_err)

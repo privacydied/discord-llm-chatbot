@@ -120,6 +120,55 @@ def _timeout_skips_provider_retry() -> bool:
     return os.getenv("LADDER_TIMEOUT_SKIPS_RETRY", "1").strip().lower() not in ("0", "false", "no")
 
 
+# Provider replies that mean "this model/route is gone", not "try again later". [CMV][REH]
+# A retired model answers in ~50ms, so it never trips the timeout-based breaker:
+# without this list the ladder re-discovers the same corpse on every single
+# message until someone edits the .env, and each dead rung it walks is budget
+# the live rungs below never get.
+_DEAD_MODEL_MARKERS: tuple[str, ...] = (
+    "no endpoints found",
+    "no endpoints that support",
+    "end of life",
+    "no longer available",
+    "no longer supported",
+    "has been deprecated",
+    "decommissioned",
+    "unavailable for free",  # OpenRouter: ":free" slug retired, paid slug remains
+    "model not found",
+    "unknown model",
+    "invalid model",
+)
+
+
+def is_dead_model_error(error: Exception | str) -> bool:
+    """Is this error a permanently retired/unknown model rather than a blip? [REH]
+
+    Deliberately narrow: bare status codes are not enough (a 404 can come from a
+    mistyped route that a retry would still hit, a 410 without a reason phrase is
+    ambiguous), so each marker names an upstream phrase that only appears when the
+    model itself is gone.
+    """
+    text = error if isinstance(error, str) else f"{type(error).__name__}: {error}"
+    low = text.lower()
+    if any(marker in low for marker in _DEAD_MODEL_MARKERS):
+        return True
+    # HTTP 410 Gone: the upstream is explicit that this route will not return.
+    return "410" in low and "gone" in low
+
+
+def _dead_model_cooldown_s() -> float:
+    """Bench duration for a retired model. Env: DEAD_MODEL_COOLDOWN_S. [CMV]
+
+    Legacy alias ``OPENROUTER_DEAD_MODEL_COOLDOWN_S`` still honoured — the rule
+    now applies to every provider (NVIDIA retires models too), not just OpenRouter.
+    """
+    raw = os.getenv("DEAD_MODEL_COOLDOWN_S") or os.getenv("OPENROUTER_DEAD_MODEL_COOLDOWN_S") or "1800"
+    try:
+        return max(0.0, float(raw))
+    except (ValueError, TypeError):
+        return 1800.0
+
+
 @dataclass
 class CircuitBreakerState:
     """Circuit breaker state for a provider."""
@@ -594,12 +643,11 @@ class EnhancedRetryManager:
             "response normalization failed",
         ]
 
-        # Hard non-retryable 404 / no-endpoints patterns (provider permanently unavailable)
-        if "404" in error_str and "no endpoints found" in error_str:
+        # Hard non-retryable: the model/route is permanently gone (404 no-endpoints,
+        # 410 end-of-life, ":free" slug retired, unknown model, ...). [REH]
+        if is_dead_model_error(error):
             return False
         if "404" in error_str and "no endpoint" in error_str and "openrouter" in error_str:
-            return False
-        if "404" in error_str and "model not found" in error_str:
             return False
         # Hard non-retryable auth/authorization failures.
         # These are configuration/account issues, not transient provider blips.
@@ -728,21 +776,20 @@ class EnhancedRetryManager:
                             e = te
                     except (AttributeError, TypeError) as e2:
                         logger.debug(f"Timeout normalization failed: {e2}")
-                    # Treat OpenRouter 404 / no-endpoints as permanent provider unavailability [REH]
-                    msg_lower = f"{type(e).__name__}: {e}".lower()
-                    if "404" in msg_lower and "no endpoints found" in msg_lower:
+                    # Retired / unknown model: permanent, so bench the rung instead of
+                    # re-walking it on every request until the .env is edited. [REH][PA]
+                    if is_dead_model_error(e):
                         # Also handled: bench this model and keep laddering, so
                         # WARNING rather than an ERROR traceback. [REH]
-                        logger.warning(f"⛔ Provider unavailable (404 no endpoints), benching {provider_key}: {type(e).__name__}: {e}")
-                        logger.debug(f"Provider-unavailable detail for {provider_key}", exc_info=True)
+                        dead_model_cooldown = _dead_model_cooldown_s()
+                        logger.warning(
+                            f"⛔ Model retired/unavailable, benching {provider_key} for {dead_model_cooldown:.0f}s (update the ladder in .env): {type(e).__name__}: {e}",
+                        )
+                        logger.debug(f"Dead-model detail for {provider_key}", exc_info=True)
                         last_exception = e
                         self._record_failure(provider_key)
                         breaker = self._get_circuit_breaker(provider_key)
                         breaker.status = ProviderStatus.CIRCUIT_OPEN
-                        try:
-                            dead_model_cooldown = float(os.getenv("OPENROUTER_DEAD_MODEL_COOLDOWN_S", "1800"))
-                        except (ValueError, TypeError):
-                            dead_model_cooldown = 1800.0
                         breaker.cooldown_duration = max(float(breaker.cooldown_duration or 0.0), 60.0, dead_model_cooldown)
                         break
                     # Auth failures should short-circuit the entire ladder: trying more models

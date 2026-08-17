@@ -4,7 +4,8 @@ import contextlib
 import re
 
 from .action import BotAction
-from .ai_backend import generate_response
+from .ai_backend import generate_response, is_handled_provider_failure
+from .enhanced_retry import is_dead_model_error
 from .exceptions import InferenceError
 from .utils.logging import get_logger
 from .vl.postprocess import sanitize_model_output
@@ -58,7 +59,14 @@ async def brain_infer(prompt: str, context: str = "", system_prompt: str | None 
             msg = "Unexpected response format from AI backend"
             raise InferenceError(msg)
     except Exception as e:
-        logger.exception(f"🧠 Brain inference failed: {e!s}")
+        # An exhausted ladder is already reported by ai_backend and answered with a
+        # friendly message below — a second full traceback here adds no information
+        # and buries the one-line cause. Keep it for genuine faults. [REH]
+        if is_handled_provider_failure(e):
+            logger.warning(f"🧠 Brain inference failed: {e!s}")
+            logger.debug("Brain inference failure detail", exc_info=True)
+        else:
+            logger.exception(f"🧠 Brain inference failed: {e!s}")
 
         # Provide user-friendly error message based on error type [REH]
         error_str = str(e).lower()
@@ -80,6 +88,18 @@ async def brain_infer(prompt: str, context: str = "", system_prompt: str | None 
                     },
                 )
             user_message = "🤖 The AI model pool I'm using is temporarily unavailable. This is an issue with the upstream provider, not your message. Please try again in a little while."
+        elif is_dead_model_error(e) or "retired/unavailable" in error_str:
+            # Distinct from a provider blip: "try again later" is wrong advice when
+            # the model is gone for good and the .env needs editing. [REH]
+            with contextlib.suppress(Exception):
+                logger.info(
+                    "text.model_retired",
+                    extra={
+                        "event": "text.model_retired",
+                        "detail": {"reason": "model_retired_or_unknown"},
+                    },
+                )
+            user_message = "🤖 The model I was configured to use has been retired by the provider. An admin needs to point me at a current model — I can't answer until then."
         elif "timeout" in error_str:
             user_message = "⏰ The AI service timed out. Please try again with a shorter message."
         else:

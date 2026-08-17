@@ -32,7 +32,7 @@ else:
 import contextlib
 
 from bot.config import get_vl_model_ladder, load_config
-from bot.enhanced_retry import get_retry_manager
+from bot.enhanced_retry import get_retry_manager, is_dead_model_error
 from bot.exceptions import APIError
 from bot.memory import get_profile, get_server_profile
 from bot.retry_utils import (
@@ -824,9 +824,16 @@ Server Context: {server_context}"""
                         _is_auth = ("401" in err_str or "403" in err_str) and (
                             "authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str
                         )
+                        _is_dead_model = is_dead_model_error(base_err)
                         if _is_no_endpoints:
                             msg = (
                                 f"Text providers unavailable via OpenRouter (404 / no endpoints) after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
+                            )
+                        elif _is_dead_model:
+                            # Config problem, not a provider blip: say so, and name the knob to edit. [REH]
+                            msg = (
+                                f"Text model retired/unavailable (last_provider={prov}) — update TEXT_FALLBACK_MODELS in .env. "
+                                f"Ladder exhausted after {attempts} attempt(s) in {total_time:.2f}s. Last error: {type(base_err).__name__}: {base_err}"
                             )
                         elif _is_moderation:
                             msg = f"Content blocked by moderation (last_provider={prov}): input was flagged. Last error: {type(base_err).__name__}: {base_err}"
@@ -1281,8 +1288,14 @@ async def _generate_vl_response_with_retry(
                         "authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str
                     )
 
+                    _is_dead_model = is_dead_model_error(base_err)
                     if _is_no_ep:
                         msg = f"Vision providers unavailable via OpenRouter (404 / no endpoints) after {attempts} attempt(s) in {total_time:.2f}s (last_provider={prov}). Last error: {type(base_err).__name__}: {base_err}"
+                    elif _is_dead_model:
+                        msg = (
+                            f"Vision model retired/unavailable (last_provider={prov}) — update VISION_MODEL / the VL ladder in .env. "
+                            f"Ladder exhausted after {attempts} attempt(s) in {total_time:.2f}s. Last error: {type(base_err).__name__}: {base_err}"
+                        )
                     elif _is_mod:
                         msg = f"Vision content blocked by moderation (last_provider={prov}): input was flagged. Last error: {type(base_err).__name__}: {base_err}"
                     elif _is_auth:
@@ -1298,7 +1311,7 @@ async def _generate_vl_response_with_retry(
                     api_err.vl_attempts = attempts
                     api_err.vl_provider_base = base_url
                     try:
-                        if _is_no_ep or _is_auth or _is_mod:
+                        if _is_no_ep or _is_auth or _is_mod or _is_dead_model:
                             api_err.retryable = False
                         if _is_mod:
                             api_err.content_moderation = True

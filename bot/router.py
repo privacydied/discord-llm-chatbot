@@ -5875,7 +5875,17 @@ class Router:
         return None
 
     async def _finalize_extraction(self, url: str, extract_res: Any) -> str | None:
-        """Adapt a tiered-extractor result onto _finalize_web_content. [CA]"""
+        """Adapt a tiered-extractor result onto _finalize_web_content. [CA]
+
+        When the tiered extractor failed due to a bot-wall interstitial, return
+        its specific, actionable message directly so the user is told the real
+        reason (e.g. "this capture host blocks automated access") instead of the
+        generic extraction-failure text. [PAY]
+        """
+        if extract_res is not None and not getattr(extract_res, "success", False):
+            marker = getattr(extract_res, "bot_wall_marker", None)
+            if marker is not None:
+                return extract_res.to_message()
         if not (extract_res and getattr(extract_res, "success", False)):
             return await self._finalize_web_content(url, None)
         return await self._finalize_web_content(

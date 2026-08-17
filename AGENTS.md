@@ -26,6 +26,7 @@ Always use `uv run` for reproducible interpreter/environment behavior.
 - Prefer constants/enums over magic values.
 - Keep functions small and flat where possible (target: <=30 lines, nesting <=3 when practical).
 - Preserve dual-sink logging behavior (Rich console + JSONL file).
+- **Outbound Discord sends**: use `safe_send` / `safe_reply` / `safe_edit` from `bot/core/output.py` for any new `.send(`/`.reply(`/`.edit(` call site, instead of calling `discord.abc.Messageable`/`discord.Message` methods directly. They are the single outbound boundary: text is split via the shared splitter (`bot/core/text_chunking.py`, byte-exact, code-fence-aware at send time) instead of hand-rolled `text[:1900]`-style truncation that silently drops content, and embeds are clamped to Discord's real per-field and 6000-char aggregate limits instead of each caller duplicating its own truncation (or, worse, not truncating and hitting HTTP 400 / error 50035). A raw call is appropriate only where the framework requires it directly (e.g. inside `bot/core/output.py` itself, or a handful of infra call sites already reviewed for length).
 
 ## Testing Guidelines
 - Framework: `pytest` with `asyncio_mode = auto` (`pytest.ini`).

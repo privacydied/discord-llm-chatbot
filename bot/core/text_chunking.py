@@ -27,6 +27,37 @@ DISCORD_ERR_UNKNOWN_MESSAGE = 10008
 DISCORD_ERR_INVALID_FORM_BODY = 50035
 
 
+# Cap on a captured fence language tag (e.g. "python") used when reopening a
+# fence split across chunks. Guards against treating an un-terminated fence
+# (no newline before the next max_len window) as an enormous "language". [CMV][REH]
+_MAX_FENCE_LANG_LEN = 20
+
+
+def _apply_fence_toggles(text: str, fence_open: bool, fence_lang: str) -> tuple[bool, str]:
+    """Walk every ``` occurrence in ``text`` in order, toggling fence state.
+
+    Shared by the splitter (to prefer break points outside a fence) and by
+    ``fence_wrap_markers`` (to decorate parts for rendering). Language tag is
+    captured only on the open transition, from the text between the fence
+    marker and the next newline. [CMV]
+    """
+    idx = 0
+    while True:
+        pos = text.find("```", idx)
+        if pos == -1:
+            break
+        if not fence_open:
+            eol = text.find("\n", pos + 3)
+            tag_end = eol if eol != -1 else len(text)
+            fence_lang = text[pos + 3 : tag_end].strip()[:_MAX_FENCE_LANG_LEN]
+            fence_open = True
+        else:
+            fence_open = False
+            fence_lang = ""
+        idx = pos + 3
+    return fence_open, fence_lang
+
+
 def split_for_discord(content: str, max_len: int = DISCORD_MAX_CONTENT_LEN) -> list[str]:
     """Split a text payload into Discord-safe chunks.
 
@@ -36,6 +67,13 @@ def split_for_discord(content: str, max_len: int = DISCORD_MAX_CONTENT_LEN) -> l
       then whitespace; hard cut only as last resort within max_len.
     - Avoid empty/whitespace-only chunks where possible without dropping content.
     - Respect code-fence parity when choosing a split point if feasible.
+
+    This function's own output stays byte-exact and undecorated -- it never
+    inserts fence markers, so ``"".join(split_for_discord(t)) == t`` always
+    holds. A part that lands inside an open code fence still renders broken on
+    its own; ``fence_wrap_markers`` / ``render_chunks_for_discord`` below are
+    the presentation layer that fixes that at send time, kept separate so the
+    splitter's reassembly guarantee is never in tension with rendering. [CA]
     """
     try:
         if content is None:
@@ -53,6 +91,11 @@ def split_for_discord(content: str, max_len: int = DISCORD_MAX_CONTENT_LEN) -> l
     chunks: list[str] = []
     n = len(text)
     start = 0
+    # Cumulative fence state as of `start`, carried across iterations so parity
+    # checks account for a fence left open by an earlier chunk -- not just the
+    # candidate window in isolation. [REH]
+    fence_open = False
+    fence_lang = ""
 
     while start < n:
         remaining = n - start
@@ -96,10 +139,13 @@ def split_for_discord(content: str, max_len: int = DISCORD_MAX_CONTENT_LEN) -> l
 
         best_break: int | None = None
 
-        # Prefer boundaries that keep us outside of fenced code blocks when possible.
+        # Prefer boundaries that leave us OUTSIDE a fenced code block, evaluated
+        # cumulatively (fence_open carried in) rather than assuming each window
+        # starts unfenced. [REH]
         for candidate in sorted(uniq_candidates, reverse=True):
             segment = text[start : start + candidate]
-            if segment.count("```") % 2 == 0:
+            candidate_open, _ = _apply_fence_toggles(segment, fence_open, fence_lang)
+            if not candidate_open:
                 best_break = candidate
                 break
 
@@ -116,11 +162,46 @@ def split_for_discord(content: str, max_len: int = DISCORD_MAX_CONTENT_LEN) -> l
 
         # If the chunk is empty/whitespace-only and there's more content ahead,
         # extend it by one character to avoid producing an effectively empty message.
-        if not chunk.strip() and (start + best_break < n):
+        # Never past max_len, though -- best_break can already equal max_len (an
+        # all-whitespace window with no other candidate), and extending further
+        # would break the "every part fits the limit" guarantee. [REH]
+        if not chunk.strip() and (start + best_break < n) and best_break < max_len:
             extra = min(1, n - (start + best_break))
-            chunk = text[start : start + best_break + extra]
+            best_break += extra
+            chunk = text[start : start + best_break]
 
         chunks.append(chunk)
+        fence_open, fence_lang = _apply_fence_toggles(chunk, fence_open, fence_lang)
         start += best_break
 
     return chunks
+
+
+def fence_wrap_markers(chunks: list[str]) -> list[tuple[str, str]]:
+    """For each raw ``split_for_discord`` part, the (prefix, suffix) that makes
+    it render as valid Markdown on its own -- reopening a fence left open by
+    the previous part, and closing one this part leaves open.
+
+    Deliberately separate from the split itself: apply these AFTER any text
+    sanitization of the chunk body, so the markers bracket the final sent text
+    rather than risk a sanitizer mangling them. The wrapped result does NOT
+    preserve ``"".join(...) == original`` -- it is a presentation step for
+    what actually gets sent, not the splitter's reassembly contract. [CA][REH]
+    """
+    markers: list[tuple[str, str]] = []
+    fence_open = False
+    fence_lang = ""
+    for chunk in chunks:
+        prefix = f"```{fence_lang}\n" if fence_open else ""
+        fence_open, fence_lang = _apply_fence_toggles(chunk, fence_open, fence_lang)
+        suffix = "\n```" if fence_open else ""
+        markers.append((prefix, suffix))
+    return markers
+
+
+def render_chunks_for_discord(chunks: list[str]) -> list[str]:
+    """Convenience wrapper: apply ``fence_wrap_markers`` directly to raw parts.
+
+    For callers with no separate per-part sanitization step to interleave with.
+    """
+    return [f"{prefix}{chunk}{suffix}" for chunk, (prefix, suffix) in zip(chunks, fence_wrap_markers(chunks), strict=True)]

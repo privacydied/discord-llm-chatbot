@@ -52,6 +52,7 @@ from .text_chunking import (
     DISCORD_ERR_INVALID_FORM_BODY,
     DISCORD_ERR_UNKNOWN_MESSAGE,
     DISCORD_MAX_CONTENT_LEN,
+    fence_wrap_markers,
     split_for_discord,
 )
 
@@ -2073,9 +2074,19 @@ class LLMBot(commands.Bot):
         total_parts = len(chunks)
         last_sent: discord.Message | None = None
 
+        # Fence prefix/suffix per raw chunk, computed once up front from the
+        # UNSANITIZED chunks so fence state tracks the actual ``` occurrences.
+        # Applied around each part's sanitized text below -- a code block split
+        # across parts still renders as code in every part, without changing
+        # what `chunks` itself means for the mismatch/oversize checks upstream. [REH]
+        fence_markers = fence_wrap_markers(chunks)
+
         for part_idx, base_chunk in enumerate(chunks, start=1):
             is_first_part = part_idx == 1
+            fence_prefix, fence_suffix = fence_markers[part_idx - 1]
             chunk_content = sanitize_public_text(base_chunk)
+            if chunk_content:
+                chunk_content = f"{fence_prefix}{chunk_content}{fence_suffix}"
 
             # Apply explicit mention only to the first part.
             try:

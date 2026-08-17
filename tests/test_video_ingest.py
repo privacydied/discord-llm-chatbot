@@ -206,6 +206,150 @@ async def test_fetch_uses_canonical_instagram_url_for_ytdlp(manager: VideoIngest
 
 
 @pytest.mark.asyncio
+async def test_long_youtube_bypasses_audio_duration_cap(
+    manager: VideoIngestionManager, tmp_path: Path, monkeypatch,
+) -> None:
+    """A long YouTube (e.g. 45m) must NOT be rejected by the 10m audio cap.
+
+    YouTube has transcript-first paths (summarize CLI, caption resolver in
+    hear.py) that run before this gate, and is streamable/low-risk, so the
+    flat MAX_DURATION_SECONDS ceiling does not apply to it. [REH][IV]
+    """
+    url = "https://www.youtube.com/watch?v=longvideo123"
+    youtube_id = "longvideo123"
+
+    async def fake_probe(url_arg: str, timeout_s: float):
+        return {
+            "id": youtube_id,
+            "extractor_key": "Youtube",
+            "title": "A Very Long YouTube Video",
+            "duration": 2700,  # 45 minutes
+            "uploader": "tester",
+            "upload_date": "20260507",
+            "webpage_url": url,
+            "formats": [
+                {
+                    "format_id": "audio",
+                    "ext": "m4a",
+                    "vcodec": "none",
+                    "acodec": "mp4a",
+                    "url": "https://cdn.example.com/audio.m4a",
+                    "filesize": 4,
+                },
+            ],
+        }
+
+    downloaded = {}
+
+    async def fake_download(source_url, format_id, ext, output_dir, timeout_s):
+        downloaded["url"] = source_url
+        output = Path(output_dir) / f"{youtube_id}.{ext}"
+        output.write_bytes(b"data")
+        return output
+
+    monkeypatch.setattr(manager, "_probe_metadata", fake_probe)
+    monkeypatch.setattr(manager, "_download_audio", fake_download)
+
+    # Must not raise VideoIngestError despite 45m > 10m default cap.
+    result = await manager.fetch_and_prepare_url_audio(url, force_refresh=True)
+    assert result.metadata.source_type == "youtube"
+    assert downloaded.get("url") == url
+
+
+@pytest.mark.asyncio
+async def test_long_non_youtube_still_rejected_by_duration_cap(
+    manager: VideoIngestionManager, tmp_path: Path, monkeypatch,
+) -> None:
+    """Non-YouTube (TikTok) long videos keep the flat 10m audio cap. [REH][IV]"""
+    url = "https://www.tiktok.com/@user/video/longtiktok123"
+
+    async def fake_probe(url_arg: str, timeout_s: float):
+        return {
+            "id": "longtiktok123",
+            "extractor_key": "TikTok",
+            "title": "A Very Long TikTok",
+            "duration": 2700,  # 45 minutes
+            "uploader": "tester",
+            "upload_date": "20260507",
+            "webpage_url": url,
+            "formats": [
+                {
+                    "format_id": "audio",
+                    "ext": "m4a",
+                    "vcodec": "none",
+                    "acodec": "mp4a",
+                    "url": "https://cdn.example.com/audio.m4a",
+                    "filesize": 4,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(manager, "_probe_metadata", fake_probe)
+
+    with pytest.raises(VideoIngestError, match="Video too long"):
+        await manager.fetch_and_prepare_url_audio(url, force_refresh=True)
+
+
+@pytest.mark.asyncio
+async def test_youtube_duration_cap_disabled_via_env(
+    manager: VideoIngestionManager, tmp_path: Path, monkeypatch,
+) -> None:
+    """VIDEO_MAX_DURATION_YOUTUBE=0 disables the ceiling entirely for YouTube."""
+    # Patch the module global in place (no reload — reload leaks module state
+    # into sibling tests in the same session). [REH]
+    monkeypatch.setattr(
+        "bot.video_ingest.MAX_DURATION_SECONDS_YOUTUBE", 0
+    )
+    monkeypatch.setattr(manager, "_probe_metadata", lambda u, t: _yt_probe_coro(7200, u))
+    downloaded = {}
+    async def _fake_dl_async(su, fi, ex, od, ts):
+        return _fake_dl(downloaded, su, od, "yt0")
+    monkeypatch.setattr(
+        manager,
+        "_download_audio",
+        _fake_dl_async,
+    )
+
+    result = await manager.fetch_and_prepare_url_audio(
+        "https://www.youtube.com/watch?v=yt0", force_refresh=True
+    )
+    assert result.metadata.source_type == "youtube"
+    assert downloaded.get("url") == "https://www.youtube.com/watch?v=yt0"
+
+
+def _yt_probe_coro(duration: float, url_arg: str):
+    async def _probe():
+        return {
+            "id": "yt0",
+            "extractor_key": "Youtube",
+            "title": "Long",
+            "duration": duration,
+            "uploader": "tester",
+            "upload_date": "20260507",
+            "webpage_url": url_arg,
+            "formats": [
+                {
+                    "format_id": "audio",
+                    "ext": "m4a",
+                    "vcodec": "none",
+                    "acodec": "mp4a",
+                    "url": "https://cdn.example.com/audio.m4a",
+                    "filesize": 4,
+                },
+            ],
+        }
+
+    return _probe()
+
+
+def _fake_dl(seen: dict, source_url: str, output_dir: Path, vid: str):
+    seen["url"] = source_url
+    output = Path(output_dir) / f"{vid}.m4a"
+    output.write_bytes(b"data")
+    return output
+
+
+@pytest.mark.asyncio
 async def test_vxinstagram_reel_resolves_to_direct_media_without_instagram_ytdlp(manager: VideoIngestionManager, tmp_path: Path, monkeypatch) -> None:
     """d.vxinstagram reel pages should use their og:video direct MP4 to avoid Instagram login walls."""
     page_url = "https://d.vxinstagram.com/reel/DVMPNJtE50x/"

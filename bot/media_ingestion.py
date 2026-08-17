@@ -330,6 +330,17 @@ class MediaIngestionManager:
                         processing_time_ms=processing_time,
                     )
 
+                # Bot-wall failure: surface the specific, actionable message
+                # instead of the generic "No content could be extracted" text. [PAY]
+                if extract_res is not None and getattr(extract_res, "bot_wall_marker", None) is not None:
+                    return MediaIngestionResult(
+                        success=False,
+                        error_message=extract_res.to_message(),
+                        fallback_triggered=True,
+                        source_type="scrape",
+                        processing_time_ms=processing_time,
+                    )
+
                 if processed_data.get("error"):
                     return MediaIngestionResult(
                         success=False,

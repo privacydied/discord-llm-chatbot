@@ -137,7 +137,7 @@ class VideoCommands(commands.Cog):
                 embed.set_footer(text=f"Processed at {metadata['timestamp'][:19]} UTC")
 
                 # Edit the processing message with results
-                await processing_msg.edit(content=None, embed=embed)
+                await safe_edit(processing_msg, content=None, embed=embed)
 
                 # Log successful transcription
                 logger.info(

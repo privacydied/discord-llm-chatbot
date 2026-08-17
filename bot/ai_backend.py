@@ -4,11 +4,33 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from .config import load_config
+from .enhanced_retry import is_dead_model_error
 from .exceptions import APIError, InferenceError
 from .retry_utils import VISION_RETRY_CONFIG, is_retryable_error
 from .utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def is_handled_provider_failure(error: Exception) -> bool:
+    """Is this a routing outcome the caller already handles gracefully? [REH]
+
+    An exhausted fallback ladder is not a crash: every rung was tried, the user
+    gets a friendly message, and the stack trace only ever points at the same
+    three re-raise sites. Log those at WARNING (traceback stays at DEBUG) and
+    keep ERROR + traceback for failures that genuinely need debugging.
+    """
+    err_str = str(error).lower()
+    return (
+        ("404" in err_str and ("endpoint" in err_str or "no endpoints" in err_str))
+        or "providers unavailable" in err_str
+        or "providers exhausted" in err_str
+        or "fallback ladder failed" in err_str
+        or "retired/unavailable" in err_str
+        or "per-item budget" in err_str
+        or is_dead_model_error(error)
+        or (("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str))
+    )
 
 
 async def generate_response(
@@ -98,16 +120,9 @@ async def generate_response(
 
     except Exception as e:
         # Suppress traceback for expected "all providers unavailable" errors [REH]
-        err_str = str(e).lower()
-        is_expected_failure = (
-            ("404" in err_str and ("endpoint" in err_str or "no endpoints" in err_str))
-            or "providers unavailable" in err_str
-            or "all text providers exhausted" in err_str
-            or (("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str))
-        )
-
-        if is_expected_failure:
+        if is_handled_provider_failure(e):
             logger.warning(f"⚠️ Text generation failed (all providers unavailable): {e}")
+            logger.debug("Text generation failure detail", exc_info=True)
         else:
             logger.error(f"❌ Error in generate_response: {e}", exc_info=True)
         msg = f"Failed to generate response: {e!s}"
@@ -184,16 +199,9 @@ async def generate_vl_response(
 
     except Exception as e:
         # Suppress traceback for expected "all providers unavailable" errors [REH]
-        err_str = str(e).lower()
-        is_expected_failure = (
-            ("404" in err_str and ("endpoint" in err_str or "no endpoints" in err_str))
-            or "providers unavailable" in err_str
-            or "all vision providers exhausted" in err_str
-            or (("401" in err_str or "403" in err_str) and ("authentication" in err_str or "unauthorized" in err_str or "forbidden" in err_str or "user not found" in err_str or "invalid api key" in err_str))
-        )
-
-        if is_expected_failure:
+        if is_handled_provider_failure(e):
             logger.warning(f"⚠️ VL generation failed (all providers unavailable): {e}")
+            logger.debug("VL generation failure detail", exc_info=True)
         else:
             logger.error(f"❌ Error in generate_vl_response: {e}", exc_info=True)
 
