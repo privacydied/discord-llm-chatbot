@@ -5894,6 +5894,38 @@ class Router:
             author=getattr(extract_res, "author", None),
         )
 
+    async def _resolve_discord_message_link(self, url: str, message: Message | None) -> str | None:
+        """Resolve a Discord jump URL over the API instead of scraping it. [CA][SFT]
+
+        Returns None when the URL is not a Discord message link, so the caller
+        continues with normal URL handling. Failures come back as a short,
+        prompt-safe explanation (the aggregator drops raised failures, which
+        would leave the model with no idea *why* the link went missing). [REH]
+        """
+        if _is_mock(self.bot):
+            return None
+        from .discord_message_link import link_budget, resolve_message_link
+
+        timeout_s, max_chars = link_budget(self.config)
+        resolution = await resolve_message_link(
+            self.bot,
+            url,
+            requester=getattr(message, "author", None),
+            timeout_s=timeout_s,
+            max_chars=max_chars,
+        )
+        if resolution is None:
+            return None
+        self.logger.info(
+            f"url.route bucket=DISCORD_MESSAGE ok={resolution.ok} reason={resolution.reason}",
+            extra={
+                "subsys": "url",
+                "event": "url.discord_link",
+                "detail": {"url": url[:200], "ok": resolution.ok, "reason": resolution.reason},
+            },
+        )
+        return resolution.text
+
     async def _handle_general_url(self, item: InputItem, message: Message | None = None) -> str:
         """Handle general URL input items.
         Returns extracted content for further processing.
@@ -5914,6 +5946,11 @@ class Router:
                 if canon_candidate and canon_candidate != url:
                     url = canon_candidate
             self.logger.info(f"🌐 Processing general URL: {url}")
+
+            # --- Discord message links resolve via the API, never the scraper [CA][SFT] ---
+            linked = await self._resolve_discord_message_link(url, message)
+            if linked is not None:
+                return linked
 
             # --- URL MIME classification for media/document routing [CA][REH] ---
             # Skip classification for known platform URLs (Twitter/X, YouTube, etc.)
