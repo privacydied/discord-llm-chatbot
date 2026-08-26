@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -35,6 +36,20 @@ def _load_bool_config(key: str, default: bool) -> bool:
     except (ValueError, TypeError, KeyError, AttributeError, OSError) as e:
         logger.debug(f"Failed to load bool config {key}: {e}")
     return default
+
+
+def _check_context_perms(filepath: str, harden: bool) -> tuple[int | None, bool]:
+    """Stat (and optionally chmod) the context file. Blocking; call via a thread.
+
+    Returns (current_mode, hardened). ``hardened`` is True only when this call
+    actually changed the permissions.
+    """
+    st = os.stat(filepath)
+    mode = stat.S_IMODE(st.st_mode)
+    if mode != 0o600 and harden:
+        os.chmod(filepath, 0o600)
+        return mode, True
+    return mode, False
 
 
 class ContextManager:
@@ -125,26 +140,30 @@ class ContextManager:
             from bot.atomic_json import write_json_atomic
 
             await write_json_atomic(Path(self.filepath), guild_context_only)
-            # Post-write permission check (best-effort)
+            # Post-write permission check (best-effort). stat/chmod are blocking
+            # syscalls and the context file may live on a network mount, so they
+            # run in a thread rather than on the event loop. [PA][RM]
             try:
-                st = os.stat(self.filepath)
-                mode = stat.S_IMODE(st.st_mode)
-                if mode != 0o600:
-                    if get_bool("STRICT_CONTEXT_PERMS", False):
-                        os.chmod(self.filepath, 0o600)
-                        logger.info(
-                            "Hardened context file permissions to 600",
-                            extra={
-                                "subsys": "context",
-                                "event": "context.perms.hardened",
-                            },
-                        )
-                    else:
-                        logger.warning(
-                            "Context file permissions are not 600 (mode=%o). Consider: chmod 600 %s",
-                            mode,
-                            self.filepath,
-                        )
+                harden = get_bool("STRICT_CONTEXT_PERMS", False)
+                mode, hardened = await asyncio.to_thread(
+                    _check_context_perms,
+                    self.filepath,
+                    harden,
+                )
+                if hardened:
+                    logger.info(
+                        "Hardened context file permissions to 600",
+                        extra={
+                            "subsys": "context",
+                            "event": "context.perms.hardened",
+                        },
+                    )
+                elif mode is not None and mode != 0o600:
+                    logger.warning(
+                        "Context file permissions are not 600 (mode=%o). Consider: chmod 600 %s",
+                        mode,
+                        self.filepath,
+                    )
             except (OSError, ValueError, AttributeError, TypeError) as e:
                 # Never fail route on permission checks
                 logger.debug(f"Permission check failed: {e}")

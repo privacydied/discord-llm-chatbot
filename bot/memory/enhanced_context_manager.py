@@ -249,9 +249,10 @@ class EnhancedContextManager:
 
             await write_json_atomic(Path(self.filepath), data)
 
-            # Post-write permission hardening
+            # Post-write permission hardening. chmod is a blocking syscall and the
+            # context file may live on a network mount, so keep it off the loop. [PA]
             with contextlib.suppress(Exception):
-                os.chmod(self.filepath, 0o600)
+                await asyncio.to_thread(os.chmod, self.filepath, 0o600)
 
         except Exception as e:
             logger.exception("Failed to save context: %s", e)

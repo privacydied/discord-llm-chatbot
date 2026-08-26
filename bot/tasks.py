@@ -26,6 +26,29 @@ from .memory import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Log files older than this are purged by the periodic cleanup task [CMV]
+LOG_RETENTION_DAYS = 30
+
+
+def _sweep_old_logs(logs_dir: str, cutoff_time: float) -> int:
+    """Delete *.log files older than cutoff. Blocking; call via a thread. [RM]"""
+    from pathlib import Path
+
+    root = Path(logs_dir)
+    if not root.exists():
+        return 0
+    deleted = 0
+    for log_file in root.rglob("*.log"):
+        try:
+            if log_file.stat().st_mtime < cutoff_time:
+                log_file.unlink()
+                deleted += 1
+                logger.debug(f"Deleted old log file: {log_file}")
+        except OSError as e:
+            logger.warning(f"Error deleting log file {log_file}: {e}")
+    return deleted
+
 # Global task registry
 _background_tasks: dict[str, tasks.Loop] = {}
 _running_tasks: list[asyncio.Task] = []
@@ -368,7 +391,6 @@ class TaskManager:
             """Clean up old log files."""
             try:
                 import time
-                from pathlib import Path
 
                 current_cfg = load_config()
                 target_hours = current_cfg.get("CLEANUP_INTERVAL_HOURS", 24)
@@ -385,21 +407,17 @@ class TaskManager:
                     )
 
                 logs_dir = current_cfg.get("USER_LOGS_DIR")
-                if not logs_dir or not Path(logs_dir).exists():
+                if not logs_dir:
                     return
 
-                # Clean up files older than 30 days
-                cutoff_time = time.time() - (30 * 24 * 60 * 60)
+                # Clean up files older than 30 days. The whole sweep (exists +
+                # rglob + stat + unlink over an arbitrarily large tree, possibly
+                # on a network mount) is blocking I/O, so it runs in a thread
+                # instead of stalling the event loop and the gateway heartbeat.
+                cutoff_time = time.time() - (LOG_RETENTION_DAYS * 24 * 60 * 60)
+                deleted = await asyncio.to_thread(_sweep_old_logs, logs_dir, cutoff_time)
 
-                for log_file in Path(logs_dir).rglob("*.log"):
-                    try:
-                        if log_file.stat().st_mtime < cutoff_time:
-                            log_file.unlink()
-                            logger.debug(f"Deleted old log file: {log_file}")
-                    except Exception as e:
-                        logger.warning(f"Error deleting log file {log_file}: {e}")
-
-                logger.info("Log cleanup completed")
+                logger.info(f"Log cleanup completed (deleted={deleted})")
 
             except Exception as e:
                 logger.error(f"Error during log cleanup: {e}", exc_info=True)

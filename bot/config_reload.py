@@ -8,6 +8,7 @@ import hashlib
 import os
 import signal
 import threading
+from functools import lru_cache
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -48,7 +49,22 @@ _last_reload_call_time: float = 0
 RELOAD_DEBOUNCE_S = 0.5  # Minimum time between reload calls
 
 
+@lru_cache(maxsize=1)
+def _candidate_env_paths_cached() -> tuple[Path, ...]:
+    """Resolve candidate env paths once.
+
+    ``Path.resolve()`` is a realpath syscall; on network filesystems it can block
+    for seconds. The candidates never change for the process lifetime, so resolve
+    them once instead of on every watcher tick. [PA][RM]
+    """
+    return tuple(_candidate_env_paths_uncached())
+
+
 def _candidate_env_paths() -> list[Path]:
+    return list(_candidate_env_paths_cached())
+
+
+def _candidate_env_paths_uncached() -> list[Path]:
     """Return list of candidate env files to watch (resolved absolute paths).
     Order matters; the first existing is used as the preferred .env for default reloads.
     Includes repo-root variants and yoroi.env for developer workflows. [CMV].
@@ -142,6 +158,25 @@ async def _file_digest_async(p: Path) -> str | None:
         return (await asyncio.to_thread(hashlib.sha256, data)).hexdigest()
     except (OSError, IOError):
         return None
+
+
+def _stat_mtimes(paths: tuple[Path, ...]) -> dict[Path, float]:
+    """Stat every watched path in one go (blocking; call via a thread)."""
+    out: dict[Path, float] = {}
+    for p in paths:
+        try:
+            out[p] = p.stat().st_mtime
+        except OSError:
+            out[p] = 0.0
+    return out
+
+
+async def _stat_mtimes_async(paths: tuple[Path, ...]) -> dict[Path, float]:
+    """Offload watched-path stats to a thread so the event loop stays responsive."""
+    try:
+        return await asyncio.to_thread(_stat_mtimes, paths)
+    except OSError:
+        return dict.fromkeys(paths, 0.0)
 
 
 # Sensitive keys that should be redacted in logs
@@ -548,17 +583,12 @@ def _sighup_handler(signum: int, frame) -> None:
 
 async def _file_watcher_loop() -> None:
     """Main file watcher loop with proper debouncing."""
-    env_paths = _candidate_env_paths()
+    env_paths = _candidate_env_paths_cached()
     last_digests: dict[Path, str | None] = {}
     for p in env_paths:
         last_digests[p] = await _file_digest_async(p)
     # Track per-file mtime for quick-noop skip [Phase 17-23]
-    last_mtime: dict[Path, float] = {}
-    for p in env_paths:
-        try:
-            last_mtime[p] = p.stat().st_mtime if p.exists() else 0.0
-        except OSError:
-            last_mtime[p] = 0.0
+    last_mtime: dict[Path, float] = await _stat_mtimes_async(env_paths)
     last_reload_time = 0.0
     # Configurable debounce — reads from config if available [Phase 17-23]
     debounce_delay = 0.5  # fallback
@@ -577,24 +607,23 @@ async def _file_watcher_loop() -> None:
 
             try:
                 current_time = time.time()
-                for p in _candidate_env_paths():
+                # Stat all candidates off-loop first; only files whose mtime moved
+                # are hashed. Both steps are blocking syscalls on a possibly
+                # networked filesystem, so neither runs on the event loop. [PA][REH]
+                cur_mtimes = await _stat_mtimes_async(env_paths)
+                for p in env_paths:
                     try:
+                        cur_mtime = cur_mtimes.get(p, 0.0)
+                        if cur_mtime == last_mtime.get(p, 0.0):
+                            continue  # quick-noop: untouched since last tick
+                        last_mtime[p] = cur_mtime
                         prev = last_digests.get(p)
-                        dig = await _file_digest_async(p) if p.exists() else None
-                        # mtime guard: skip reload if mtime unchanged and digest matches [Phase 17-23]
-                        try:
-                            cur_mtime = p.stat().st_mtime if p.exists() else 0.0
-                            old_mtime = last_mtime.get(p, 0.0)
-                            if cur_mtime == old_mtime and dig == prev:
-                                continue
-                            last_mtime[p] = cur_mtime
-                        except OSError:
-                            pass
+                        dig = await _file_digest_async(p) if cur_mtime else None
                         if dig != prev and current_time - last_reload_time >= debounce_delay:
                             reload_env(p)
                             last_reload_time = current_time
                         last_digests[p] = dig
-                    except (OSError, AttributeError, TypeError, ValueError) as _e:
+                    except (OSError, AttributeError, TypeError, ValueError):
                         # Continue checking other paths
                         last_digests[p] = last_digests.get(p)
 

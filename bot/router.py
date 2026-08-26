@@ -5564,9 +5564,10 @@ class Router:
                 # Fallback: general URL handler which has X syndication logic
                 return await self._handle_general_url(InputItem(source_type="url", payload=url))
 
-            # For non-Twitter URLs, provide user-friendly message
+            # For non-Twitter URLs, try reading the page as an article before giving up [REH]
             self.logger.info(f"ℹ️ Video processing: {ve}")
-            return f"⚠️ {ve!s}"
+            recovered = await self._recover_video_url_as_article(url, reason="video_ingest")
+            return recovered if recovered else f"⚠️ {ve!s}"
 
         except InferenceError as ie:
             # Prefer caption-only degrade for Twitter when available [REH]
@@ -5585,6 +5586,10 @@ class Router:
                     self.logger.debug(f"format_x_with_resolved_base_text_if_available failed: {exc}")
             # Fallback to existing user-friendly message for non-Twitter or when caption unavailable
             self.logger.info(f"ℹ️ Video inference: {ie}")
+            if not is_twitter:
+                recovered = await self._recover_video_url_as_article(url, reason="inference")
+                if recovered:
+                    return recovered
             return f"⚠️ {ie!s}"
 
         except Exception as e:
@@ -5607,6 +5612,32 @@ class Router:
                 return "⚠️ Could not process this Twitter URL as video; text extraction also failed."
 
             return f"⚠️ Video processing failed: {e!s}"
+
+    async def _recover_video_url_as_article(self, url: str, *, reason: str) -> str | None:
+        """Re-read a failed video URL as a web article.
+
+        yt-dlp claims many news/article domains it can only partially serve, so a
+        failed STT job must not dead-end: fall back to the tiered text extractor
+        rather than returning an error string with no content. [REH][CA]
+        """
+        if not isinstance(url, str) or not url.lower().startswith(("http://", "https://")):
+            return None
+        try:
+            extract_res = await web_extractor.extract(url)
+        except Exception as exc:
+            self.logger.info(f"stt.article_fallback.error reason={reason} err={exc}")
+            return None
+        if not getattr(extract_res, "success", False):
+            self.logger.info(f"stt.article_fallback.miss reason={reason} url={url[:80]}")
+            return None
+        from bot.url_safety import wrap_untrusted_content
+
+        self.logger.info(f"stt.article_fallback.ok reason={reason} url={url[:80]}")
+        wrapped = wrap_untrusted_content(
+            extract_res.to_message(),
+            source=getattr(extract_res, "canonical_url", None) or url,
+        )
+        return f"Web page content:\n{wrapped}"
 
     async def _handle_audio_video_file(self, item: InputItem, message: Message | None = None) -> str:
         """Handle audio/video file attachments.

@@ -341,6 +341,37 @@ async def _map_attachment_to_modality(attachment: discord.Attachment) -> InputMo
     return InputModality.UNKNOWN
 
 
+# Domains that are overwhelmingly articles but appear in the yt-dlp catch-all
+# union; only these path segments should be treated as video. [CMV][REH]
+_ARTICLE_FIRST_VIDEO_DOMAINS = frozenset(
+    {
+        "ign.com",
+        "gamespot.com",
+        "giantbomb.com",
+        "polygon.com",
+        "eurogamer.net",
+        "kotaku.com",
+        "engadget.com",
+        "theverge.com",
+        "businessinsider.com",
+        "bloomberg.com",
+        "huffpost.com",
+        "dailymail.co.uk",
+        "metacritic.com",
+        "imdb.com",
+        "nintendo.com",
+        "espn.com",
+        "buzzfeed.com",
+        "people.com",
+        "cbsnews.com",
+        "ndtv.com",
+        "aljazeera.com",
+    }
+)
+
+_VIDEO_PATH_SEGMENTS = ("/video/", "/videos/", "/watch/", "/clip/", "/clips/")
+
+
 async def _map_url_to_modality(url: str) -> InputModality:
     """Map URL to modality based on domain and pattern matching [PA]."""
     global _VIDEO_PATTERNS
@@ -430,6 +461,14 @@ async def _map_url_to_modality(url: str) -> InputModality:
     if host in article_domains or any(host.endswith(f".{d}") for d in ("substack.com",)):
         logger.debug(f"url.classify type=GENERAL_URL (article_domain) url={url[:80]}")
         return InputModality.GENERAL_URL
+
+    # Article-first domains: news/games sites where yt-dlp only supports a
+    # narrow /video(s)/ subtree, but the massive catch-all pattern below would
+    # otherwise claim every article path and send it to a doomed STT job. [REH][CMV]
+    if host.split(":")[0].removeprefix("www.") in _ARTICLE_FIRST_VIDEO_DOMAINS:
+        if not any(seg in path_lower for seg in _VIDEO_PATH_SEGMENTS):
+            logger.info(f"modality.guard: article-first domain non-video → GENERAL_URL (host={host} path={path[:60]})")
+            return InputModality.GENERAL_URL
 
     # === VIDEO PATTERN MATCHING === [PA]
 
