@@ -880,11 +880,12 @@ class OpenRouterPlugin(ProviderPlugin):
         self.base_url = config.get("base_url", "https://openrouter.ai/api/v1")
         self.model_map = {
             VisionTask.TEXT_TO_IMAGE: "black-forest-labs/flux.2-pro",
+            VisionTask.IMAGE_TO_IMAGE: "qwen/qwen2.5-vl-72b-instruct:free",
         }
 
     def capabilities(self) -> dict[str, Any]:
         return {
-            "modes": [VisionTask.TEXT_TO_IMAGE],
+            "modes": [VisionTask.TEXT_TO_IMAGE, VisionTask.IMAGE_TO_IMAGE],
             "max_size": (2048, 2048),
             "max_steps": 0,
             "supports_negative_prompt": False,
@@ -933,9 +934,32 @@ class OpenRouterPlugin(ProviderPlugin):
                 user_message=f"Sorry, {request.task.value} is not supported by this provider.",
             )
 
+        # Build payload: image-to-image sends the input image + prompt as
+        # multi-part content; text-to-image sends prompt only. [CA]
+        if request.task == VisionTask.IMAGE_TO_IMAGE and request.input_image_data:
+            b64_image = base64.b64encode(request.input_image_data).decode()
+            # Detect content type from magic bytes (default png)
+            ct = "image/png"
+            if request.input_image_data[:3] == b"\xff\xd8\xff":
+                ct = "image/jpeg"
+            elif request.input_image_data[:4] == b"RIFF":
+                ct = "image/webp"
+            image_url = f"data:{ct};base64,{b64_image}"
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                        {"type": "text", "text": f"Edit this image: {request.prompt}"},
+                    ],
+                }
+            ]
+        else:
+            messages = [{"role": "user", "content": request.prompt}]
+
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [{"role": "user", "content": request.prompt}],
+            "messages": messages,
             "modalities": ["image", "text"],
             "stream": False,
         }
@@ -1183,6 +1207,18 @@ class NvidiaPlugin(OpenRouterPlugin):
         # That last one enumerates the whole allowed set: three demo images.
         # flux.2-klein-4b enforces the same gate, so this is platform-wide on the
         # hosted preview endpoints, not specific to kontext.
+
+    def capabilities(self) -> dict[str, Any]:
+        # Explicit override, NOT inherited from OpenRouterPlugin: this class
+        # subclasses OpenRouterPlugin for its chat/completions plumbing, but
+        # submit() above hard-rejects everything except TEXT_TO_IMAGE (see the
+        # NOTE above -- NVIDIA's hosted GenAI endpoint only accepts one of its
+        # 3 canned demo images for editing, not an arbitrary upload). Letting
+        # this fall through to the parent's capabilities() would advertise
+        # IMAGE_TO_IMAGE support NVIDIA cannot actually serve, so the fallback
+        # chain would pick NVIDIA and then error instead of skipping it. [REH]
+        parent = super().capabilities()
+        return {**parent, "modes": [VisionTask.TEXT_TO_IMAGE]}
 
     async def submit(self, request: NormalizedRequest) -> str:
         await self.startup()
@@ -2086,7 +2122,9 @@ class UnifiedVisionAdapter:
             self.logger.info(f"🎯 Using VISION_MODEL override: {model_selection.provider}:{model_selection.endpoint} (model={model_selection.model_hint})")
         else:
             # Use policy-driven selection
-            provider_order = policy.get("provider_order", ["novita:qwen-image", "novita:txt2img", "together"])
+            # OpenRouter is last: a free VL fallback for IMAGE_TO_IMAGE when
+            # paid providers (Novita/Together) are out of credit. [CA][REH]
+            provider_order = policy.get("provider_order", ["novita:qwen-image", "novita:txt2img", "together", "openrouter"])
             forced_endpoint = None
 
             # Parse provider:endpoint format in policy
