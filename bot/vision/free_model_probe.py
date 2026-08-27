@@ -170,22 +170,20 @@ async def quarantine_models(dead: dict[str, str]) -> None:
     logger.info("vision.probe.quarantined models=%s ttl_s=%.0f", sorted(dead), ttl)
 
 
-def filter_quarantined(models: list[str]) -> list[str]:
-    """Drop models currently serving a quarantine ban."""
-    banned = load_quarantine()
-    if not banned:
-        return list(models)
-    kept = [m for m in models if m not in banned]
-    dropped = [m for m in models if m in banned]
-    if dropped:
-        logger.debug("vision.probe.skipping_quarantined models=%s", dropped)
-    return kept
+# filter_quarantined moved below to support modality parameter
 
 
 # --- Probing ---------------------------------------------------------------
 
 
-def _probe_body(model: str) -> dict[str, Any]:
+def _probe_body(model: str, *, modality: str = "vision") -> dict[str, Any]:
+    """Build a probe request. Vision uses a 1x1 image; text is a bare prompt. [CA]"""
+    if modality == "text":
+        return {
+            "model": model,
+            "max_tokens": PROBE_MAX_TOKENS,
+            "messages": [{"role": "user", "content": PROBE_PROMPT}],
+        }
     return {
         "model": model,
         "max_tokens": PROBE_MAX_TOKENS,
@@ -196,7 +194,7 @@ def _probe_body(model: str) -> dict[str, Any]:
                     {"type": "text", "text": PROBE_PROMPT},
                     {"type": "image_url", "image_url": {"url": PROBE_IMAGE_DATA_URL}},
                 ],
-            },
+            }
         ],
     }
 
@@ -212,13 +210,13 @@ def _classify(status: int, body: str) -> tuple[str, str]:
     return ("transient", f"HTTP {status}: {body[:120]}")
 
 
-async def _probe_one(client: httpx.AsyncClient, model: str, key: str) -> tuple[str, str, str]:
+async def _probe_one(client: httpx.AsyncClient, model: str, key: str, *, modality: str = "vision") -> tuple[str, str, str]:
     """Probe one model. Returns (model, verdict, reason)."""
     try:
         response = await client.post(
             OPENROUTER_CHAT_URL,
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json=_probe_body(model),
+            json=_probe_body(model, modality=modality),
         )
     except httpx.HTTPError as exc:
         # Network trouble is ours, not the model's -> never quarantine on it.
@@ -244,7 +242,7 @@ def _unprobed(models: list[str]) -> ProbeReport:
     return ProbeReport(good=[], transient=list(models), dead={}, skipped=True)
 
 
-async def _run_probes(models: list[str], key: str) -> list[Any]:
+async def _run_probes(models: list[str], key: str, *, modality: str = "vision") -> list[Any]:
     """Probe every model concurrently under a bounded semaphore. [PA][RM]"""
     timeout = _env_float(_ENV_PROBE_TIMEOUT, DEFAULT_PROBE_TIMEOUT_S)
     semaphore = asyncio.Semaphore(_env_int(_ENV_PROBE_CONCURRENCY, DEFAULT_PROBE_CONCURRENCY))
@@ -253,7 +251,7 @@ async def _run_probes(models: list[str], key: str) -> list[Any]:
 
         async def guarded(model: str) -> tuple[str, str, str]:
             async with semaphore:
-                return await _probe_one(client, model, key)
+                return await _probe_one(client, model, key, modality=modality)
 
         return await asyncio.gather(*(guarded(m) for m in models), return_exceptions=True)
 
@@ -320,3 +318,95 @@ def env_ladder_candidates() -> list[str]:
             if model.lower().endswith(":free") and model not in candidates:
                 candidates.append(model)
     return candidates
+
+
+# --- Text model probing ----------------------------------------------------
+
+# Text models share the same quarantine store but under a separate "text" key.
+# A model dead for text may still be live for vision and vice-versa. [CMV]
+
+
+def load_text_quarantine() -> dict[str, dict[str, Any]]:
+    """Read the text-model quarantine map, dropping expired entries."""
+    from bot.atomic_json import read_json_safe
+
+    raw = read_json_safe(quarantine_path(), default={}) or {}
+    entries = raw.get("text_models") if isinstance(raw, dict) else None
+    if not isinstance(entries, dict):
+        return {}
+    now = time.time()
+    live: dict[str, dict[str, Any]] = {}
+    for model, meta in entries.items():
+        if not isinstance(meta, dict):
+            continue
+        try:
+            until = float(meta.get("until") or 0.0)
+        except (ValueError, TypeError):
+            continue
+        if until > now:
+            live[str(model)] = meta
+    return live
+
+
+async def save_text_quarantine(entries: dict[str, dict[str, Any]]) -> None:
+    """Persist text quarantine entries alongside vision ones. [REH]"""
+    from bot.atomic_json import read_json_safe, write_json_atomic
+
+    raw = read_json_safe(quarantine_path(), default={}) or {}
+    if not isinstance(raw, dict):
+        raw = {}
+    raw["text_models"] = entries
+    raw["updated_at"] = time.time()
+    try:
+        await write_json_atomic(quarantine_path(), raw)
+    except (OSError, ValueError) as exc:
+        logger.warning("text.probe.quarantine_write_failed error=%s", exc)
+
+
+def filter_quarantined(models: list[str], modality: str = "vision") -> list[str]:
+    """Drop models currently serving a quarantine ban (for the given modality)."""
+    if modality == "text":
+        banned = load_text_quarantine()
+    else:
+        banned = load_quarantine()
+    if not banned:
+        return list(models)
+    kept = [m for m in models if m not in banned]
+    dropped = [m for m in models if m in banned]
+    if dropped:
+        logger.debug("probe.skipping_quarantined modality=%s models=%s", modality, dropped)
+    return kept
+
+
+async def quarantine_text_models(dead: dict[str, str]) -> None:
+    """Bench hard-failed text models for the quarantine TTL. [REH]"""
+    if not dead:
+        return
+    ttl = _env_float(_ENV_QUARANTINE_TTL, DEFAULT_QUARANTINE_TTL_S)
+    entries = load_text_quarantine()
+    now = time.time()
+    for model, reason in dead.items():
+        entries[model] = {"reason": reason[:200], "since": now, "until": now + ttl}
+    await save_text_quarantine(entries)
+    logger.info("text.probe.quarantined models=%s ttl_s=%.0f", sorted(dead), ttl)
+
+
+async def probe_text_models(models: list[str]) -> ProbeReport:
+    """Probe text models with a bare text prompt (no image). Never raises. [REH][PA]"""
+    if not models:
+        return ProbeReport()
+    if not probing_enabled():
+        return _unprobed(models)
+
+    key = resolve_openrouter_key()
+    if not key:
+        logger.info("text.probe.no_key (skipping liveness probe)")
+        return _unprobed(models)
+
+    report, account_failure = _collect(await _run_probes(models, key, modality="text"))
+    if account_failure:
+        logger.warning("text.probe.account_error error=%s (keeping unprobed ladder)", account_failure)
+        return _unprobed(models)
+
+    logger.info("text.probe.done good=%s transient=%s dead=%s", report.good, report.transient, sorted(report.dead))
+    return report

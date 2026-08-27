@@ -249,6 +249,9 @@ class TaskManager:
             # Start OpenRouter free-vision-model discovery (self-healing VL ladder)
             await self._start_vision_discovery()
 
+            # Start OpenRouter free-text-model discovery (self-healing text ladder)
+            await self._start_text_discovery()
+
             self.running = True
             logger.info("All background tasks started successfully")
 
@@ -276,6 +279,14 @@ class TaskManager:
             await stop_discovery_refresh()
         except Exception as e:
             logger.warning(f"Error stopping vision model discovery: {e}")
+
+        # Stop text model discovery
+        try:
+            from bot.vision.free_text_discovery import stop_discovery_refresh as stop_text_discovery_refresh
+
+            await stop_text_discovery_refresh()
+        except Exception as e:
+            logger.warning(f"Error stopping text model discovery: {e}")
 
         # Stop curated memory service
         try:
@@ -528,6 +539,17 @@ class TaskManager:
             await start_discovery_refresh()
         except Exception as e:
             logger.error(f"Error starting vision model discovery: {e}", exc_info=True)
+
+    async def _start_text_discovery(self) -> None:
+        """Start the OpenRouter free text-model discovery refresh loop. [REH]"""
+        try:
+            from bot.vision.free_text_discovery import refresh_and_apply, start_discovery_refresh
+
+            # Prime once now so the ladder is correct before the first text call.
+            await refresh_and_apply()
+            await start_discovery_refresh()
+        except Exception as e:
+            logger.error(f"Error starting text model discovery: {e}", exc_info=True)
 
     async def _start_janitor(self) -> None:
         """Start the cache and log janitor task."""

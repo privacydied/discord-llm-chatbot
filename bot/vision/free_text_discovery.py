@@ -1,14 +1,14 @@
-"""Auto-discovery of free image-capable models on OpenRouter. [REH][CMV][PA]
+"""Auto-discovery of free text models on OpenRouter. [REH][CMV][PA]
 
-Why this exists: free VL models on OpenRouter get delisted, renamed or 404'd
-without warning, which silently takes vision down until someone hand-edits
-``VISION_FALLBACK_MODELS`` in ``.env``. This module polls OpenRouter's public
-model catalogue, keeps the currently-live free image->text models on disk, and
-feeds them into the vision fallback ladder so the bot self-heals.
+Why this exists: the text ladder in ``TEXT_FALLBACK_MODELS`` goes stale the same
+way the vision one does -- ``:free`` slugs get delisted, renamed, or start 503ing
+without warning. This module polls OpenRouter's public model catalogue, keeps the
+currently-live free text models on disk, and feeds them into the text fallback
+ladder so the bot self-heals.
 
 Public surface:
-- ``discover_free_vision_models()``  -- async fetch + cache refresh
-- ``get_cached_free_vision_models()`` -- sync, non-blocking read for ladder build
+- ``discover_free_text_models()``  -- async fetch + cache refresh
+- ``get_cached_free_text_models()`` -- sync, non-blocking read for ladder build
 - ``start_discovery_refresh()`` / ``stop_discovery_refresh()`` -- background loop
 """
 
@@ -35,30 +35,23 @@ logger = get_logger(__name__)
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 DISCOVERY_QUERY: dict[str, str] = {
     "max_price": "0",
-    "input_modalities": "image",
     "output_modalities": "text",
     "variant": "free",
 }
-# The catalogue filters above are advisory: OpenRouter still returns non-free
-# variants (e.g. zero-priced previews that start billing later) for this query,
-# so every entry is re-validated locally before it can reach the ladder. [SFT]
 FREE_VARIANT_SUFFIX = ":free"
-DEFAULT_CACHE_PATH = "vision_data/free_vision_models.json"
+DEFAULT_CACHE_PATH = "vision_data/free_text_models.json"
 DEFAULT_TTL_S = 6 * 60 * 60  # 6h
 DEFAULT_REFRESH_INTERVAL_S = 6 * 60 * 60
 DEFAULT_MAX_MODELS = 6
-# Probe more candidates than we keep, so hard-failed slugs can be replaced by
-# live ones in the same round instead of leaving the ladder short. [REH]
 PROBE_CANDIDATE_MULTIPLIER = 3
 DEFAULT_TIMEOUT_S = 10.0
 MAX_FETCH_ATTEMPTS = 3
 RETRY_BASE_DELAY_S = 1.5
 RETRY_MAX_DELAY_S = 8.0
-FAILURE_RETRY_INTERVAL_S = 900.0  # retry sooner after a failed refresh
+FAILURE_RETRY_INTERVAL_S = 900.0
 MIN_CONTEXT_LENGTH = 8000
 
-# Models that technically accept images but are useless as a VL rung:
-# safety/moderation classifiers, embeddings, audio/music generators, etc.
+# Models that accept text but are useless as a chat rung.
 _EXCLUDE_SUBSTRINGS: tuple[str, ...] = (
     "content-safety",
     "guard",
@@ -70,26 +63,37 @@ _EXCLUDE_SUBSTRINGS: tuple[str, ...] = (
     "whisper",
     "stable-diffusion",
     "flux",
+    "text-to-",
+    "speech",
+    "audio",
+    "voice",
 )
 
 # Preferred families, ranked. Matching models sort first (stable within a tier).
 _PREFERRED_SUBSTRINGS: tuple[str, ...] = (
-    "-vl",
-    "vision",
-    "pixtral",
+    "deepseek",
     "qwen",
     "gemma",
     "llama",
     "mistral",
     "gemini",
+    "gpt",
+    "claude",
+    "phi",
+    "nemotron",
+    "ling",
+    "glm",
+    "kimi",
+    "grok",
+    "aya",
 )
 
-_ENV_ENABLED = "VISION_AUTO_DISCOVERY"
-_ENV_CACHE_PATH = "VISION_DISCOVERY_CACHE_PATH"
-_ENV_TTL = "VISION_DISCOVERY_TTL_S"
-_ENV_INTERVAL = "VISION_DISCOVERY_REFRESH_S"
-_ENV_MAX_MODELS = "VISION_DISCOVERY_MAX_MODELS"
-_ENV_TIMEOUT = "VISION_DISCOVERY_TIMEOUT_S"
+_ENV_ENABLED = "TEXT_AUTO_DISCOVERY"
+_ENV_CACHE_PATH = "TEXT_DISCOVERY_CACHE_PATH"
+_ENV_TTL = "TEXT_DISCOVERY_TTL_S"
+_ENV_INTERVAL = "TEXT_DISCOVERY_REFRESH_S"
+_ENV_MAX_MODELS = "TEXT_DISCOVERY_MAX_MODELS"
+_ENV_TIMEOUT = "TEXT_DISCOVERY_TIMEOUT_S"
 
 # In-process cache: (models, fetched_at)
 _memory_cache: tuple[list[str], float] | None = None
@@ -128,34 +132,17 @@ def cache_path() -> Path:
 # --- Filtering / ranking ---------------------------------------------------
 
 
-REQUIRED_PRICING_KEYS: tuple[str, ...] = ("prompt", "completion")
-
-
 def is_free_slug(model_id: str) -> bool:
-    """True only for OpenRouter ``:free`` variants. [SFT]
-
-    Zero pricing alone is not a guarantee: preview models are listed at 0 and
-    start billing once the preview ends. The ``:free`` variant is the only slug
-    OpenRouter contractually never charges for, so it is a hard requirement.
-    """
+    """True only for OpenRouter ``:free`` variants. [SFT]"""
     return bool(model_id) and model_id.strip().lower().endswith(FREE_VARIANT_SUFFIX)
 
 
 def _is_free(pricing: dict[str, Any], model_id: str = "") -> bool:
-    """Free means: ``:free`` variant AND every priced dimension is exactly zero.
-
-    Unknown/unparseable/negative values (OpenRouter uses ``-1`` for "variable")
-    are treated as *not free* — we never gamble with the user's credits.
-    """
+    """Free means: ``:free`` variant AND every priced dimension is exactly zero."""
     if model_id and not is_free_slug(model_id):
         return False
     if not isinstance(pricing, dict):
         return False
-    for key in REQUIRED_PRICING_KEYS:
-        if pricing.get(key) in (None, ""):
-            return False
-    # Every dimension the catalogue reports (including ones added later, e.g.
-    # image/audio/web_search/internal_reasoning) must be exactly zero.
     for raw in pricing.values():
         if raw in (None, ""):
             continue
@@ -167,7 +154,7 @@ def _is_free(pricing: dict[str, Any], model_id: str = "") -> bool:
     return True
 
 
-def _is_usable_vision_model(entry: dict[str, Any]) -> bool:
+def _is_usable_text_model(entry: dict[str, Any]) -> bool:
     """Client-side re-validation of the catalogue filters. [IV]"""
     model_id = str(entry.get("id") or "").strip()
     if not model_id:
@@ -179,7 +166,10 @@ def _is_usable_vision_model(entry: dict[str, Any]) -> bool:
     arch = entry.get("architecture") or {}
     inputs = {str(m).lower() for m in (arch.get("input_modalities") or [])}
     outputs = {str(m).lower() for m in (arch.get("output_modalities") or [])}
-    if "image" not in inputs or outputs != {"text"}:
+    # Text models: input must include text (or be empty = default), output must be text.
+    if inputs and "text" not in inputs:
+        return False
+    if outputs and outputs != {"text"}:
         return False
 
     if not _is_free(entry.get("pricing") or {}, model_id):
@@ -194,7 +184,7 @@ def _is_usable_vision_model(entry: dict[str, Any]) -> bool:
 
 
 def _rank_key(entry: dict[str, Any]) -> tuple[int, int, int, int]:
-    """Sort: bigger parameter count first, then preferred VL families, then bigger context, then newer."""
+    """Sort: bigger parameter count first, then preferred families, then bigger context, then newer."""
     lowered = str(entry.get("id", "")).lower()
     size_tier = param_tier(lowered)
     family_tier = next((i for i, kw in enumerate(_PREFERRED_SUBSTRINGS) if kw in lowered), len(_PREFERRED_SUBSTRINGS))
@@ -211,7 +201,7 @@ def _rank_key(entry: dict[str, Any]) -> tuple[int, int, int, int]:
 
 def _select_models(payload: dict[str, Any], limit: int) -> list[str]:
     """Rank and cap the usable free models. Non-``:free`` slugs can never survive."""
-    entries = [e for e in (payload.get("data") or []) if isinstance(e, dict) and _is_usable_vision_model(e)]
+    entries = [e for e in (payload.get("data") or []) if isinstance(e, dict) and _is_usable_text_model(e)]
     entries.sort(key=_rank_key)
     seen: set[str] = set()
     models: list[str] = []
@@ -235,7 +225,6 @@ def _read_cache_file() -> tuple[list[str], float]:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return [], 0.0
-    # Re-validate on read: a hand-edited or stale cache must not inject a paid model. [SFT]
     models = [str(m).strip() for m in (raw.get("models") or []) if is_free_slug(str(m))]
     try:
         fetched_at = float(raw.get("fetched_at") or 0.0)
@@ -251,10 +240,10 @@ async def _write_cache_file(models: list[str]) -> None:
     try:
         await write_json_atomic(cache_path(), payload)
     except (OSError, ValueError) as exc:
-        logger.warning("vision.discovery.cache_write_failed error=%s", exc)
+        logger.warning("text.discovery.cache_write_failed error=%s", exc)
 
 
-def get_cached_free_vision_models() -> list[str]:
+def get_cached_free_text_models() -> list[str]:
     """Sync, non-blocking read of the discovered ladder (memory then disk)."""
     global _memory_cache
 
@@ -282,10 +271,7 @@ def cache_is_fresh() -> bool:
 async def _fetch_catalogue(timeout_s: float) -> dict[str, Any]:
     """GET the model catalogue with bounded retries + jittered backoff. [REH]"""
     last_exc: Exception | None = None
-    # The catalogue endpoint is public. Deliberately unauthenticated: sending a key
-    # meant for a different provider (VISION_API_KEY can be Together/Novita) would
-    # turn a working discovery into a 401 and silently freeze the ladder. [SFT][REH]
-    headers = {"Accept": "application/json", "User-Agent": "discord-llm-chatbot/vision-discovery"}
+    headers = {"Accept": "application/json", "User-Agent": "discord-llm-chatbot/text-discovery"}
 
     for attempt in range(1, MAX_FETCH_ATTEMPTS + 1):
         try:
@@ -295,40 +281,45 @@ async def _fetch_catalogue(timeout_s: float) -> dict[str, Any]:
                 return response.json()
         except (httpx.HTTPError, ValueError) as exc:
             last_exc = exc
-            logger.warning("vision.discovery.fetch_attempt_failed attempt=%d/%d error=%s", attempt, MAX_FETCH_ATTEMPTS, exc)
+            logger.warning("text.discovery.fetch_attempt_failed attempt=%d/%d error=%s", attempt, MAX_FETCH_ATTEMPTS, exc)
             if attempt < MAX_FETCH_ATTEMPTS:
                 delay = min(RETRY_MAX_DELAY_S, RETRY_BASE_DELAY_S * (2 ** (attempt - 1)))
-                await asyncio.sleep(delay * (0.5 + random.random()))  # noqa: S311  # nosec B311 - jitter only
+                await asyncio.sleep(delay * (0.5 + random.random()))  # nosec B311 - jitter only
     raise RuntimeError(f"OpenRouter model discovery failed after {MAX_FETCH_ATTEMPTS} attempts: {last_exc}")
 
 
 async def _verify_candidates(candidates: list[str], limit: int) -> list[str]:
-    """Quarantine-filter then liveness-probe candidates; return the top `limit`.
-
-    Verified-live models lead the ladder; models that only blipped (429/5xx/network)
-    keep their place behind them, since the circuit breaker already handles those.
-    """
-    from bot.vision.free_model_probe import env_ladder_candidates, filter_quarantined, probe_models, quarantine_models
-
+    """Liveness-probe candidates with a trivial text prompt; return the top `limit`."""
     try:
-        fresh = filter_quarantined(candidates)
+        from bot.vision.free_model_probe import (
+            filter_quarantined,
+            probe_text_models,
+            quarantine_text_models,
+        )
+
+        try:
+            fresh = filter_quarantined(candidates, modality="text")
+        except TypeError:
+            # Older signature without modality kwarg
+            fresh = filter_quarantined(candidates)
         if not fresh:
-            # Everything is benched: probe anyway rather than serve an empty ladder.
-            logger.warning("vision.discovery.all_candidates_quarantined (probing anyway)")
+            logger.warning("text.discovery.all_candidates_quarantined (probing anyway)")
             fresh = list(candidates)
-        # Vet the operator's own .env rungs in the same round, so a slug that has
-        # gone 404 there is quarantined instead of burning budget on every image.
-        extras = [m for m in filter_quarantined(env_ladder_candidates()) if m not in fresh]
-        report = await probe_models([*fresh, *extras])
-        await quarantine_models(report.dead)
-        # Env rungs join the discovered ladder only when a probe proved them live;
-        # unprobed ones stay where they were (the tail the retry manager appends).
+        # Also vet operator-configured text rungs in the same round.
+        text_env_candidates = []
+        for raw in (os.getenv("TEXT_FALLBACK_MODELS") or "").split(","):
+            model = raw.split("|", 1)[-1].strip()
+            if model.lower().endswith(":free") and model not in fresh:
+                text_env_candidates.append(model)
+        extras = [m for m in filter_quarantined(text_env_candidates, modality="text") if m not in fresh]
+        report = await probe_text_models([*fresh, *extras])
+        await quarantine_text_models(report.dead)
         discovered = set(fresh)
         verified_good = set(report.good)
         usable = [m for m in report.usable if m in discovered or m in verified_good]
         return usable[:limit]
-    except (OSError, ValueError, RuntimeError, asyncio.TimeoutError) as exc:
-        logger.warning("vision.discovery.probe_failed error=%s (using unprobed candidates)", exc)
+    except (ImportError, OSError, ValueError, RuntimeError, asyncio.TimeoutError) as exc:
+        logger.warning("text.discovery.probe_failed error=%s (using unprobed candidates)", exc)
         return candidates[:limit]
 
 
@@ -336,58 +327,58 @@ async def _commit(models: list[str]) -> list[str]:
     """Persist the verified ladder to memory + disk and log what changed."""
     global _memory_cache
 
-    previous = get_cached_free_vision_models()
+    previous = get_cached_free_text_models()
     _memory_cache = (models, time.time())
     await _write_cache_file(models)
     if models != previous:
-        logger.info("vision.discovery.updated models=%s previous=%s", models, previous)
+        logger.info("text.discovery.updated models=%s previous=%s", models, previous)
     else:
-        logger.debug("vision.discovery.unchanged models=%s", models)
+        logger.debug("text.discovery.unchanged models=%s", models)
     return list(models)
 
 
-async def discover_free_vision_models(*, force: bool = False) -> list[str]:
-    """Refresh the free image-capable model list. Returns the cached list on failure."""
+async def discover_free_text_models(*, force: bool = False) -> list[str]:
+    """Refresh the free text model list. Returns the cached list on failure."""
     if not is_enabled():
         return []
     if not force and cache_is_fresh():
-        return get_cached_free_vision_models()
+        return get_cached_free_text_models()
 
     async with _fetch_lock:
         if not force and cache_is_fresh():
-            return get_cached_free_vision_models()
+            return get_cached_free_text_models()
         try:
             payload = await _fetch_catalogue(_env_float(_ENV_TIMEOUT, DEFAULT_TIMEOUT_S))
         except (RuntimeError, asyncio.TimeoutError) as exc:
-            logger.error("vision.discovery.failed error=%s (keeping previous ladder)", exc)
-            return get_cached_free_vision_models()
+            logger.error("text.discovery.failed error=%s (keeping previous ladder)", exc)
+            return get_cached_free_text_models()
 
         limit = _env_int(_ENV_MAX_MODELS, DEFAULT_MAX_MODELS)
         candidates = _select_models(payload, limit * PROBE_CANDIDATE_MULTIPLIER)
         if not candidates:
-            logger.warning("vision.discovery.empty_result (keeping previous ladder)")
-            return get_cached_free_vision_models()
+            logger.warning("text.discovery.empty_result (keeping previous ladder)")
+            return get_cached_free_text_models()
 
         models = await _verify_candidates(candidates, limit)
         if not models:
-            logger.warning("vision.discovery.no_live_models (keeping previous ladder)")
-            return get_cached_free_vision_models()
+            logger.warning("text.discovery.no_live_models (keeping previous ladder)")
+            return get_cached_free_text_models()
 
         return await _commit(models)
 
 
 async def refresh_and_apply(*, force: bool = False) -> list[str]:
-    """Discover models and rebuild the retry manager's vision ladder."""
-    models = await discover_free_vision_models(force=force)
+    """Discover models and rebuild the retry manager's text ladder."""
+    models = await discover_free_text_models(force=force)
     if not models:
         return []
     try:
         from bot.enhanced_retry import get_retry_manager
 
         summary = get_retry_manager().refresh_from_env()
-        logger.info("vision.discovery.ladder_applied vision=%s", summary.get("vision"))
+        logger.info("text.discovery.ladder_applied text=%s", summary.get("text"))
     except (ImportError, AttributeError, TypeError, ValueError) as exc:
-        logger.warning("vision.discovery.ladder_apply_failed error=%s", exc)
+        logger.warning("text.discovery.ladder_apply_failed error=%s", exc)
     return models
 
 
@@ -400,7 +391,7 @@ async def _refresh_loop() -> None:
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # defensive: never kill the loop [REH]
-            logger.error("vision.discovery.loop_error error=%s", exc, exc_info=True)
+            logger.error("text.discovery.loop_error error=%s", exc, exc_info=True)
             sleep_for = FAILURE_RETRY_INTERVAL_S
         await asyncio.sleep(sleep_for)
 
@@ -410,12 +401,12 @@ async def start_discovery_refresh() -> None:
     global _refresh_task
 
     if not is_enabled():
-        logger.info("vision.discovery.disabled")
+        logger.info("text.discovery.disabled")
         return
     if _refresh_task is not None and not _refresh_task.done():
         return
-    _refresh_task = asyncio.create_task(_refresh_loop(), name="vision_model_discovery")
-    logger.info("vision.discovery.started interval_s=%.0f", _env_float(_ENV_INTERVAL, DEFAULT_REFRESH_INTERVAL_S))
+    _refresh_task = asyncio.create_task(_refresh_loop(), name="text_model_discovery")
+    logger.info("text.discovery.started interval_s=%.0f", _env_float(_ENV_INTERVAL, DEFAULT_REFRESH_INTERVAL_S))
 
 
 async def stop_discovery_refresh() -> None:
@@ -428,7 +419,7 @@ async def stop_discovery_refresh() -> None:
     with contextlib.suppress(asyncio.CancelledError, Exception):
         await _refresh_task
     _refresh_task = None
-    logger.info("vision.discovery.stopped")
+    logger.info("text.discovery.stopped")
 
 
 def _reset_for_tests() -> None:

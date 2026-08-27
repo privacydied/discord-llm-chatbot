@@ -107,7 +107,7 @@ def test_probe_body_sends_an_image_part():
 
 
 async def _fake_probe_factory(verdicts: dict[str, str]):
-    async def fake(_client, model, _key):
+    async def fake(_client, model, _key, **_kwargs):
         verdict = verdicts.get(model, "good")
         return (model, verdict, "" if verdict == "good" else f"reason:{verdict}")
 

@@ -123,6 +123,41 @@ def _discovered_vision_ladder(timeouts_env: str | None) -> list["ProviderConfig"
     return ladder
 
 
+# Default per-attempt timeout for auto-discovered text rungs (seconds). [CMV]
+DISCOVERED_TEXT_TIMEOUT_S = 25.0
+
+
+def _discovered_text_ladder(timeouts_env: str | None) -> list["ProviderConfig"]:
+    """Build text ProviderConfigs from the OpenRouter free-model discovery cache. [REH]
+
+    Returns [] when discovery is disabled, unavailable, or has no cached result,
+    in which case the caller falls back to the env/default ladder.
+    """
+    try:
+        from bot.vision.free_text_discovery import get_cached_free_text_models
+    except ImportError:  # discovery module optional at import time
+        return []
+    try:
+        models = get_cached_free_text_models()
+    except (OSError, ValueError, AttributeError) as exc:
+        logger.warning("text.ladder.discovery_read_failed error=%s", exc)
+        return []
+    if not models:
+        return []
+
+    timeouts = _parse_timeout_list(timeouts_env)
+    ladder: list[ProviderConfig] = []
+    for idx, model in enumerate(models):
+        if idx < len(timeouts):
+            timeout = timeouts[idx]
+        elif timeouts:
+            timeout = timeouts[-1]
+        else:
+            timeout = DISCOVERED_TEXT_TIMEOUT_S
+        ladder.append(ProviderConfig("openrouter", model, timeout=timeout, max_attempts=1))
+    return ladder
+
+
 # Providers whose models are billed per-token by an external account. Rungs from
 # these providers must carry OpenRouter's ``:free`` variant suffix to be allowed
 # into the vision ladder while auto-discovery is active. Local/self-hosted
@@ -276,7 +311,7 @@ def _dead_model_cooldown_s() -> float:
 # so a delisted VL model self-heals within one message rather than hours. [REH]
 _ENV_REDISCOVERY_MIN_INTERVAL = "VISION_DISCOVERY_KICK_MIN_INTERVAL_S"
 DEFAULT_REDISCOVERY_MIN_INTERVAL_S = 600.0
-_last_rediscovery_kick: float = 0.0
+_last_rediscovery_kick: dict[str, float] = {}
 _rediscovery_tasks: set[asyncio.Task] = set()
 
 
@@ -288,16 +323,23 @@ def _rediscovery_min_interval_s() -> float:
 
 
 def _schedule_vision_rediscovery(modality: str) -> None:
-    """Debounced, fire-and-forget refresh of the free vision ladder. [REH][RM]"""
+    """Debounced, fire-and-forget refresh of the free model ladder. [REH][RM]
+
+    Handles both ``vision`` (VL models) and ``text`` (text models) ladders.
+    """
     global _last_rediscovery_kick
 
-    if modality != "vision":
+    if modality not in ("vision", "text"):
         return
     now = time.time()
-    if (now - _last_rediscovery_kick) < _rediscovery_min_interval_s():
+    last_kick = _last_rediscovery_kick.get(modality, 0.0)
+    if (now - last_kick) < _rediscovery_min_interval_s():
         return
     try:
-        from bot.vision.free_model_discovery import is_enabled, refresh_and_apply
+        if modality == "vision":
+            from bot.vision.free_model_discovery import is_enabled, refresh_and_apply
+        else:
+            from bot.vision.free_text_discovery import is_enabled, refresh_and_apply
     except ImportError:
         return
     if not is_enabled():
@@ -306,11 +348,11 @@ def _schedule_vision_rediscovery(modality: str) -> None:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return
-    _last_rediscovery_kick = now
-    task = loop.create_task(refresh_and_apply(force=True), name="vision_rediscovery_kick")
+    _last_rediscovery_kick[modality] = now
+    task = loop.create_task(refresh_and_apply(force=True), name=f"{modality}_rediscovery_kick")
     _rediscovery_tasks.add(task)
     task.add_done_callback(_rediscovery_tasks.discard)
-    logger.info("vision.discovery.kick reason=dead_model")
+    logger.info(f"{modality}.discovery.kick reason=dead_model")
 
 
 @dataclass
@@ -508,9 +550,10 @@ class EnhancedRetryManager:
         text_timeouts = os.getenv("TEXT_FALLBACK_TIMEOUTS")
         text_max_attempts = os.getenv("TEXT_FALLBACK_MAX_ATTEMPTS")
 
-        # Determine whether the ladder comes from env (authoritative) or defaults
+        # Determine whether the vision ladder comes from env (authoritative) or
+        # defaults. Text has no such gate: discovery always leads, per the fix
+        # above -- so no text_from_env flag is needed here.
         vision_from_env = bool(vision_models)
-        text_from_env = bool(text_models)
 
         vl_head = (config.get("VL_MODEL") or "").strip()
 
@@ -568,7 +611,24 @@ class EnhancedRetryManager:
         # Do not prepend OPENAI_TEXT_MODEL when env ladder is provided, because stale
         # model slugs can cause repeated 404/no-endpoints stalls before real fallbacks.
         raw_text_ladder = _parse_ladder(text_models, text_timeouts, default_text, text_max_attempts)
-        filtered_text = raw_text_ladder if text_from_env else raw_text_ladder
+
+        # Auto-discovered free text models lead the ladder, env/default kept as a
+        # deduped tail -- mirrors the vision ladder self-healing exactly (see
+        # discovered_vision above). Previously this only applied when no env
+        # ladder was configured at all, which meant TEXT_FALLBACK_MODELS being
+        # set (the common case) silently disabled self-healing forever: the
+        # discovery cache would refresh but never reach the live ladder. [CA][REH]
+        discovered_text = _discovered_text_ladder(text_timeouts)
+        if discovered_text:
+            seen_models = {pc.model for pc in discovered_text}
+            tail = [pc for pc in raw_text_ladder if pc.model not in seen_models]
+            filtered_text = [*discovered_text, *tail]
+            logger.info(
+                "text.ladder.auto_discovered models=%s",
+                [pc.model for pc in filtered_text],
+            )
+        else:
+            filtered_text = raw_text_ladder
 
         self.provider_configs["text"] = filtered_text
         # Media ladder can be overridden via env; if not provided, use defaults above
