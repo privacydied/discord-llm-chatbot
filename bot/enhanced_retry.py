@@ -78,6 +78,47 @@ def _is_image_capable_model(model: str) -> bool:
     return any(kw in model_lower for kw in vl_keywords)
 
 
+# Default per-attempt timeout for auto-discovered vision rungs (seconds). [CMV]
+DISCOVERED_VISION_TIMEOUT_S = 20.0
+
+
+def _discovered_vision_ladder(timeouts_env: str | None) -> list["ProviderConfig"]:
+    """Build vision ProviderConfigs from the OpenRouter free-model discovery cache. [REH]
+
+    Returns [] when discovery is disabled, unavailable, or has no cached result,
+    in which case the caller falls back to the env/default ladder.
+    """
+    try:
+        from bot.vision.free_model_discovery import get_cached_free_vision_models
+    except ImportError:  # discovery module optional at import time
+        return []
+    try:
+        models = get_cached_free_vision_models()
+    except (OSError, ValueError, AttributeError) as exc:
+        logger.warning("vision.ladder.discovery_read_failed error=%s", exc)
+        return []
+    if not models:
+        return []
+
+    timeouts: list[float] = []
+    if timeouts_env:
+        try:
+            timeouts = [float(t.strip()) for t in timeouts_env.split(",") if t.strip()]
+        except (ValueError, AttributeError):
+            timeouts = []
+
+    ladder: list[ProviderConfig] = []
+    for idx, model in enumerate(models):
+        if idx < len(timeouts):
+            timeout = timeouts[idx]
+        elif timeouts:
+            timeout = timeouts[-1]
+        else:
+            timeout = DISCOVERED_VISION_TIMEOUT_S
+        ladder.append(ProviderConfig("openrouter", model, timeout=timeout, max_attempts=1))
+    return ladder
+
+
 @dataclass
 class ProviderConfig:
     """Configuration for a provider/model combination."""
@@ -384,9 +425,27 @@ class EnhancedRetryManager:
             head_cfg = ProviderConfig("openrouter", head_model, timeout=default_timeout)
             return [head_cfg, *ladder]
 
+        # Auto-discovered free image-capable models from OpenRouter take precedence over
+        # the hand-maintained env ladder: free VL slugs get delisted without warning, and a
+        # stale .env is exactly how vision goes dark for users. [REH]
+        discovered_vision = _discovered_vision_ladder(vision_timeouts)
+
         # Vision ladder: env is authoritative; only apply capability filtering to defaults
         raw_vision_ladder = _parse_ladder(vision_models, vision_timeouts, default_vision)
-        if vision_from_env:
+        if discovered_vision:
+            # Discovered models first, env/default ladder retained as a tail (dedup by model).
+            seen_models = {pc.model for pc in discovered_vision}
+            tail = [pc for pc in raw_vision_ladder if pc.model not in seen_models]
+            merged = [*discovered_vision, *tail]
+            # Only honour VL_MODEL as head if discovery still lists it as alive.
+            if vl_head and vl_head in seen_models:
+                merged = _ensure_head(merged, vl_head, merged[0].timeout)
+            filtered_vision = merged
+            logger.info(
+                "vision.ladder.auto_discovered models=%s",
+                [pc.model for pc in merged],
+            )
+        elif vision_from_env:
             # Do not drop or reorder env-provided models; only warn if suspected non-image
             possible_non_image = [pc.model for pc in raw_vision_ladder if not _is_image_capable_model(pc.model)]
             if possible_non_image:
@@ -414,7 +473,7 @@ class EnhancedRetryManager:
         media_timeouts = os.getenv("MEDIA_FALLBACK_TIMEOUTS")
         self.provider_configs["media"] = _parse_ladder(media_models, media_timeouts, default_media)
 
-        self._apply_vl_override(vision_from_env=vision_from_env)
+        self._apply_vl_override(vision_from_env=vision_from_env or bool(discovered_vision))
         # Keep a concise vision ladder for predictable fallbacks in tests
         if not self.provider_configs.get("vision"):
             self.provider_configs["vision"] = default_vision[:2]

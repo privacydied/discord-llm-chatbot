@@ -246,6 +246,9 @@ class TaskManager:
             # Start janitor task
             await self._start_janitor()
 
+            # Start OpenRouter free-vision-model discovery (self-healing VL ladder)
+            await self._start_vision_discovery()
+
             self.running = True
             logger.info("All background tasks started successfully")
 
@@ -265,6 +268,14 @@ class TaskManager:
             await stop_janitor()
         except Exception as e:
             logger.warning(f"Error stopping janitor: {e}")
+
+        # Stop vision model discovery
+        try:
+            from bot.vision.free_model_discovery import stop_discovery_refresh
+
+            await stop_discovery_refresh()
+        except Exception as e:
+            logger.warning(f"Error stopping vision model discovery: {e}")
 
         # Stop curated memory service
         try:
@@ -506,6 +517,17 @@ class TaskManager:
         health_check.start()
         self.tasks["health_check"] = health_check
         logger.info("Health check task started")
+
+    async def _start_vision_discovery(self) -> None:
+        """Start the OpenRouter free vision-model discovery refresh loop. [REH]"""
+        try:
+            from bot.vision.free_model_discovery import refresh_and_apply, start_discovery_refresh
+
+            # Prime once now so the ladder is correct before the first image arrives.
+            await refresh_and_apply()
+            await start_discovery_refresh()
+        except Exception as e:
+            logger.error(f"Error starting vision model discovery: {e}", exc_info=True)
 
     async def _start_janitor(self) -> None:
         """Start the cache and log janitor task."""

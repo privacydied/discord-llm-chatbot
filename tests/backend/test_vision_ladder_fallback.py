@@ -195,6 +195,8 @@ def test_env_vision_ladder_is_authoritative_and_not_clobbered(
         "openrouter|env-vl-1,openrouter|env-vl-2,openrouter|env-vl-3",
     )
     monkeypatch.setenv("VL_MODEL", "")
+    # Auto-discovery outranks the env ladder by design; disable it for this test.
+    monkeypatch.setenv("VISION_AUTO_DISCOVERY", "0")
 
     # Ensure config cache doesn't hide monkeypatched env
     try:
