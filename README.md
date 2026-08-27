@@ -5,7 +5,7 @@
 
 **Production-ready Discord bot** that blends chat, search/RAG, and multimodal (vision, OCR, TTS/STT). Built on `discord.py 2.x` with robust routing, retries, structured logs, and optional Prometheus metrics.
 
-> Text via OpenAI/OpenRouter, **NVIDIA NIM**, or local Ollama. RAG via ChromaDB. Vision via Together/Novita. STT via faster-whisper/whispercpp. TTS via Kokoro. OCR via PyMuPDF + Tesseract. Server Archive via SQLite. Admin alerts, config hot-reload, voice publishing, and syndication-based X/Twitter text extraction.
+> Text via OpenAI/OpenRouter, **NVIDIA NIM**, or local Ollama. RAG via ChromaDB. Vision via Together/Novita/NVIDIA/OpenRouter. STT via faster-whisper/whispercpp. TTS via Kokoro. OCR via PyMuPDF + Tesseract. Server Archive via SQLite. Admin alerts, config hot-reload, voice publishing, and syndication-based X/Twitter text extraction. Free-tier vision and text fallback ladders self-heal via OpenRouter model auto-discovery (liveness-probed, quarantined, ranked by parameter size).
 
 ---
 
@@ -27,8 +27,10 @@
   * **X/Twitter** → Thread unrolling of author self-replies, syndication probes with image→VL routing.
 * **Vision Generation**
   * Image & video generation with provider budgeting, safety filtering, job management, artifact caching, and cost tracking.
-  * Provider ladder: Together.ai → Novita.ai.
+  * Provider ladder: Together.ai → Novita.ai → NVIDIA NIM → OpenRouter (free img2img fallback when paid providers are out of credit).
+  * Self-healing free-model auto-discovery: polls OpenRouter's catalogue for live `:free` vision **and** text models, liveness-probes each candidate, quarantines hard failures, and ranks survivors by parameter size (largest first, undisclosed-size frontier models kept mid-tier rather than penalized) — both fallback ladders repair themselves without a `.env` edit.
   * Slash commands: `/image`, `/imgedit`, `/video`, `/vidref`.
+  * Conversational editing: mention the bot with `edit: <prompt>` (or reply to an image), no slash command needed — same orchestrator/safety/budget path as `/imgedit`, including its `-seed`/`-steps`/`-strength`/`-guidance`/`-negative`/`-provider`/`-use` flags.
 * **Voice & Speech**
   * **TTS** via Kokoro (local, G2P-based) with phoneme vocabulary loading, IPA-based assets, and engine abstraction.
   * **STT** orchestrator with multi-provider support (local whisper cascade, caching, confidence thresholds).
@@ -145,6 +147,7 @@ flowchart TD
         IH["input_harvest.py: item extraction + normalization"]
         PA["prompt_access.py: prompt loading"]
         RT["runtime.py: compat/runtime access"]
+        CE["conversational_edit.py: 'edit:' trigger + /imgedit-style flag parsing"]
     end
 
     %% ── Text Flow ──────────────────────────────────────────────
@@ -175,9 +178,12 @@ flowchart TD
         OPENAI["OpenAI/OpenRouter/NIM text ladder"]
         NVIDIA["NVIDIA NIM backend"]
         OLLAMA["Ollama local backend"]
-        RETRY["enhanced_retry (backoff, fallback ladder)"]
+        RETRY["enhanced_retry (backoff, self-healing fallback ladder)"]
         STREAM["streaming async generator"]
+        DISCOVERY["OpenRouter free-model discovery<br/>(vision+text, liveness-probed, quarantined, param-size ranked)"]
     end
+
+    DISCOVERY --> RETRY
 
     MEM --> BRAIN
     MENTION --> BRAIN
@@ -209,14 +215,18 @@ flowchart TD
         VSF["VisionSafetyFilter (content moderation)"]
         VBM["VisionBudgetManager (cost quotas)"]
         VAC["VisionArtifactCache (dedup cache)"]
-        VGW["VisionGateway (Together/Novita ladder)"]
+        VGW["VisionGateway (Together/Novita/NVIDIA/OpenRouter ladder)"]
         VPROV_T["Together provider"]
         VPROV_N["Novita provider"]
+        VPROV_NV["NVIDIA NIM provider (text-to-image only, no img2img support)"]
+        VPROV_OR["OpenRouter provider (free img2img fallback, qwen2.5-vl)"]
         MONITOR["VisionJobWatcher (poll + Discord upload)"]
         VORCH --> VSTORE
         VORCH --> VSF --> VBM --> VAC --> VGW
         VGW --> VPROV_T
         VGW --> VPROV_N
+        VGW --> VPROV_NV
+        VGW --> VPROV_OR
         VORCH --> MONITOR
     end
 
@@ -324,6 +334,7 @@ flowchart TD
     PA --> BRAIN
     GT --> GATE
     RT --> TF
+    CE --> VORCH
 ```
 
 Entrypoint: `run.py` → `bot.main:run_bot()` → `asyncio.run(main_with_cleanup())` → `LLMBot.start()` → `setup_hook()`.
