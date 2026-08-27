@@ -240,3 +240,48 @@ def test_startup_warns_when_default_provider_cannot_serve_a_task(adapter):
     warned = " ".join(str(call) for call in adapter.logger.warning.call_args_list)
     assert "cannot_serve" in warned
     assert "image_to_image" in warned
+
+
+# --- Novita endpoint selection for edits -----------------------------------
+
+
+@pytest.mark.asyncio
+async def test_image_edit_never_routes_to_the_qwen_endpoint(adapter):
+    """The qwen endpoint's payload allowlist is {prompt, size}: an edit sent there
+    silently lost the user's image and became a text-to-image. [IV]"""
+    seen = {}
+
+    async def _capture(request, endpoint=None):
+        seen["endpoint"] = endpoint
+        seen["has_image"] = bool(request.input_image_data)
+        return "novita-task-id"
+
+    adapter.providers["novita"].submit = _capture
+
+    request = VisionRequest(
+        task=VisionTask.IMAGE_TO_IMAGE,
+        prompt="give him a hat",
+        user_id="1",
+        input_image_data=b"real-user-photo",
+    )
+    await adapter.submit(request)
+
+    assert seen["endpoint"] == "txt2img"
+    assert seen["has_image"] is True
+
+
+@pytest.mark.asyncio
+async def test_text_to_image_still_uses_the_policy_endpoint(adapter):
+    seen = {}
+
+    async def _capture(request, endpoint=None):
+        seen["endpoint"] = endpoint
+        return "novita-task-id"
+
+    adapter.providers["novita"].submit = _capture
+    # Take nvidia (the promoted default) out of the running so novita is used.
+    adapter.allowed_providers = ["novita"]
+
+    await adapter.submit(VisionRequest(task=VisionTask.TEXT_TO_IMAGE, prompt="a red bike", user_id="1"))
+
+    assert seen["endpoint"] == "qwen-image-txt2img"

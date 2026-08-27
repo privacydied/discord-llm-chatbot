@@ -9099,6 +9099,35 @@ class Router:
         guild_id = message.guild.id if message.guild else None
         return is_server_feature_enabled(guild_id, "image_editing")
 
+    def _image_edit_capable_providers(self) -> list[str] | None:
+        """Providers that can serve IMAGE_TO_IMAGE right now, or None if unknown. [REH]"""
+        adapter = getattr(getattr(self._vision_orchestrator, "gateway", None), "adapter", None)
+        audit = getattr(adapter, "audit_task_coverage", None)
+        if not callable(audit):
+            return None
+        try:
+            return audit().get("image_to_image")
+        except (AttributeError, TypeError, ValueError) as exc:
+            self.logger.debug(f"image-edit coverage check failed: {exc}")
+            return None
+
+    def _image_edit_unavailable_action(self) -> BotAction | None:
+        """Answer honestly instead of reserving budget for a job nobody can run.
+
+        With no image-edit provider configured (or the only one benched for an
+        empty account), submitting anyway costs a budget reservation, a provider
+        round trip and a ~3s wait before failing. Say so up front. [REH][PA]
+        """
+        providers = self._image_edit_capable_providers()
+        if providers is None or providers:
+            return None
+        self.logger.warning("vision.route.conversational_edit.no_provider task=image_to_image")
+        self._metric_inc("vision.route.conversational_edit", {"outcome": "no_provider"})
+        return BotAction(
+            content="I can't edit images right now — no image-editing provider is available. (I can still describe the image if you ask.)",
+            error=True,
+        )
+
     async def _maybe_route_conversational_edit(self, message: Message, original_text: str) -> BotAction | None:
         """Route an addressed image+edit-instruction message to img2img.
 
@@ -9116,6 +9145,10 @@ class Router:
         )
         if not intent.is_edit:
             return None
+
+        unavailable = self._image_edit_unavailable_action()
+        if unavailable is not None:
+            return unavailable
 
         max_mb = int(self.config.get("MAX_ATTACHMENT_SIZE_MB", 25) or 25)
         resolved = await resolve_edit_source_image(message, max_mb)

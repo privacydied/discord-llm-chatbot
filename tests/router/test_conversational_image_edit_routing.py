@@ -258,3 +258,51 @@ async def test_edit_verb_inside_another_word_does_not_route_to_edit(monkeypatch)
     await router._process_multimodal_message_internal(msg, "ctx")
 
     router._run_conversational_edit_job.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_edit_route_answers_honestly_when_no_provider_can_edit(monkeypatch) -> None:
+    """No image-edit provider (none configured, or the only one out of credit):
+    say so instead of reserving budget for a job that cannot run. [REH][PA]"""
+    bot = DummyBot()
+    router = Router(bot)
+
+    orchestrator = MagicMock()
+    orchestrator.gateway.adapter.audit_task_coverage = MagicMock(
+        return_value={"text_to_image": ["nvidia"], "image_to_image": []},
+    )
+    router._vision_orchestrator = orchestrator
+
+    msg, ref_msg = _reply_message(bot, content="<@12345> give this man a beard")
+    _wire_common_mocks(monkeypatch, image_owner_id=ref_msg.id)
+    monkeypatch.setattr(router_mod, "resolve_edit_source_image", AsyncMock())
+    router._prioritized_vision_route = AsyncMock(return_value=None)
+    router._run_conversational_edit_job = AsyncMock()
+
+    action = await router._process_multimodal_message_internal(msg, "ctx")
+
+    router._run_conversational_edit_job.assert_not_awaited()
+    router_mod.resolve_edit_source_image.assert_not_awaited()  # no download either
+    assert action.error is True
+    assert "can't edit images right now" in action.content
+
+
+@pytest.mark.asyncio
+async def test_edit_route_proceeds_when_a_provider_can_edit(monkeypatch) -> None:
+    bot = DummyBot()
+    router = Router(bot)
+
+    orchestrator = MagicMock()
+    orchestrator.gateway.adapter.audit_task_coverage = MagicMock(return_value={"image_to_image": ["novita"]})
+    router._vision_orchestrator = orchestrator
+
+    msg, ref_msg = _reply_message(bot, content="<@12345> give this man a beard")
+    _wire_common_mocks(monkeypatch, image_owner_id=ref_msg.id)
+    resolved = ResolvedEditImage(data=b"img-bytes", content_type="image/png", source="reply")
+    monkeypatch.setattr(router_mod, "resolve_edit_source_image", AsyncMock(return_value=resolved))
+    router._prioritized_vision_route = AsyncMock(return_value=None)
+    router._run_conversational_edit_job = AsyncMock(return_value=BotAction(content="", files=["edited"]))
+
+    await router._process_multimodal_message_internal(msg, "ctx")
+
+    router._run_conversational_edit_job.assert_awaited_once()

@@ -124,6 +124,10 @@ _BALANCE_ERROR_STATUSES: frozenset[int] = frozenset({402, 403})
 # failure on every single job. Env: VISION_PROVIDER_QUOTA_COOLDOWN_S. [CMV][PA]
 DEFAULT_QUOTA_COOLDOWN_S = 900.0
 
+# Novita endpoint that accepts an init_image. The qwen-image endpoint only allows
+# {prompt, size}, so it can never serve an edit. [CMV]
+NOVITA_IMAGE_TO_IMAGE_ENDPOINT = "txt2img"
+
 
 def _is_balance_error(status: int, error_text: str) -> bool:
     """True when this response means "top up the account", not "retry later". [IV]"""
@@ -2133,6 +2137,16 @@ class UnifiedVisionAdapter:
                     "novita:qwen-image",
                 )
                 endpoint = "qwen-image-txt2img" if "qwen-image" in original_entry else "txt2img"
+            # Only the txt2img endpoint carries init_image; the qwen endpoint's payload
+            # allowlist is {prompt, size}, so routing an edit there silently DROPPED the
+            # user's image and generated a fresh one from the prompt alone. [IV][REH]
+            if provider_name == "novita" and normalized_request.task == VisionTask.IMAGE_TO_IMAGE and endpoint != NOVITA_IMAGE_TO_IMAGE_ENDPOINT:
+                self.logger.info(
+                    "vision.novita.endpoint_override from=%s to=%s reason=image_to_image_needs_init_image",
+                    endpoint,
+                    NOVITA_IMAGE_TO_IMAGE_ENDPOINT,
+                )
+                endpoint = NOVITA_IMAGE_TO_IMAGE_ENDPOINT
 
             # Attempt submission with retries
             did_prompt_retry = False  # Single-shot retry for Novita prompt length
