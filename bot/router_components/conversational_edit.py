@@ -6,6 +6,12 @@ analysis/question, so the router can send it down the existing img2img
 orchestrator path instead of VL analysis. Pure/IO-light functions live here so
 they can be unit tested without spinning up the full Router. [CSD]
 
+Two trigger forms are supported:
+1. Explicit mention trigger: ``@Bot edit: <prompt>`` or ``@Bot edit <prompt>``
+   — the ``edit`` keyword followed by optional colon is a direct instruction.
+2. Heuristic keyword trigger: ``@Bot give him a beard`` — classified by
+   ``classify_edit_intent`` using a policy-driven phrase list.
+
 v1 uses keyword heuristics (`classify_edit_intent`). A learned/LLM intent
 classifier could later replace that function's body without changing its
 signature or the router wiring that calls it.
@@ -106,6 +112,42 @@ class EditIntentResult:
 
     is_edit: bool
     matched_phrase: str | None = None
+
+
+# Pattern for the explicit mention trigger: "edit:" or "edit" as the first token
+# after the bot mention has been stripped. Captures everything after as the prompt.
+# Matches: "edit: make him chinese", "edit make him chinese", "EDIT: foo".
+# Does NOT match: "edited by", "credit me", "editor picks" (word boundary on left).
+_EXPLICIT_EDIT_RE = re.compile(
+    r"""^\s*edit(?::|\s+)\s*(.+)$""",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True)
+class ExplicitEditInvocation:
+    """Parsed result of an explicit ``@Bot edit: <prompt>`` trigger."""
+
+    prompt: str  # everything after "edit:" / "edit "
+
+
+def parse_explicit_edit_trigger(text: str) -> ExplicitEditInvocation | None:
+    """Detect the explicit mention-triggered edit form.
+
+    After the bot mention is stripped, a message like ``edit: make him chinese``
+    or ``edit make him chinese`` is an unambiguous edit instruction — no
+    heuristic needed. Returns ``None`` when the text does not match this form
+    so the caller can fall back to ``classify_edit_intent``. [CA]
+    """
+    if not text:
+        return None
+    match = _EXPLICIT_EDIT_RE.match(text.strip())
+    if not match:
+        return None
+    prompt = match.group(1).strip()
+    if not prompt:
+        return None
+    return ExplicitEditInvocation(prompt=prompt)
 
 
 @lru_cache(maxsize=512)

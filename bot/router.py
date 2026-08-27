@@ -92,6 +92,7 @@ from .router_components import (
     classify_syndication_cache_hit,
     collect_x_candidate_urls,
     compose_x_tweet_with_visual_facts,
+    EditIntentResult,
     existing_url_payloads,
     extract_fxtwitter_tweet_node,
     extract_oembed_payload_from_response,
@@ -128,6 +129,7 @@ from .router_components import (
     load_router_runtime_compat,
     mentions_bot,
     normalize_x_url,
+    parse_explicit_edit_trigger,
     parse_twitter_status_id,
     resolve_and_probe_twitter_images,
     resolve_caption_only_base_text,
@@ -9134,17 +9136,30 @@ class Router:
         Returns None when the route doesn't apply (feature disabled, not an
         edit instruction, or no source image resolvable) so the caller falls
         through to the existing VL-analysis branch unchanged. [CA]
+
+        Two trigger forms are recognised:
+        1. Explicit: ``edit: <prompt>`` or ``edit <prompt>`` — unambiguous, routes
+           directly without heuristic classification.
+        2. Heuristic: keyword-based via ``classify_edit_intent`` (existing).
         """
         if not self._conversational_edit_enabled(message) or not self._vision_orchestrator:
             return None
 
-        intent = classify_edit_intent(
-            original_text,
-            self.config.get("VISION_POLICY_PATH", "configs/vision_policy.json"),
-            self.config.get("VISION_EDIT_INTENT_KEYWORDS", ""),
-        )
-        if not intent.is_edit:
-            return None
+        # 1. Explicit "edit:" / "edit <prompt>" trigger — highest priority.
+        explicit = parse_explicit_edit_trigger(original_text)
+        if explicit is not None:
+            edit_prompt = explicit.prompt
+            intent = EditIntentResult(is_edit=True, matched_phrase="edit:")
+        else:
+            # 2. Heuristic keyword classification (existing behaviour).
+            intent = classify_edit_intent(
+                original_text,
+                self.config.get("VISION_POLICY_PATH", "configs/vision_policy.json"),
+                self.config.get("VISION_EDIT_INTENT_KEYWORDS", ""),
+            )
+            if not intent.is_edit:
+                return None
+            edit_prompt = original_text
 
         unavailable = self._image_edit_unavailable_action()
         if unavailable is not None:
@@ -9156,10 +9171,10 @@ class Router:
             return None
 
         self._metric_inc("vision.route.conversational_edit", {"outcome": "fired"})
-        self._log_edit_route_fired(message, resolved, intent)
-        return await self._run_conversational_edit_job(message, original_text, resolved)
+        self._log_edit_route_fired(message, resolved, intent, invocation_type="explicit" if explicit else "heuristic")
+        return await self._run_conversational_edit_job(message, edit_prompt, resolved)
 
-    def _log_edit_route_fired(self, message: Message, resolved, intent) -> None:
+    def _log_edit_route_fired(self, message: Message, resolved, intent, invocation_type: str = "heuristic") -> None:
         """Structured log for a conversational-edit routing decision. [REH]"""
         with suppress(Exception):
             self.logger.info(
@@ -9170,7 +9185,7 @@ class Router:
                     "guild_id": str(message.guild.id) if message.guild else None,
                     "user_id": str(message.author.id),
                     "msg_id": message.id,
-                    "detail": f"source={resolved.source} phrase={intent.matched_phrase}",
+                    "detail": f"source={resolved.source} phrase={intent.matched_phrase} invocation={invocation_type}",
                 },
             )
 

@@ -9,8 +9,10 @@ from .compose import (
 )
 from .conversational_edit import (
     EditIntentResult,
+    ExplicitEditInvocation,
     ResolvedEditImage,
     classify_edit_intent,
+    parse_explicit_edit_trigger,
     resolve_edit_source_image,
 )
 from .gating import is_reply_to_bot, mentions_bot, strip_leading_bot_mention
@@ -566,6 +568,7 @@ from .x_routing import (
 
 __all__ = [
     "EditIntentResult",
+    "ExplicitEditInvocation",
     "ResolvedEditImage",
     "RouterRuntimeCompat",
     "all_attachments_are_text",
@@ -937,6 +940,7 @@ __all__ = [
     "normalize_x_path",
     "normalize_x_url",
     "normalized_article_header_text",
+    "parse_explicit_edit_trigger",
     "parse_image_host",
     "parse_twitter_status_id",
     "parse_unwrap_x_media_params",
