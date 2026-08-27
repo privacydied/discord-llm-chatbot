@@ -1437,10 +1437,18 @@ class UnifiedVisionAdapter:
         return {
             "vision": {
                 "default_policy": {
+                    # OpenRouter is last: a free VL fallback for IMAGE_TO_IMAGE
+                    # when paid providers (Novita/Together) are out of credit.
+                    # NOTE: this is the list actually used at runtime whenever
+                    # VISION_PROVIDER_CONFIG_PATH is unset (the common case) --
+                    # submit()'s `policy.get("provider_order", [...])` fallback
+                    # is dead code once this key exists, so it must be kept in
+                    # sync here too. [CA][REH]
                     "provider_order": [
                         "novita:qwen-image",
                         "novita:txt2img",
                         "together",
+                        "openrouter",
                     ],
                     "budget_per_job_usd": 0.25,
                     "prefer_model": {"image": "qwen-image", "video": "svd-xt"},
@@ -2124,6 +2132,10 @@ class UnifiedVisionAdapter:
             # Use policy-driven selection
             # OpenRouter is last: a free VL fallback for IMAGE_TO_IMAGE when
             # paid providers (Novita/Together) are out of credit. [CA][REH]
+            # NOTE: this .get() default only fires when `policy` truly lacks the
+            # key (e.g. a custom VISION_PROVIDER_CONFIG_PATH file without one) --
+            # the common case (no override file) uses _default_provider_config()'s
+            # own provider_order above, which must be kept in sync separately.
             provider_order = policy.get("provider_order", ["novita:qwen-image", "novita:txt2img", "together", "openrouter"])
             forced_endpoint = None
 
