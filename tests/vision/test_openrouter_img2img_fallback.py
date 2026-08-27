@@ -14,7 +14,16 @@ from unittest.mock import AsyncMock
 import pytest
 
 from bot.vision.types import VisionError, VisionErrorType, VisionProvider, VisionRequest, VisionTask
-from bot.vision.unified_adapter import UnifiedVisionAdapter
+from bot.vision.unified_adapter import UnifiedVisionAdapter, _resolve_openrouter_api_key
+
+
+@pytest.fixture(autouse=True)
+def _clean_openrouter_env(monkeypatch):
+    """These vars leaking from the real shell/.env would silently mask the
+    bug this file exists to catch. [IV]
+    """
+    for var in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "OPENAI_API_BASE", "VISION_API_KEY", "VISION_API_BASE"):
+        monkeypatch.delenv(var, raising=False)
 
 
 def test_default_provider_config_provider_order_includes_openrouter() -> None:
@@ -62,3 +71,83 @@ async def test_openrouter_used_when_novita_quota_exhausted() -> None:
     adapter.providers["openrouter"].submit.assert_awaited_once()
     assert response.success is True
     assert response.provider == VisionProvider.OPENROUTER
+
+
+# ---------------------------------------------------------------------------
+# _resolve_openrouter_api_key -- the second bug found live: OpenRouter's
+# provider entry resolved its key from VISION_API_KEY (a Together/Novita
+# key), so even once reachable it failed with "authentication failed". A
+# deployment's real OpenRouter key commonly lives under OPENAI_API_KEY
+# (the text-backend setup), not a dedicated OPENROUTER_API_KEY.
+# ---------------------------------------------------------------------------
+
+
+class TestResolveOpenrouterApiKey:
+    def test_prefers_dedicated_var(self) -> None:
+        config = {"OPENROUTER_API_KEY": "or-dedicated-key", "OPENAI_API_KEY": "or-openai-key", "OPENAI_API_BASE": "https://openrouter.ai/api/v1"}
+        assert _resolve_openrouter_api_key(config) == "or-dedicated-key"
+
+    def test_falls_back_to_openai_key_when_its_base_is_openrouter(self) -> None:
+        """The real deployment shape: OpenRouter doubles as the text backend,
+        so OPENAI_API_KEY/OPENAI_API_BASE are the only place the key lives.
+        """
+        config = {
+            "OPENAI_API_KEY": "sk-or-v1-the-real-openrouter-key",
+            "OPENAI_API_BASE": "https://openrouter.ai/api/v1",
+            "VISION_API_KEY": "a-together-or-novita-key",
+        }
+        assert _resolve_openrouter_api_key(config) == "sk-or-v1-the-real-openrouter-key"
+
+    def test_ignores_vision_api_key_when_its_base_is_not_openrouter(self) -> None:
+        """VISION_API_KEY alone must never be treated as an OpenRouter key --
+        it's the Together/Novita-flavored key by convention in this codebase.
+        """
+        config = {"VISION_API_KEY": "a-together-or-novita-key"}
+        assert _resolve_openrouter_api_key(config) == ""
+
+    def test_uses_vision_api_key_only_when_its_base_is_openrouter(self) -> None:
+        config = {"VISION_API_KEY": "a-real-openrouter-key", "VISION_API_BASE": "https://openrouter.ai/api/v1"}
+        assert _resolve_openrouter_api_key(config) == "a-real-openrouter-key"
+
+    def test_returns_empty_when_nothing_resolves(self) -> None:
+        assert _resolve_openrouter_api_key({}) == ""
+
+
+@pytest.mark.asyncio
+async def test_openrouter_plugin_gets_openai_key_not_vision_api_key() -> None:
+    """End-to-end repro of the real incident: OPENAI_API_KEY/OPENAI_API_BASE
+    hold the real OpenRouter credentials (text-backend setup), VISION_API_KEY
+    holds an unrelated Together/Novita key, and no OPENROUTER_API_KEY is set
+    at all. The openrouter plugin must end up with the OPENAI_API_KEY value,
+    not VISION_API_KEY -- previously it always got VISION_API_KEY.
+    """
+    config = {
+        "VISION_ALLOWED_PROVIDERS": ["openrouter"],
+        "VISION_API_KEY": "a-together-or-novita-key",
+        "OPENAI_API_KEY": "sk-or-v1-the-real-openrouter-key",
+        "OPENAI_API_BASE": "https://openrouter.ai/api/v1",
+    }
+    adapter = UnifiedVisionAdapter(config)
+
+    assert adapter.providers["openrouter"].api_key == "sk-or-v1-the-real-openrouter-key"
+
+
+@pytest.mark.asyncio
+async def test_hot_reload_does_not_regress_openrouter_key() -> None:
+    """update_config() (the .env hot-reload path) used to re-derive every
+    provider's api_key with the same buggy VISION_API_KEY fallback right
+    after _initialize_providers() resolved it correctly, silently undoing
+    the fix on the next config reload.
+    """
+    config = {
+        "VISION_ALLOWED_PROVIDERS": ["openrouter"],
+        "VISION_API_KEY": "a-together-or-novita-key",
+        "OPENAI_API_KEY": "sk-or-v1-the-real-openrouter-key",
+        "OPENAI_API_BASE": "https://openrouter.ai/api/v1",
+    }
+    adapter = UnifiedVisionAdapter(config)
+    assert adapter.providers["openrouter"].api_key == "sk-or-v1-the-real-openrouter-key"
+
+    adapter.update_config(dict(config))  # simulate a hot-reload with unchanged env
+
+    assert adapter.providers["openrouter"].api_key == "sk-or-v1-the-real-openrouter-key"

@@ -144,6 +144,33 @@ def _is_balance_error(status: int, error_text: str) -> bool:
     return status in _BALANCE_ERROR_STATUSES and any(marker in lowered for marker in _BALANCE_ERROR_MARKERS)
 
 
+def _resolve_openrouter_api_key(config: dict[str, Any]) -> str:
+    """Best-effort OpenRouter key resolution over the adapter's own config dict.
+
+    A dedicated ``OPENROUTER_API_KEY`` first; otherwise ``OPENAI_API_KEY`` or
+    ``VISION_API_KEY`` when their paired ``_BASE`` var points at
+    openrouter.ai -- the common shape where OpenRouter doubles as the text
+    backend, so its real key lives under ``OPENAI_API_KEY`` rather than a
+    provider-specific var. A key belonging to a different provider is never
+    returned. [SFT]
+
+    Mirrors ``bot.vision.free_model_probe.resolve_openrouter_key()``'s
+    priority order but reads the passed-in ``config`` dict (falling back to
+    ``os.environ``) rather than a fresh global ``load_config()`` call, so
+    callers that construct ``UnifiedVisionAdapter`` with an explicit config
+    dict (e.g. tests) aren't silently overridden by unrelated env state.
+    """
+    direct = str(config.get("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEY") or "").strip()
+    if direct:
+        return direct
+    for key_name, base_name in (("OPENAI_API_KEY", "OPENAI_API_BASE"), ("VISION_API_KEY", "VISION_API_BASE")):
+        base = str(config.get(base_name) or os.getenv(base_name) or "").lower()
+        candidate = str(config.get(key_name) or os.getenv(key_name) or "").strip()
+        if candidate and "openrouter" in base:
+            return candidate
+    return ""
+
+
 class ProviderPlugin(ABC):
     """Abstract base class for provider plugins."""
 
@@ -1403,8 +1430,15 @@ class UnifiedVisionAdapter:
             if provider is None:
                 continue
             provider.config = provider_config
-            key_env = provider_config.get("api_key_env", "VISION_API_KEY")
-            provider.api_key = str(config.get(key_env) or fallback_key or "")
+            if name == "openrouter":
+                # Same special-case as _initialize_providers() -- otherwise a
+                # hot-reload silently resets openrouter's key back to
+                # VISION_API_KEY (Together/Novita's key) right after
+                # _initialize_providers() resolved it correctly. [SFT][REH]
+                provider.api_key = _resolve_openrouter_api_key(config) or fallback_key
+            else:
+                key_env = provider_config.get("api_key_env", "VISION_API_KEY")
+                provider.api_key = str(config.get(key_env) or fallback_key or "")
             if hasattr(provider, "base_url"):
                 provider.base_url = provider_config.get("base_url", provider.base_url)
             if hasattr(provider, "genai_base_url"):
@@ -1510,7 +1544,13 @@ class UnifiedVisionAdapter:
                     {
                         "name": "openrouter",
                         "base_url": "https://openrouter.ai/api/v1",
-                        "api_key_env": "VISION_API_KEY",
+                        # Informational fallback only -- _initialize_providers()
+                        # special-cases "openrouter" to use resolve_openrouter_key()
+                        # instead, since a deployment's real OpenRouter key is
+                        # often stored under OPENAI_API_KEY (text backend) rather
+                        # than a dedicated OPENROUTER_API_KEY or VISION_API_KEY
+                        # (which is typically a Together/Novita key). [SFT][REH]
+                        "api_key_env": "OPENROUTER_API_KEY",
                         "enabled": True,
                         "priority": 3,
                         "price": {
@@ -1549,9 +1589,16 @@ class UnifiedVisionAdapter:
             if self.allowed_providers and name.lower() not in self.allowed_providers:
                 continue
 
-            # Get API key from environment
-            key_env = provider_config.get("api_key_env", "VISION_API_KEY")
-            provider_key = self.config.get(key_env, api_key)
+            # Get API key from environment. OpenRouter is special-cased: its key
+            # is commonly whatever OPENAI_API_KEY holds when OPENAI_API_BASE
+            # points at openrouter.ai (the text-backend setup), not a dedicated
+            # OPENROUTER_API_KEY or the Together/Novita-flavored VISION_API_KEY.
+            # [SFT][REH]
+            if name == "openrouter":
+                provider_key = _resolve_openrouter_api_key(self.config)
+            else:
+                key_env = provider_config.get("api_key_env", "VISION_API_KEY")
+                provider_key = self.config.get(key_env, api_key)
 
             # Plugins only ever see their own provider_config, so the global
             # per-request timeout has to be handed down explicitly. [CMV]
@@ -1603,7 +1650,12 @@ class UnifiedVisionAdapter:
             elif name == "together":
                 key = self.config.get("TOGETHER_API_KEY") or self.config.get("VISION_API_KEY_TOGETHER") or ""
             elif name == "openrouter":
-                key = self.config.get("OPENROUTER_API_KEY") or self.config.get("VISION_API_KEY") or ""
+                # VISION_API_KEY is typically a Together/Novita key, not a valid
+                # OpenRouter one -- checking for its mere presence here used to
+                # let this gate pass with the wrong key, so the failure only
+                # surfaced later as an opaque "authentication failed" from the
+                # actual API call instead of being skipped upfront. [SFT][REH]
+                key = _resolve_openrouter_api_key(self.config)
             elif name == "nvidia":
                 key = self.config.get("NVIDIA_NIM_API_KEY") or self.config.get("OPENAI_API_KEY") or self.config.get("VISION_API_KEY") or ""
             else:
