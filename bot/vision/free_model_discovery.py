@@ -36,11 +36,19 @@ DISCOVERY_QUERY: dict[str, str] = {
     "max_price": "0",
     "input_modalities": "image",
     "output_modalities": "text",
+    "variant": "free",
 }
+# The catalogue filters above are advisory: OpenRouter still returns non-free
+# variants (e.g. zero-priced previews that start billing later) for this query,
+# so every entry is re-validated locally before it can reach the ladder. [SFT]
+FREE_VARIANT_SUFFIX = ":free"
 DEFAULT_CACHE_PATH = "vision_data/free_vision_models.json"
 DEFAULT_TTL_S = 6 * 60 * 60  # 6h
 DEFAULT_REFRESH_INTERVAL_S = 6 * 60 * 60
 DEFAULT_MAX_MODELS = 6
+# Probe more candidates than we keep, so hard-failed slugs can be replaced by
+# live ones in the same round instead of leaving the ladder short. [REH]
+PROBE_CANDIDATE_MULTIPLIER = 3
 DEFAULT_TIMEOUT_S = 10.0
 MAX_FETCH_ATTEMPTS = 3
 RETRY_BASE_DELAY_S = 1.5
@@ -119,14 +127,39 @@ def cache_path() -> Path:
 # --- Filtering / ranking ---------------------------------------------------
 
 
-def _is_free(pricing: dict[str, Any]) -> bool:
-    """All priced dimensions must be zero (OpenRouter returns strings)."""
-    for key in ("prompt", "completion", "request", "image", "input_cache_read", "input_cache_write"):
-        raw = pricing.get(key)
+REQUIRED_PRICING_KEYS: tuple[str, ...] = ("prompt", "completion")
+
+
+def is_free_slug(model_id: str) -> bool:
+    """True only for OpenRouter ``:free`` variants. [SFT]
+
+    Zero pricing alone is not a guarantee: preview models are listed at 0 and
+    start billing once the preview ends. The ``:free`` variant is the only slug
+    OpenRouter contractually never charges for, so it is a hard requirement.
+    """
+    return bool(model_id) and model_id.strip().lower().endswith(FREE_VARIANT_SUFFIX)
+
+
+def _is_free(pricing: dict[str, Any], model_id: str = "") -> bool:
+    """Free means: ``:free`` variant AND every priced dimension is exactly zero.
+
+    Unknown/unparseable/negative values (OpenRouter uses ``-1`` for "variable")
+    are treated as *not free* — we never gamble with the user's credits.
+    """
+    if model_id and not is_free_slug(model_id):
+        return False
+    if not isinstance(pricing, dict):
+        return False
+    for key in REQUIRED_PRICING_KEYS:
+        if pricing.get(key) in (None, ""):
+            return False
+    # Every dimension the catalogue reports (including ones added later, e.g.
+    # image/audio/web_search/internal_reasoning) must be exactly zero.
+    for raw in pricing.values():
         if raw in (None, ""):
             continue
         try:
-            if float(raw) > 0:
+            if float(raw) != 0.0:
                 return False
         except (ValueError, TypeError):
             return False
@@ -148,7 +181,7 @@ def _is_usable_vision_model(entry: dict[str, Any]) -> bool:
     if "image" not in inputs or outputs != {"text"}:
         return False
 
-    if not _is_free(entry.get("pricing") or {}):
+    if not _is_free(entry.get("pricing") or {}, model_id):
         return False
 
     try:
@@ -175,13 +208,14 @@ def _rank_key(entry: dict[str, Any]) -> tuple[int, int, int]:
 
 
 def _select_models(payload: dict[str, Any], limit: int) -> list[str]:
+    """Rank and cap the usable free models. Non-``:free`` slugs can never survive."""
     entries = [e for e in (payload.get("data") or []) if isinstance(e, dict) and _is_usable_vision_model(e)]
     entries.sort(key=_rank_key)
     seen: set[str] = set()
     models: list[str] = []
     for entry in entries:
         model_id = str(entry["id"]).strip()
-        if model_id in seen:
+        if model_id in seen or not is_free_slug(model_id):
             continue
         seen.add(model_id)
         models.append(model_id)
@@ -199,7 +233,8 @@ def _read_cache_file() -> tuple[list[str], float]:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return [], 0.0
-    models = [str(m) for m in (raw.get("models") or []) if str(m).strip()]
+    # Re-validate on read: a hand-edited or stale cache must not inject a paid model. [SFT]
+    models = [str(m).strip() for m in (raw.get("models") or []) if is_free_slug(str(m))]
     try:
         fetched_at = float(raw.get("fetched_at") or 0.0)
     except (ValueError, TypeError):
@@ -245,10 +280,10 @@ def cache_is_fresh() -> bool:
 async def _fetch_catalogue(timeout_s: float) -> dict[str, Any]:
     """GET the model catalogue with bounded retries + jittered backoff. [REH]"""
     last_exc: Exception | None = None
+    # The catalogue endpoint is public. Deliberately unauthenticated: sending a key
+    # meant for a different provider (VISION_API_KEY can be Together/Novita) would
+    # turn a working discovery into a 401 and silently freeze the ladder. [SFT][REH]
     headers = {"Accept": "application/json", "User-Agent": "discord-llm-chatbot/vision-discovery"}
-    api_key = (os.getenv("OPENROUTER_API_KEY") or os.getenv("VISION_API_KEY") or "").strip()
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
 
     for attempt in range(1, MAX_FETCH_ATTEMPTS + 1):
         try:
@@ -265,10 +300,52 @@ async def _fetch_catalogue(timeout_s: float) -> dict[str, Any]:
     raise RuntimeError(f"OpenRouter model discovery failed after {MAX_FETCH_ATTEMPTS} attempts: {last_exc}")
 
 
-async def discover_free_vision_models(*, force: bool = False) -> list[str]:
-    """Refresh the free image-capable model list. Returns the cached list on failure."""
+async def _verify_candidates(candidates: list[str], limit: int) -> list[str]:
+    """Quarantine-filter then liveness-probe candidates; return the top `limit`.
+
+    Verified-live models lead the ladder; models that only blipped (429/5xx/network)
+    keep their place behind them, since the circuit breaker already handles those.
+    """
+    from bot.vision.free_model_probe import env_ladder_candidates, filter_quarantined, probe_models, quarantine_models
+
+    try:
+        fresh = filter_quarantined(candidates)
+        if not fresh:
+            # Everything is benched: probe anyway rather than serve an empty ladder.
+            logger.warning("vision.discovery.all_candidates_quarantined (probing anyway)")
+            fresh = list(candidates)
+        # Vet the operator's own .env rungs in the same round, so a slug that has
+        # gone 404 there is quarantined instead of burning budget on every image.
+        extras = [m for m in filter_quarantined(env_ladder_candidates()) if m not in fresh]
+        report = await probe_models([*fresh, *extras])
+        await quarantine_models(report.dead)
+        # Env rungs join the discovered ladder only when a probe proved them live;
+        # unprobed ones stay where they were (the tail the retry manager appends).
+        discovered = set(fresh)
+        verified_good = set(report.good)
+        usable = [m for m in report.usable if m in discovered or m in verified_good]
+        return usable[:limit]
+    except (OSError, ValueError, RuntimeError, asyncio.TimeoutError) as exc:
+        logger.warning("vision.discovery.probe_failed error=%s (using unprobed candidates)", exc)
+        return candidates[:limit]
+
+
+async def _commit(models: list[str]) -> list[str]:
+    """Persist the verified ladder to memory + disk and log what changed."""
     global _memory_cache
 
+    previous = get_cached_free_vision_models()
+    _memory_cache = (models, time.time())
+    await _write_cache_file(models)
+    if models != previous:
+        logger.info("vision.discovery.updated models=%s previous=%s", models, previous)
+    else:
+        logger.debug("vision.discovery.unchanged models=%s", models)
+    return list(models)
+
+
+async def discover_free_vision_models(*, force: bool = False) -> list[str]:
+    """Refresh the free image-capable model list. Returns the cached list on failure."""
     if not is_enabled():
         return []
     if not force and cache_is_fresh():
@@ -283,19 +360,18 @@ async def discover_free_vision_models(*, force: bool = False) -> list[str]:
             logger.error("vision.discovery.failed error=%s (keeping previous ladder)", exc)
             return get_cached_free_vision_models()
 
-        models = _select_models(payload, _env_int(_ENV_MAX_MODELS, DEFAULT_MAX_MODELS))
-        if not models:
+        limit = _env_int(_ENV_MAX_MODELS, DEFAULT_MAX_MODELS)
+        candidates = _select_models(payload, limit * PROBE_CANDIDATE_MULTIPLIER)
+        if not candidates:
             logger.warning("vision.discovery.empty_result (keeping previous ladder)")
             return get_cached_free_vision_models()
 
-        previous = get_cached_free_vision_models()
-        _memory_cache = (models, time.time())
-        await _write_cache_file(models)
-        if models != previous:
-            logger.info("vision.discovery.updated models=%s previous=%s", models, previous)
-        else:
-            logger.debug("vision.discovery.unchanged models=%s", models)
-        return list(models)
+        models = await _verify_candidates(candidates, limit)
+        if not models:
+            logger.warning("vision.discovery.no_live_models (keeping previous ladder)")
+            return get_cached_free_vision_models()
+
+        return await _commit(models)
 
 
 async def refresh_and_apply(*, force: bool = False) -> list[str]:

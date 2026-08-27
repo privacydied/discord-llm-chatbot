@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from bot.vision.free_model_discovery import cache_path, discover_free_vision_models  # noqa: E402
+from bot.vision.free_model_probe import load_quarantine, quarantine_path  # noqa: E402
 
 
 async def main() -> int:
@@ -18,9 +19,15 @@ async def main() -> int:
     if not models:
         print("No free image-capable models discovered (cache unchanged).")
         return 1
-    print(f"Cache: {cache_path()}")
+    print(f"Ladder cache: {cache_path()}")
     for i, model in enumerate(models, 1):
-        print(f"{i}. {model}")
+        print(f"  {i}. {model}")
+
+    banned = load_quarantine()
+    if banned:
+        print(f"\nQuarantined (see {quarantine_path()}):")
+        for model, meta in sorted(banned.items()):
+            print(f"  - {model}: {str(meta.get('reason', ''))[:100]}")
     return 0
 
 

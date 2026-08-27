@@ -82,6 +82,16 @@ def _is_image_capable_model(model: str) -> bool:
 DISCOVERED_VISION_TIMEOUT_S = 20.0
 
 
+def _parse_timeout_list(timeouts_env: str | None) -> list[float]:
+    """Parse a comma-separated timeout list, tolerating junk. [IV]"""
+    if not timeouts_env:
+        return []
+    try:
+        return [float(t.strip()) for t in timeouts_env.split(",") if t.strip()]
+    except (ValueError, AttributeError):
+        return []
+
+
 def _discovered_vision_ladder(timeouts_env: str | None) -> list["ProviderConfig"]:
     """Build vision ProviderConfigs from the OpenRouter free-model discovery cache. [REH]
 
@@ -100,13 +110,7 @@ def _discovered_vision_ladder(timeouts_env: str | None) -> list["ProviderConfig"
     if not models:
         return []
 
-    timeouts: list[float] = []
-    if timeouts_env:
-        try:
-            timeouts = [float(t.strip()) for t in timeouts_env.split(",") if t.strip()]
-        except (ValueError, AttributeError):
-            timeouts = []
-
+    timeouts = _parse_timeout_list(timeouts_env)
     ladder: list[ProviderConfig] = []
     for idx, model in enumerate(models):
         if idx < len(timeouts):
@@ -117,6 +121,63 @@ def _discovered_vision_ladder(timeouts_env: str | None) -> list["ProviderConfig"
             timeout = DISCOVERED_VISION_TIMEOUT_S
         ladder.append(ProviderConfig("openrouter", model, timeout=timeout, max_attempts=1))
     return ladder
+
+
+# Providers whose models are billed per-token by an external account. Rungs from
+# these providers must carry OpenRouter's ``:free`` variant suffix to be allowed
+# into the vision ladder while auto-discovery is active. Local/self-hosted
+# providers (ollama, internal) cost nothing and are always allowed. [SFT][CMV]
+_BILLABLE_PROVIDERS: frozenset[str] = frozenset({"openrouter", "openai", "novita", "together", "nvidia"})
+_ENV_ALLOW_PAID_VISION = "VISION_ALLOW_PAID_FALLBACK"
+
+
+def _paid_vision_fallback_allowed() -> bool:
+    """Whether billable (non-``:free``) models may sit in the vision ladder."""
+    return os.getenv(_ENV_ALLOW_PAID_VISION, "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _is_free_rung(provider: "ProviderConfig") -> bool:
+    """True when this rung cannot cost the user money. [SFT]"""
+    if provider.name.strip().lower() not in _BILLABLE_PROVIDERS:
+        return True  # ollama / internal / local providers
+    return provider.model.strip().lower().endswith(":free")
+
+
+def _drop_quarantined(ladder: list["ProviderConfig"]) -> list["ProviderConfig"]:
+    """Remove rungs a liveness probe proved dead (404 no-endpoints, 403, ...). [REH]"""
+    try:
+        from bot.vision.free_model_probe import load_quarantine
+
+        banned = load_quarantine()
+    except (ImportError, OSError, ValueError):
+        return ladder
+    if not banned:
+        return ladder
+    kept = [pc for pc in ladder if pc.model not in banned]
+    dropped = [pc.model for pc in ladder if pc.model in banned]
+    if dropped:
+        logger.info("vision.ladder.quarantined_models_dropped=%s", dropped)
+    return kept
+
+
+def _enforce_free_only(ladder: list["ProviderConfig"]) -> list["ProviderConfig"]:
+    """Drop billable rungs unless the user explicitly opted into paid fallbacks."""
+    if _paid_vision_fallback_allowed():
+        return ladder
+    kept: list[ProviderConfig] = []
+    dropped: list[str] = []
+    for pc in ladder:
+        if _is_free_rung(pc):
+            kept.append(pc)
+        else:
+            dropped.append(f"{pc.name}|{pc.model}")
+    if dropped:
+        logger.warning(
+            "vision.ladder.paid_models_dropped=%s (set %s=1 to allow)",
+            dropped,
+            _ENV_ALLOW_PAID_VISION,
+        )
+    return kept
 
 
 @dataclass
@@ -208,6 +269,48 @@ def _dead_model_cooldown_s() -> float:
         return max(0.0, float(raw))
     except (ValueError, TypeError):
         return 1800.0
+
+
+# Re-discovery kick: when a vision rung reports "this model is gone", refresh the
+# free-model catalogue immediately instead of waiting for the next periodic tick,
+# so a delisted VL model self-heals within one message rather than hours. [REH]
+_ENV_REDISCOVERY_MIN_INTERVAL = "VISION_DISCOVERY_KICK_MIN_INTERVAL_S"
+DEFAULT_REDISCOVERY_MIN_INTERVAL_S = 600.0
+_last_rediscovery_kick: float = 0.0
+_rediscovery_tasks: set[asyncio.Task] = set()
+
+
+def _rediscovery_min_interval_s() -> float:
+    try:
+        return max(0.0, float(os.getenv(_ENV_REDISCOVERY_MIN_INTERVAL, DEFAULT_REDISCOVERY_MIN_INTERVAL_S)))
+    except (ValueError, TypeError):
+        return DEFAULT_REDISCOVERY_MIN_INTERVAL_S
+
+
+def _schedule_vision_rediscovery(modality: str) -> None:
+    """Debounced, fire-and-forget refresh of the free vision ladder. [REH][RM]"""
+    global _last_rediscovery_kick
+
+    if modality != "vision":
+        return
+    now = time.time()
+    if (now - _last_rediscovery_kick) < _rediscovery_min_interval_s():
+        return
+    try:
+        from bot.vision.free_model_discovery import is_enabled, refresh_and_apply
+    except ImportError:
+        return
+    if not is_enabled():
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    _last_rediscovery_kick = now
+    task = loop.create_task(refresh_and_apply(force=True), name="vision_rediscovery_kick")
+    _rediscovery_tasks.add(task)
+    task.add_done_callback(_rediscovery_tasks.discard)
+    logger.info("vision.discovery.kick reason=dead_model")
 
 
 @dataclass
@@ -440,10 +543,10 @@ class EnhancedRetryManager:
             # Only honour VL_MODEL as head if discovery still lists it as alive.
             if vl_head and vl_head in seen_models:
                 merged = _ensure_head(merged, vl_head, merged[0].timeout)
-            filtered_vision = merged
+            filtered_vision = _drop_quarantined(_enforce_free_only(merged)) or discovered_vision
             logger.info(
                 "vision.ladder.auto_discovered models=%s",
-                [pc.model for pc in merged],
+                [pc.model for pc in filtered_vision],
             )
         elif vision_from_env:
             # Do not drop or reorder env-provided models; only warn if suspected non-image
@@ -842,9 +945,11 @@ class EnhancedRetryManager:
                         # WARNING rather than an ERROR traceback. [REH]
                         dead_model_cooldown = _dead_model_cooldown_s()
                         logger.warning(
-                            f"⛔ Model retired/unavailable, benching {provider_key} for {dead_model_cooldown:.0f}s (update the ladder in .env): {type(e).__name__}: {e}",
+                            f"⛔ Model retired/unavailable, benching {provider_key} for {dead_model_cooldown:.0f}s (vision ladder auto-refreshes; text ladder is .env-managed): {type(e).__name__}: {e}",
                         )
                         logger.debug(f"Dead-model detail for {provider_key}", exc_info=True)
+                        # Self-heal: refresh the free vision catalogue right away.
+                        _schedule_vision_rediscovery(modality)
                         last_exception = e
                         self._record_failure(provider_key)
                         breaker = self._get_circuit_breaker(provider_key)
