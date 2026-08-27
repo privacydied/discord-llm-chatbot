@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from bot.router import Router
-from bot.router_components import ResolvedEditImage
-from bot.vision.types import VisionError, VisionErrorType, VisionJobState
+from bot.router_components import ParsedEditFlags, ResolvedEditImage
+from bot.vision.types import VisionError, VisionErrorType, VisionJobState, VisionProvider
 
 
 class DummyBot:
@@ -151,3 +151,93 @@ class TestRunConversationalEditJob:
         assert "timed out" in action.content.lower()
         router._vision_orchestrator.cancel_job.assert_awaited_once()
         router._metric_inc.assert_any_call("vision.route.conversational_edit", {"outcome": "provider_error"})
+
+
+@pytest.mark.asyncio
+class TestConversationalEditFlags:
+    """Flags parsed from the explicit trigger must map onto VisionRequest
+    fields, and a placeholder message must not affect the returned BotAction.
+    """
+
+    async def test_flags_map_onto_vision_request_fields(self, router) -> None:
+        artifact_path = Path("/nonexistent/path.png")  # job fails fast; we only care about the submitted request
+        router._vision_orchestrator.submit_job.return_value = SimpleNamespace(job_id="job123")
+        router._vision_orchestrator.get_job_status.return_value = _job(
+            VisionJobState.COMPLETED,
+            response=SimpleNamespace(artifacts=[artifact_path]),
+        )
+        flags = ParsedEditFlags(
+            prompt="make him a superhero",
+            seed=7,
+            steps=20,
+            strength=0.6,
+            guidance=9.5,
+            negative="blurry",
+            provider="together",
+            model="some/model",
+        )
+
+        await router._run_conversational_edit_job(_message(), flags.prompt, _resolved(), flags)
+
+        submitted = router._vision_orchestrator.submit_job.await_args.args[0]
+        assert submitted.seed == 7
+        assert submitted.steps == 20
+        assert submitted.strength == 0.6
+        assert submitted.guidance_scale == 9.5
+        assert submitted.negative_prompt == "blurry"
+        assert submitted.preferred_model == "some/model"
+        assert submitted.preferred_provider == VisionProvider.TOGETHER
+
+    async def test_none_flags_apply_no_overrides(self, router) -> None:
+        """Heuristic-trigger path (flags=None) must behave exactly as before flags existed."""
+        router._vision_orchestrator.submit_job.return_value = SimpleNamespace(job_id="job123")
+        router._vision_orchestrator.get_job_status.return_value = _job(
+            VisionJobState.COMPLETED,
+            response=SimpleNamespace(artifacts=[Path("/nonexistent/path.png")]),
+        )
+
+        await router._run_conversational_edit_job(_message(), "edit it", _resolved())
+
+        submitted = router._vision_orchestrator.submit_job.await_args.args[0]
+        assert submitted.seed is None
+        assert submitted.preferred_model is None
+        assert submitted.preferred_provider is None
+
+    async def test_placeholder_send_failure_does_not_affect_result(self, router, monkeypatch) -> None:
+        """A placeholder is best-effort UX -- if it can't be sent, the actual
+        edit result must be unaffected. [REH]
+        """
+        import bot.router as router_mod
+
+        monkeypatch.setattr(router_mod, "safe_send", AsyncMock(side_effect=RuntimeError("no perms")))
+        artifact = Path("/nonexistent/path.png")
+        router._vision_orchestrator.submit_job.return_value = SimpleNamespace(job_id="job123")
+        router._vision_orchestrator.get_job_status.return_value = _job(
+            VisionJobState.COMPLETED,
+            response=SimpleNamespace(artifacts=[artifact]),
+        )
+
+        action = await router._run_conversational_edit_job(_message(), "edit it", _resolved())
+
+        assert action.error is True  # missing artifact -> provider_error, unrelated to placeholder
+        assert "no image" in action.content.lower()
+
+    async def test_placeholder_sent_and_cleared_around_the_job(self, router, monkeypatch) -> None:
+        import bot.router as router_mod
+
+        placeholder = AsyncMock()
+        monkeypatch.setattr(router_mod, "safe_send", AsyncMock(return_value=placeholder))
+        artifact = Path("/nonexistent/path.png")
+        router._vision_orchestrator.submit_job.return_value = SimpleNamespace(job_id="job123")
+        router._vision_orchestrator.get_job_status.return_value = _job(
+            VisionJobState.COMPLETED,
+            response=SimpleNamespace(artifacts=[artifact]),
+        )
+
+        action = await router._run_conversational_edit_job(_message(), "edit it", _resolved())
+
+        router_mod.safe_send.assert_awaited_once()
+        placeholder.delete.assert_awaited_once()
+        # The returned action is the real result, unaffected by the placeholder lifecycle.
+        assert action.error is True
+        assert "no image" in action.content.lower()

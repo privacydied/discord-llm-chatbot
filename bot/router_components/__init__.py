@@ -8,10 +8,13 @@ from .compose import (
     has_visual_facts_section,
 )
 from .conversational_edit import (
+    EDIT_FLAGS_HELP_TEXT,
     EditIntentResult,
     ExplicitEditInvocation,
+    ParsedEditFlags,
     ResolvedEditImage,
     classify_edit_intent,
+    parse_edit_flags,
     parse_explicit_edit_trigger,
     resolve_edit_source_image,
 )
@@ -567,8 +570,10 @@ from .x_routing import (
 )
 
 __all__ = [
+    "EDIT_FLAGS_HELP_TEXT",
     "EditIntentResult",
     "ExplicitEditInvocation",
+    "ParsedEditFlags",
     "ResolvedEditImage",
     "RouterRuntimeCompat",
     "all_attachments_are_text",
@@ -940,6 +945,7 @@ __all__ = [
     "normalize_x_path",
     "normalize_x_url",
     "normalized_article_header_text",
+    "parse_edit_flags",
     "parse_explicit_edit_trigger",
     "parse_image_host",
     "parse_twitter_status_id",

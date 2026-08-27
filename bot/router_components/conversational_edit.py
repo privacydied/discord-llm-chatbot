@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import tempfile
 from contextlib import suppress
 from dataclasses import dataclass
@@ -148,6 +149,149 @@ def parse_explicit_edit_trigger(text: str) -> ExplicitEditInvocation | None:
     if not prompt:
         return None
     return ExplicitEditInvocation(prompt=prompt)
+
+
+# --- Flag parsing for the explicit "edit:" trigger -------------------------
+#
+# Mirrors /imgedit's option set (bot/commands/vision_commands.py:216-222) so
+# the mention-triggered route isn't a stripped-down version of the slash
+# command. Bounds are identical to /imgedit's app_commands.Range validators. [IV][CMV]
+
+STEPS_RANGE = (10, 50)
+STRENGTH_RANGE = (0.1, 1.0)
+GUIDANCE_RANGE = (1.0, 20.0)
+_KNOWN_PROVIDERS = ("together", "novita", "auto")
+
+EDIT_FLAGS_HELP_TEXT = (
+    "**Image edit usage**\n"
+    "`@Bot edit: <prompt>` or `@Bot edit <prompt>` — attach an image, reply to "
+    "one, or include a direct image URL.\n"
+    "Optional flags (same ranges as `/imgedit`):\n"
+    "`-seed <int>` `-steps <10-50>` `-strength <0.1-1.0>` `-guidance <1-20>` "
+    "`-negative <text>` `-provider <together|novita|auto>` `-use <model>`\n"
+    "Example: `@Bot edit: make him a superhero -steps 20 -strength 0.6`"
+)
+
+# Flags that consume the following token as their value.
+_VALUE_FLAGS = frozenset({"-seed", "-steps", "-strength", "-guidance", "-negative", "-provider", "-use"})
+
+
+@dataclass(frozen=True)
+class ParsedEditFlags:
+    """Result of extracting ``-flag value`` pairs out of an edit prompt.
+
+    ``errors`` holds human-readable validation failures (e.g. an out-of-range
+    ``-steps``); the caller should surface these instead of submitting a job
+    when non-empty. [REH]
+    """
+
+    prompt: str
+    seed: int | None = None
+    steps: int | None = None
+    strength: float | None = None
+    guidance: float | None = None
+    negative: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    help_requested: bool = False
+    errors: tuple[str, ...] = ()
+
+
+def _parse_flag_value(flag: str, raw: str, errors: list[str]) -> tuple[str, object | None]:
+    """Validate one flag's value against /imgedit's bounds. Returns (field_name, value)."""
+    if flag == "-seed":
+        try:
+            return "seed", int(raw)
+        except ValueError:
+            errors.append(f"`-seed` must be a whole number, got `{raw}`.")
+            return "seed", None
+    if flag == "-steps":
+        try:
+            value = int(raw)
+        except ValueError:
+            errors.append(f"`-steps` must be a whole number, got `{raw}`.")
+            return "steps", None
+        if not (STEPS_RANGE[0] <= value <= STEPS_RANGE[1]):
+            errors.append(f"`-steps` must be between {STEPS_RANGE[0]} and {STEPS_RANGE[1]}, got `{value}`.")
+            return "steps", None
+        return "steps", value
+    if flag == "-strength":
+        try:
+            value = float(raw)
+        except ValueError:
+            errors.append(f"`-strength` must be a number, got `{raw}`.")
+            return "strength", None
+        if not (STRENGTH_RANGE[0] <= value <= STRENGTH_RANGE[1]):
+            errors.append(f"`-strength` must be between {STRENGTH_RANGE[0]} and {STRENGTH_RANGE[1]}, got `{value}`.")
+            return "strength", None
+        return "strength", value
+    if flag == "-guidance":
+        try:
+            value = float(raw)
+        except ValueError:
+            errors.append(f"`-guidance` must be a number, got `{raw}`.")
+            return "guidance", None
+        if not (GUIDANCE_RANGE[0] <= value <= GUIDANCE_RANGE[1]):
+            errors.append(f"`-guidance` must be between {GUIDANCE_RANGE[0]} and {GUIDANCE_RANGE[1]}, got `{value}`.")
+            return "guidance", None
+        return "guidance", value
+    if flag == "-provider":
+        low = raw.strip().lower()
+        if low not in _KNOWN_PROVIDERS:
+            errors.append(f"`-provider` must be one of {', '.join(_KNOWN_PROVIDERS)}, got `{raw}`.")
+            return "provider", None
+        return "provider", low
+    if flag == "-negative":
+        return "negative", raw
+    return "model", raw  # -use
+
+
+def parse_edit_flags(text: str) -> ParsedEditFlags:
+    """Extract ``-seed``/``-steps``/``-strength``/``-guidance``/``-negative``/
+    ``-provider``/``-use``/``-h`` flags out of an explicit edit prompt.
+
+    Uses ``shlex`` so quoted multi-word values (e.g. ``-negative "blurry, low
+    quality"``) work; falls back to a plain whitespace split on unbalanced
+    quotes so a typo doesn't swallow the whole prompt. Unrecognized tokens are
+    rejoined, in order, as the cleaned prompt. [IV]
+    """
+    try:
+        tokens = shlex.split(text)
+    except ValueError:
+        tokens = text.split()
+
+    errors: list[str] = []
+    prompt_parts: list[str] = []
+    values: dict[str, object] = {}
+    help_requested = False
+
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        low = token.lower()
+        if low in ("-h", "--help"):
+            help_requested = True
+            i += 1
+            continue
+        if low in _VALUE_FLAGS:
+            if i + 1 >= len(tokens):
+                errors.append(f"`{token}` needs a value.")
+                i += 1
+                continue
+            field, value = _parse_flag_value(low, tokens[i + 1], errors)
+            if value is not None:
+                values[field] = value
+            i += 2
+            continue
+        prompt_parts.append(token)
+        i += 1
+
+    return ParsedEditFlags(
+        prompt=" ".join(prompt_parts).strip(),
+        help_requested=help_requested,
+        errors=tuple(errors),
+        **values,
+    )
 
 
 @lru_cache(maxsize=512)

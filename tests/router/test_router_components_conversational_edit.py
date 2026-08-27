@@ -197,6 +197,93 @@ class TestEditPhraseWordBoundaries:
     def test_substring_matches_are_not_edits(self, text: str) -> None:
         assert ce.classify_edit_intent(text).is_edit is False
 
+
+class TestParseEditFlags:
+    """parse_edit_flags: -seed/-steps/-strength/-guidance/-negative/-provider/
+    -use/-h extraction, bounds-checked against /imgedit's own ranges. [IV]
+    """
+
+    def test_no_flags_returns_prompt_unchanged(self) -> None:
+        result = ce.parse_edit_flags("make him a superhero")
+        assert result.prompt == "make him a superhero"
+        assert result.seed is None
+        assert result.steps is None
+        assert result.strength is None
+        assert result.guidance is None
+        assert result.negative is None
+        assert result.provider is None
+        assert result.model is None
+        assert result.help_requested is False
+        assert result.errors == ()
+
+    def test_all_flags_parsed_and_stripped_from_prompt(self) -> None:
+        result = ce.parse_edit_flags(
+            "make him a superhero -seed 7 -steps 20 -strength 0.6 -guidance 9.5 -provider together -use some/model"
+        )
+        assert result.prompt == "make him a superhero"
+        assert result.seed == 7
+        assert result.steps == 20
+        assert result.strength == 0.6
+        assert result.guidance == 9.5
+        assert result.provider == "together"
+        assert result.model == "some/model"
+        assert result.errors == ()
+
+    def test_flags_interspersed_with_prompt_text_still_extracted(self) -> None:
+        result = ce.parse_edit_flags("make -steps 15 him a superhero")
+        assert result.prompt == "make him a superhero"
+        assert result.steps == 15
+
+    def test_negative_flag_supports_quoted_multiword_value(self) -> None:
+        result = ce.parse_edit_flags('make him a superhero -negative "blurry, low quality"')
+        assert result.prompt == "make him a superhero"
+        assert result.negative == "blurry, low quality"
+
+    def test_unbalanced_quotes_falls_back_to_whitespace_split(self) -> None:
+        # shlex.split would raise ValueError on the stray quote; must not crash
+        # or eat the whole prompt.
+        result = ce.parse_edit_flags('make him a superhero "quote')
+        assert "superhero" in result.prompt
+
+    @pytest.mark.parametrize(
+        ("flag_text", "expected_substr"),
+        [
+            ("-seed notanumber", "-seed"),
+            ("-steps 5", "-steps"),  # below STEPS_RANGE minimum (10)
+            ("-steps 100", "-steps"),  # above STEPS_RANGE maximum (50)
+            ("-strength 0", "-strength"),  # below STRENGTH_RANGE minimum (0.1)
+            ("-strength 2.0", "-strength"),  # above STRENGTH_RANGE maximum (1.0)
+            ("-guidance 0.5", "-guidance"),  # below GUIDANCE_RANGE minimum (1.0)
+            ("-guidance 25", "-guidance"),  # above GUIDANCE_RANGE maximum (20.0)
+            ("-provider bogus", "-provider"),
+        ],
+    )
+    def test_out_of_range_or_invalid_values_produce_errors(self, flag_text: str, expected_substr: str) -> None:
+        result = ce.parse_edit_flags(f"prompt {flag_text}")
+        assert result.errors, f"expected an error for {flag_text!r}"
+        assert any(expected_substr in e for e in result.errors)
+
+    def test_flag_missing_value_produces_error(self) -> None:
+        result = ce.parse_edit_flags("make him a superhero -steps")
+        assert result.errors
+        assert "-steps" in result.errors[0]
+
+    @pytest.mark.parametrize("help_text", ["-h", "--help"])
+    def test_help_flag_detected(self, help_text: str) -> None:
+        result = ce.parse_edit_flags(f"{help_text} make him a superhero")
+        assert result.help_requested is True
+
+    def test_steps_at_range_boundaries_accepted(self) -> None:
+        assert ce.parse_edit_flags("prompt -steps 10").steps == 10
+        assert ce.parse_edit_flags("prompt -steps 50").steps == 50
+
+    def test_strength_at_range_boundaries_accepted(self) -> None:
+        assert ce.parse_edit_flags("prompt -strength 0.1").strength == 0.1
+        assert ce.parse_edit_flags("prompt -strength 1.0").strength == 1.0
+
+    def test_provider_case_insensitive(self) -> None:
+        assert ce.parse_edit_flags("prompt -provider NOVITA").provider == "novita"
+
     @pytest.mark.parametrize(
         ("text", "phrase"),
         [

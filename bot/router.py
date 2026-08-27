@@ -92,8 +92,10 @@ from .router_components import (
     classify_syndication_cache_hit,
     collect_x_candidate_urls,
     compose_x_tweet_with_visual_facts,
+    EDIT_FLAGS_HELP_TEXT,
     EditIntentResult,
     existing_url_payloads,
+    ParsedEditFlags,
     extract_fxtwitter_tweet_node,
     extract_oembed_payload_from_response,
     extract_primary_tweet_id,
@@ -129,6 +131,7 @@ from .router_components import (
     load_router_runtime_compat,
     mentions_bot,
     normalize_x_url,
+    parse_edit_flags,
     parse_explicit_edit_trigger,
     parse_twitter_status_id,
     resolve_and_probe_twitter_images,
@@ -9139,16 +9142,27 @@ class Router:
 
         Two trigger forms are recognised:
         1. Explicit: ``edit: <prompt>`` or ``edit <prompt>`` — unambiguous, routes
-           directly without heuristic classification.
-        2. Heuristic: keyword-based via ``classify_edit_intent`` (existing).
+           directly without heuristic classification. Accepts /imgedit-style
+           flags (``-seed``/``-steps``/``-strength``/``-guidance``/``-negative``/
+           ``-provider``/``-use``/``-h``) parsed by ``parse_edit_flags``.
+        2. Heuristic: keyword-based via ``classify_edit_intent`` (existing, no
+           flag support — the whole message is the prompt).
         """
         if not self._conversational_edit_enabled(message) or not self._vision_orchestrator:
             return None
 
         # 1. Explicit "edit:" / "edit <prompt>" trigger — highest priority.
         explicit = parse_explicit_edit_trigger(original_text)
+        flags: ParsedEditFlags | None = None
         if explicit is not None:
-            edit_prompt = explicit.prompt
+            flags = parse_edit_flags(explicit.prompt)
+            if flags.help_requested:
+                self._metric_inc("vision.route.conversational_edit", {"outcome": "help"})
+                return BotAction(content=EDIT_FLAGS_HELP_TEXT)
+            if flags.errors:
+                self._metric_inc("vision.route.conversational_edit", {"outcome": "bad_flags"})
+                return BotAction(content="\n".join(flags.errors), error=True)
+            edit_prompt = flags.prompt
             intent = EditIntentResult(is_edit=True, matched_phrase="edit:")
         else:
             # 2. Heuristic keyword classification (existing behaviour).
@@ -9172,7 +9186,7 @@ class Router:
 
         self._metric_inc("vision.route.conversational_edit", {"outcome": "fired"})
         self._log_edit_route_fired(message, resolved, intent, invocation_type="explicit" if explicit else "heuristic")
-        return await self._run_conversational_edit_job(message, edit_prompt, resolved)
+        return await self._run_conversational_edit_job(message, edit_prompt, resolved, flags)
 
     def _log_edit_route_fired(self, message: Message, resolved, intent, invocation_type: str = "heuristic") -> None:
         """Structured log for a conversational-edit routing decision. [REH]"""
@@ -9189,9 +9203,42 @@ class Router:
                 },
             )
 
-    async def _run_conversational_edit_job(self, message: Message, edit_prompt: str, resolved) -> BotAction:
+    @staticmethod
+    def _edit_flags_to_request_kwargs(flags: ParsedEditFlags | None) -> dict:
+        """Map parsed edit flags onto the VisionRequest fields /imgedit exposes
+        as slash-command options. Returns {} for None (heuristic trigger, pure
+        defaults). [CA]
+        """
+        from .vision.types import VisionProvider
+
+        if flags is None:
+            return {}
+        kwargs: dict = {}
+        if flags.seed is not None:
+            kwargs["seed"] = flags.seed
+        if flags.steps is not None:
+            kwargs["steps"] = flags.steps
+        if flags.strength is not None:
+            kwargs["strength"] = flags.strength
+        if flags.guidance is not None:
+            kwargs["guidance_scale"] = flags.guidance
+        if flags.negative is not None:
+            kwargs["negative_prompt"] = flags.negative
+        if flags.model:
+            kwargs["preferred_model"] = flags.model
+        if flags.provider and flags.provider != "auto":
+            with suppress(ValueError):
+                kwargs["preferred_provider"] = VisionProvider(flags.provider)
+        return kwargs
+
+    async def _run_conversational_edit_job(self, message: Message, edit_prompt: str, resolved, flags: ParsedEditFlags | None = None) -> BotAction:
         """Submit the img2img job (safety+budget gated by the orchestrator) and
         await its result, same provider path as /imgedit. [REH][SFT]
+
+        ``flags`` (parsed from the explicit "edit:" trigger by
+        ``parse_edit_flags``) map onto the same VisionRequest fields /imgedit
+        exposes as slash-command options. The heuristic trigger passes ``None``
+        and gets pure defaults, matching behaviour before flags existed.
         """
         from .vision.types import VisionRequest, VisionTask
 
@@ -9202,6 +9249,7 @@ class Router:
             guild_id=str(message.guild.id) if message.guild else None,
             channel_id=str(message.channel.id),
             input_image_data=resolved.data,
+            **self._edit_flags_to_request_kwargs(flags),
         )
 
         try:
@@ -9213,8 +9261,39 @@ class Router:
             self._metric_inc("vision.route.conversational_edit", {"outcome": "provider_error"})
             return BotAction(content="Sorry, I couldn't start that edit. Please try again.", error=True)
 
+        # Best-effort "working on it" message: a real job is now running and the
+        # poll below can take up to VISION_CONVERSATIONAL_EDIT_TIMEOUT_S (~90s
+        # default), which was previously dead silence from the user's POV. Never
+        # allowed to affect the actual result -- see _send_edit_placeholder. [PA]
+        placeholder = await self._send_edit_placeholder(message)
         final_job = await self._await_conversational_edit_job(job.job_id, request.user_id)
-        return await self._finish_conversational_edit(message, final_job)
+        action = await self._finish_conversational_edit(message, final_job)
+        await self._clear_edit_placeholder(placeholder)
+        return action
+
+    async def _send_edit_placeholder(self, message: Message):
+        """Post a best-effort 'working on it' message. Never raises. [PA][REH]
+
+        A failed send (missing permissions, rate limit) must not block the
+        actual edit -- returns None on any failure, which downstream treats
+        as "no placeholder to clean up".
+        """
+        try:
+            return await safe_send(message.channel, content="🎨 Editing your image…")
+        except Exception as exc:
+            self.logger.debug(f"edit placeholder send failed: {exc}")
+            return None
+
+    async def _clear_edit_placeholder(self, placeholder) -> None:
+        """Remove the placeholder once the real result/error is about to be
+        returned. Deleted rather than edited: the caller's returned BotAction
+        (unchanged content/files contract) is what actually delivers the
+        result, so editing here too would show it twice. [PA]
+        """
+        if placeholder is None:
+            return
+        with suppress(Exception):
+            await placeholder.delete()
 
     async def _await_conversational_edit_job(self, job_id: str, user_id: str):
         """Bounded poll for job completion - no unbounded waits. [REH]"""

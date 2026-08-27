@@ -100,7 +100,12 @@ def _make_message(content, *, attachments=True, reference=None, mentions_bot=Tru
 
 @pytest.mark.asyncio
 async def test_explicit_edit_trigger_routes_to_edit_job(monkeypatch) -> None:
-    """@Bot edit: <prompt> must fire the edit route even without a keyword match."""
+    """@Bot edit: <prompt> must fire the edit route even without a keyword match.
+
+    ``-steps 10`` is now a recognised /imgedit-parity flag (parse_edit_flags),
+    so it's stripped out of the prompt and threaded through as a ParsedEditFlags
+    instead of surviving as literal prompt text.
+    """
     bot = DummyBot()
     router = Router(bot)
     router._vision_orchestrator = MagicMock()
@@ -122,9 +127,13 @@ async def test_explicit_edit_trigger_routes_to_edit_job(monkeypatch) -> None:
     action = await router._maybe_route_conversational_edit(msg, "edit: make this guy chinese -steps 10")
 
     router._run_conversational_edit_job.assert_awaited_once()
-    # The prompt passed to the job must be just the text AFTER "edit:"
+    # The prompt passed to the job must be just the text AFTER "edit:", minus
+    # the recognised -steps flag; the flag itself must be captured, not lost.
     call_args = router._run_conversational_edit_job.await_args.args
-    assert call_args[1] == "make this guy chinese -steps 10"
+    assert call_args[1] == "make this guy chinese"
+    flags = call_args[3]
+    assert flags.steps == 10
+    assert flags.errors == ()
 
 
 @pytest.mark.asyncio
@@ -257,3 +266,62 @@ async def test_explicit_trigger_uses_invocation_type_in_log(monkeypatch) -> None
     assert log_calls, "edit_route.fired log not emitted"
     extra = log_calls[0].kwargs.get("extra", {})
     assert "invocation=explicit" in extra.get("detail", "")
+
+
+# ---------------------------------------------------------------------------
+# _maybe_route_conversational_edit — flag help/error short-circuit the route
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_explicit_trigger_help_flag_returns_help_without_submitting_job() -> None:
+    bot = DummyBot()
+    router = Router(bot)
+    router._vision_orchestrator = MagicMock()
+    router._run_conversational_edit_job = AsyncMock()
+
+    msg = _make_message("edit: -h make him tall")
+    action = await router._maybe_route_conversational_edit(msg, "edit: -h make him tall")
+
+    router._run_conversational_edit_job.assert_not_awaited()
+    assert action is not None
+    assert action.error is False
+    assert "edit:" in action.content
+
+
+@pytest.mark.asyncio
+async def test_explicit_trigger_bad_flag_value_returns_error_without_submitting_job() -> None:
+    bot = DummyBot()
+    router = Router(bot)
+    router._vision_orchestrator = MagicMock()
+    router._run_conversational_edit_job = AsyncMock()
+
+    msg = _make_message("edit: make him tall -steps 999")
+    action = await router._maybe_route_conversational_edit(msg, "edit: make him tall -steps 999")
+
+    router._run_conversational_edit_job.assert_not_awaited()
+    assert action is not None
+    assert action.error is True
+    assert "-steps" in action.content
+
+
+@pytest.mark.asyncio
+async def test_explicit_trigger_valid_flags_reach_the_job(monkeypatch) -> None:
+    """A syntactically valid flag doesn't short-circuit -- it must still reach
+    _run_conversational_edit_job as a ParsedEditFlags. [REH]
+    """
+    bot = DummyBot()
+    router = Router(bot)
+    router._vision_orchestrator = MagicMock()
+
+    resolved = ResolvedEditImage(data=b"img", content_type="image/png", source="current")
+    monkeypatch.setattr(router_mod, "resolve_edit_source_image", AsyncMock(return_value=resolved))
+    router._run_conversational_edit_job = AsyncMock(return_value=BotAction(content="", files=["edited.png"]))
+
+    msg = _make_message("edit: make him tall -steps 25")
+    await router._maybe_route_conversational_edit(msg, "edit: make him tall -steps 25")
+
+    router._run_conversational_edit_job.assert_awaited_once()
+    flags = router._run_conversational_edit_job.await_args.args[3]
+    assert flags.steps == 25
+    assert flags.prompt == "make him tall"
