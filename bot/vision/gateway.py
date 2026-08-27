@@ -260,12 +260,24 @@ class VisionGateway:
                 if job_id in self.active_jobs:
                     del self.active_jobs[job_id]
 
+            # Preserve the adapter's diagnosis. Re-wrapping every failure as a
+            # generic PROVIDER_ERROR with "please try again" told users to retry a
+            # job that could never succeed (e.g. the provider account is out of
+            # credit) and erased the error_type downstream handlers key off. [REH]
+            if isinstance(e, VisionError):
+                self.logger.error(
+                    "vision.gateway.failed job=%s error_type=%s provider=%s message=%s",
+                    job_id,
+                    getattr(e.error_type, "value", e.error_type),
+                    getattr(e.provider, "value", e.provider),
+                    e.message,
+                )
+                raise
             self.logger.error(f"Vision gateway failed for job {job_id}: {e}", exc_info=True)
             raise VisionError(
                 error_type=VisionErrorType.PROVIDER_ERROR,
                 message=f"Vision processing failed: {e!s}",
                 user_message="I encountered an error while processing your request. Please try again.",
-                provider=VisionProvider.NOVITA,
             )
 
     def _calculate_actual_cost(self, job_meta: dict[str, Any], result) -> Money:

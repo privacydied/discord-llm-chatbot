@@ -203,3 +203,58 @@ async def test_no_image_text_to_image_phrase_never_touches_edit_route(monkeypatc
 
     router._maybe_route_conversational_edit.assert_not_awaited()
     assert action is expected_action
+
+
+@pytest.mark.asyncio
+async def test_bare_mention_reply_does_not_adopt_parent_text_as_edit_command(monkeypatch) -> None:
+    """Production bug 2026-08-27: a bare "@bot" reply to an image whose parent
+    text merely CONTAINED an edit verb was adopted as the prompt and submitted
+    as an img2img job (task=image_to_image), burning budget and failing on a
+    provider balance error. Adopted text is context, never a command. [SFT]
+    """
+    bot = DummyBot()
+    router = Router(bot)
+    router._vision_orchestrator = MagicMock()
+
+    msg, ref_msg = _reply_message(bot, content="<@12345>")
+    # The parent (image owner) text is what used to get adopted and classified.
+    ref_msg.content = "here is the final version, straight from the photo editor"
+    _wire_common_mocks(monkeypatch, image_owner_id=ref_msg.id)
+
+    resolved = ResolvedEditImage(data=b"img-bytes", content_type="image/png", source="reply")
+    monkeypatch.setattr(router_mod, "resolve_edit_source_image", AsyncMock(return_value=resolved))
+
+    router._prioritized_vision_route = AsyncMock(return_value=None)
+    router._run_perception_notes = AsyncMock(return_value=("notes", None))
+    router._invoke_text_flow = AsyncMock(return_value=BotAction(content="vl answer"))
+    router._run_conversational_edit_job = AsyncMock(return_value=BotAction(content="", files=["should-not-happen"]))
+
+    await router._process_multimodal_message_internal(msg, "ctx")
+
+    router._run_conversational_edit_job.assert_not_awaited()
+    router._run_perception_notes.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_edit_verb_inside_another_word_does_not_route_to_edit(monkeypatch) -> None:
+    """ "credit"/"reddit"/"editor" must not fire the edit route (substring bug)."""
+    bot = DummyBot()
+    router = Router(bot)
+    router._vision_orchestrator = MagicMock()
+
+    msg, ref_msg = _reply_message(bot, content="<@12345> whose credit is this, saw it on reddit")
+    _wire_common_mocks(monkeypatch, image_owner_id=ref_msg.id)
+
+    monkeypatch.setattr(
+        router_mod,
+        "resolve_edit_source_image",
+        AsyncMock(return_value=ResolvedEditImage(data=b"x", content_type="image/png", source="reply")),
+    )
+    router._prioritized_vision_route = AsyncMock(return_value=None)
+    router._run_perception_notes = AsyncMock(return_value=("notes", None))
+    router._invoke_text_flow = AsyncMock(return_value=BotAction(content="vl answer"))
+    router._run_conversational_edit_job = AsyncMock(return_value=BotAction(content="", files=["should-not-happen"]))
+
+    await router._process_multimodal_message_internal(msg, "ctx")
+
+    router._run_conversational_edit_job.assert_not_awaited()

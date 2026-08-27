@@ -92,10 +92,12 @@ def _load_policy_trigger_phrases(policy_path: str) -> tuple[str, ...]:
         return _DEFAULT_EDIT_TRIGGER_PHRASES
 
 
+@lru_cache(maxsize=8)
 def _edit_trigger_phrases(policy_path: str, extra_keywords: str) -> tuple[str, ...]:
+    """Merged trigger phrases, longest first so the most specific one is reported."""
     base = set(_load_policy_trigger_phrases(policy_path)) | set(_DEFAULT_EDIT_TRIGGER_PHRASES)
     extra = {kw.strip().lower() for kw in (extra_keywords or "").split(",") if kw.strip()}
-    return tuple(base | extra)
+    return tuple(sorted(base | extra, key=len, reverse=True))
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,18 @@ class EditIntentResult:
 
     is_edit: bool
     matched_phrase: str | None = None
+
+
+@lru_cache(maxsize=512)
+def _phrase_pattern(phrase: str) -> re.Pattern[str]:
+    """Whole-word matcher for one trigger phrase. [IV]
+
+    Substring matching is what made ``edit`` fire on "credit", "reddit" and
+    "editor", ``fix`` on "prefix", and ``change`` on "exchange" -- turning an
+    ordinary sentence into an image-generation job. Phrases may contain spaces
+    ("give this"), so the boundaries are asserted around the whole phrase.
+    """
+    return re.compile(rf"(?<!\w){re.escape(phrase)}(?!\w)", re.IGNORECASE)
 
 
 def classify_edit_intent(
@@ -116,6 +130,9 @@ def classify_edit_intent(
     Analysis-style questions ("what is this", "describe...", trailing "?")
     are treated as NOT an edit instruction even if an edit verb also appears,
     matching the spec's "ambiguous -> prefer VL analysis" default. [SFT]
+
+    Only ever call this with text the requester actually typed: adopted text
+    (a quoted parent message, an ingested .txt) is context, not a command.
     """
     if not text or not text.strip():
         return EditIntentResult(False)
@@ -125,8 +142,9 @@ def classify_edit_intent(
     if any(pattern.search(lowered) for pattern in _ANALYSIS_PATTERNS):
         return EditIntentResult(False)
 
+    # Phrases arrive longest-first: "make it look like" is reported over "make it".
     for phrase in _edit_trigger_phrases(policy_path, extra_keywords):
-        if phrase in lowered:
+        if _phrase_pattern(phrase).search(lowered):
             return EditIntentResult(True, phrase)
 
     return EditIntentResult(False)

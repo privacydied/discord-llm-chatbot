@@ -100,6 +100,39 @@ class UnifiedResult:
     warnings: list[str] = field(default_factory=list)
 
 
+# Provider phrases that mean "this account cannot pay for the job". Novita answers
+# 403 NOT_ENOUGH_BALANCE (not 402, and the word is "balance", not "credit"), which
+# used to be filed as a generic PROVIDER_ERROR -- indistinguishable from a real
+# outage, so the user was told to "try again" forever. [CMV][REH]
+_BALANCE_ERROR_MARKERS: tuple[str, ...] = (
+    "not_enough_balance",
+    "not enough balance",
+    "insufficient balance",
+    "insufficient_balance",
+    "insufficient funds",
+    "out of credit",
+    "credit",
+    "quota",
+    "billing",
+)
+# Statuses a provider uses to report a payment problem rather than a rejection.
+_BALANCE_ERROR_STATUSES: frozenset[int] = frozenset({402, 403})
+
+
+# How long a provider stays benched after it reports an empty account. Re-asking a
+# provider with no balance costs a budget reservation, a round trip and a user-facing
+# failure on every single job. Env: VISION_PROVIDER_QUOTA_COOLDOWN_S. [CMV][PA]
+DEFAULT_QUOTA_COOLDOWN_S = 900.0
+
+
+def _is_balance_error(status: int, error_text: str) -> bool:
+    """True when this response means "top up the account", not "retry later". [IV]"""
+    if status == 402:
+        return True
+    lowered = (error_text or "").lower()
+    return status in _BALANCE_ERROR_STATUSES and any(marker in lowered for marker in _BALANCE_ERROR_MARKERS)
+
+
 class ProviderPlugin(ABC):
     """Abstract base class for provider plugins."""
 
@@ -235,11 +268,11 @@ class TogetherPlugin(ProviderPlugin):
                         error_type=VisionErrorType.RATE_LIMITED,
                         user_message="Too many requests. Please wait a moment and try again.",
                     )
-                elif response.status == 402 or "quota" in error_text.lower():
+                elif _is_balance_error(response.status, error_text):
                     raise VisionError(
-                        message="Together.ai quota exceeded",
+                        message=f"Together.ai balance/quota exhausted ({response.status}): {error_text}",
                         error_type=VisionErrorType.QUOTA_EXCEEDED,
-                        user_message="Service quota exceeded. Please try again later.",
+                        user_message="The image provider's account is out of credit, so image generation is unavailable right now.",
                     )
                 elif response.status >= 500:
                     raise VisionError(
@@ -614,11 +647,11 @@ class NovitaPlugin(ProviderPlugin):
                         error_type=VisionErrorType.RATE_LIMITED,
                         user_message="Too many requests. Please wait a moment and try again.",
                     )
-                elif response.status == 402 or "credit" in error_text.lower():
+                elif _is_balance_error(response.status, error_text):
                     raise VisionError(
-                        message="Novita.ai quota exceeded",
+                        message=f"Novita.ai balance/quota exhausted ({response.status}): {error_text}",
                         error_type=VisionErrorType.QUOTA_EXCEEDED,
-                        user_message="Service quota exceeded. Please try again later.",
+                        user_message="The image provider's account is out of credit, so image generation is unavailable right now.",
                     )
                 elif response.status >= 500:
                     raise VisionError(
@@ -1247,6 +1280,8 @@ class UnifiedVisionAdapter:
 
         self.allowed_providers = self._parse_allowed_providers(config)
         self.default_provider = self._parse_default_provider(config)
+        # provider -> monotonic deadline while it is benched for an empty account [REH]
+        self._quota_cooldowns: dict[str, float] = {}
 
         # Model override from environment [CMV]
         self.vision_model_override = self._parse_vision_model_override(config)
@@ -1281,6 +1316,8 @@ class UnifiedVisionAdapter:
         self.allowed_providers = self._parse_allowed_providers(config)
         self.default_provider = self._parse_default_provider(config)
         self.vision_model_override = self._parse_vision_model_override(config)
+        # A config reload may have added credit/keys: give every provider a fresh start.
+        self._quota_cooldowns = {}
         self._load_provider_config()
         self._initialize_providers()
         self._model_aliases = self._build_model_aliases()
@@ -1488,8 +1525,69 @@ class UnifiedVisionAdapter:
             logger.debug(f"Credential check failed for {provider_name}: {exc}")
             return False
 
+    def _quota_cooldown_s(self) -> float:
+        """Bench duration after an out-of-balance response. [CMV]"""
+        try:
+            return max(0.0, float(self.config.get("VISION_PROVIDER_QUOTA_COOLDOWN_S", DEFAULT_QUOTA_COOLDOWN_S)))
+        except (TypeError, ValueError):
+            return DEFAULT_QUOTA_COOLDOWN_S
+
+    def _bench_provider_for_quota(self, provider_name: str) -> None:
+        """Bench a provider that just reported an empty account. [REH][PA]"""
+        cooldown = self._quota_cooldown_s()
+        if cooldown <= 0:
+            return
+        base = provider_name.split(":", maxsplit=1)[0].lower()
+        self._quota_cooldowns[base] = time.monotonic() + cooldown
+        self.logger.warning(
+            "vision.provider.benched provider=%s reason=quota_exceeded cooldown_s=%.0f",
+            base,
+            cooldown,
+        )
+
+    def _quota_cooldown_remaining(self, provider_name: str) -> float:
+        """Seconds left on this provider's quota bench (0 when it is available)."""
+        base = provider_name.split(":", maxsplit=1)[0].lower()
+        until = self._quota_cooldowns.get(base)
+        if until is None:
+            return 0.0
+        remaining = until - time.monotonic()
+        if remaining <= 0:
+            self._quota_cooldowns.pop(base, None)
+            return 0.0
+        return remaining
+
+    def _filter_provider_order(self, provider_order: list[str]) -> tuple[list[str], dict[str, str]]:
+        """Keep usable providers, and record WHY each of the others was dropped. [REH]
+
+        The drop reasons used to be invisible, so a provider that vanished from the
+        ladder (missing key, benched, never initialized) looked exactly like one that
+        was never configured -- and the ladder silently shrank to a single rung.
+        """
+        filtered: list[str] = []
+        dropped: dict[str, str] = {}
+        for name in provider_order:
+            base = name.split(":")[0].lower()
+            if base in filtered or base in dropped:
+                continue
+            if self.allowed_providers and base not in self.allowed_providers:
+                dropped[base] = "not_in_allowlist"
+            elif base not in self.providers:
+                dropped[base] = "not_initialized"
+            elif not self._has_valid_credentials(base):
+                dropped[base] = "no_credentials"
+            elif self._quota_cooldown_remaining(base) > 0:
+                dropped[base] = f"quota_benched_{self._quota_cooldown_remaining(base):.0f}s"
+            elif not self._is_provider_healthy(base):
+                dropped[base] = "unhealthy"
+            else:
+                filtered.append(base)
+        return filtered, dropped
+
     def _is_provider_healthy(self, provider_name: str) -> bool:
-        """Lightweight health gate. Currently mirrors credential presence/shape [PA]."""
+        """Credential presence plus the out-of-balance bench. [PA][REH]"""
+        if self._quota_cooldown_remaining(provider_name) > 0:
+            return False
         return self._has_valid_credentials(provider_name)
 
     def _estimate_cost_money(self, provider_name: str, request: NormalizedRequest) -> Money | None:
@@ -1920,20 +2018,14 @@ class UnifiedVisionAdapter:
                 provider_order = [self.default_provider] + [p for p in provider_order if p != self.default_provider]
 
         # Filter by configured/healthy providers, preserving order [SFT]
-        filtered_order: list[str] = []
-        for name in provider_order:
-            base = name.split(":")[0]
-            if self.allowed_providers and base.lower() not in self.allowed_providers:
-                continue
-            if self._has_valid_credentials(base) and self._is_provider_healthy(base) and base in self.providers and base not in filtered_order:
-                filtered_order.append(base)
+        filtered_order, dropped = self._filter_provider_order(provider_order)
         if not filtered_order:
             raise VisionError(
                 error_type=VisionErrorType.SYSTEM_ERROR,
-                message="No configured/healthy vision providers available",
-                user_message="Vision generation is not configured.",
+                message=f"No configured/healthy vision providers available (dropped: {dropped})",
+                user_message="Image generation is not available right now — no provider is configured for it.",
             )
-        self.logger.debug(f"Provider order (filtered): {filtered_order}")
+        self.logger.info("vision.provider_order task=%s order=%s dropped=%s", normalized_request.task.value, filtered_order, dropped)
         provider_order = filtered_order
 
         last_error = None
@@ -2019,8 +2111,10 @@ class UnifiedVisionAdapter:
                                 continue
                         # Already retried once; fall through to existing handling
                     elif e.error_type == VisionErrorType.QUOTA_EXCEEDED:
-                        # Payment/quota errors - NOT retryable, try next provider immediately [REH]
+                        # Payment/quota errors - NOT retryable, try next provider immediately,
+                        # and bench this one so the next job does not re-pay the round trip. [REH][PA]
                         self.logger.warning(f"Quota/balance error from {provider_name}: {e.message}. Trying next provider...")
+                        self._bench_provider_for_quota(provider_name)
                         break
                     else:
                         # Non-retryable error, try next provider

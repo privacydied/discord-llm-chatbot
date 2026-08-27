@@ -4554,6 +4554,13 @@ class Router:
                 exc_info=True,
             )
 
+        # Snapshot of what THIS user actually typed, before the UX fallbacks below
+        # adopt a parent/previous message (or a .txt attachment) into original_text.
+        # Adopted text is context for the reply -- never a command: a bare "@bot"
+        # reply to a message reading "...for the editor" must not become an img2img
+        # edit job just because the quoted text contains an edit verb. [SFT][IV]
+        authored_text = original_text
+
         # Diagnostics: post-harvest item counts [RAT][PA]
         try:
             url_ct = sum(1 for it in items if getattr(it, "source_type", None) == "url")
@@ -4835,7 +4842,9 @@ class Router:
         # and only when the bot was actually addressed (mention/DM/reply) so
         # this never adds cost to unaddressed traffic. [CA]
         if (is_dm or mentioned_me or is_reply) and combined_count >= 1 and not has_x_url:
-            edit_action = await self._maybe_route_conversational_edit(message, original_text)
+            # authored_text, not original_text: only the requester's own words may
+            # ask for an edit (see the authored_text snapshot above). [SFT]
+            edit_action = await self._maybe_route_conversational_edit(message, authored_text)
             if edit_action is not None:
                 return edit_action
 

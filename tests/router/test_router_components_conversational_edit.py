@@ -175,3 +175,43 @@ class TestResolveEditSourceImage:
         resolved = await ce.resolve_edit_source_image(msg, max_size_mb=7)
         assert resolved is None
         assert captured["max_size_mb"] == 7
+
+
+class TestEditPhraseWordBoundaries:
+    """Trigger phrases must match whole words, not substrings. [IV]"""
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "i gave him credit for that",
+            "saw it on reddit earlier",
+            "the editor approved it",
+            "this is the extended edition",
+            "nothing changed since the exchange",
+            "prefix the filename please",
+            "he removed himself from the group",
+            "unaltered footage",
+            "the fixture is broken",
+        ],
+    )
+    def test_substring_matches_are_not_edits(self, text: str) -> None:
+        assert ce.classify_edit_intent(text).is_edit is False
+
+    @pytest.mark.parametrize(
+        ("text", "phrase"),
+        [
+            ("edit this to be brighter", "edit"),
+            ("please fix the lighting", "fix"),
+            ("change the sky to purple", "change"),
+            ("extend the canvas on the left", "extend"),
+        ],
+    )
+    def test_whole_word_verbs_still_fire(self, text: str, phrase: str) -> None:
+        result = ce.classify_edit_intent(text)
+        assert result.is_edit is True
+        assert result.matched_phrase == phrase
+
+    def test_longest_phrase_wins_for_reporting(self) -> None:
+        result = ce.classify_edit_intent("make it look like a renaissance painting")
+        assert result.is_edit is True
+        assert result.matched_phrase == "make it look like"
