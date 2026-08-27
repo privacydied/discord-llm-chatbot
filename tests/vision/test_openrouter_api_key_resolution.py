@@ -1,19 +1,30 @@
-"""Regression test: the free OpenRouter img2img fallback (added alongside
-OpenRouterPlugin.capabilities()'s IMAGE_TO_IMAGE mode) was silently never
-reachable in the common deployment shape (no VISION_PROVIDER_CONFIG_PATH
-override file). UnifiedVisionAdapter.submit()'s `policy.get("provider_order",
-[..., "openrouter"])` fallback default is dead code whenever `policy` already
-has the key -- which it always does via _default_provider_config()'s own
-hardcoded list. That embedded list is the one that actually needs
-"openrouter" in it; this test locks that in, plus an end-to-end check that a
-quota-exhausted Novita actually falls through to OpenRouter. [REH][CMV]
+"""Regression tests for OpenRouter provider key resolution, plus a guard
+against re-introducing a free IMAGE_TO_IMAGE default with no real model
+behind it.
+
+History: a prior commit added OpenRouter as a "free img2img fallback" using
+qwen/qwen2.5-vl-72b-instruct:free. That was reverted after two live
+failures: (1) the provider was unreachable in the default deployment shape
+because two separate hardcoded provider_order lists existed and only one got
+"openrouter" added, and (2) once reachable, it authenticated with
+VISION_API_KEY (a Together/Novita key) instead of a real OpenRouter key.
+Fixing (2) surfaced a third, unfixable problem: verified against OpenRouter's
+live catalogue (2026-08-27) that qwen2.5-vl-72b-instruct has
+output_modalities=["text"] only -- an understanding model, not a
+generation/edit one -- and that every model OpenRouter currently lists with
+"image" in output_modalities is paid. There is no free model to default to,
+so IMAGE_TO_IMAGE support was reverted entirely rather than left half-broken.
+
+The key-resolution fix itself (_resolve_openrouter_api_key) remains correct
+and generically useful regardless of which tasks OpenRouter ends up serving,
+so those tests stay. [REH][SFT][CMV]
 """
 
 from unittest.mock import AsyncMock
 
 import pytest
 
-from bot.vision.types import VisionError, VisionErrorType, VisionProvider, VisionRequest, VisionTask
+from bot.vision.types import VisionRequest, VisionTask
 from bot.vision.unified_adapter import UnifiedVisionAdapter, _resolve_openrouter_api_key
 
 
@@ -26,59 +37,71 @@ def _clean_openrouter_env(monkeypatch):
         monkeypatch.delenv(var, raising=False)
 
 
-def test_default_provider_config_provider_order_includes_openrouter() -> None:
-    """The embedded default_policy.provider_order -- the one actually used
-    whenever no VISION_PROVIDER_CONFIG_PATH override file is configured --
-    must list openrouter, not just the .get() fallback default deeper in
-    submit() (which is dead code once this key is present).
+# ---------------------------------------------------------------------------
+# Guard: no free-model IMAGE_TO_IMAGE default. See module docstring.
+# ---------------------------------------------------------------------------
+
+
+def test_openrouter_does_not_claim_image_to_image_capability() -> None:
+    """There is currently no free OpenRouter model that can generate/edit
+    images (verified against the live catalogue). Advertising IMAGE_TO_IMAGE
+    support with no real model behind it just moves the "always fails" bug
+    around instead of fixing it -- don't re-add this without a specific,
+    deliberately chosen model in OpenRouterPlugin.model_map alongside it.
     """
-    adapter = UnifiedVisionAdapter({"VISION_ALLOWED_PROVIDERS": ["novita", "together", "openrouter"]})
-    provider_order = adapter.provider_config["vision"]["default_policy"]["provider_order"]
-    assert any(entry.split(":")[0] == "openrouter" for entry in provider_order)
+    adapter = UnifiedVisionAdapter({"VISION_ALLOWED_PROVIDERS": ["openrouter"], "OPENROUTER_API_KEY": "test-key-0123456789"})
+    modes = adapter.providers["openrouter"].capabilities()["modes"]
+    assert VisionTask.IMAGE_TO_IMAGE not in modes
 
 
 @pytest.mark.asyncio
-async def test_openrouter_used_when_novita_quota_exhausted() -> None:
-    """Reproduces the real failure: Novita returns a quota/balance error for
-    IMAGE_TO_IMAGE and there is no VISION_PROVIDER_CONFIG_PATH override --
-    OpenRouter must be tried next instead of the job failing outright.
-    """
-    config = {
-        "VISION_ALLOWED_PROVIDERS": ["novita", "openrouter"],
-        "VISION_API_KEY": "test-vision-api-key-0123456789",
-        "OPENROUTER_API_KEY": "test-openrouter-api-key-0123456789",
-    }
-    adapter = UnifiedVisionAdapter(config)
-    adapter.providers["novita"].submit = AsyncMock(
-        side_effect=VisionError(
-            error_type=VisionErrorType.QUOTA_EXCEEDED,
-            message="Novita.ai balance/quota exhausted (403)",
-            user_message="Out of credit.",
-        )
-    )
-    adapter.providers["openrouter"].submit = AsyncMock(return_value="openrouter-task-id")
+async def test_openrouter_rejects_image_to_image_with_no_configured_model() -> None:
+    adapter = UnifiedVisionAdapter({"VISION_ALLOWED_PROVIDERS": ["openrouter"], "OPENROUTER_API_KEY": "test-key-0123456789"})
+    adapter.providers["openrouter"].startup = AsyncMock()
+    from bot.vision.unified_adapter import NormalizedRequest
 
+    request = NormalizedRequest(task=VisionTask.IMAGE_TO_IMAGE, prompt="edit it", input_image_data=b"fake")
+    with pytest.raises(Exception, match="not supported"):
+        await adapter.providers["openrouter"].submit(request)
+
+
+def test_default_provider_order_omits_openrouter() -> None:
+    """The embedded default_policy.provider_order (the one actually used
+    whenever no VISION_PROVIDER_CONFIG_PATH override file is configured)
+    must not list openrouter -- it can't serve the tasks this ladder is for
+    without a real model configured (see module docstring).
+    """
+    adapter = UnifiedVisionAdapter({"VISION_ALLOWED_PROVIDERS": ["novita", "together"]})
+    provider_order = adapter.provider_config["vision"]["default_policy"]["provider_order"]
+    assert not any(entry.split(":")[0] == "openrouter" for entry in provider_order)
+
+
+@pytest.mark.asyncio
+async def test_image_to_image_job_fails_honestly_with_no_openrouter_in_the_mix() -> None:
+    """With OpenRouter no longer claiming IMAGE_TO_IMAGE, a job with no
+    capable provider must fail with the existing honest "no provider"
+    message, not a confusing downstream auth/model error.
+    """
+    from bot.vision.types import VisionError
+
+    adapter = UnifiedVisionAdapter({"VISION_ALLOWED_PROVIDERS": ["nvidia"], "NVIDIA_NIM_API_KEY": "test-key-0123456789"})
     request = VisionRequest(
         task=VisionTask.IMAGE_TO_IMAGE,
-        prompt="make him a superhero",
+        prompt="edit it",
         user_id="1",
         input_image_data=b"fake-image-bytes",
     )
-
-    response = await adapter.submit(request)
-
-    adapter.providers["novita"].submit.assert_awaited_once()
-    adapter.providers["openrouter"].submit.assert_awaited_once()
-    assert response.success is True
-    assert response.provider == VisionProvider.OPENROUTER
+    with pytest.raises(VisionError):
+        await adapter.submit(request)
 
 
 # ---------------------------------------------------------------------------
-# _resolve_openrouter_api_key -- the second bug found live: OpenRouter's
-# provider entry resolved its key from VISION_API_KEY (a Together/Novita
-# key), so even once reachable it failed with "authentication failed". A
-# deployment's real OpenRouter key commonly lives under OPENAI_API_KEY
-# (the text-backend setup), not a dedicated OPENROUTER_API_KEY.
+# _resolve_openrouter_api_key -- OpenRouter's provider entry used to resolve
+# its key from VISION_API_KEY (a Together/Novita key), so even when
+# reachable it failed with "authentication failed". A deployment's real
+# OpenRouter key commonly lives under OPENAI_API_KEY (the text-backend
+# setup), not a dedicated OPENROUTER_API_KEY. Still relevant regardless of
+# IMAGE_TO_IMAGE: OpenRouter remains a configured TEXT_TO_IMAGE provider.
 # ---------------------------------------------------------------------------
 
 

@@ -907,12 +907,21 @@ class OpenRouterPlugin(ProviderPlugin):
         self.base_url = config.get("base_url", "https://openrouter.ai/api/v1")
         self.model_map = {
             VisionTask.TEXT_TO_IMAGE: "black-forest-labs/flux.2-pro",
-            VisionTask.IMAGE_TO_IMAGE: "qwen/qwen2.5-vl-72b-instruct:free",
         }
 
     def capabilities(self) -> dict[str, Any]:
+        # IMAGE_TO_IMAGE deliberately NOT advertised: verified against OpenRouter's
+        # live catalogue (2026-08-27) that every model with "image" in its
+        # output_modalities is paid -- there is currently no free model this
+        # provider could default to. qwen2.5-vl-72b-instruct:free (previously
+        # listed here) is image+text->text only: an understanding model, not a
+        # generation/edit one -- it can never produce an edited image regardless
+        # of API key validity. Re-add only alongside a specific, deliberately
+        # chosen (likely paid) model in model_map -- never as a bare capability
+        # claim with no model behind it, which just moves the "always fails"
+        # bug from "wrong key" to "wrong model". [SFT][REH]
         return {
-            "modes": [VisionTask.TEXT_TO_IMAGE, VisionTask.IMAGE_TO_IMAGE],
+            "modes": [VisionTask.TEXT_TO_IMAGE],
             "max_size": (2048, 2048),
             "max_steps": 0,
             "supports_negative_prompt": False,
@@ -961,32 +970,9 @@ class OpenRouterPlugin(ProviderPlugin):
                 user_message=f"Sorry, {request.task.value} is not supported by this provider.",
             )
 
-        # Build payload: image-to-image sends the input image + prompt as
-        # multi-part content; text-to-image sends prompt only. [CA]
-        if request.task == VisionTask.IMAGE_TO_IMAGE and request.input_image_data:
-            b64_image = base64.b64encode(request.input_image_data).decode()
-            # Detect content type from magic bytes (default png)
-            ct = "image/png"
-            if request.input_image_data[:3] == b"\xff\xd8\xff":
-                ct = "image/jpeg"
-            elif request.input_image_data[:4] == b"RIFF":
-                ct = "image/webp"
-            image_url = f"data:{ct};base64,{b64_image}"
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": image_url}},
-                        {"type": "text", "text": f"Edit this image: {request.prompt}"},
-                    ],
-                }
-            ]
-        else:
-            messages = [{"role": "user", "content": request.prompt}]
-
         payload: dict[str, Any] = {
             "model": model,
-            "messages": messages,
+            "messages": [{"role": "user", "content": request.prompt}],
             "modalities": ["image", "text"],
             "stream": False,
         }
@@ -1471,18 +1457,20 @@ class UnifiedVisionAdapter:
         return {
             "vision": {
                 "default_policy": {
-                    # OpenRouter is last: a free VL fallback for IMAGE_TO_IMAGE
-                    # when paid providers (Novita/Together) are out of credit.
                     # NOTE: this is the list actually used at runtime whenever
                     # VISION_PROVIDER_CONFIG_PATH is unset (the common case) --
                     # submit()'s `policy.get("provider_order", [...])` fallback
                     # is dead code once this key exists, so it must be kept in
                     # sync here too. [CA][REH]
+                    #
+                    # OpenRouter deliberately NOT listed: verified against its
+                    # live catalogue (2026-08-27) that no free model can serve
+                    # IMAGE_TO_IMAGE (every image-output-capable model is paid).
+                    # See OpenRouterPlugin.capabilities() for the full note.
                     "provider_order": [
                         "novita:qwen-image",
                         "novita:txt2img",
                         "together",
-                        "openrouter",
                     ],
                     "budget_per_job_usd": 0.25,
                     "prefer_model": {"image": "qwen-image", "video": "svd-xt"},
@@ -2182,13 +2170,11 @@ class UnifiedVisionAdapter:
             self.logger.info(f"🎯 Using VISION_MODEL override: {model_selection.provider}:{model_selection.endpoint} (model={model_selection.model_hint})")
         else:
             # Use policy-driven selection
-            # OpenRouter is last: a free VL fallback for IMAGE_TO_IMAGE when
-            # paid providers (Novita/Together) are out of credit. [CA][REH]
             # NOTE: this .get() default only fires when `policy` truly lacks the
             # key (e.g. a custom VISION_PROVIDER_CONFIG_PATH file without one) --
             # the common case (no override file) uses _default_provider_config()'s
             # own provider_order above, which must be kept in sync separately.
-            provider_order = policy.get("provider_order", ["novita:qwen-image", "novita:txt2img", "together", "openrouter"])
+            provider_order = policy.get("provider_order", ["novita:qwen-image", "novita:txt2img", "together"])
             forced_endpoint = None
 
             # Parse provider:endpoint format in policy

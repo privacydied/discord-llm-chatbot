@@ -5,7 +5,7 @@
 
 **Production-ready Discord bot** that blends chat, search/RAG, and multimodal (vision, OCR, TTS/STT). Built on `discord.py 2.x` with robust routing, retries, structured logs, and optional Prometheus metrics.
 
-> Text via OpenAI/OpenRouter, **NVIDIA NIM**, or local Ollama. RAG via ChromaDB. Vision via Together/Novita/NVIDIA/OpenRouter. STT via faster-whisper/whispercpp. TTS via Kokoro. OCR via PyMuPDF + Tesseract. Server Archive via SQLite. Admin alerts, config hot-reload, voice publishing, and syndication-based X/Twitter text extraction. Free-tier vision and text fallback ladders self-heal via OpenRouter model auto-discovery (liveness-probed, quarantined, ranked by parameter size).
+> Text via OpenAI/OpenRouter, **NVIDIA NIM**, or local Ollama. RAG via ChromaDB. Vision generation via Together/Novita (NVIDIA text-to-image only). STT via faster-whisper/whispercpp. TTS via Kokoro. OCR via PyMuPDF + Tesseract. Server Archive via SQLite. Admin alerts, config hot-reload, voice publishing, and syndication-based X/Twitter text extraction. Free-tier vision-*understanding* and text fallback ladders self-heal via OpenRouter model auto-discovery (liveness-probed, quarantined, ranked by parameter size) — this is separate from image *generation/editing*, which OpenRouter cannot currently do for free (see note below).
 
 ---
 
@@ -27,10 +27,10 @@
   * **X/Twitter** → Thread unrolling of author self-replies, syndication probes with image→VL routing.
 * **Vision Generation**
   * Image & video generation with provider budgeting, safety filtering, job management, artifact caching, and cost tracking.
-  * Provider ladder: Together.ai → Novita.ai → NVIDIA NIM → OpenRouter (free img2img fallback when paid providers are out of credit).
-  * Self-healing free-model auto-discovery: polls OpenRouter's catalogue for live `:free` vision **and** text models, liveness-probes each candidate, quarantines hard failures, and ranks survivors by parameter size (largest first, undisclosed-size frontier models kept mid-tier rather than penalized) — both fallback ladders repair themselves without a `.env` edit.
+  * Provider ladder: Together.ai → Novita.ai (image *generation/editing*); NVIDIA NIM additionally serves text-to-image only, not editing — its hosted GenAI endpoint only accepts 3 canned demo images, not arbitrary uploads. OpenRouter is **not** in this ladder: verified against its live catalogue that every model capable of image output is paid, so there is currently no free img2img fallback to default to (adding one back requires a specific, deliberately chosen paid model, not a bare capability claim).
+  * Self-healing free-model auto-discovery (separate from the ladder above): polls OpenRouter's catalogue for live `:free` vision-**understanding** and text models, liveness-probes each candidate, quarantines hard failures, and ranks survivors by parameter size (largest first, undisclosed-size frontier models kept mid-tier rather than penalized). These models describe/analyze images (VL analysis via `see.py`) or generate text — none of them generate or edit images.
   * Slash commands: `/image`, `/imgedit`, `/video`, `/vidref`.
-  * Conversational editing: mention the bot with `edit: <prompt>` (or reply to an image), no slash command needed — same orchestrator/safety/budget path as `/imgedit`, including its `-seed`/`-steps`/`-strength`/`-guidance`/`-negative`/`-provider`/`-use` flags.
+  * Conversational editing: mention the bot with `edit: <prompt>` (or reply to an image), no slash command needed — same orchestrator/safety/budget path as `/imgedit` (Together/Novita only), including its `-seed`/`-steps`/`-strength`/`-guidance`/`-negative`/`-provider`/`-use` flags.
 * **Voice & Speech**
   * **TTS** via Kokoro (local, G2P-based) with phoneme vocabulary loading, IPA-based assets, and engine abstraction.
   * **STT** orchestrator with multi-provider support (local whisper cascade, caching, confidence thresholds).
@@ -180,7 +180,7 @@ flowchart TD
         OLLAMA["Ollama local backend"]
         RETRY["enhanced_retry (backoff, self-healing fallback ladder)"]
         STREAM["streaming async generator"]
-        DISCOVERY["OpenRouter free-model discovery<br/>(vision+text, liveness-probed, quarantined, param-size ranked)"]
+        DISCOVERY["OpenRouter free-model discovery<br/>(VL analysis + text, NOT image generation -- liveness-probed, quarantined, param-size ranked)"]
     end
 
     DISCOVERY --> RETRY
@@ -215,18 +215,16 @@ flowchart TD
         VSF["VisionSafetyFilter (content moderation)"]
         VBM["VisionBudgetManager (cost quotas)"]
         VAC["VisionArtifactCache (dedup cache)"]
-        VGW["VisionGateway (Together/Novita/NVIDIA/OpenRouter ladder)"]
+        VGW["VisionGateway (Together/Novita/NVIDIA ladder)"]
         VPROV_T["Together provider"]
         VPROV_N["Novita provider"]
-        VPROV_NV["NVIDIA NIM provider (text-to-image only, no img2img support)"]
-        VPROV_OR["OpenRouter provider (free img2img fallback, qwen2.5-vl)"]
+        VPROV_NV["NVIDIA NIM provider (text-to-image only -- hosted GenAI endpoint rejects arbitrary uploaded images, no img2img)"]
         MONITOR["VisionJobWatcher (poll + Discord upload)"]
         VORCH --> VSTORE
         VORCH --> VSF --> VBM --> VAC --> VGW
         VGW --> VPROV_T
         VGW --> VPROV_N
         VGW --> VPROV_NV
-        VGW --> VPROV_OR
         VORCH --> MONITOR
     end
 
