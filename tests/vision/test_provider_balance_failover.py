@@ -285,3 +285,38 @@ async def test_text_to_image_still_uses_the_policy_endpoint(adapter):
     await adapter.submit(VisionRequest(task=VisionTask.TEXT_TO_IMAGE, prompt="a red bike", user_id="1"))
 
     assert seen["endpoint"] == "qwen-image-txt2img"
+
+
+# --- Provider request timeout ---------------------------------------------
+
+
+def test_provider_timeout_is_taken_from_config(adapter):
+    """VISION_PROVIDER_TIMEOUT_MS used to be parsed and then ignored, leaving every
+    session on a 300s ceiling — a model that hangs held the job for 5 minutes."""
+    for plugin in adapter.providers.values():
+        plugin.config["timeout_ms"] = 45000
+        assert plugin.session_timeout_s() == 45.0
+
+
+def test_provider_timeout_falls_back_when_unset_or_junk(adapter):
+    plugin = adapter.providers["nvidia"]
+    from bot.vision.unified_adapter import DEFAULT_PROVIDER_TIMEOUT_S, MIN_PROVIDER_TIMEOUT_S
+
+    for bad in (None, "", "not-a-number", 0, -5):
+        plugin.config["timeout_ms"] = bad
+        assert plugin.session_timeout_s() == DEFAULT_PROVIDER_TIMEOUT_S
+
+    plugin.config["timeout_ms"] = 100  # 0.1s — clamped up to something usable
+    assert plugin.session_timeout_s() == MIN_PROVIDER_TIMEOUT_S
+
+
+@pytest.mark.asyncio
+async def test_session_is_created_with_the_configured_timeout(adapter):
+    plugin = adapter.providers["nvidia"]
+    plugin.config["timeout_ms"] = 45000
+    plugin.session = None
+    await plugin.startup()
+    try:
+        assert plugin.session.timeout.total == 45.0
+    finally:
+        await plugin.shutdown()

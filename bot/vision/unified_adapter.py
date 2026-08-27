@@ -128,6 +128,13 @@ DEFAULT_QUOTA_COOLDOWN_S = 900.0
 # {prompt, size}, so it can never serve an edit. [CMV]
 NOVITA_IMAGE_TO_IMAGE_ENDPOINT = "txt2img"
 
+# Per-request ceiling for provider HTTP calls. VISION_PROVIDER_TIMEOUT_MS used to be
+# parsed from .env and then ignored here, so every provider session ran with a 300s
+# total timeout: a model that hangs (NVIDIA's flux.1-schnell answers nothing at all)
+# held a job for five minutes instead of failing over. [CMV][REH][PA]
+DEFAULT_PROVIDER_TIMEOUT_S = 300.0
+MIN_PROVIDER_TIMEOUT_S = 10.0
+
 
 def _is_balance_error(status: int, error_text: str) -> bool:
     """True when this response means "top up the account", not "retry later". [IV]"""
@@ -166,10 +173,23 @@ class ProviderPlugin(ABC):
         """Cancel job (optional)."""
         return False
 
+    def session_timeout_s(self) -> float:
+        """Total per-request timeout, from VISION_PROVIDER_TIMEOUT_MS. [CMV][REH]"""
+        raw = self.config.get("timeout_ms")
+        if raw in (None, ""):
+            return DEFAULT_PROVIDER_TIMEOUT_S
+        try:
+            seconds = float(raw) / 1000.0
+        except (TypeError, ValueError):
+            return DEFAULT_PROVIDER_TIMEOUT_S
+        if seconds <= 0:
+            return DEFAULT_PROVIDER_TIMEOUT_S
+        return max(MIN_PROVIDER_TIMEOUT_S, seconds)
+
     async def startup(self) -> None:
         """Initialize provider connection."""
         if not self.session:
-            timeout = aiohttp.ClientTimeout(total=300)
+            timeout = aiohttp.ClientTimeout(total=self.session_timeout_s())
             self.session = aiohttp.ClientSession(timeout=timeout)
 
     async def shutdown(self) -> None:
@@ -1151,6 +1171,18 @@ class NvidiaPlugin(OpenRouterPlugin):
         # different deployment (your own GPU/endpoint), not this public API
         # tier. Don't re-add IMAGE_TO_IMAGE here without a genai_base_url that
         # actually accepts uploaded images. [CMV][REH]
+        #
+        # Re-verified 2026-08-27 against a live key, every encoding the endpoint
+        # could plausibly want:
+        #   raw base64                        -> 422 "Image has been provided in the invalid form"
+        #   data:image/png;base64,<b64>       -> 422 "Expected: example_id, got: base64"
+        #   data:image/png;asset_id,<uuid>    -> 422 "Expected: example_id, got: asset_id"
+        #     (the NVCF asset upload itself succeeds - POST /v2/nvcf/assets 200,
+        #      PUT to the presigned URL 200 - the genai endpoint just won't take it)
+        #   data:image/png;example_id,3       -> 422 "Not valid example_id, expected value 0, 1, 2"
+        # That last one enumerates the whole allowed set: three demo images.
+        # flux.2-klein-4b enforces the same gate, so this is platform-wide on the
+        # hosted preview endpoints, not specific to kontext.
 
     async def submit(self, request: NormalizedRequest) -> str:
         await self.startup()
@@ -1477,6 +1509,12 @@ class UnifiedVisionAdapter:
             key_env = provider_config.get("api_key_env", "VISION_API_KEY")
             provider_key = self.config.get(key_env, api_key)
 
+            # Plugins only ever see their own provider_config, so the global
+            # per-request timeout has to be handed down explicitly. [CMV]
+            provider_timeout_ms = self.config.get("VISION_PROVIDER_TIMEOUT_MS")
+            if provider_timeout_ms not in (None, ""):
+                provider_config.setdefault("timeout_ms", provider_timeout_ms)
+
             if not provider_key:
                 self.logger.warning(f"No API key found for provider {name}")
                 continue
@@ -1603,8 +1641,7 @@ class UnifiedVisionAdapter:
             uncovered = [task for task, names in coverage.items() if not names]
             if uncovered:
                 self.logger.warning(
-                    "vision.task_coverage.uncovered tasks=%s providers_loaded=%s allowed=%s "
-                    "(requests for these tasks cannot succeed with the current config)",
+                    "vision.task_coverage.uncovered tasks=%s providers_loaded=%s allowed=%s (requests for these tasks cannot succeed with the current config)",
                     uncovered,
                     sorted(self.providers),
                     self.allowed_providers or "all",
