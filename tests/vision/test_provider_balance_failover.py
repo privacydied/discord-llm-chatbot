@@ -201,3 +201,42 @@ async def test_gateway_still_wraps_unexpected_exceptions():
         await gateway.submit_job(request)
 
     assert exc.value.error_type == VisionErrorType.PROVIDER_ERROR
+
+
+# --- Startup capability audit ---------------------------------------------
+
+
+def test_task_coverage_reports_who_can_serve_each_task(adapter):
+    coverage = adapter.audit_task_coverage()
+
+    # nvidia/openrouter are text-to-image only; novita is the only i2i provider.
+    assert "nvidia" in coverage["text_to_image"]
+    assert "nvidia" not in coverage["image_to_image"]
+    assert "novita" in coverage["image_to_image"]
+
+
+def test_task_coverage_excludes_providers_without_credentials(adapter, monkeypatch):
+    """A provider with no key must not look like image-edit coverage."""
+    monkeypatch.setattr(adapter, "_has_valid_credentials", lambda name: name not in ("novita", "together"))
+    coverage = adapter.audit_task_coverage()
+    assert coverage["image_to_image"] == []
+    assert "nvidia" in coverage["text_to_image"]
+
+
+def test_task_coverage_respects_the_allowlist(adapter):
+    adapter.allowed_providers = ["nvidia"]
+    coverage = adapter.audit_task_coverage()
+    assert coverage["image_to_image"] == []
+    assert coverage["text_to_image"] == ["nvidia"]
+
+
+def test_startup_warns_when_default_provider_cannot_serve_a_task(adapter):
+    """VISION_DEFAULT_PROVIDER=nvidia + an image-edit request must be visible at boot."""
+    from unittest.mock import MagicMock as _MagicMock
+
+    adapter.logger = _MagicMock()
+    adapter._log_task_coverage()
+
+    warned = " ".join(str(call) for call in adapter.logger.warning.call_args_list)
+    assert "cannot_serve" in warned
+    assert "image_to_image" in warned

@@ -1294,6 +1294,7 @@ class UnifiedVisionAdapter:
 
         # Initialize model resolver
         self._model_aliases = self._build_model_aliases()
+        self._log_task_coverage()
 
     @staticmethod
     def _parse_allowed_providers(config: dict[str, Any]) -> list[str]:
@@ -1321,6 +1322,7 @@ class UnifiedVisionAdapter:
         self._load_provider_config()
         self._initialize_providers()
         self._model_aliases = self._build_model_aliases()
+        self._log_task_coverage()
 
         fallback_key = str(config.get("VISION_API_KEY") or "")
         for provider_config in self.provider_config.get("vision", {}).get("providers", []):
@@ -1556,6 +1558,65 @@ class UnifiedVisionAdapter:
             self._quota_cooldowns.pop(base, None)
             return 0.0
         return remaining
+
+    def audit_task_coverage(self) -> dict[str, list[str]]:
+        """Which usable providers declare support for each vision task. [REH]
+
+        "Usable" means: initialized, in VISION_ALLOWED_PROVIDERS and holding
+        credentials -- the same gates the submit path applies -- so this answers
+        "would a request for X find anyone to serve it?" rather than "is a plugin
+        for X compiled in?".
+        """
+        coverage: dict[str, list[str]] = {}
+        for task in VisionTask:
+            capable: list[str] = []
+            for name, plugin in self.providers.items():
+                if self.allowed_providers and name.lower() not in self.allowed_providers:
+                    continue
+                if not self._has_valid_credentials(name):
+                    continue
+                try:
+                    modes = plugin.capabilities().get("modes", []) or []
+                except (AttributeError, TypeError, ValueError) as exc:
+                    self.logger.debug(f"capabilities() failed for {name}: {exc}")
+                    continue
+                if task in modes:
+                    capable.append(name)
+            coverage[task.value] = capable
+        return coverage
+
+    def _log_task_coverage(self) -> None:
+        """Say at startup which tasks nobody can serve. [REH]
+
+        The operator's .env can name a default provider (VISION_DEFAULT_PROVIDER)
+        or an image ladder for a task that provider cannot actually perform. That
+        used to surface only as a confusing per-request failure; now the mismatch
+        is stated once, at boot, with the reason.
+        """
+        with contextlib.suppress(Exception):
+            coverage = self.audit_task_coverage()
+            self.logger.info("vision.task_coverage %s", coverage)
+            uncovered = [task for task, names in coverage.items() if not names]
+            if uncovered:
+                self.logger.warning(
+                    "vision.task_coverage.uncovered tasks=%s providers_loaded=%s allowed=%s "
+                    "(requests for these tasks cannot succeed with the current config)",
+                    uncovered,
+                    sorted(self.providers),
+                    self.allowed_providers or "all",
+                )
+            default = self.default_provider
+            if default:
+                default_tasks = [task for task, names in coverage.items() if default in names]
+                self.logger.info("vision.default_provider provider=%s serves=%s", default, default_tasks)
+                unservable = [task for task, names in coverage.items() if names and default not in names]
+                if unservable:
+                    self.logger.warning(
+                        "vision.default_provider.cannot_serve provider=%s tasks=%s handled_by=%s",
+                        default,
+                        unservable,
+                        {task: coverage[task] for task in unservable},
+                    )
 
     def _filter_provider_order(self, provider_order: list[str]) -> tuple[list[str], dict[str, str]]:
         """Keep usable providers, and record WHY each of the others was dropped. [REH]
