@@ -700,9 +700,22 @@ class FFMpegPCMStream(BasePCMStream):
                 logger.debug("⚠️ Failed to kill ffmpeg during abort", exc_info=True)
 
     async def _monitor(self) -> None:
+        started = time.monotonic()
         try:
             await asyncio.wait_for(self._proc.wait(), timeout=self._pre_timeout)
         except TimeoutError:
+            # Previously silent: a hang here surfaced only via the stale
+            # "Audio preprocessing timed out" error raised much later (whenever
+            # the consumer next calls wait_finished()), with zero indication of
+            # WHEN the timeout actually fired relative to the rest of the STT
+            # pipeline -- making a downstream stall (e.g. model load queued
+            # behind other thread-pool work) indistinguishable from ffmpeg
+            # itself genuinely hanging. [REH][PA]
+            logger.warning(
+                "stt.pre.ffmpeg_timeout budget_s=%.1f elapsed_s=%.1f",
+                self._pre_timeout,
+                time.monotonic() - started,
+            )
             self._error = InferenceError("Audio preprocessing timed out")
             await self.abort()
         except asyncio.CancelledError:
@@ -1379,6 +1392,18 @@ async def _preprocess_audio(
         spans=spans,
         pre_timeout=pre_budget,
     )
+    # Start draining ffmpeg's stdout NOW, not whenever the caller first calls
+    # iter_frames() (which BasePCMStream.start() previously deferred to). ffmpeg
+    # begins writing PCM to its stdout pipe the moment it's spawned above; the
+    # OS pipe buffer (~64KB on Linux) fills in well under a second for a 48kHz
+    # mono s16le stream. If nothing has started reading by then, ffmpeg blocks
+    # on write() -- a real deadlock, not just slowness -- until _monitor()'s
+    # pre_budget timeout kills it. Whatever the caller does between here and
+    # its first iter_frames() call (model loading via ensure_model() is a
+    # queued call into the shared default thread-pool executor and can take
+    # anywhere from milliseconds to a long wait under contention) used to be
+    # exactly that window. Starting the producer eagerly closes it. [REH][PA]
+    await stream.start()
     try:
         ram_guard.check("pre-ffmpeg_start")
     except RAMGuardExceeded:

@@ -267,12 +267,37 @@ class STTManager:
         from faster_whisper import WhisperModel
 
         self._last_used = time.monotonic()
+        lock_wait_start = time.monotonic()
         lock = self._get_lock_for(spec)
         with lock:
+            lock_wait_s = time.monotonic() - lock_wait_start
             model = self._model_cache.get(spec)
             if model:
                 self._model_cache.move_to_end(spec)
+                # A wait here means another thread was already loading this
+                # exact spec (duplicate-load avoidance) -- worth knowing about,
+                # but not a full cold load, so log at debug. [PA]
+                if lock_wait_s > 0.1:
+                    logger.debug(
+                        "stt.model_load.cache_hit_after_wait size=%s compute=%s lock_wait_s=%.1f",
+                        spec.size,
+                        spec.compute_type,
+                        lock_wait_s,
+                    )
                 return model
+            # Previously unmeasured: a cold load (or one queued behind other
+            # work in the shared default thread-pool executor -- ensure_model()
+            # uses loop.run_in_executor(None, ...), which shares its pool with
+            # every other run_in_executor/asyncio.to_thread call in the bot)
+            # could silently take anywhere from a couple seconds to minutes,
+            # and nothing distinguished "loading" from "stuck". [REH][PA]
+            logger.info(
+                "stt.model_load.start size=%s compute=%s lock_wait_s=%.1f",
+                spec.size,
+                spec.compute_type,
+                lock_wait_s,
+            )
+            load_start = time.monotonic()
             device = _device_for_runtime()
             try:
                 model = WhisperModel(
@@ -295,6 +320,13 @@ class STTManager:
                     device=device,
                     compute_type=spec.compute_type,
                 )
+            logger.info(
+                "stt.model_load.done size=%s compute=%s device=%s duration_s=%.1f",
+                spec.size,
+                spec.compute_type,
+                device,
+                time.monotonic() - load_start,
+            )
             self._model_cache[spec] = model
             self._evict_lru_locked()
             return model
@@ -321,9 +353,32 @@ class STTManager:
         return bool(ready and self.available)
 
     async def ensure_model(self, spec: ModelSpec) -> WhisperModel:
-        """Ensure model for the given spec exists, loading lazily via executor."""
+        """Ensure model for the given spec exists, loading lazily via executor.
+
+        `_load_model` runs on `loop.run_in_executor(None, ...)` -- Python's
+        shared default ThreadPoolExecutor, the same pool every other
+        run_in_executor(None, ...)/asyncio.to_thread(...) call in the bot
+        draws from (RAG embeddings, per-chunk whisper decode, etc). If that
+        pool is saturated, this call can sit QUEUED for a long time before
+        `_load_model` even starts -- time the stt.model_load.start/done logs
+        inside `_load_model` can't see, since they only start once the thread
+        actually begins running. Logging the full round-trip here makes that
+        queueing delay visible: round_trip_s much greater than
+        stt.model_load.done's duration_s means the wait was queueing, not
+        loading. [REH][PA]
+        """
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._load_model, spec)
+        call_start = time.monotonic()
+        model = await loop.run_in_executor(None, self._load_model, spec)
+        round_trip_s = time.monotonic() - call_start
+        if round_trip_s > 3.0:
+            logger.warning(
+                "stt.model_load.slow_round_trip size=%s compute=%s round_trip_s=%.1f",
+                spec.size,
+                spec.compute_type,
+                round_trip_s,
+            )
+        return model
 
     def downgrade_spec(self, spec: ModelSpec) -> ModelSpec | None:
         nxt = _downgrade(spec.size)
