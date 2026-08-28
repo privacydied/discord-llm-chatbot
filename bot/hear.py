@@ -1211,6 +1211,11 @@ async def _preprocess_audio_with_retry(
     Tier 2: If codec error, force-extract to WAV first, then preprocess
 
     This ensures that AAC decoder issues don't cause complete STT failure.
+
+    A pure ffmpeg wall-clock timeout (host contention, not a decode failure)
+    is retried one layer up, in stt_pipeline.transcribe_flow -- by the time
+    it's visible here the ffmpeg process has already been killed, so there's
+    nothing left to retry at this layer.
     """
     try:
         # Tier 1: Try normal preprocessing

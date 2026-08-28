@@ -34,23 +34,33 @@ def ffmpeg_candidates_from_env() -> list[str]:
     return ordered
 
 
-def ffmpeg_supports_aac_decoder(ffmpeg_bin: str) -> bool:
-    """Check whether ffmpeg binary exposes AAC decoder(s)."""
-    try:
-        proc = subprocess.run(  # nosec B603
-            [ffmpeg_bin, "-hide_banner", "-decoders"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=5,
-            check=False,
-        )
+def ffmpeg_supports_aac_decoder(ffmpeg_bin: str, *, attempts: int = 2, timeout: float = 8.0) -> bool:
+    """Check whether ffmpeg binary exposes AAC decoder(s).
+
+    Retries on transient probe failures (process spawn starved by host load,
+    the `-decoders` listing not finishing inside `timeout`) instead of
+    treating them the same as a binary that genuinely lacks the decoder.
+    The result is cached for the life of the process (see resolve_ffmpeg_bin),
+    so a single flaky probe would otherwise poison every later STT job with a
+    false "no AAC" verdict. [REH]
+    """
+    for _attempt in range(attempts):
+        try:
+            proc = subprocess.run(  # nosec B603
+                [ffmpeg_bin, "-hide_banner", "-decoders"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        except Exception:  # nosec B112
+            continue  # deliberate retry, not a swallowed error
         if proc.returncode != 0:
-            return False
+            continue
         out = proc.stdout or ""
         return bool(re.search(r"\baac(?:_fixed|_latm)?\b", out))
-    except Exception:
-        return False
+    return False
 
 
 def ffmpeg_bin_has_aac() -> bool | None:

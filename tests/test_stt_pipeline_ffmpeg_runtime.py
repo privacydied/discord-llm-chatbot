@@ -38,6 +38,28 @@ def test_ffmpeg_supports_aac_decoder_false(monkeypatch) -> None:
     assert ffmpeg_supports_aac_decoder("ffmpeg") is False
 
 
+def test_ffmpeg_supports_aac_decoder_retries_after_transient_failure(monkeypatch) -> None:
+    calls = {"n": 0}
+
+    def fake_run(*_args, **_kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise TimeoutError("probe starved under host load")
+        return SimpleNamespace(returncode=0, stdout=" A..... aac\n")
+
+    monkeypatch.setattr("bot.stt_pipeline.ffmpeg_runtime.subprocess.run", fake_run)
+    assert ffmpeg_supports_aac_decoder("ffmpeg") is True
+    assert calls["n"] == 2
+
+
+def test_ffmpeg_supports_aac_decoder_false_after_exhausting_retries(monkeypatch) -> None:
+    def fake_run(*_args, **_kwargs):
+        raise TimeoutError("probe starved under host load")
+
+    monkeypatch.setattr("bot.stt_pipeline.ffmpeg_runtime.subprocess.run", fake_run)
+    assert ffmpeg_supports_aac_decoder("ffmpeg") is False
+
+
 def test_resolve_ffmpeg_bin_caches_and_tracks_aac(monkeypatch) -> None:
     reset_ffmpeg_runtime_cache()
     monkeypatch.delenv("STT_FFMPEG_BIN", raising=False)
