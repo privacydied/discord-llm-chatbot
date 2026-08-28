@@ -59,6 +59,7 @@ class VisionProvider(Enum):
     NOVITA = "novita"
     OPENROUTER = "openrouter"
     NVIDIA = "nvidia"
+    NOTSOBOT = "notsobot"
 
 
 class VisionJobState(Enum):

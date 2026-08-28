@@ -1345,6 +1345,368 @@ class NvidiaPlugin(OpenRouterPlugin):
             )
 
 
+# NotSoBot poll interval/timeout. NotSoBot's /utilities/ml/edit is async: it
+# returns a job id immediately, then you poll /jobs/:id for the result.
+_NOTSOBOT_POLL_INTERVAL_S = 0.5
+_NOTSOBOT_POLL_TIMEOUT_S = 120
+
+
+class NotSoBotPlugin(ProviderPlugin):
+    """NotSoBot provider plugin (https://notsobot.com).
+
+    Uses multiple ML endpoints:
+    - POST /api/utilities/ml/edit — image-to-image edit
+    - GET  /api/utilities/ml/imagine — text-to-image
+    - GET  /api/utilities/ml/imagine/video — image-to-video
+    - POST /api/utilities/ml/interrogate — image captioning
+    - POST /api/utilities/ml/mashup — multi-image blend
+    All async jobs are polled via GET /api/jobs/:id.
+    Configured via NOTSOBOT_API_TOKEN.
+    """
+
+    def __init__(self, name: str, config: dict[str, Any], api_key: str) -> None:
+        super().__init__(name, config, api_key)
+        self.base_url = config.get("base_url", "https://notsobot.com").rstrip("/")
+        self.api_path = config.get("api_path", "/api").rstrip("/")
+        self.model_map = {
+            VisionTask.TEXT_TO_IMAGE: "FLUX_KLEIN",
+            VisionTask.IMAGE_TO_IMAGE: "FLUX_KLEIN",
+            VisionTask.VIDEO_GENERATION: "FLUX_KLEIN",
+        }
+
+    def capabilities(self) -> dict[str, Any]:
+        return {
+            "modes": [
+                VisionTask.TEXT_TO_IMAGE,
+                VisionTask.IMAGE_TO_IMAGE,
+                VisionTask.VIDEO_GENERATION,
+            ],
+            "max_size": (2048, 2048),
+            "max_steps": 50,
+            "supports_negative_prompt": True,
+            "supports_batch": False,
+            "nsfw_policy": "filtered",
+            "video_max_seconds": 6,
+        }
+
+    def _build_headers(self, request: NormalizedRequest) -> dict[str, str]:
+        headers: dict[str, str] = {"content-type": "application/json"}
+        if self.api_key:
+            headers["authorization"] = f"Bot {self.api_key}"
+        user = getattr(request, "discord_user", None)
+        if user:
+            bare: dict[str, Any] = {
+                "id": str(user.get("id", "")),
+                "username": user.get("username", ""),
+                "discriminator": user.get("discriminator", "0"),
+                "bot": user.get("bot", False),
+            }
+            avatar = user.get("avatar")
+            if avatar:
+                bare["avatar"] = avatar
+            headers["x-user-id"] = str(user["id"])
+            headers["x-user"] = base64.b64encode(json.dumps(bare).encode()).decode()
+        channel_id = getattr(request, "channel_id", None)
+        if channel_id:
+            headers["x-channel-id"] = str(channel_id)
+        guild_id = getattr(request, "guild_id", None)
+        if guild_id:
+            headers["x-guild-id"] = str(guild_id)
+            headers["x-server-id"] = str(guild_id)
+        owner_id = getattr(request, "guild_owner_id", None)
+        if owner_id:
+            headers["x-server-owner-id"] = str(owner_id)
+        return headers
+
+    def _build_body(self, request: NormalizedRequest) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "query": request.prompt,
+            "model": request.preferred_model or self.model_map.get(request.task),
+            "seed": request.seed,
+            "steps": request.steps,
+            "safe": request.safety_mode != "off",
+        }
+        if request.input_image_url:
+            body["urls"] = [request.input_image_url]
+        elif request.input_image_data:
+            b64 = base64.b64encode(request.input_image_data).decode()
+            body["urls"] = [f"data:image/png;base64,{b64}"]
+        return {k: v for k, v in body.items() if v is not None}
+
+    def _build_query_params(self, request: NormalizedRequest) -> dict[str, str]:
+        params: dict[str, str] = {"query": request.prompt}
+        model = request.preferred_model or self.model_map.get(request.task)
+        if model:
+            params["model"] = model
+        if request.seed is not None:
+            params["seed"] = str(request.seed)
+        if request.steps is not None:
+            params["steps"] = str(request.steps)
+        if request.safety_mode == "off":
+            params["safe"] = "false"
+        else:
+            params["safe"] = "true"
+        return params
+
+    async def submit(self, request: NormalizedRequest) -> str:
+        await self.startup()
+
+        if request.task == VisionTask.IMAGE_TO_IMAGE:
+            return await self._submit_edit(request)
+        if request.task == VisionTask.TEXT_TO_IMAGE:
+            return await self._submit_imagine(request)
+        if request.task == VisionTask.VIDEO_GENERATION:
+            return await self._submit_imagine_video(request)
+        raise VisionError(
+            message=f"NotSoBot does not support task {request.task}",
+            error_type=VisionErrorType.UNSUPPORTED_TASK,
+            user_message=f"NotSoBot does not support {request.task.value}.",
+        )
+
+    async def _submit_edit(self, request: NormalizedRequest) -> str:
+        url = f"{self.base_url}{self.api_path}/utilities/ml/edit"
+        headers = self._build_headers(request)
+        body = self._build_body(request)
+        return await self._post_json(url, headers, body)
+
+    async def _submit_imagine(self, request: NormalizedRequest) -> str:
+        url = f"{self.base_url}{self.api_path}/utilities/ml/imagine"
+        headers = self._build_headers(request)
+        params = self._build_query_params(request)
+        return await self._get_query(url, headers, params)
+
+    async def _submit_imagine_video(self, request: NormalizedRequest) -> str:
+        url = f"{self.base_url}{self.api_path}/utilities/ml/imagine/video"
+        headers = self._build_headers(request)
+        params = self._build_query_params(request)
+        params["safe"] = "true"
+        if request.input_image_url:
+            params["url"] = request.input_image_url
+        elif request.input_image_data:
+            b64 = base64.b64encode(request.input_image_data).decode()
+            params["url"] = f"data:image/png;base64,{b64}"
+        return await self._get_query(url, headers, params)
+
+    async def _post_json(self, url: str, headers: dict[str, str], body: dict[str, Any]) -> str:
+        try:
+            async with self.session.post(url, json=body, headers=headers) as response:
+                error_text = await response.text()
+                self._raise_for_status(response.status, error_text)
+                data = await response.json()
+                return self._extract_job_id(data)
+        except VisionError:
+            raise
+        except Exception as e:
+            raise VisionError(
+                message=f"NotSoBot connection error: {e!s}",
+                error_type=VisionErrorType.CONNECTION_ERROR,
+                user_message="Unable to connect to NotSoBot. Please try again.",
+            )
+
+    async def _get_query(self, url: str, headers: dict[str, str], params: dict[str, str]) -> str:
+        try:
+            async with self.session.get(url, params=params, headers=headers) as response:
+                error_text = await response.text()
+                self._raise_for_status(response.status, error_text)
+                data = await response.json()
+                return self._extract_job_id(data)
+        except VisionError:
+            raise
+        except Exception as e:
+            raise VisionError(
+                message=f"NotSoBot connection error: {e!s}",
+                error_type=VisionErrorType.CONNECTION_ERROR,
+                user_message="Unable to connect to NotSoBot. Please try again.",
+            )
+
+    def _raise_for_status(self, status: int, error_text: str) -> None:
+        if status == 400:
+            raise VisionError(
+                message=f"NotSoBot bad request: {error_text}",
+                error_type=VisionErrorType.VALIDATION_ERROR,
+                user_message="There was an issue with your request. Please check and try again.",
+            )
+        if status == 401:
+            raise VisionError(
+                message="NotSoBot authentication failed",
+                error_type=VisionErrorType.AUTHENTICATION_ERROR,
+                user_message="NotSoBot auth failed. Check NOTSOBOT_API_TOKEN.",
+            )
+        if status == 403:
+            raise VisionError(
+                message=f"NotSoBot quota/balance exhausted: {error_text}",
+                error_type=VisionErrorType.QUOTA_EXCEEDED,
+                user_message="NotSoBot account is out of credit.",
+            )
+        if status == 404:
+            raise VisionError(
+                message=f"NotSoBot model unavailable (paid?): {error_text}",
+                error_type=VisionErrorType.UNSUPPORTED_TASK,
+                user_message="That NotSoBot model requires a paid plan.",
+            )
+        if status == 429:
+            raise VisionError(
+                message="NotSoBot rate limit exceeded",
+                error_type=VisionErrorType.RATE_LIMITED,
+                user_message="Too many requests to NotSoBot. Please wait a moment.",
+            )
+        if status >= 500:
+            raise VisionError(
+                message=f"NotSoBot server error ({status}): {error_text}",
+                error_type=VisionErrorType.SERVER_ERROR,
+                user_message="NotSoBot is temporarily unavailable. Please try again.",
+            )
+        if status != 200:
+            raise VisionError(
+                message=f"NotSoBot error ({status}): {error_text}",
+                error_type=VisionErrorType.PROVIDER_ERROR,
+                user_message="NotSoBot request failed. Please try again.",
+            )
+
+    def _extract_job_id(self, data: dict[str, Any]) -> str:
+        job_id = data.get("id") or (data.get("job") or {}).get("id") or data.get("job_id")
+        if not job_id:
+            raise VisionError(
+                message="NotSoBot did not return a job id",
+                error_type=VisionErrorType.PROVIDER_ERROR,
+                user_message="NotSoBot did not return a job id.",
+            )
+        self._jobs = getattr(self, "_jobs", {})
+        self._jobs[job_id] = {
+            "status": "queued",
+            "progress": 0,
+            "start_time": time.time(),
+            "cost": 0.0,
+            "result": None,
+        }
+        return job_id
+
+    async def poll(self, job_id: str) -> UnifiedJobStatus:
+        job_url = f"{self.base_url}{self.api_path}/jobs/{job_id}"
+        headers = {}
+        if self.api_key:
+            headers["authorization"] = f"Bot {self.api_key}"
+
+        deadline = time.monotonic() + _NOTSOBOT_POLL_TIMEOUT_S
+        while True:
+            try:
+                async with self.session.get(job_url, headers=headers) as response:
+                    if response.status == 404:
+                        return UnifiedJobStatus(
+                            status=UnifiedStatus.FAILED,
+                            progress_percentage=0,
+                            phase="Job not found (404)",
+                        )
+                    if response.status >= 500:
+                        return UnifiedJobStatus(
+                            status=UnifiedStatus.RUNNING,
+                            progress_percentage=0,
+                            phase=f"Provider error {response.status}",
+                        )
+                    if response.status != 200:
+                        text = await response.text()
+                        return UnifiedJobStatus(
+                            status=UnifiedStatus.RUNNING,
+                            progress_percentage=0,
+                            phase=f"Polling error {response.status}: {text[:120]}",
+                        )
+
+                    data = await response.json()
+                    result = data.get("result", {})
+                    if result.get("error"):
+                        return UnifiedJobStatus(
+                            status=UnifiedStatus.FAILED,
+                            progress_percentage=0,
+                            phase=f"NotSoBot error: {result['error']}",
+                            provider_raw=data,
+                        )
+                    if result.get("response"):
+                        jobs = getattr(self, "_jobs", {})
+                        if job_id in jobs:
+                            jobs[job_id]["status"] = "completed"
+                            jobs[job_id]["progress"] = 100
+                            jobs[job_id]["result"] = data
+                        return UnifiedJobStatus(
+                            status=UnifiedStatus.COMPLETED,
+                            progress_percentage=100,
+                            phase="completed",
+                            provider_raw=data,
+                        )
+
+            except Exception as e:
+                return UnifiedJobStatus(
+                    status=UnifiedStatus.RUNNING,
+                    progress_percentage=0,
+                    phase=f"Polling exception: {e}",
+                )
+
+            if time.monotonic() > deadline:
+                return UnifiedJobStatus(
+                    status=UnifiedStatus.FAILED,
+                    progress_percentage=0,
+                    phase="NotSoBot polling timed out",
+                )
+            await asyncio.sleep(_NOTSOBOT_POLL_INTERVAL_S)
+
+    async def fetch_result(self, job_id: str) -> UnifiedResult:
+        job_url = f"{self.base_url}{self.api_path}/jobs/{job_id}"
+        headers = {}
+        if self.api_key:
+            headers["authorization"] = f"Bot {self.api_key}"
+
+        async with self.session.get(job_url, headers=headers) as response:
+            text = await response.text()
+            if response.status != 200:
+                raise VisionError(
+                    message=f"NotSoBot result fetch failed ({response.status}): {text}",
+                    error_type=VisionErrorType.PROVIDER_ERROR,
+                    user_message="Failed to retrieve result from NotSoBot.",
+                )
+            data = json.loads(text)
+            result = data.get("result", {})
+            if result.get("error"):
+                raise VisionError(
+                    message=f"NotSoBot job error: {result['error']}",
+                    error_type=VisionErrorType.PROVIDER_ERROR,
+                    user_message="NotSoBot job failed.",
+                )
+            response_data = result.get("response", {})
+            assets: list[str] = []
+            # Primary: storage.urls (the canonical output location)
+            storage = response_data.get("storage") or {}
+            storage_urls = storage.get("urls") or {}
+            if isinstance(storage_urls, dict):
+                for url in storage_urls.values():
+                    if isinstance(url, str) and url:
+                        assets.append(url)
+            elif isinstance(storage_urls, list):
+                for url in storage_urls:
+                    if isinstance(url, str) and url:
+                        assets.append(url)
+            # Fallback: response.file direct URL
+            file_info = response_data.get("file") or {}
+            file_url = file_info.get("url") or file_info.get("filename")
+            if isinstance(file_url, str) and file_url:
+                assets.append(file_url)
+            # Legacy fallback: top-level urls array
+            for url in response_data.get("urls", []) or []:
+                if isinstance(url, str) and url:
+                    assets.append(url)
+            assets = list(dict.fromkeys(assets))
+            if not assets:
+                raise VisionError(
+                    message="No assets found in NotSoBot response",
+                    error_type=VisionErrorType.PROVIDER_ERROR,
+                    user_message="NotSoBot returned no images.",
+                )
+            return UnifiedResult(
+                assets=assets,
+                final_cost=0.0,
+                provider_used="notsobot",
+                metadata={"response": response_data},
+            )
+
+
 class UnifiedVisionAdapter:
     """Unified Vision adapter with pluggable provider system [CA][REH][SFT].
 
@@ -1480,6 +1842,16 @@ class UnifiedVisionAdapter:
                 },
                 "providers": [
                     {
+                        "name": "notsobot",
+                        "base_url": "https://notsobot.com",
+                        "api_path": "/api",
+                        "api_key_env": "NOTSOBOT_API_TOKEN",
+                        "enabled": True,
+                        "priority": 0,
+                        "price": {"image_base": 0.0, "image_per_px": 0.0, "video_per_s": 0.0},
+                        "limits": {"max_size": "2048x2048", "max_steps": 50},
+                    },
+                    {
                         "name": "together",
                         "base_url": "https://api.together.xyz",
                         "api_key_env": "VISION_API_KEY",
@@ -1584,6 +1956,11 @@ class UnifiedVisionAdapter:
             # [SFT][REH]
             if name == "openrouter":
                 provider_key = _resolve_openrouter_api_key(self.config)
+            elif name == "notsobot":
+                # NotSoBot uses its own dedicated token (NOTSOBOT_API_TOKEN).
+                # Never fall back to VISION_API_KEY — that's a Together/Novita
+                # key and would just produce a confusing 401 from NotSoBot. [SFT]
+                provider_key = str(self.config.get("NOTSOBOT_API_TOKEN") or os.getenv("NOTSOBOT_API_TOKEN") or "").strip()
             else:
                 key_env = provider_config.get("api_key_env", "VISION_API_KEY")
                 provider_key = self.config.get(key_env, api_key)
@@ -1617,6 +1994,8 @@ class UnifiedVisionAdapter:
                     plugin = OpenRouterPlugin(name, provider_config, provider_key)
                 elif name == "nvidia":
                     plugin = NvidiaPlugin(name, provider_config, provider_key)
+                elif name == "notsobot":
+                    plugin = NotSoBotPlugin(name, provider_config, provider_key)
                 else:
                     self.logger.warning(f"Unknown provider: {name}")
                     continue
@@ -1646,6 +2025,8 @@ class UnifiedVisionAdapter:
                 key = _resolve_openrouter_api_key(self.config)
             elif name == "nvidia":
                 key = self.config.get("NVIDIA_NIM_API_KEY") or self.config.get("OPENAI_API_KEY") or self.config.get("VISION_API_KEY") or ""
+            elif name == "notsobot":
+                key = self.config.get("NOTSOBOT_API_TOKEN") or ""
             else:
                 key = self.config.get("VISION_API_KEY", "")
             return isinstance(key, str) and len(key.strip()) > 10
@@ -2206,6 +2587,13 @@ class UnifiedVisionAdapter:
         if self.default_provider:
             with contextlib.suppress(Exception):
                 provider_order = [self.default_provider] + [p for p in provider_order if p != self.default_provider]
+
+        # Auto-promote notsobot to the front when its token is configured. NotSoBot
+        # is free (no per-job cost), so it should be preferred over paid providers
+        # like novita/openrouter. Only promotes when it is actually initialized and
+        # has credentials, otherwise it just falls through. [REH]
+        if "notsobot" in self.providers and self._has_valid_credentials("notsobot"):
+            provider_order = ["notsobot"] + [p for p in provider_order if p != "notsobot"]
 
         # Filter by configured/healthy providers, preserving order [SFT]
         filtered_order, dropped = self._filter_provider_order(provider_order)
