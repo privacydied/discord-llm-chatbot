@@ -121,7 +121,6 @@ class ExtendedMemoryCommands(commands.Cog):
             await ctx.send("❌ Failed to retrieve memories for review.")
 
     @commands.command(name="memory-forget", aliases=["mem-forget"])
-    @commands.cooldown(1, 120, commands.BucketType.user)
     async def memory_forget(self, ctx, *, memory_id: str) -> None:
         """Forget a specific memory by ID.
 
