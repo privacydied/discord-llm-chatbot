@@ -14,6 +14,7 @@ from bot.config import load_config
 from bot.core.output import safe_send
 from bot.logger import log_command
 from bot.memory import add_explicit_memory, delete_memory, get_memory_distiller, get_profile, get_server_profile, list_user_memories, save_profile, save_server_profile, search_user_memories, wipe_user_memories
+from bot.memory.curator import is_safe_memory_text
 
 logger = logging.getLogger(__name__)
 
@@ -312,8 +313,19 @@ class MemoryCommands(commands.Cog):
                 await ctx.send("❌ Memory contains prohibited content.")
                 return
 
+            # Reject secrets / internal noise so arbitrary text can't be
+            # saved as a "memory" unfiltered [SFT][IV]
+            if not is_safe_memory_text(content):
+                await ctx.send("❌ That looks like a secret or internal/system text, not a memory. Not saved.")
+                return
+
             # Get user's profile
             profile = get_profile(str(ctx.author.id), str(ctx.author))
+
+            # Reject exact/near-duplicate memories already on file [CSD]
+            if any(existing.get("content", "").strip().lower() == content_lower for existing in profile.get("memories", [])):
+                await ctx.send("❌ You already have that memory saved.")
+                return
 
             # Add the memory with sanitized content
             memory = {
@@ -480,9 +492,20 @@ class MemoryCommands(commands.Cog):
                 await ctx.send("❌ Memory contains prohibited content.")
                 return
 
+            # Reject secrets / internal noise so arbitrary text can't be
+            # saved as a server "memory" unfiltered [SFT][IV]
+            if not is_safe_memory_text(content):
+                await ctx.send("❌ That looks like a secret or internal/system text, not a memory. Not saved.")
+                return
+
             # Get server profile
             server_id = str(ctx.guild.id)
             profile = get_server_profile(server_id, ctx.guild.name)
+
+            # Reject exact/near-duplicate memories already on file [CSD]
+            if any(existing.get("content", "").strip().lower() == content_lower for existing in profile.get("memories", [])):
+                await ctx.send("❌ That server memory is already saved.")
+                return
 
             # Add the memory
             memory = {

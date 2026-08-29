@@ -74,6 +74,20 @@ class MemoryCandidate:
         )
 
 
+def is_safe_memory_text(text: str) -> bool:
+    """Return True when free-form text is safe to persist as a memory.
+
+    Shared gate for any code path that stores raw user text as a memory
+    (legacy `!memory add` / `!server-memory add` included), so those paths
+    apply the same secret/internal-noise filtering as the curated pipeline
+    instead of writing arbitrary text unfiltered. [SFT][IV]
+    """
+    lower = (text or "").lower()
+    if any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _SECRET_PATTERNS):
+        return False
+    return not any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _INTERNAL_PATTERNS)
+
+
 class CuratedMemoryCurator:
     """Heuristic curation for durable memories.
 
@@ -432,8 +446,13 @@ class CuratedMemoryCurator:
         # Direct: "I prefer", "my preference is", etc.
         if re.search(r"\b(i prefer|my preference|i'd prefer|i would prefer)\b", lower):
             return True
-        # Strong preference without filler: "prefer short replies"
-        return bool(bool(re.search(r"(?:^|\s)prefer\b(?:\s+\w+){1,6}", lower)))
+        # "please prefer X" / imperative preference directed at the bot —
+        # still requires a first-person or bot-directed anchor, not a bare
+        # "prefer" anywhere in the sentence (that also matches idle chatter
+        # like "most people prefer pizza"). [SFT]
+        return bool(re.search(r"\b(?:you should |please )?prefer\b(?:\s+\w+){1,6}", lower)) and bool(
+            re.search(r"\b(?:i|me|my|you)\b", lower)
+        )
 
     @staticmethod
     def _is_recurring_instruction(lower: str) -> bool:
@@ -456,10 +475,13 @@ class CuratedMemoryCurator:
         # "always" with bot addressee or followed by content
         if bool(re.search(r"\byou\s+(?:should\s+|must\s+|have\s+to\s+)?always\b", lower)):
             return True
-        if bool(re.search(r"\balways\b(?:\s+\w+){1,}", lower)):
-            # "always" followed by at least one word — but reject "i always"
-            if not bool(re.search(r"\b(?:i|my|she|he|they)\b.*\balways\b", lower)):
-                return True
+        # "please always X" / imperative "always X" — a command directed at
+        # the bot, not a narrative claim about someone/something else (e.g.
+        # "this game is always so buggy" does not start with "always").
+        if bool(re.search(r"\bplease\s+always\b(?:\s+\w+){1,}", lower)):
+            return True
+        if bool(re.search(r"^\s*always\b(?:\s+\w+){1,}", lower)):
+            return True
 
         # "you should never", "you must never", "you never" — bot-directed
         if bool(re.search(r"\byou\s+(?:should\s+|must\s+|have\s+to\s+)?never\b", lower)):
@@ -528,8 +550,10 @@ class CuratedMemoryCurator:
         if bool(re.search(r"\bthe correct rule is\b", lower)):
             return True
 
-        # "actually, ..." as correction:
-        if bool(re.search(r"^\s*actually,\s+", lower)):
+        # "actually, X is Y" / "actually, you should Z" — a correction needs
+        # a stated fact/rule after "actually,", not just filler chatter like
+        # "actually, I had lunch already". [SFT]
+        if bool(re.search(r"^\s*actually,\s+(?:it's|it is|that's|you should|the correct|you were)\b", lower)):
             return True
 
         # "don't say/do that again":
