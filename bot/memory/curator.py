@@ -345,10 +345,44 @@ class CuratedMemoryCurator:
     def _has_project_fact_cue(lower: str) -> bool:
         return any(re.search(pattern, lower, flags=re.IGNORECASE) for pattern in _PROJECT_FACT_CUES)
 
+    @staticmethod
+    def _looks_like_casual_chat(lower: str) -> bool:
+        """Reject questions and first-person rambling that merely mention a
+        project-ish word (memory, module, file, search, config, bug, reply,
+        ...) somewhere in the sentence, without stating a fact/rule.
+
+        These are extremely common English words, so an anchor+cue match
+        anywhere in a long message is not enough signal on its own — plain
+        chat like "what is the difference between X and Y" or "I'm a
+        brainlet, how is memory being edited" would otherwise match. [SFT]
+        """
+        if "?" in lower:
+            return True
+        casual_markers = [
+            r"\bi'?m a\b",
+            r"\bif i had\b",
+            r"\bwhat'?s\b",
+            r"\bwhat is\b",
+            r"\bhow is\b",
+            r"\bwhy is\b",
+            r"\baren'?t we\b",
+            r"\bisn'?t that\b",
+            r"\bhow do i\b",
+            r"\bcan i\b",
+        ]
+        return any(re.search(pattern, lower) for pattern in casual_markers)
+
     def _looks_project_scoped_fact(self, lower: str) -> bool:
-        if not self._has_project_anchor(lower):
+        if self._looks_like_casual_chat(lower):
             return False
-        return self._has_project_fact_cue(lower)
+        # Require the cue verb to sit near the anchor term (same clause),
+        # not just co-occur anywhere in a long, unrelated message.
+        for pattern in _PROJECT_FACT_SIGNALS:
+            for match in re.finditer(pattern, lower, flags=re.IGNORECASE):
+                window = lower[max(0, match.start() - 45) : match.end() + 45]
+                if self._has_project_fact_cue(window):
+                    return True
+        return False
 
     @staticmethod
     def _looks_quoted_or_external_content(lower: str) -> bool:
