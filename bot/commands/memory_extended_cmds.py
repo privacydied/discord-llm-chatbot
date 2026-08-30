@@ -11,6 +11,7 @@ import discord
 from discord.ext import commands
 
 from bot.config import load_config
+from bot.core.output import safe_send
 from bot.memory import get_memory_service
 
 logger = logging.getLogger(__name__)
@@ -120,81 +121,111 @@ class ExtendedMemoryCommands(commands.Cog):
             logger.error(f"Error in memory-review: {e}", exc_info=True)
             await ctx.send("❌ Failed to retrieve memories for review.")
 
+    @staticmethod
+    def _parse_memory_ids(raw: str) -> list[str]:
+        """Split whitespace-separated IDs, preserving order and de-duping."""
+        seen: dict[str, None] = {}
+        for token in (raw or "").split():
+            seen.setdefault(token, None)
+        return list(seen)
+
+    @staticmethod
+    def _resolve_memory_target(owned: list, raw_id: str) -> tuple[object | None, str | None]:
+        """Resolve one ID/prefix against owned memories.
+
+        Returns (record, None) on a clean match, or (None, error_text).
+        """
+        exact_matches = [r for r in owned if r.memory_id == raw_id]
+        candidates = exact_matches if len(exact_matches) == 1 else [r for r in owned if r.memory_id.startswith(raw_id)]
+
+        if not candidates:
+            return None, f"No memory owned by you matches ID prefix `{raw_id}`."
+        if len(candidates) > 1:
+            ids = ", ".join(f"`{r.memory_id[:8]}`" for r in candidates)
+            return None, f"Ambiguous prefix `{raw_id}` matches {len(candidates)} memories: {ids}. Provide more characters."
+        return candidates[0], None
+
+    def _resolve_memory_targets(self, owned: list, raw_ids: list[str]) -> tuple[list, list[str]]:
+        """Resolve every requested ID, deduping by resolved memory_id."""
+        targets: dict[str, object] = {}
+        errors: list[str] = []
+        for raw_id in raw_ids:
+            record, error = self._resolve_memory_target(owned, raw_id)
+            if error:
+                errors.append(error)
+            else:
+                targets[record.memory_id] = record
+        return list(targets.values()), errors
+
+    @staticmethod
+    def _format_target_preview(target) -> str:
+        summary = target.summary or target.text or ""
+        if len(summary) > 200:
+            summary = summary[:197] + "..."
+        return f"**ID:** `{target.memory_id}`\n**Preview:** {summary}\n**Type:** {target.context_type}  **Confidence:** {target.confidence:.2f}"
+
+    async def _confirm_forget(self, ctx, targets: list) -> bool:
+        """Show a single confirmation for one or many memories; wait for a reaction."""
+        previews = "\n\n".join(self._format_target_preview(t) for t in targets)
+        plural = "y" if len(targets) == 1 else "ies"
+        header = f"🧠 Found {len(targets)} matching memor{plural}. React with ✅ to delete, or ignore.\n\n"
+        await safe_send(ctx, header + previews)
+
+        def check(reaction, user):
+            return user.id == ctx.author.id and reaction.message.channel == ctx.channel and str(reaction.emoji) == "✅"
+
+        try:
+            await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
+        except asyncio.TimeoutError:
+            await safe_send(ctx, "⏱️ Delete cancelled (timed out).")
+            return False
+        return True
+
+    async def _delete_targets(self, ctx, service, requester_id: str, targets: list) -> None:
+        lines = []
+        for target in targets:
+            deleted = await service.delete_memory(target.memory_id, owner_id=requester_id)
+            mark = "✅ Deleted" if deleted else "❌ Failed to delete"
+            lines.append(f"{mark} `{target.memory_id[:8]}`.")
+        await safe_send(ctx, "\n".join(lines))
+
     @commands.command(name="memory-forget", aliases=["mem-forget"])
     async def memory_forget(self, ctx, *, memory_id: str) -> None:
-        """Forget a specific memory by ID.
+        """Forget one or more memories by ID.
 
-        Accepts full UUID or unambiguous prefix. Never uses fuzzy/semantic
-        matching for deletion — only exact or prefix match within the
-        requesting user's own memories.
+        Accepts one or more full UUIDs or unambiguous prefixes, space
+        separated, e.g. `!memory-forget ca5a45ec 8e41dd1b`. Never uses
+        fuzzy/semantic matching for deletion — only exact or prefix match
+        within the requesting user's own memories.
         """
         try:
-            raw_id = (memory_id or "").strip()
-            if not raw_id:
-                await ctx.send("❌ Usage: `!memory-forget <id>`")
+            raw_ids = self._parse_memory_ids(memory_id)
+            if not raw_ids:
+                await safe_send(ctx, "❌ Usage: `!memory-forget <id> [id2] [id3] ...`")
                 return
 
             service = await get_memory_service(self.bot)
             if not service or not service.enabled:
-                await ctx.send("Memory service is not enabled.")
+                await safe_send(ctx, "Memory service is not enabled.")
                 return
 
             requester_id = str(ctx.author.id)
-
-            # Step 1: Load requester's own memories (source of truth).
             owned = await service.list_user_memories(requester_id, limit=500)
+            targets, errors = self._resolve_memory_targets(owned, raw_ids)
 
-            # Step 2: Find matching memory(s) within owned set.
-            exact_matches = [r for r in owned if r.memory_id == raw_id]
-            if len(exact_matches) == 1:
-                candidates = exact_matches
-            else:
-                # Prefix match within owned memories.
-                candidates = [r for r in owned if r.memory_id.startswith(raw_id)]
-
-            if len(candidates) == 0:
-                await ctx.send(f"❌ No memory owned by you matches ID prefix `{raw_id}`.")
-                return
-            if len(candidates) > 1:
-                ids = ", ".join(f"`{r.memory_id[:8]}`" for r in candidates)
-                await ctx.send(f"❌ Ambiguous prefix `{raw_id}` matches {len(candidates)} memories: {ids}. Provide more characters.")
+            if errors:
+                await safe_send(ctx, "❌ " + "\n".join(errors))
+            if not targets:
                 return
 
-            target = candidates[0]
-
-            # Step 3: Confirm before deleting.
-            summary = target.summary or target.text or ""
-            if len(summary) > 200:
-                summary = summary[:197] + "..."
-
-            confirm_msg = f"🧠 Found a matching memory. React with ✅ to delete, or ignore.\n**ID:** `{target.memory_id}`\n**Preview:** {summary}\n**Type:** {target.context_type}  **Confidence:** {target.confidence:.2f}"
-            confirm_msg_ref = await ctx.send(confirm_msg)
-
-            def check(reaction, user):
-                return user.id == ctx.author.id and reaction.message.channel == ctx.channel and str(reaction.emoji) == "\u2705"
-
-            try:
-                await self.bot.wait_for("reaction_add", timeout=30.0, check=check)
-            except asyncio.TimeoutError:
-                await ctx.send("⏱️ Delete cancelled (timed out).")
+            if not await self._confirm_forget(ctx, targets):
                 return
 
-            # Step 4: Delete by canonical ID, enforcing ownership.
-            canonical_id = target.memory_id
-            deleted = await service.delete_memory(canonical_id, owner_id=requester_id)
-
-            # Step 5: Verify — check it's actually gone.
-            if deleted:
-                await ctx.send(f"✅ Deleted `{canonical_id[:8]}`.")
-            # Verify via the confirmation message.
-            elif confirm_msg_ref:
-                await ctx.send(f"❌ Delete operation for `{canonical_id[:8]}` returned failure — memory may already be deleted or inaccessible.")
-            else:
-                await ctx.send("❌ Failed to delete memory.")
+            await self._delete_targets(ctx, service, requester_id, targets)
 
         except Exception as e:
             logger.error(f"Error in memory-forget: {e}", exc_info=True)
-            await ctx.send("❌ Failed to forget memory.")
+            await safe_send(ctx, "❌ Failed to forget memory.")
 
     @commands.command(name="memory-disable", aliases=["mem-disable"])
     async def memory_disable(self, ctx) -> None:
