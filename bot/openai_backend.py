@@ -607,6 +607,8 @@ Server Context: {server_context}"""
 
         logger.info(f"Configured OpenAI-compatible text model: {model}")
         logger.debug(f"[OpenAI] Request params: temp={temperature}, presence_penalty={presence_penalty}, max_tokens={max_tokens}, stream={stream}")
+        _sent_system_chars = len(messages[0].get("content", "")) if messages else 0
+        logger.info(f"[OpenAI] request.prompt_chars system={_sent_system_chars} user={len(prompt or '')} max_tokens={max_tokens}")
 
         # Helper to normalize a completion response into our result dict
         def _normalize_nonstream_response(response_obj, used_model: str) -> dict[str, Any]:
@@ -635,6 +637,11 @@ Server Context: {server_context}"""
                     "completion_tokens": getattr(usage, "completion_tokens", 0),
                     "total_tokens": getattr(usage, "total_tokens", 0),
                 }
+                # Visibility for reasoning-model completion-budget starvation:
+                # if completion_tokens lands at/near max_tokens, the model
+                # likely burned its whole budget on hidden chain-of-thought
+                # and left little/nothing for visible content. [REH]
+                logger.info(f"[OpenAI] response.usage model={used_model} {usage_info_local} reply_chars={len(content)} max_tokens={max_tokens}")
                 return {
                     "text": content,
                     "model": used_model,
