@@ -145,9 +145,22 @@ def _discovered_text_ladder(timeouts_env: str | None) -> list["ProviderConfig"]:
     if not models:
         return []
 
+    # "reasoning"-flavored free models are documented as unreliable content
+    # emitters in this codebase (see _reasoning_exclude_extra_body docstring:
+    # they leak/collapse chain-of-thought into content). Observed in practice:
+    # a "nano"-class reasoning model given a long scraped article "thought"
+    # for ~600 tokens then emitted a throwaway generic reply, well under its
+    # max_tokens budget -- not a budget problem, a model-quality problem.
+    # Sink them to the back of the auto-discovered block instead of letting
+    # them lead the ladder, so a sturdier non-reasoning free model is tried
+    # first; reasoning rungs remain available as fallbacks. [REH][PA]
+    non_reasoning = [m for m in models if "reasoning" not in m.lower()]
+    reasoning = [m for m in models if "reasoning" in m.lower()]
+    ordered_models = non_reasoning + reasoning
+
     timeouts = _parse_timeout_list(timeouts_env)
     ladder: list[ProviderConfig] = []
-    for idx, model in enumerate(models):
+    for idx, model in enumerate(ordered_models):
         if idx < len(timeouts):
             timeout = timeouts[idx]
         elif timeouts:
