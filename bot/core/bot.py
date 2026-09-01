@@ -172,6 +172,9 @@ class LLMBot(commands.Bot):
         self._background_tasks: set[asyncio.Task] = set()
         self._event_loop: asyncio.AbstractEventLoop | None = None
         self._is_ready = asyncio.Event()
+        # Gateway watchdog state: last time we had a confirmed live connection
+        # (initial connect, RESUME, or READY). See _gateway_watchdog(). [REH]
+        self._last_gateway_ok: float = time.monotonic()
         self.system_prompts = {}
         self.message_processor = None  # set in setup_hook
         self._typing_suppressed_until: dict[int, float] = {}
@@ -912,6 +915,8 @@ class LLMBot(commands.Bot):
             self.command_error_handler = await setup_command_error_handler(self)
             self.logger.info("✅ Global command error handler configured")
 
+            self._track_background_task(asyncio.create_task(self._gateway_watchdog(), name="gateway_watchdog"))
+
             self.logger.info("🚀 Bot setup complete")
 
         except Exception as e:
@@ -921,11 +926,48 @@ class LLMBot(commands.Bot):
 
     async def on_ready(self) -> None:
         """Called when the bot is ready and connected to Discord."""
+        self._last_gateway_ok = time.monotonic()
         # Simple ready state logging - all setup is handled in setup_hook() [DRY]
         if not self._is_ready.is_set():
             self.logger.info(f"🤖 Logged in as {self.user} (ID: {self.user.id})")
             self._is_ready.set()
             self.logger.info("🎉 Bot is ready to receive commands!")
+
+    async def on_connect(self) -> None:
+        """Gateway websocket established (pre-READY). Feeds the reconnect watchdog."""
+        self._last_gateway_ok = time.monotonic()
+
+    async def on_resumed(self) -> None:
+        """Gateway session resumed after a drop. Feeds the reconnect watchdog."""
+        self._last_gateway_ok = time.monotonic()
+        self.logger.info("Gateway session resumed")
+
+    async def _gateway_watchdog(self) -> None:
+        """Self-restart if the gateway never recovers from a reconnect loop. [REH]
+
+        discord.py's own Client.connect() loop can retry forever with growing
+        backoff (see ReconnectNoiseFilter in bot/utils/logging.py) without ever
+        raising -- nothing previously noticed when that loop never actually
+        succeeds. Observed in production: the process stayed alive (background
+        tasks kept ticking) while the gateway sat dead for ~13 hours, and even
+        a manual SIGTERM couldn't cleanly close the wedged connection, forcing
+        a SIGKILL. This watches time-since-last-successful-connect and, past a
+        threshold, replaces the process image in place (os.execv, same PID --
+        botctl's PID file keeps working) so it self-heals unattended.
+        """
+        interval_s = float(self.config.get("GATEWAY_WATCHDOG_INTERVAL_S", 30))
+        stuck_threshold_s = float(self.config.get("GATEWAY_WATCHDOG_STUCK_S", 300))
+        while not self.is_closed():
+            await asyncio.sleep(interval_s)
+            if self.is_closed() or self.is_ready():
+                continue
+            stuck_for = time.monotonic() - self._last_gateway_ok
+            if stuck_for < stuck_threshold_s:
+                continue
+            self.logger.critical(f"Gateway stuck reconnecting for {stuck_for:.0f}s with no successful connect/resume -- self-restarting process.")
+            with suppress(Exception):
+                await asyncio.wait_for(self.close(), timeout=5.0)
+            os.execv(sys.executable, [sys.executable, *sys.argv])
 
     def _get_user_queue(self, user_id: str) -> asyncio.Queue:
         """Compatibility shim — delegated to MessageProcessor."""
@@ -2735,10 +2777,16 @@ class LLMBot(commands.Bot):
                     await asyncio.wait_for(super().close(), timeout=8.0)
                     self.logger.info("Discord connection closed successfully")
                 except TimeoutError:
-                    self.logger.warning("Discord close timed out, forcing closure")
-                    # Force close by setting internal state
+                    # Flipping the internal flag alone does not actually tear
+                    # down a wedged socket/heartbeat -- observed in production
+                    # leaving a zombie process that required a manual SIGKILL.
+                    # The important state (profiles, context) was already
+                    # persisted by the shutdown steps before close() runs, so
+                    # it's safe to just end the process here. [REH]
+                    self.logger.critical("Discord close timed out; connection is wedged -- forcing process exit instead of leaving a zombie for SIGKILL")
                     if hasattr(self, "_closed"):
                         self._closed = True
+                    os._exit(1)
                 except (RuntimeError, OSError) as e:
                     self.logger.warning(f"Error closing Discord connection: {e}")
 

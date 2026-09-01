@@ -55,7 +55,22 @@ _RECONNECT_NOISE_PREFIX = "Attempting a reconnect"
 
 
 class ReconnectNoiseFilter(logging.Filter):
-    """Demote discord.py's self-healing gateway-reconnect tracebacks to WARNING."""
+    """Demote discord.py's self-healing gateway-reconnect tracebacks to WARNING.
+
+    Stripping exc_info on every single attempt previously threw away the one
+    piece of evidence that would explain WHY a reconnect loop never recovers
+    (bad token refresh, DNS failure, a specific non-fatal close code, etc.) --
+    a prolonged outage left 100+ near-identical "Attempting a reconnect" lines
+    with no diagnosable cause. Keep the real traceback on the first occurrence
+    and periodically thereafter so a stuck-forever loop is still root-causable
+    from logs alone. [REH][CSD]
+    """
+
+    _SAMPLE_EVERY = 20
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._count = 0
 
     def filter(self, record: logging.LogRecord) -> bool:
         if (
@@ -64,10 +79,12 @@ class ReconnectNoiseFilter(logging.Filter):
             and isinstance(record.msg, str)
             and record.msg.startswith(_RECONNECT_NOISE_PREFIX)
         ):
+            self._count += 1
             record.levelno = logging.WARNING
             record.levelname = "WARNING"
-            record.exc_info = None
-            record.exc_text = None
+            if self._count % self._SAMPLE_EVERY != 1:
+                record.exc_info = None
+                record.exc_text = None
         return True
 
 
