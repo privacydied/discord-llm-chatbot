@@ -180,7 +180,7 @@ class NovitaAdapter(BaseVisionProvider):
             self._log_request_error(request, e, processing_time)
             return self._create_error_response(request.idempotency_key, e, processing_time)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - top-level generate wrapper; never raises, returns error response (logged below)
             processing_time = time.time() - start_time
             error = VisionError(
                 error_type=VisionErrorType.PROVIDER_ERROR,
@@ -693,7 +693,7 @@ class NovitaAdapter(BaseVisionProvider):
                     "error": f"HTTP {resp.status}",
                 }
 
-        except Exception as e:
+        except (aiohttp.ClientError, TimeoutError, ValueError, AttributeError, TypeError) as e:
             return {
                 "status": "ERROR",
                 "progress": 0,
@@ -732,7 +732,7 @@ class NovitaAdapter(BaseVisionProvider):
                 phase=f"Novita: {status.replace('TASK_STATUS_', '').lower()}",
             )
 
-        except Exception as e:
+        except (VisionError, AttributeError, TypeError, ValueError) as e:
             return UnifiedJobStatus(
                 status=UnifiedStatus.FAILED,
                 progress_percentage=0,

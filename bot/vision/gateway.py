@@ -101,7 +101,7 @@ async def _decode_data_image_url(url: str) -> tuple[bytes | None, str | None]:
         # Multi-MB base64 payloads decode on a worker thread to avoid blocking [PA]
         data = await asyncio.to_thread(base64.b64decode, b64)
         return data, mime
-    except Exception as exc:
+    except (ValueError, AttributeError, TypeError) as exc:
         logger.debug(f"Data URL decode failed: {exc}")
         return None, None
 
@@ -299,7 +299,7 @@ class VisionGateway:
                 duration_seconds=getattr(request, "duration_seconds", 4.0) or 4.0,
                 model=getattr(request, "preferred_model", None) or getattr(request, "model", None),
             )
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             self.logger.warning(f"Actual cost calculation failed, using fallback: {e}")
             return Money("0.006")
 
@@ -496,7 +496,7 @@ class VisionGateway:
                     total_size += saved.stat().st_size
                 else:
                     self.logger.warning(f"Failed to download artifact {idx} for job {job_id}: {_scrub_url(url)}")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - per-asset fan-out; logged, warnings collected, loop continues
                 warnings.append(f"Asset download failed: {e}")
                 self.logger.warning(f"Asset download failed (job_id={job_id}, url={_scrub_url(url)}): {e}")
 
