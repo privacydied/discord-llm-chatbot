@@ -51,7 +51,7 @@ class Money:
             except (InvalidOperation, ValueError) as e:
                 logger.exception(f"Invalid money value: {value} - {e}")
                 msg = f"Cannot convert {value} to Money: {e}"
-                raise ValueError(msg)
+                raise ValueError(msg) from e
 
         # Ensure non-negative for costs
         if self._amount < self.ZERO:

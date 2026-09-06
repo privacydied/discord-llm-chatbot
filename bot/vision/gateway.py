@@ -131,7 +131,7 @@ async def _download_asset(session: aiohttp.ClientSession, url: str, tmp_path: Pa
         return final_path
     except Exception as e:
         # Normalize to APIError to trigger retries consistently
-        raise APIError(str(e))
+        raise APIError(str(e)) from e
 
 
 class VisionGateway:
@@ -183,7 +183,7 @@ class VisionGateway:
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Gateway startup failed: {e}",
                 user_message="Vision system could not be initialized. Please try again later.",
-            )
+            ) from e
 
     async def shutdown(self) -> None:
         """Cleanup gateway resources [RM]."""
@@ -278,7 +278,7 @@ class VisionGateway:
                 error_type=VisionErrorType.PROVIDER_ERROR,
                 message=f"Vision processing failed: {e!s}",
                 user_message="I encountered an error while processing your request. Please try again.",
-            )
+            ) from e
 
     def _calculate_actual_cost(self, job_meta: dict[str, Any], result) -> Money:
         """Calculate actual cost using pricing table instead of trusting provider values [CA][REH]."""
@@ -379,7 +379,7 @@ class VisionGateway:
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Unexpected error: {e}",
                 user_message="An unexpected error occurred during generation.",
-            )
+            ) from e
         finally:
             # Clean up in finally block - safe to reference job_id here
             if reservation is not None:

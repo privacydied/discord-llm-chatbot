@@ -101,7 +101,7 @@ class VisionJobStore:
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Failed to save job: {e!s}",
                 user_message="Failed to save job progress. Please try again.",
-            )
+            ) from e
 
     async def load_job(self, job_id: str) -> VisionJob | None:
         """Load job from JSON file.
@@ -148,7 +148,7 @@ class VisionJobStore:
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Job file corrupted: {e!s}",
                 user_message="Job data is corrupted. Please contact support.",
-            )
+            ) from e
 
         except Exception as e:
             self.logger.exception(f"Failed to load job - job_id: {job_id[:8]}, error: {e!s}")

@@ -233,7 +233,7 @@ class VisionOrchestrator:
                 error_type=VisionErrorType.SYSTEM_ERROR,
                 message=f"Unexpected error: {e!s}",
                 user_message="An internal error occurred. Please try again.",
-            )
+            ) from e
 
     async def get_job_status(self, job_id: str) -> VisionJob | None:
         """Get current status of job."""
