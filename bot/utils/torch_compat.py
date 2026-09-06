@@ -38,20 +38,20 @@ def ensure_reduce_op_alias() -> None:
 
     try:
         import torch.distributed as dist  # type: ignore
-    except Exception:
+    except ImportError:
         return
 
     try:
         reduce_enum: Any = dist.ReduceOp  # type: ignore[attr-defined]
     except AttributeError:
         return
-    except Exception:
+    except Exception:  # noqa: BLE001 - torch internals can fail arbitrarily; layered guard returns
         return
 
     try:
         # Rebind without reading dist.reduce_op first; getattr would re-trigger the warning.
         dist.reduce_op = reduce_enum
         logger.debug("torch.compat.reduce_op_rebound")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - import-time safety: torch internals must not break import (logged below)
         # Safety-first: avoid failing import-time logic because of torch internals.
         logger.debug(f"reduce_op rebind failed: {exc}")

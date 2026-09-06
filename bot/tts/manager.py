@@ -74,7 +74,7 @@ class TTSManager:
         # Best‑effort tokenizer registry init (safe if patched in tests)
         try:
             self._init_tokenizer_registry()
-        except Exception as e:  # [REH]
+        except Exception as e:  # noqa: BLE001 - best-effort init, safe under test patching (logged below) [REH]
             logger.debug(
                 f"Tokenizer registry init skipped: {e}",
                 extra={"subsys": "tts", "event": "manager.registry_init.skip"},
@@ -92,7 +92,7 @@ class TTSManager:
                 "Tokenizer registry initialized",
                 extra={"subsys": "tts", "event": "manager.registry_init"},
             )
-        except Exception as e:  # [REH]
+        except Exception as e:  # noqa: BLE001 - third-party registry discovery; logged, TTS works without it [REH]
             logger.info(
                 f"Tokenizer registry unavailable: {e}",
                 extra={"subsys": "tts", "event": "manager.registry_init.unavailable"},
@@ -241,7 +241,7 @@ class TTSManager:
                     _WARMUP_TIMEOUT,
                     extra={"subsys": "tts", "event": "manager.warmup.timeout", "timeout_s": _WARMUP_TIMEOUT},
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - warmup worker failure; logged, status=failed fallback
                 self._warmup_status = "failed"
                 logger.warning(
                     "TTS warmup failed: %s",
