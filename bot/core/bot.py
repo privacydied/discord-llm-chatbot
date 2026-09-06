@@ -408,7 +408,7 @@ class LLMBot(commands.Bot):
                 )
             yield
             return
-        except (discord.HTTPException, discord.NotFound, discord.Forbidden, asyncio.TimeoutError) as exc:
+        except asyncio.TimeoutError as exc:
             self._typing_suppressed_until[channel_key] = now + 60.0
             with suppress(Exception):
                 self.logger.warning(

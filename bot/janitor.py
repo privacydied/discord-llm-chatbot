@@ -324,7 +324,7 @@ def prune_old_compressed_logs(log_dir: Path, retention_days: int, total_cap_mb: 
             gz_files = get_files_by_mtime(log_dir, "*.gz")
             target_to_free = current_size - cap_bytes
 
-            for file_path, mtime in gz_files:
+            for file_path, _mtime in gz_files:
                 if bytes_freed >= target_to_free:
                     break
 
