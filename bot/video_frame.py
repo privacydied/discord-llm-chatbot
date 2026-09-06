@@ -119,7 +119,7 @@ async def describe_video_still(video_path: Path, duration_s: float | None = None
     except TimeoutError:
         logger.warning("video.still.vl_timeout | path=%s", video_path.name)
         return None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - VL backend unbounded; TimeoutError handled above, logged, None fallback
         logger.debug(f"video.still.vl_fail: {exc}")
         return None
     finally:

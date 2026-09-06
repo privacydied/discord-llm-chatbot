@@ -17,7 +17,7 @@ def _maybe_attr(obj: Any, *names: str) -> Any | None:
     for name in names:
         try:
             val = getattr(obj, name, None)
-        except Exception:
+        except Exception:  # noqa: BLE001 - defensive probe; hostile descriptors can raise anything
             val = None
         if val is not None:
             return val

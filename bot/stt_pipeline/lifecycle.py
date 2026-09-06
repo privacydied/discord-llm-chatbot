@@ -21,7 +21,7 @@ async def abort_job_stream_if_present(
         return
     try:
         await stream.abort()
-    except Exception:
+    except Exception:  # noqa: BLE001 - abort path must never raise; logged with traceback
         logger.debug(debug_message, exc_info=True)
 
 

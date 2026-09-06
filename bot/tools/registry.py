@@ -112,6 +112,6 @@ async def execute_tool(name: str, arguments: dict[str, Any], ctx: ToolContext) -
     except TimeoutError:
         logger.warning("tool.timeout name=%s", name)
         return ToolResult.failure(f"{name} timed out")
-    except Exception as exc:  # [REH] a tool fault must not break the turn
+    except Exception as exc:  # noqa: BLE001 - tool sandbox; a tool fault must not break the turn [REH]
         logger.warning("tool.failed name=%s error=%s", name, exc)
         return ToolResult.failure(f"{name} failed: {type(exc).__name__}")

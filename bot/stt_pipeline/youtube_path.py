@@ -70,7 +70,7 @@ async def try_youtube_transcript_first(
 
     try:
         yt = await resolver(url, force_refresh=force_refresh)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - third-party resolver; logged, miss fallback below
         logger.info(
             "stt.youtube_transcript.miss reason=error elapsed_ms=%d url=%s err=%s",
             _elapsed_ms(),
