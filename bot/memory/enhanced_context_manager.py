@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import discord
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from bot.config import load_config as _load_config
 from bot.memory.turn_notes import MAX_NOTES_PER_TURN, MAX_NOTE_CHARS, compact_text, extract_urls, normalize_kind
@@ -206,7 +206,7 @@ class EnhancedContextManager:
 
         try:
             plaintext = self.cipher.decrypt(encrypted_content.encode()).decode()
-        except Exception as e:
+        except (InvalidToken, AttributeError, TypeError, ValueError) as e:
             # Covers InvalidToken (unencrypted fallback content from the
             # encrypt path) as well as malformed payloads. [REH]
             logger.debug(f"Decryption failed, assuming unencrypted: {e}")
@@ -486,7 +486,7 @@ class EnhancedContextManager:
                 if entry.message_id == want:
                     try:
                         return self._decrypted_turn(entry)
-                    except Exception as e:
+                    except (AttributeError, TypeError, ValueError) as e:
                         logger.debug(f"Turn decrypt failed for {want}: {e}")
                         return None
         return None

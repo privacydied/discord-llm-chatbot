@@ -21,7 +21,7 @@ try:  # pragma: no cover - exercised in integration
 
     PHONEME_TO_ID: dict[str, int] = dict(_kokoro_config.DEFAULT_VOCAB)
     EXPECTED_VOCAB_SIZE: int | None = len(PHONEME_TO_ID)
-except Exception as exc:  # pragma: no cover - dependency missing in some tests
+except Exception as exc:  # pragma: no cover - dependency missing in some tests  # noqa: BLE001 - optional-dependency import guard
     IS_PLACEHOLDER = True
     _IMPORT_ERROR = exc
     PHONEME_TO_ID = {}

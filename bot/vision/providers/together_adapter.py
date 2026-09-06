@@ -108,7 +108,7 @@ class TogetherAdapter(BaseVisionProvider):
             self._log_request_error(request, e, processing_time)
             return self._create_error_response(request.idempotency_key, e, processing_time)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - top-level request wrapper; never raises, returns error response (logged below)
             processing_time = time.time() - start_time
             error = VisionError(
                 error_type=VisionErrorType.PROVIDER_ERROR,

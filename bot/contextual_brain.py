@@ -204,7 +204,7 @@ async def contextual_brain_infer(
             try:
                 _counted = bot.enhanced_context_manager.count_derived(context_entries)
                 _derived_count, _derived_kinds = int(_counted[0]), list(_counted[1])
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, IndexError) as e:
                 logger.debug(f"Derived-note telemetry unavailable: {e}")
             _guild = getattr(message, "guild", None)
             _channel = getattr(message, "channel", None)
@@ -247,7 +247,7 @@ async def contextual_brain_infer(
                     },
                 },
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - telemetry must never break the response path (mocks, odd shapes)
             # Telemetry must never break the response path (mocks, odd shapes).
             logger.debug(f"Failed to emit context_build breadcrumb: {e}")
 
