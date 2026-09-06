@@ -967,7 +967,7 @@ class LLMBot(commands.Bot):
             self.logger.critical(f"Gateway stuck reconnecting for {stuck_for:.0f}s with no successful connect/resume -- self-restarting process.")
             with suppress(Exception):
                 await asyncio.wait_for(self.close(), timeout=5.0)
-            os.execv(sys.executable, [sys.executable, *sys.argv])
+            os.execv(sys.executable, [sys.executable, *sys.argv])  # nosec B606 - intentional exec self-restart, no shell
 
     def _get_user_queue(self, user_id: str) -> asyncio.Queue:
         """Compatibility shim — delegated to MessageProcessor."""

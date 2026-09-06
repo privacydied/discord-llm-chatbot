@@ -619,7 +619,8 @@ class EnhancedContextManager:
             for note in entry.derived or []:
                 try:
                     snippet = self._decrypt_content(str((note or {}).get("text", "") or ""))
-                except Exception:
+                except (AttributeError, TypeError) as exc:
+                    logger.debug(f"Skipping malformed derived note: {exc}")
                     continue
                 if not snippet.strip():
                     continue

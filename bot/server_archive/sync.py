@@ -62,8 +62,8 @@ def _avatar_url(author: Any) -> str | None:
         if uid is not None:
             index = int(uid) % 6
             return f"https://cdn.discordapp.com/embed/avatars/{index}.png"
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(f"Avatar URL extraction failed: {exc}")
     return None
 
 

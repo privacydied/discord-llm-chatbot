@@ -18,7 +18,7 @@ from bot.server_archive.models import (
     ArchiveUser,
 )
 from bot.server_archive.service import ServerArchiveService
-from bot.server_archive.store import ServerArchiveStore
+from bot.server_archive.store import ServerArchiveStore, _SCHEMA_VERSION
 
 
 @pytest.fixture
@@ -70,7 +70,7 @@ async def test_schema_bootstrap_idempotent_and_wal(tmp_path) -> None:
     await store.initialize()
     conn = sqlite3.connect(store.sqlite_path)
     try:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == _SCHEMA_VERSION
         assert conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
         assert conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='archive_messages'").fetchone()
         assert conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='archive_messages_fts'").fetchone()
