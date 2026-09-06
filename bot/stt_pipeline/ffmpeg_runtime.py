@@ -54,7 +54,7 @@ def ffmpeg_supports_aac_decoder(ffmpeg_bin: str, *, attempts: int = 2, timeout: 
                 timeout=timeout,
                 check=False,
             )
-        except Exception:  # nosec B112
+        except (OSError, ValueError, subprocess.SubprocessError):  # nosec B112
             continue  # deliberate retry, not a swallowed error
         if proc.returncode != 0:
             continue

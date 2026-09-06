@@ -54,7 +54,7 @@ async def _try_provider(provider: NewsProvider, url: str, timeout_s: float) -> N
         return await asyncio.wait_for(provider.fetch(url), timeout=timeout_s)
     except TimeoutError:
         logger.info("news.provider.timeout provider=%s url=%s", provider.name, url[:120])
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # noqa: BLE001 - third-party provider fan-out, unbounded; logged, None fallback [REH]
         logger.info("news.provider.failed provider=%s url=%s error=%s", provider.name, url[:120], exc)
     return None
 

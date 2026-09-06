@@ -43,7 +43,7 @@ async def close_search_client() -> None:
     if _client is not None:
         try:
             await _client.aclose()
-        except Exception as e:  # [REH]
+        except Exception as e:  # noqa: BLE001 - aclose cleanup; logged, reset in finally [REH]
             logger.debug(f"Error closing search HTTP client: {e}")
         finally:
             _client = None

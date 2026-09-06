@@ -59,7 +59,7 @@ def _downsample_image(image_path: str, max_dimension: int) -> str:
                 tmp_path,
             )
             return str(tmp_path)
-    except Exception:
+    except Exception:  # noqa: BLE001 - never-fail downsample fallback; logged with traceback, original returned
         logger.warning("vl.downsample failed, using original image %s", image_path, exc_info=True)
         return image_path
 

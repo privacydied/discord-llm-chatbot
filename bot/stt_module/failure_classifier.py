@@ -173,7 +173,7 @@ class STTFailureClassifier:
                     confidence_score=0.7,
                 )
 
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             return FailureClassification(
                 category="extraction",
                 severity="hard",
