@@ -81,6 +81,24 @@ REASONING_LEAK_PATTERNS = [
     r"^\s*</system>",
     r"^\s*<instruction>",
     r"^\s*</instruction>",
+    # v3: paraphrased mode-decision narration (model restates the MODE GATE
+    # procedure in its own words instead of quoting it) [REH]
+    r"^\s*We\s+need\s+to\s+decide\s+(the\s+)?(mode|MODE)",
+    r"^\s*We\s+need\s+to\s+(figure\s+out|determine)\s+(the\s+)?mode",
+    r"\bThe\s+user\s+asks\s*:",
+    r"^\s*Let(?:'?s|\s+us)\s+decide\s+(the\s+)?mode",
+    # v4: generic task-restating preambles (model narrates what the request
+    # is instead of just answering it) [REH]
+    r"^\s*This\s+is\s+(a\s+)?(request|question|asking)\s+(to|for|that)\b",
+    r"^\s*The\s+(task|question|request)\s+is\s+to\b",
+    r"^\s*The\s+user\s+(is\s+asking|wants|is\s+requesting)\b",
+    # v5: policy/self-censorship deliberation narrated in the reply itself
+    # (model debating whether it's "allowed" to answer, out loud) [REH]
+    r"^\s*This\s+is\s+(basically|essentially|simply)\s+asking\b",
+    r"\bis\s+(this|that)\s+disallowed\b",
+    r"\bthis\s+is\s+disallowed\b",
+    r"\b(allowed|disallowed)\s+(to\s+)?(answer|respond|reply)\b",
+    r"\bpossibly\s+implying\s+a\s+relationship\b",
 ]
 
 # Compiled regex for faster matching
@@ -210,7 +228,29 @@ def _strip_leaking_lines(text: str) -> str:
     if not match_idx:
         return text.strip()
     kept = lines[: match_idx[0]] + lines[match_idx[-1] + 1 :]
-    return "\n".join(kept).strip()
+    result = "\n".join(kept).strip()
+    if result:
+        return result
+    # The leak and the real reply share one line/paragraph with no line break
+    # between them (e.g. "We need to decide mode. The user asks: ... <reply>").
+    # Line-level removal nukes the whole thing since it's a single line.
+    # Fall back to sentence-level stripping of just the matching span. [REH]
+    span = "\n".join(lines[match_idx[0] : match_idx[-1] + 1])
+    return _strip_leaking_sentences(span)
+
+
+def _strip_leaking_sentences(text: str) -> str:
+    """Sentence-level version of `_strip_leaking_lines` for single-line text.
+
+    Removes the contiguous span from the first leak-matching sentence through
+    the last, keeping any real reply sentences before or after it.
+    """
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    match_idx = [i for i, s in enumerate(sentences) if _reasoning_pattern.search(s)]
+    if not match_idx:
+        return text.strip()
+    kept = sentences[: match_idx[0]] + sentences[match_idx[-1] + 1 :]
+    return " ".join(kept).strip()
 
 
 def _matches_reasoning_pattern(text: str) -> tuple[bool, str]:

@@ -12,6 +12,7 @@ import discord
 import pytest
 
 from bot.core.bot import LLMBot
+from bot.public_output import sanitize_public_text
 from bot.router import ResponseMessage
 
 
@@ -108,12 +109,15 @@ def bot():
                 has_audio = response.audio_path is not None and response.audio_path.strip() != ""
                 if response and (has_content or has_embeds or has_files or has_audio):
                     mock_bot.logger.debug(f"Response generated: {response.content}")
+                    # Mirror production send boundary (_execute_action):
+                    # content goes through the public-output sanitizer.
+                    safe_content = sanitize_public_text(response.content or "")
                     if message.guild:
                         # In guild channels, use reply
-                        await message.reply(content=response.content, mention_author=True)
+                        await message.reply(content=safe_content, mention_author=True)
                     else:
                         # In DMs, use channel.send
-                        await message.channel.send(content=response.content)
+                        await message.channel.send(content=safe_content)
                 else:
                     # Handle empty response
                     mock_bot.logger.warning("Empty response from dispatcher")
