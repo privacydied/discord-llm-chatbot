@@ -542,7 +542,7 @@ class TokenizerRegistry:
                         payload=phonemes,
                         alphabet="IPA",  # Most of these produce IPA-like output
                     )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - third-party tokenizer backend; logged, falls through to next
                 logger.debug(
                     f"Phoneme tokenization failed with {tokenizer}: {e}",
                     extra={"subsys": "tts", "event": "registry.phoneme_failed"},
@@ -554,7 +554,7 @@ class TokenizerRegistry:
                 phonemes = self._tokenize_to_phonemes(text, tokenizer, language)
                 if phonemes:
                     return Decision(mode="phonemes", payload=phonemes, alphabet="IPA")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - third-party tokenizer backend; logged, falls through
                 logger.debug(
                     f"Misaki tokenization failed: {e}",
                     extra={"subsys": "tts", "event": "registry.misaki_failed"},

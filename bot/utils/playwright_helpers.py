@@ -93,7 +93,7 @@ async def check_playwright_health() -> bool:
         _pw_consecutive_failures = 0
         _pw_health_last_check = now
         return True
-    except (TimeoutError, PlaywrightError, Exception) as exc:
+    except (TimeoutError, PlaywrightError) as exc:
         _pw_consecutive_failures += 1
         _pw_health_available = False
         _pw_health_last_check = now
@@ -140,7 +140,7 @@ async def connect_browser(browser_type: BrowserType) -> Browser | None:
         browser = await browser_type.connect(ws_url, timeout=30_000)
         logger.info("Connected to remote Playwright server")
         return browser
-    except Exception as exc:
+    except PlaywrightError as exc:
         # Rate-limit repeated Playwright connection warnings [Phase 18]
         _rate_limit_warn("Playwright remote server unreachable at %s: %s", ws_url, exc)
         return None

@@ -130,7 +130,7 @@ class JobWatcherRegistry:
                 if progress_msg and current_state != self._last_states.get(job_id):
                     try:
                         await self._update_progress_message(progress_msg, updated_job, original_msg, elapsed_time)
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 - cosmetic progress edit on duck-typed message; logged, polling continues
                         logger.debug(f"Could not update progress message: {e}")
 
                 # Apply poll cadence with jitter - NO SLEEP after terminal
@@ -202,7 +202,7 @@ class JobWatcherRegistry:
                 )
 
                 await progress_msg.edit(embed=embed)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - cosmetic progress edit; logged, watcher continues
             logger.debug(f"Progress message update failed: {e}")
 
     def cancel_all_watchers(self):

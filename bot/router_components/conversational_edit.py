@@ -94,7 +94,7 @@ def _load_policy_trigger_phrases(policy_path: str) -> tuple[str, ...]:
         phrases = policy.get("intent_patterns", {}).get("image_editing", {}).get("trigger_phrases", [])
         cleaned = tuple(str(p).strip().lower() for p in phrases if str(p).strip())
         return cleaned or _DEFAULT_EDIT_TRIGGER_PHRASES
-    except Exception as exc:
+    except (OSError, ValueError, AttributeError, TypeError) as exc:
         logger.debug(f"vision_policy edit-phrase load failed, using defaults: {exc}")
         return _DEFAULT_EDIT_TRIGGER_PHRASES
 
@@ -379,7 +379,7 @@ async def resolve_edit_source_image(message: Message, max_size_mb: int) -> Resol
     if getattr(message, "reference", None):
         try:
             ref_message = await message.channel.fetch_message(message.reference.message_id)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - gateway fetch on duck-typed message; logged, None continues
             logger.debug(f"edit_route: fetch reference message failed: {exc}")
 
     if ref_message:
