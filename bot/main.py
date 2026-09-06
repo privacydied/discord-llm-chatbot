@@ -156,7 +156,7 @@ def run_bot() -> None:
         asyncio.run(main_with_cleanup())
     except KeyboardInterrupt:
         shutdown_logging_and_exit(0)
-    except BaseException:
+    except BaseException:  # noqa: BLE001 - top-level crash handler; KeyboardInterrupt handled above
         import traceback
 
         traceback.print_exc()

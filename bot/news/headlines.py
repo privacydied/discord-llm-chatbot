@@ -145,7 +145,7 @@ async def fetch_headlines(
             config=_REQUEST,
             params=_build_params(api_key, topic, days, limit),
         )
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # noqa: BLE001 - headlines must never break; logged, [] fallback [REH]
         logger.warning("news.headlines.failed topic=%s error=%s", topic, exc)
         return []
 

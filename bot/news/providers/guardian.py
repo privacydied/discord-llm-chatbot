@@ -96,7 +96,7 @@ class GuardianNewsProvider(AbstractNewsProvider):
             return None
         try:
             payload = await self._request(content_id)
-        except Exception as exc:  # [REH] provider failure must not break the chain
+        except Exception as exc:  # noqa: BLE001 - Never-raises provider contract; logged, None fallback [REH]
             logger.debug("guardian.fetch failed for %s: %s", content_id, exc)
             return None
         return self._to_article(payload, url) if payload else None

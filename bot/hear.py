@@ -568,7 +568,7 @@ class BasePCMStream:
             await self._produce()
         except asyncio.CancelledError:
             raise
-        except BaseException as exc:
+        except BaseException as exc:  # noqa: BLE001 - task error surfacing via _error; CancelledError re-raised above
             self._error = exc
         finally:
             self._signal_end()

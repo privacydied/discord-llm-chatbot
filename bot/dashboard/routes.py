@@ -488,7 +488,7 @@ class DashboardRoutes:
                     before_id=before_id_str,
                 )
                 return _json_response(result)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - archive failure falls back to legacy store; logged
                 logger.warning("get_channel_messages: archive_store failed, falling back: %s", e)
 
         # Fallback: dashboard MessageStore (legacy / dashboard-sent messages)
