@@ -51,7 +51,7 @@ def _get_embedding_rows(session: InferenceSession | None) -> int:
                             return int(value)
                         except ValueError:
                             pass
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - third-party onnx metadata API; logged, mapping fallback below
             logger.debug(f"vocab size extraction from metadata failed: {exc}")
 
     # Fallback: assume size from embedded mapping

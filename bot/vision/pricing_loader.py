@@ -115,7 +115,7 @@ class PricingTable:
             try:
                 per_image_cost = Money(env_override)
                 return per_image_cost * num_images
-            except Exception as e:
+            except (ValueError, TypeError) as e:
                 logger.warning(f"Invalid env override {env_key}={env_override}: {e}")
 
         provider_config = self.pricing_data.get("providers", {}).get(provider_name)

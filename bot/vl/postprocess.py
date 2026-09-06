@@ -141,7 +141,7 @@ def sanitize_vl_reply_text(text: str, max_chars: int | None = None, strip_reason
         try:
             max_chars_env = os.getenv("VL_REPLY_MAX_CHARS", "420")
             max_chars = int(max_chars_env.strip())
-        except Exception:
+        except (AttributeError, ValueError, TypeError):
             max_chars = 420
     if strip_reasoning is None:
         strip_reasoning = os.getenv("VL_STRIP_REASONING", "1").lower() in (

@@ -215,7 +215,7 @@ class BaseVisionProvider(ABC):
                     return img.size  # (width, height)
         except ImportError:
             self.logger.debug("PIL not available for dimension extraction")
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             self.logger.debug(f"Could not extract dimensions: {e}")
 
         return None

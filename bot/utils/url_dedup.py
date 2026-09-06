@@ -17,7 +17,7 @@ def _normalize_url(url: str) -> str:
         path = parsed.path.rstrip("/") or "/"
         # Collapse tracking params (t, utm_*, ref, etc.)
         return f"{parsed.scheme.lower()}://{parsed.hostname.lower()}{path}"
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return url.strip().lower()
 
 
