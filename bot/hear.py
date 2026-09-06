@@ -710,7 +710,7 @@ class FFMpegPCMStream(BasePCMStream):
                 self._proc.kill()
             except ProcessLookupError:
                 pass
-            except (ProcessLookupError, OSError, PermissionError):
+            except (OSError, PermissionError):
                 logger.debug("⚠️ Failed to kill ffmpeg during abort", exc_info=True)
 
     async def _monitor(self) -> None:
@@ -2669,4 +2669,4 @@ async def _run_whisper_with_fallback(
             logger.exception(f"[STT] Multimodal fallback failed: {fallback_error}")
 
             # Re-raise the original error - fallback failed too
-            raise primary_error
+            raise primary_error from fallback_error
