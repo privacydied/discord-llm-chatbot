@@ -185,7 +185,7 @@ async def fetch_url_content(url: str, timeout: int = 15) -> tuple[bytes, str] | 
     except (httpx.RequestError, httpx.TooManyRedirects, httpx.TimeoutException) as e:
         logging.info(f"Network error for {url}: {str(e)[:160]}")
         return None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - defense-in-depth net after precise handlers; logged, None fallback
         logging.debug(f"fetch_url_content unexpected error for {url}: {str(e)[:200]}")
         return None
 
@@ -197,7 +197,7 @@ async def _fetch_url_content_detail(url: str, timeout: int = 15) -> tuple[tuple[
         if payload is None:
             return None, "fetch_failed"
         return payload, None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - error-tuple contract: never raises, classifies below
         return None, f"fetch_exception: {e.__class__.__name__}"
 
 
@@ -393,7 +393,7 @@ async def process_url(url: str) -> dict[str, Any]:
                 }
             logging.info(f"📝 No media in Twitter URL {url}. Proceeding with text extraction (no auto-screenshot).")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - smart-routing fallback: failure continues to text extraction (logged below)
             logging.exception(f"❌ Smart routing failed for {url}: {e}. Continuing with text extraction.")
 
     # 2. Attempt screenshot if forced (legacy behavior for non-smart domains)
@@ -442,7 +442,7 @@ async def process_url(url: str) -> dict[str, Any]:
                 "error": fetch_error,
             }
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - initial-fetch fallback: failure proceeds to screenshot/caller steps below
         logging.warning(f"Initial httpx fetch failed for {url}: {e}.")
 
     # 3. No automatic screenshot fallback; allow caller to decide next steps.

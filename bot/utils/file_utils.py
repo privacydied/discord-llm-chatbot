@@ -86,13 +86,13 @@ async def download_robust_image(image_ref, local_path: str, max_size_mb: int = 2
                         import os
 
                         os.unlink(local_path)  # Clean up partial file
-                    except Exception as exc:
+                    except OSError as exc:
                         logger.debug(f"partial file cleanup failed: {exc}")
 
             except TimeoutError:
                 logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: timeout")
                 continue
-            except Exception as e:
+            except (aiohttp.ClientError, OSError, ValueError, TypeError) as e:
                 logger.warning(f"Image download candidate {idx + 1}/{len(candidates)} failed: {e}")
                 continue
 
@@ -132,7 +132,7 @@ async def download_file(url: str, save_path: Path, session: aiohttp.ClientSessio
     # connection instead of cutting off an in-progress large image. [PA][REH]
     try:
         per_attempt_ms = int(os.getenv("IMAGEDL_TIMEOUT_PER_ATTEMPT_MS", "8000"))
-    except Exception:
+    except (AttributeError, ValueError, TypeError):
         per_attempt_ms = 8000
     total_s = max(1.0, per_attempt_ms / 1000.0)
     timeout = aiohttp.ClientTimeout(total=total_s, sock_connect=5.0, sock_read=total_s)
@@ -182,7 +182,7 @@ async def download_file(url: str, save_path: Path, session: aiohttp.ClientSessio
             from bot.metrics import METRICS  # type: ignore
 
             METRICS.counter("x.syndication.image_fetch_timeout").inc(1)
-        except Exception as exc:
+        except (ImportError, AttributeError, TypeError) as exc:
             logging.debug(f"metrics timeout counter failed: {exc}")
         # Handled condition: the caller retries with a lower-res variant, so log
         # a concise warning rather than an ERROR-level traceback. [REH]
