@@ -185,3 +185,57 @@ MEMORY_SAVE_INTERVAL=30
 - Add unit tests around trimming logic and persistence boundaries [REH].
 - Keep functions under 30 lines and avoid deep nesting [CSD].
 - Prefer named constants over literals [CMV].
+
+## Conversation Turns & Derived Media Results
+
+Short-term continuity for multimodal follow-ups ("the video attached",
+"translate that") rests on the per-turn record in `EnhancedContextManager`,
+not on long-term memory:
+
+- Each stored turn carries identity (`message_id`, `referenced_message_id`,
+  `urls`, attachment descriptors) plus capped `derived` notes: STT
+  transcripts, VL descriptions, extraction text (`bot/memory/turn_notes.py`).
+- Specialized routes join results back through one shared boundary
+  (`Router._record_turn_derived`): X/STT transcript + caption, per-item
+  aggregator results, attachment evidence parts, perception notes, and media
+  ingestion output. No route keeps its understanding private.
+- Prompt assembly (`contextual_brain_infer`) treats the local scope block
+  (thread tail / reply chain / ambient-local, each enriched with the stored
+  notes by exact message ID) as history-suppressing, while RAG and
+  curated-memory blocks ride along as `retrieved_context` and never suppress
+  rolling history.
+- Explicit replies resolve by exact Discord message ID: in-memory turn first,
+  gateway fetch, then `ServerArchiveStore.get_message_by_id` (indexed PK
+  lookup, never FTS). Provenance lands in `event=context_build`
+  (`reference_resolve`: `discord_resolved` | `discord_fetch` | `archive` |
+  `miss`; `archive_lookup`, `derived_media_items`, `derived_kinds`).
+- Bounds: `CONTEXT_DERIVED_MAX_CHARS_PER_NOTE` (default 1500, head+tail
+  compaction), `CONTEXT_DERIVED_MAX_NOTES_PER_TURN` (default 8), plus the
+  existing `HISTORY_WINDOW` / char caps. Transcripts are never promoted to
+  curated long-term memory by this path.
+
+## Reply Derived-Result Reuse (no reprocessing)
+
+A reply to an already-processed message reuses the stored turn instead of
+re-running the media pipeline:
+
+- Precedence for an exact reply reference: in-memory turn by Discord
+  message ID (falling back to the nearest preceding user turn with notes
+  when replying to the bot's own message) -> persisted turn store after
+  reload -> server-archive recovery -> only then re-harvest/re-transcribe.
+  Never semantic memory. Checked once per dispatch
+  (`_check_reply_derived_reuse`); hits skip all four referenced-harvest
+  blocks and the X parent-URL layer. The trigger's own media always still
+  processes.
+- Reply-harvest normalization (`_prune_redundant_reply_media_items`,
+  replies only): status URLs canonicalized to `https://x.com/i/status/{id}`;
+  same-status aliases, X profile URLs, `jf.x.com` preview artifacts, and
+  `video.twimg.com`/`pbs.twimg.com` CDN artifacts pruned once a status
+  entity is present. `jf.x.com` also maps to `SINGLE_IMAGE` in modality
+  classification so it can never enter tiered web extraction.
+- STT lifecycle (`bot/hear.py`): the memory guard aborts only on
+  job-attributable RSS *growth* past `STT_MEMORY_ABORT_THRESHOLD_MB`
+  (`STT_MEMORY_GROWTH_FLOOR_MB`, default 256) instead of absolute process
+  RSS; the PCM retry cache is preserved whenever ffmpeg reached EOF without
+  error, even on consumer abort, so model-downgrade retries read from disk
+  instead of paying re-download + re-preprocess.

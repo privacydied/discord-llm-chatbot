@@ -7,7 +7,7 @@ import contextlib
 import json
 import os
 from collections import OrderedDict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -16,6 +16,7 @@ import discord
 from cryptography.fernet import Fernet
 
 from bot.config import load_config as _load_config
+from bot.memory.turn_notes import MAX_NOTES_PER_TURN, MAX_NOTE_CHARS, compact_text, extract_urls, normalize_kind
 from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -53,7 +54,14 @@ def _load_bool_config(key: str, default: bool) -> bool:
 
 @dataclass
 class MessageEntry:
-    """Represents a stored message with all required metadata."""
+    """Represents a stored message with all required metadata.
+
+    Identity fields (message_id / referenced_message_id / urls / attachments)
+    let later turns resolve "the video attached" or an explicit Discord reply
+    to the exact prior turn. ``derived`` carries capped multimodal results
+    (transcripts, VL descriptions, extraction text) attached after a
+    specialized route runs -- see :mod:`bot.memory.turn_notes`.
+    """
 
     user_id: str
     channel_id: str
@@ -62,6 +70,12 @@ class MessageEntry:
     role: str  # 'user' or 'bot'
     content: str
     guild_id: str | None = None
+    message_id: str = ""
+    referenced_message_id: str | None = None
+    author_name: str = ""
+    urls: list[str] = field(default_factory=list)
+    attachments: list[dict[str, Any]] = field(default_factory=list)
+    derived: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -192,7 +206,9 @@ class EnhancedContextManager:
 
         try:
             plaintext = self.cipher.decrypt(encrypted_content.encode()).decode()
-        except (ValueError, TypeError, RuntimeError) as e:
+        except Exception as e:
+            # Covers InvalidToken (unencrypted fallback content from the
+            # encrypt path) as well as malformed payloads. [REH]
             logger.debug(f"Decryption failed, assuming unencrypted: {e}")
             plaintext = encrypted_content  # Assume it's unencrypted
 
@@ -305,6 +321,32 @@ class EnhancedContextManager:
             if len(raw_content) > self.max_chars_per_message:
                 raw_content = raw_content[: self.max_chars_per_message]
 
+            # Harvest turn identity so later turns can resolve references to
+            # this message ("the video", an explicit reply, ...). [REH][IV]
+            ref_id: str | None = None
+            try:
+                ref = getattr(message, "reference", None)
+                ref_mid = getattr(ref, "message_id", None) if ref is not None else None
+                ref_id = str(ref_mid) if ref_mid is not None else None
+            except (AttributeError, TypeError, ValueError):
+                ref_id = None
+            try:
+                author = getattr(message, "author", None)
+                author_name = getattr(author, "display_name", None) or getattr(author, "name", "") or ""
+            except (AttributeError, TypeError):
+                author_name = ""
+            try:
+                attachment_descs = [
+                    {
+                        "filename": str(getattr(a, "filename", "") or ""),
+                        "content_type": str(getattr(a, "content_type", "") or ""),
+                        "url": str(getattr(a, "url", "") or ""),
+                    }
+                    for a in (getattr(message, "attachments", None) or [])
+                ]
+            except (AttributeError, TypeError):
+                attachment_descs = []
+
             # Create message entry
             entry = MessageEntry(
                 user_id=str(message.author.id),
@@ -314,6 +356,11 @@ class EnhancedContextManager:
                 role=role,
                 content=self._encrypt_content(raw_content),
                 guild_id=str(message.guild.id) if message.guild else None,
+                message_id=str(getattr(message, "id", "") or ""),
+                referenced_message_id=ref_id,
+                author_name=str(author_name),
+                urls=extract_urls(raw_content),
+                attachments=attachment_descs,
             )
 
             # Add to memory
@@ -336,6 +383,151 @@ class EnhancedContextManager:
                 self._dirty = True
 
             logger.debug(f"✔ Message stored [context={context_key}, role={role}, user={message.author.id}]")
+
+    def resolve_key(self, message: Any) -> str:
+        """Public wrapper for context-key resolution (for context builders)."""
+        return self._get_context_key(message)
+
+    async def attach_derived_notes(self, message: Any, notes: list[dict[str, Any]] | None) -> bool:
+        """Attach capped multimodal results to an already-stored user turn.
+
+        Specialized routes (X/STT, VL, URL extraction, ...) produce their
+        understanding *during* dispatch, after ``append_message`` stored the
+        raw turn. This is the single shared boundary that joins those results
+        back into conversation state -- routes build notes via
+        :mod:`bot.memory.turn_notes` and call here. Never raises for a
+        missing turn (returns False); never blocks routing on failure. [CA]
+        """
+        if not notes:
+            return False
+        try:
+            context_key = self._get_context_key(message)
+            want_id = str(getattr(message, "id", "") or "")
+            want_user = str(getattr(getattr(message, "author", None), "id", "") or "")
+        except (AttributeError, TypeError, ValueError):
+            return False
+        async with self._memory_lock:
+            bucket = self.memory.get(context_key)
+            if not bucket:
+                return False
+            target: MessageEntry | None = None
+            if want_id:
+                for entry in reversed(bucket):
+                    if entry.message_id == want_id:
+                        target = entry
+                        break
+            if target is None and want_user:
+                for entry in reversed(bucket):
+                    if entry.role == "user" and entry.user_id == want_user:
+                        target = entry
+                        break
+            if target is None:
+                return False
+            room = max(0, MAX_NOTES_PER_TURN() - len(target.derived))
+            kept = 0
+            for note in (notes or [])[:room]:
+                try:
+                    text = compact_text(str((note or {}).get("text", "")), MAX_NOTE_CHARS())
+                except (AttributeError, TypeError, ValueError):
+                    continue
+                if not text:
+                    continue
+                target.derived.append(
+                    {
+                        "kind": normalize_kind((note or {}).get("kind")),
+                        "label": str((note or {}).get("label", "") or "")[:300],
+                        "text": self._encrypt_content(text),
+                        "chars": len(text),
+                    }
+                )
+                kept += 1
+            if kept and not self.in_memory_only:
+                self._dirty = True
+            return kept > 0
+
+    def _decrypted_turn(self, entry: MessageEntry) -> dict[str, Any]:
+        """Decrypted plain-dict view of one stored turn (for exact-ID lookups)."""
+        return {
+            "message_id": entry.message_id,
+            "referenced_message_id": entry.referenced_message_id,
+            "user_id": entry.user_id,
+            "author_name": entry.author_name,
+            "role": entry.role,
+            "timestamp": entry.timestamp,
+            "channel_id": entry.channel_id,
+            "thread_id": entry.thread_id,
+            "guild_id": entry.guild_id,
+            "content": self._decrypt_content(entry.content),
+            "urls": list(entry.urls or []),
+            "attachments": [dict(a) for a in (entry.attachments or [])],
+            "derived": [
+                {
+                    "kind": str(n.get("kind", "")),
+                    "label": str(n.get("label", "")),
+                    "text": self._decrypt_content(str(n.get("text", ""))),
+                    "chars": int(n.get("chars", 0) or 0),
+                }
+                for n in (entry.derived or [])
+            ],
+        }
+
+    def get_turn_by_message_id(self, message_id: Any, context_key: str | None = None) -> dict[str, Any] | None:
+        """Exact turn lookup by Discord message ID (identity beats embeddings).
+
+        Scans a single channel bucket when ``context_key`` is given, else all
+        buckets. Bounded: at most ``history_window`` entries per bucket. [PA]
+        """
+        want = str(message_id or "")
+        if not want:
+            return None
+        buckets = [context_key] if context_key else list(self.memory.keys())
+        for key in buckets:
+            for entry in reversed(self.memory.get(key, [])):
+                if entry.message_id == want:
+                    try:
+                        return self._decrypted_turn(entry)
+                    except Exception as e:
+                        logger.debug(f"Turn decrypt failed for {want}: {e}")
+                        return None
+        return None
+
+    def get_media_notes_for(self, message_ids: list[Any], context_key: str | None = None) -> dict[str, str]:
+        """Plaintext derived-note snippets keyed by Discord message ID.
+
+        Used by local context builders (thread tail, reply chains) to render
+        multimodal results under the raw message text they already include.
+        Bounded per note so builders stay within their char caps. [PA]
+        """
+        out: dict[str, str] = {}
+        for mid in message_ids or []:
+            turn = self.get_turn_by_message_id(mid, context_key)
+            if not turn or not turn["derived"]:
+                continue
+            lines = []
+            for note in turn["derived"]:
+                snippet = str(note.get("text", "") or "")
+                if len(snippet) > 800:
+                    snippet = snippet[:800] + "…"
+                label = str(note.get("label", "") or "").strip()
+                lines.append(f"[media {note.get('kind', '')}{' ' + label if label else ''}] {snippet}".strip())
+            if lines:
+                out[str(mid)] = "\n".join(lines)
+        return out
+
+    def count_derived(self, entries: list[MessageEntry]) -> tuple[int, list[str]]:
+        """Count derived notes (and their kinds) across history entries for telemetry."""
+        total = 0
+        kinds: list[str] = []
+        try:
+            for entry in entries or []:
+                for note in entry.derived or []:
+                    total += 1
+                    kind = str((note or {}).get("kind", "") or "")
+                    if kind and kind not in kinds:
+                        kinds.append(kind)
+        except (AttributeError, TypeError):
+            pass
+        return total, kinds
 
     async def flush_if_dirty(self) -> bool:
         """Persist to disk if there are unsaved changes; no-op otherwise.
@@ -420,17 +612,38 @@ class EnhancedContextManager:
         # continuation filtering and formatting below. [PA]
         decrypted_entries = [(entry, self._decrypt_content(entry.content)) for entry in entries]
 
+        # Decrypt derived turn notes once up front (same bounded memo as content).
+        derived_texts: dict[int, list[str]] = {}
+        for idx, (entry, _content) in enumerate(decrypted_entries):
+            note_lines: list[str] = []
+            for note in entry.derived or []:
+                try:
+                    snippet = self._decrypt_content(str((note or {}).get("text", "") or ""))
+                except Exception:
+                    continue
+                if not snippet.strip():
+                    continue
+                if len(snippet) > 800:
+                    snippet = snippet[:800] + "…"
+                label = str((note or {}).get("label", "") or "").strip()
+                kind = str((note or {}).get("kind", "") or "").strip()
+                note_lines.append(f"/media [{kind}{' ' + label if label else ''}]: {snippet}".strip())
+                if len(note_lines) >= MAX_NOTES_PER_TURN():
+                    break
+            if note_lines:
+                derived_texts[idx] = note_lines
+
         # Filter continuation chunks
         filtered = []
-        for entry, content in decrypted_entries:
+        for idx, (entry, content) in enumerate(decrypted_entries):
             if self.ignore_continuation_chunks:
                 stripped = content.strip()
                 if stripped in ("...", "…", "more", "**(continues)**", "(more)", "more..."):
                     continue
-            filtered.append((entry, content))
+            filtered.append((idx, entry, content))
 
         # Process entries in reverse to prioritize recent messages
-        for entry, content in reversed(filtered):
+        for idx, entry, content in reversed(filtered):
             try:
                 # content already decrypted once above; reuse it
 
@@ -446,6 +659,12 @@ class EnhancedContextManager:
                         username = f"User({entry.user_id})"
 
                     line = f"[{username}]: {content}"
+
+                # Append derived multimodal notes for this turn (transcripts,
+                # VL descriptions, extraction text) so later turns can refer
+                # back to media the bot already perceived. [REH]
+                for note_line in derived_texts.get(idx, []):
+                    line = f"{line}\n  {note_line}"
 
                 # Check token limit
                 line_tokens = self._estimate_token_count(line)

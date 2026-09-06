@@ -107,3 +107,57 @@ async def test_remeasure_failure_falls_back_to_first_reading() -> None:
         confirm_delay=0.0,
     )
     assert result is True  # first reading (over threshold) wins as fallback
+
+
+@pytest.mark.asyncio
+async def test_high_baseline_small_growth_does_not_abort() -> None:
+    """The production case: process idles at ~1.23 GB from unrelated residents
+    (threshold 900). A job that grew it by ~30 MB must NOT abort -- the abort
+    requires job-attributable growth past the floor. No limits were raised."""
+    from bot.hear import MEMORY_GROWTH_FLOOR_MB
+
+    baseline = 1200.0
+    reading = baseline + (MEMORY_GROWTH_FLOOR_MB - 10)
+    assert reading > MEMORY_ABORT_THRESHOLD_MB
+    process = _process_reporting(reading)  # confirm re-measurement stays put
+    result = await _resolve_memory_abort(
+        reading,
+        confirm=True,
+        process=process,
+        confirm_delay=0.0,
+        baseline_rss_mb=baseline,
+    )
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_real_growth_past_threshold_still_aborts() -> None:
+    """The guard still fires when the job itself drove RSS over the threshold:
+    low baseline + large growth aborts immediately (no confirm)."""
+    baseline = 400.0
+    reading = MEMORY_ABORT_THRESHOLD_MB + 50
+    process = _process_reporting(9999.0)  # never consulted
+    result = await _resolve_memory_abort(
+        reading,
+        confirm=False,
+        process=process,
+        confirm_delay=0.0,
+        baseline_rss_mb=baseline,
+    )
+    assert result is True
+    process.memory_info.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_baseline_none_keeps_legacy_absolute_behavior() -> None:
+    """baseline=None (or unreadable) preserves the old absolute-only semantics."""
+    over_threshold = MEMORY_ABORT_THRESHOLD_MB + 100
+    process = _process_reporting(over_threshold)
+    result = await _resolve_memory_abort(
+        over_threshold,
+        confirm=True,
+        process=process,
+        confirm_delay=0.0,
+        baseline_rss_mb=None,
+    )
+    assert result is True

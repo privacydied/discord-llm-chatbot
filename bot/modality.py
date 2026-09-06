@@ -434,6 +434,15 @@ async def _map_url_to_modality(url: str) -> InputModality:
         logger.info(f"stt.tiktok.skip kind=player_embed url={url[:80]}")
         return InputModality.GENERAL_URL
 
+    # X embed-artifact guard: jf.x.com media-preview/thumbnail proxies are
+    # image artifacts of an already-embedded tweet, never standalone article
+    # text. They carry no image extension, so without this guard they fall
+    # through to GENERAL_URL and enter tiered web extraction (screenshot +
+    # Playwright + Wayback) for what is just a picture. [REH]
+    if host == "jf.x.com":
+        logger.info(f"modality.guard: jf.x.com embed artifact → SINGLE_IMAGE (path={path[:60]})")
+        return InputModality.SINGLE_IMAGE
+
     # Twitter/X status posts should go through API-first general URL path [SFT][CA]
     # but allow broadcasts (Spaces/live) to be handled as video-capable URLs.
     if re.search(

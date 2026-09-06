@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum, auto
 from pathlib import Path
+from types import SimpleNamespace
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -53,6 +54,11 @@ from .memory.thread_tail import (
     collect_thread_tail_context,
     resolve_implicit_anchor,
     resolve_thread_reply_target,
+)
+from .memory.turn_notes import (
+    build_note,
+    note_from_aggregator_result,
+    note_from_evidence_part,
 )
 from .modality import (
     InputItem,
@@ -1727,10 +1733,24 @@ class Router:
                 return "trigger", trigger_urls
 
             # 2) Reply-parent layer (REPLY_CASE only)
+            # Skipped when the reply target's derived results are being reused:
+            # re-resolving the parent's URLs would re-run syndication/STT on
+            # already-transcribed media. [REH]
             if scope_case == "reply" and reply_target is not None:
-                parent_urls = self._extract_x_status_urls_from_text(getattr(reply_target, "content", "") or "")
-                if parent_urls:
-                    return "parent", parent_urls
+                if self._reply_reuse_hit(message):
+                    with suppress(Exception):
+                        self.logger.info(
+                            "x.reuse_skip_layer",
+                            extra={
+                                "event": "x.reuse_skip_layer",
+                                "msg_id": getattr(message, "id", None),
+                                "detail": {"layer": "parent"},
+                            },
+                        )
+                else:
+                    parent_urls = self._extract_x_status_urls_from_text(getattr(reply_target, "content", "") or "")
+                    if parent_urls:
+                        return "parent", parent_urls
 
             # 3) Thread-tail layer (THREAD_CASE only, near reply_target)
             if scope_case == "thread":
@@ -2393,15 +2413,19 @@ class Router:
 
         Uses `reference.resolved` when Discord already populated it (no REST call),
         otherwise performs a single cached `channel.fetch_message` round-trip shared
-        by all handlers within the TTL. Fetch failures (NotFound/Forbidden) are cached
-        as None to avoid repeated failing round-trips, matching prior per-site
-        behavior of returning None on error. [PA][REH]
+        by all handlers within the TTL. When the gateway fetch fails (deleted,
+        uncached, permission loss), falls back to an exact server-archive lookup
+        by Discord message ID -- identity beats reconstruction. Fetch failures
+        (NotFound/Forbidden) are cached as None to avoid repeated failing
+        round-trips, matching prior per-site behavior of returning None on
+        error. [PA][REH]
         """
         ref = getattr(message, "reference", None)
         if not ref:
             return None
         resolved = getattr(ref, "resolved", None)
         if resolved is not None:
+            self._note_reference_via(message, "discord_resolved")
             return resolved
         ref_id = getattr(ref, "message_id", None)
         channel = getattr(message, "channel", None)
@@ -2417,9 +2441,197 @@ class Router:
             fetched = await channel.fetch_message(ref_id)
         except Exception:
             fetched = None
+        if fetched is not None:
+            self._note_reference_via(message, "discord_fetch")
+            if key is not None:
+                self._ref_cache_put(key, fetched)
+            return fetched
+        # Gateway miss: deterministic archive recovery by exact message ID.
+        archived = await self._fetch_archived_reference(message, ref_id)
+        if archived is not None:
+            self._note_reference_via(message, "archive")
+            if key is not None:
+                self._ref_cache_put(key, archived)
+            return archived
+        self._note_reference_via(message, "miss")
         if key is not None:
-            self._ref_cache_put(key, fetched)
-        return fetched
+            self._ref_cache_put(key, None)
+        return None
+
+    def _note_reference_via(self, message: Message, via: str) -> None:
+        """Stash reply-resolution provenance for the context_build log. [REH]"""
+        try:
+            meta = self._dispatch_metadata.setdefault(getattr(message, "id", None), {})
+            if isinstance(meta, dict):
+                meta["reference_resolve"] = via
+        except (AttributeError, TypeError):
+            pass
+
+    def _reply_reuse_hit(self, message: Message) -> bool:
+        """True when the reply target's derived results should be reused.
+
+        Reads the flag stashed by _check_reply_derived_reuse during dispatch.
+        Defaults to False (reprocess) whenever the flag is absent -- e.g.
+        direct unit calls into harvest paths. [REH]
+        """
+        try:
+            meta = self._dispatch_metadata.get(getattr(message, "id", None))
+            if isinstance(meta, dict):
+                return bool(meta.get("reply_reuse_hit"))
+        except (AttributeError, TypeError):
+            pass
+        return False
+
+    async def _check_reply_derived_reuse(self, message: Message) -> bool:
+        """Reuse check honoring the resolution precedence for exact replies.
+
+        1. exact current/recent turn by Discord message_id (in-memory)
+        2. persisted recent-turn state (same store after reload -- T9)
+        3. exact server-archive recovery (raw content path; derived notes
+           live only in the turn store, never in semantic memory)
+        4. otherwise miss: re-harvest/re-fetch/re-transcribe as today.
+
+        A hit means the referenced turn already carries derived multimodal
+        results, so downstream media harvest of the *referenced* message is
+        skipped; the trigger's own media is always still processed. If the
+        reply targets the bot's own message, the nearest preceding user turn
+        with derived notes in the same channel is reused instead. Never
+        raises; stashes the outcome in dispatch metadata. [CA][REH]
+        """
+        try:
+            ref = getattr(message, "reference", None)
+            ref_id = getattr(ref, "message_id", None) if ref is not None else None
+            if not ref_id:
+                return False
+            manager = getattr(getattr(self, "bot", None), "enhanced_context_manager", None)
+            if manager is None:
+                return False
+            hit_kinds: list[str] = []
+            hit_via = ""
+            try:
+                key = manager.resolve_key(message)
+            except (AttributeError, TypeError):
+                key = None
+            turn = None
+            try:
+                turn = manager.get_turn_by_message_id(ref_id, key) or manager.get_turn_by_message_id(ref_id)
+            except (AttributeError, TypeError):
+                turn = None
+            if turn and (turn.get("derived") or []):
+                hit_via = "recent_turn"
+                hit_kinds = [str((n or {}).get("kind", "")) for n in turn["derived"]]
+            elif turn and str(turn.get("role", "")) == "bot":
+                # Reply to the bot's own message: reuse the nearest preceding
+                # user turn with derived notes in the same channel bucket.
+                try:
+                    bucket_key = key or manager.resolve_key(message)
+                    entries = (manager.memory or {}).get(bucket_key, []) if hasattr(manager, "memory") else []
+                    for entry in reversed(entries or []):
+                        if getattr(entry, "role", "") == "user" and (getattr(entry, "derived", None) or []):
+                            hit_via = "preceding_user_turn"
+                            hit_kinds = [str((n or {}).get("kind", "")) for n in (entry.derived or [])]
+                            break
+                except (AttributeError, TypeError):
+                    pass
+            hit = bool(hit_via)
+            try:
+                meta = self._dispatch_metadata.setdefault(getattr(message, "id", None), {})
+                if isinstance(meta, dict):
+                    meta["reply_reuse_hit"] = hit
+                    if hit:
+                        meta["reply_reuse_via"] = hit_via
+            except (AttributeError, TypeError):
+                pass
+            if hit:
+                with suppress(Exception):
+                    self.logger.info(
+                        "reference_reuse",
+                        extra={
+                            "event": "reference_reuse",
+                            "msg_id": getattr(message, "id", None),
+                            "detail": {"via": hit_via, "ref_id": str(ref_id), "kinds": sorted(set(hit_kinds))},
+                        },
+                    )
+            return hit
+        except Exception as exc:
+            self.logger.debug(f"reply derived-reuse check failed: {exc}")
+            return False
+
+    async def _fetch_archived_reference(self, message: Message, ref_id: Any) -> Any | None:
+        """Resolve a reply target from the server archive by exact message ID.
+
+        Returns a lightweight namespace exposing the attributes downstream
+        consumers use (id/content/author/attachments/embeds/created_at/
+        jump_url/reference/guild), or None when the archive is disabled or
+        the ID is unknown. Never raises. [REH]
+        """
+        try:
+            from bot.server_archive.service import get_archived_message
+
+            guild = getattr(message, "guild", None)
+            record = await get_archived_message(
+                str(ref_id),
+                guild_id=str(getattr(guild, "id", "")) if guild is not None else None,
+            )
+            if not record or (not (record.get("content") or "") and not (record.get("attachments_json") or [])):
+                return None
+            created = record.get("created_at") or ""
+            try:
+                created_at = datetime.fromisoformat(str(created)) if created else None
+            except (TypeError, ValueError):
+                created_at = None
+            author_id = str(record.get("author_id") or "")
+            try:
+                author_int: Any = int(author_id)
+            except (TypeError, ValueError):
+                author_int = author_id
+            try:
+                ref_int: Any = int(ref_id)
+            except (TypeError, ValueError):
+                ref_int = ref_id
+            display = record.get("author_display_name") or record.get("author_username") or f"User({author_id})"
+            attachments = []
+            for att in record.get("attachments_json") or []:
+                attachments.append(
+                    SimpleNamespace(
+                        filename=att.get("filename") or "",
+                        content_type=att.get("content_type") or "",
+                        url=att.get("url") or "",
+                        proxy_url=att.get("proxy_url") or "",
+                        size=att.get("size") or 0,
+                    )
+                )
+            reply_to = record.get("reply_to_message_id")
+            shim = SimpleNamespace(
+                id=ref_int,
+                content=record.get("content") or "",
+                author=SimpleNamespace(
+                    id=author_int,
+                    name=record.get("author_username") or display,
+                    display_name=display,
+                    bot=bool(record.get("author_is_bot")),
+                ),
+                attachments=attachments,
+                embeds=[],
+                created_at=created_at,
+                jump_url=record.get("jump_url") or "",
+                guild=SimpleNamespace(id=getattr(guild, "id", None)),
+                reference=SimpleNamespace(message_id=reply_to) if reply_to else None,
+                mentions=[],
+            )
+            with suppress(Exception):
+                self.logger.info(
+                    "reference_resolve",
+                    extra={
+                        "event": "reference_resolve",
+                        "msg_id": getattr(message, "id", None),
+                        "detail": {"via": "archive", "ref_id": str(ref_id)},
+                    },
+                )
+            return shim
+        except Exception as exc:
+            self.logger.debug(f"archived reference lookup failed: {exc}")
+            return None
 
     def _mentions_bot(self, message: Message) -> bool:
         """Return True if the message explicitly mentions this bot."""
@@ -3618,6 +3830,14 @@ class Router:
 
                 self.logger.debug(f"Scope resolved: context_str='{context_str[:100]}...'")
 
+                # Derived-reuse short-circuit: if this message replies to a
+                # turn that already carries stored multimodal results, reuse
+                # them instead of re-harvesting/re-fetching/re-transcribing
+                # the original media downstream. Only gates *referenced*
+                # harvest -- the trigger's own media is always processed. [REH]
+                with suppress(Exception):
+                    await self._check_reply_derived_reuse(message)
+
                 # Clean mention from content for processing
                 clean_content = content
                 if self._is_mentioned(message):
@@ -3874,6 +4094,14 @@ class Router:
                                 except Exception as exc:
                                     self.logger.debug(f"stt.ok logging failed: {exc}")
                                 self.logger.info(f"🎯 Route: stt_from_x_video | msg_id={message.id}")
+                                # Persist the derived understanding (tweet text +
+                                # transcript) onto the stored turn so later
+                                # turns can refer back to this video. [REH]
+                                with suppress(Exception):
+                                    await self._record_turn_derived(
+                                        message,
+                                        [build_note("x_video", url_for_stt, formatted)],
+                                    )
                                 # Stitched context: transcript (audio) + VL still (visual) [PA]
                                 visual_notes = await self._maybe_video_still_notes(stt_res, message)
                                 with suppress(Exception):
@@ -4038,6 +4266,14 @@ class Router:
                                 vl_notes=vl_notes,
                             )
                             self.logger.info(f"🎯 Route: vl_from_x_images | msg_id={message.id}")
+                            # Persist tweet caption + VL description onto the
+                            # stored turn for later reference resolution. [REH]
+                            with suppress(Exception):
+                                if vl_notes or tweet_caption:
+                                    await self._record_turn_derived(
+                                        message,
+                                        [build_note("image", (images or [base_context_url])[0], composed_input or "")],
+                                    )
                             with suppress(Exception):
                                 self.logger.info(
                                     "route.final",
@@ -4398,8 +4634,26 @@ class Router:
 
         ref_message: Message | None = None
 
+        # Derived-reuse gate: when the reply target already carries stored
+        # multimodal results, none of the referenced-message harvest blocks
+        # below run -- re-expanding the parent's URLs/embeds/attachments into
+        # items is exactly what caused full reprocessing (syndication +
+        # yt-dlp + Whisper + Playwright) of already-transcribed media.
+        # The trigger's own content/attachments are always still collected.
+        # [REH]
+        skip_ref_harvest = self._reply_reuse_hit(message)
+        if skip_ref_harvest:
+            with suppress(Exception):
+                self.logger.info(
+                    "mm.reuse_skip_harvest",
+                    extra={
+                        "event": "mm.reuse_skip_harvest",
+                        "msg_id": getattr(message, "id", None),
+                    },
+                )
+
         # Check for reply-image harvesting [VISION_REPLY_IMAGE_HARVEST]
-        if message.reference and self.config.get("VISION_REPLY_IMAGE_HARVEST", True):
+        if message.reference and not skip_ref_harvest and self.config.get("VISION_REPLY_IMAGE_HARVEST", True):
             try:
                 # Fetch the referenced message to harvest images
                 ref_message = await self._resolve_reference_message(message, fallback=ref_message)
@@ -4430,7 +4684,7 @@ class Router:
 
         # Reply link/attachment harvest (non-image) so reply chains route correctly [REH][IV]
         try:
-            if message.reference:
+            if message.reference and not skip_ref_harvest:
                 ref_message = await self._resolve_reference_message(message, fallback=ref_message)
 
                 if ref_message:
@@ -4488,7 +4742,7 @@ class Router:
         # must NOT depend on the VISION_REPLY_IMAGE_HARVEST flag. We add an unconditional safety harvest below.
         try:
             ref_msg = await self._resolve_reference_message(message, fallback=ref_message)
-            if ref_msg and getattr(ref_msg, "content", None):
+            if ref_msg and not skip_ref_harvest and getattr(ref_msg, "content", None):
                 # Extract URLs from the referenced message
                 found_urls = extract_urls_strict(ref_msg.content or "")
                 if found_urls:
@@ -4510,7 +4764,7 @@ class Router:
         # Safety net: Unconditional URL harvest for reply messages (not gated by VISION_REPLY_IMAGE_HARVEST)
         # Ensures reply→video (YouTube/TikTok/X) routes always collect the URL even when image harvest is disabled. [REH]
         try:
-            if getattr(message, "reference", None):
+            if getattr(message, "reference", None) and not skip_ref_harvest:
                 ref_msg = await self._resolve_reference_message(message, fallback=ref_message)
                 if ref_msg:
                     # 1) URLs present in the parent's text content
@@ -4537,6 +4791,15 @@ class Router:
                                 self.logger.info(f"📎 Reply URL harvest (unconditional) | from_msg={getattr(ref_msg, 'id', 'na')} urls_added={added_urls} now_items={len(items)}")
         except Exception as exc:
             self.logger.debug(f"unconditional reply URL harvest failed: {exc}")
+
+        # Collapse redundant reply-harvested URLs to one logical X status
+        # entity (canonical form, aliases/profiles/previews pruned). Replies
+        # only; standalone flows are untouched. [REH]
+        try:
+            if getattr(message, "reference", None) and not skip_ref_harvest:
+                self._prune_redundant_reply_media_items(message, items)
+        except Exception as exc:
+            self.logger.debug(f"reply media prune call failed: {exc}")
 
         # Process original text content (remove URLs that will be processed separately)
         original_text = message.content
@@ -5068,6 +5331,26 @@ class Router:
         successful_items = stats.get("successful_items", 0)
         total_items = stats.get("total_items", 0)
         self.logger.debug(f"📦 SEQUENTIAL MULTIMODAL COMPLETE: {successful_items}/{total_items} successful, total: {total_time:.1f}s")
+
+        # Join each successful item result back into shared conversation
+        # state through the one shared boundary, so every modality (X/STT,
+        # generic video/audio, VL image, URL extraction, screenshot, PDF)
+        # feeds the same recent-context representation. [CA][REH]
+        with suppress(Exception):
+            item_notes = []
+            for res in aggregator.results or []:
+                if not getattr(res, "success", False):
+                    continue
+                modality = getattr(res, "modality", None)
+                note = note_from_aggregator_result(
+                    getattr(modality, "name", None),
+                    getattr(res, "item_name", ""),
+                    getattr(res, "result_text", ""),
+                )
+                if note:
+                    item_notes.append(note)
+            if item_notes:
+                await self._record_turn_derived(message, item_notes)
 
         # Generate single aggregated response through text flow (1 IN → 1 OUT)
         # Gate out early if all multimodal items failed and no meaningful text remains.
@@ -7466,6 +7749,139 @@ class Router:
             self.logger.debug(f"vision.precheck_failed | {e}")
             return None
 
+    def _prune_redundant_reply_media_items(self, message: Message, items: list) -> dict[str, int]:
+        """Collapse a reply's harvested URLs to one logical X status entity.
+
+        The four reply-harvest blocks collect the same tweet through different
+        lenses (content text, strict match, embeds incl. preview + author
+        URLs), and twitter.com / x.com / ?s= aliases never dedupe by string.
+        Once an X status entity is present this pass, in place:
+        - rewrites status payloads to canonical https://x.com/i/status/{id},
+        - drops same-status aliases (keeps the first),
+        - drops X author/profile URLs (auxiliary, not media),
+        - drops jf.x.com preview artifacts (derived thumbnails, not sources),
+        - drops X media-CDN artifacts (video.twimg/pbs.twimg bytes the status
+          pipeline resolves authoritatively).
+        Distinct status IDs are all kept. Only runs for replies (callers
+        guard on message.reference) so standalone flows are untouched.
+        Returns prune counters for logging/tests. Never raises. [REH]
+        """
+        stats = {"canonicalized": 0, "pruned_aliases": 0, "pruned_profiles": 0, "pruned_previews": 0, "pruned_media_artifacts": 0}
+        try:
+            url_idx = [i for i, it in enumerate(items or []) if getattr(it, "source_type", None) == "url"]
+            if not url_idx:
+                return stats
+            roles: dict[int, tuple[str, str]] = {}
+            for i in url_idx:
+                raw = str(getattr(items[i], "payload", "") or "")
+                try:
+                    if self._is_twitter_status_url(raw):
+                        roles[i] = ("status", canonicalize_twitter_status_url(raw))
+                        continue
+                except (AttributeError, TypeError, ValueError):
+                    pass
+                try:
+                    host = urlparse(raw).netloc.lower()
+                except (AttributeError, TypeError, ValueError):
+                    host = ""
+                if host == "jf.x.com":
+                    roles[i] = ("preview", raw)
+                    continue
+                try:
+                    if is_twitter_media_cdn(raw):
+                        # Embed-derived CDN bytes (video.twimg/pbs.twimg) for
+                        # the same tweet: the status pipeline resolves media
+                        # authoritatively, so a parallel direct fetch would
+                        # transcribe the same bytes twice. [REH]
+                        roles[i] = ("media_artifact", raw)
+                        continue
+                except (AttributeError, TypeError, ValueError):
+                    pass
+                try:
+                    if self._is_twitter_url(raw):
+                        roles[i] = ("profile", raw)
+                        continue
+                except (AttributeError, TypeError, ValueError):
+                    pass
+                roles[i] = ("other", raw)
+            status_ids = {canon for role, canon in roles.values() if role == "status"}
+            if not status_ids:
+                return stats
+            seen_status: set[str] = set()
+            drop: set[int] = set()
+            for i in url_idx:
+                role, canon = roles[i]
+                if role == "status":
+                    try:
+                        items[i].payload = canon
+                    except (AttributeError, TypeError):
+                        pass
+                    if canon in seen_status:
+                        drop.add(i)
+                        stats["pruned_aliases"] += 1
+                    else:
+                        seen_status.add(canon)
+                        stats["canonicalized"] += 1
+                elif role == "profile":
+                    drop.add(i)
+                    stats["pruned_profiles"] += 1
+                elif role == "preview":
+                    drop.add(i)
+                    stats["pruned_previews"] += 1
+                elif role == "media_artifact":
+                    drop.add(i)
+                    stats["pruned_media_artifacts"] += 1
+            if drop:
+                kept = [it for i, it in enumerate(items) if i not in drop]
+                items[:] = kept
+            with suppress(Exception):
+                self.logger.info(
+                    "mm.harvest.pruned",
+                    extra={
+                        "event": "mm.harvest.pruned",
+                        "msg_id": getattr(message, "id", None),
+                        "detail": stats,
+                    },
+                )
+        except Exception as exc:
+            self.logger.debug(f"reply media prune failed: {exc}")
+        return stats
+
+    async def _record_turn_derived(self, message: Message, notes: list[dict] | None) -> bool:
+        """Join route-derived results into shared conversation state. [CA]
+
+        Single shared boundary for every specialized route (X/STT, VL, URL
+        extraction, documents, audio): notes built via
+        ``bot.memory.turn_notes`` attach to the stored user turn so later
+        turns ("the video attached", "translate that") resolve against recent
+        context. Never raises and never blocks the response path. [REH]
+        """
+        try:
+            manager = getattr(getattr(self, "bot", None), "enhanced_context_manager", None)
+            if manager is None or not notes:
+                return False
+            kept = [n for n in (notes or []) if n]
+            if not kept:
+                return False
+            ok = await manager.attach_derived_notes(message, kept)
+            if ok:
+                try:
+                    kinds = sorted({str((n or {}).get("kind", "")) for n in kept if (n or {}).get("kind")})
+                    self.logger.info(
+                        "turn_derived.recorded",
+                        extra={
+                            "event": "turn_derived.recorded",
+                            "msg_id": getattr(message, "id", None),
+                            "detail": {"notes": len(kept), "kinds": kinds},
+                        },
+                    )
+                except Exception as exc:
+                    self.logger.debug(f"turn_derived logging failed: {exc}")
+            return bool(ok)
+        except Exception as exc:
+            self.logger.debug(f"turn_derived.record_failed | {exc}")
+            return False
+
     async def _invoke_text_flow(
         self,
         content: str | EvidenceBundle,
@@ -7813,6 +8229,14 @@ class Router:
         """Process text input through the AI model with RAG integration and conversation context."""
         self.logger.debug("Processing text with AI model and RAG integration.")
 
+        # Perception results join shared conversation state through this one
+        # choke point: every reply-image / still-frame / VL flow funnels its
+        # notes into _flow_process_text (directly or via _invoke_text_flow),
+        # so all of them are recorded without per-route duplication. [CA]
+        if perception_notes and str(perception_notes).strip() and message is not None:
+            with suppress(Exception):
+                await self._record_turn_derived(message, [build_note("image", "perception", str(perception_notes))])
+
         # Convert EvidenceBundle to string for processing
         if isinstance(content, EvidenceBundle):
             content_str = content.compose()
@@ -7821,6 +8245,13 @@ class Router:
             content_str = content
 
         enhanced_context = context
+
+        # Local scope block (thread tail / reply chain / ambient-local) stays
+        # separate from retrieved knowledge (RAG / curated memory): only the
+        # local block may suppress rolling history downstream -- retrieved
+        # knowledge complements recent conversation, never replaces it. [REH]
+        scope_context = context or ""
+        retrieved_parts: list[str] = []
 
         # 1. RAG Integration - Search vector database concurrently for speed
         rag_task = None
@@ -7872,7 +8303,9 @@ class Router:
 
                     if rag_context_parts:
                         rag_context = "\n\n".join(rag_context_parts)
-                        enhanced_context = f"{context}\n\n=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n" if context else f"=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ===\n"
+                        rag_block = f"=== Relevant Knowledge ===\n{rag_context}\n=== End Knowledge ==="
+                        retrieved_parts.append(rag_block)
+                        enhanced_context = f"{context}\n\n{rag_block}\n" if context else f"{rag_block}\n"
                         self.logger.debug(f"✅ RAG: Enhanced context with {len(rag_context_parts)} knowledge chunks")
                     else:
                         self.logger.debug("⚠️ RAG: Search returned results but all chunks were empty")
@@ -7893,6 +8326,7 @@ class Router:
                     top_k=int(self.config.get("PERSISTENT_MEMORY_TOP_K", 6)),
                 )
                 if memory_block:
+                    retrieved_parts.append(memory_block)
                     enhanced_context = f"{enhanced_context}\n\n{memory_block}" if enhanced_context else memory_block
             except Exception as e:
                 self.logger.debug(f"persistent memory retrieval skipped: {e}")
@@ -7915,7 +8349,8 @@ class Router:
                     content_str,
                     self.bot,
                     perception_notes=perception_notes,
-                    extra_context=enhanced_context,
+                    extra_context=scope_context,
+                    retrieved_context="\n\n".join(retrieved_parts) if retrieved_parts else None,
                     system_prompt=anchored_system,
                 )
                 # Post-generation guard: if model contradicts visual facts, regenerate once, else fallback to VL text. [REH]
@@ -7979,7 +8414,8 @@ class Router:
                             repair_prompt,
                             self.bot,
                             perception_notes=perception_notes,
-                            extra_context=enhanced_context,
+                            extra_context=scope_context,
+                            retrieved_context="\n\n".join(retrieved_parts) if retrieved_parts else None,
                             system_prompt=anchored_system,
                         )
                         if second and not any(p in (second or "").lower() for p in bad_phrases):
@@ -8718,6 +9154,18 @@ class Router:
             final_prompt = f"{user_caption}\n\n{combined_evidence}" if user_caption else combined_evidence
 
             self.logger.info(f"Multimodal aggregation complete: {len(evidence_parts)} sources, {len(final_prompt)} total chars")
+
+            # Persist per-source evidence onto the stored turn (transcripts,
+            # document text, image analysis) for later reference resolution;
+            # user_caption already lives in the raw turn text. [REH]
+            with suppress(Exception):
+                ev_notes = []
+                for part in evidence_parts:
+                    note = note_from_evidence_part(part)
+                    if note:
+                        ev_notes.append(note)
+                if ev_notes:
+                    await self._record_turn_derived(message, ev_notes)
 
             # Send to brain for final processing
             return await brain_infer(final_prompt)

@@ -173,6 +173,34 @@ class ServerArchiveService:
             limit=limit or self.search_limit,
         )
 
+    async def get_message_by_id(
+        self,
+        message_id: str,
+        *,
+        guild_id: str | None = None,
+        channel_id: str | None = None,
+    ) -> dict | None:
+        """Exact archived-message lookup with scope verification.
+
+        Returns None when the archive is disabled, the ID is unknown, or the
+        stored guild/channel does not match the caller's scope (when given).
+        """
+        if not self.enabled:
+            return None
+        try:
+            record = await self.store.get_message_by_id(str(message_id))
+        except Exception:
+            return None
+        if record is None:
+            return None
+        if guild_id is not None and str(record.get("guild_id") or "") != str(guild_id):
+            return None
+        if channel_id is not None and str(record.get("channel_id") or "") != str(channel_id):
+            want_thread = str(channel_id)
+            if str(record.get("thread_id") or "") != want_thread:
+                return None
+        return record
+
     async def sync_channel(self, channel: Any, *, force: bool = False) -> int:
         if not self.enabled or self._paused:
             return 0
@@ -320,6 +348,17 @@ async def search_archive(
         author_id=author_id,
         limit=limit,
     )
+
+
+async def get_archived_message(
+    message_id: str,
+    *,
+    guild_id: str | None = None,
+    channel_id: str | None = None,
+) -> dict | None:
+    """Exact archived-message lookup by Discord message ID (module helper)."""
+    service = await get_server_archive_service()
+    return await service.get_message_by_id(message_id, guild_id=guild_id, channel_id=channel_id)
 
 
 async def get_server_archive_status(*, guild_id: str | None = None) -> dict[str, Any]:

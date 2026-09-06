@@ -73,6 +73,15 @@ async def test_harvested_reply_x_url_skips_reply_perception_gate(monkeypatch) ->
 
     monkeypatch.setattr(router_mod, "get_retry_manager", _RetryManager)
 
+    # The status item is the surviving entity after reply-harvest
+    # normalization (embed preview/thumbnail artifacts are pruned once the
+    # status is present); serve its output directly so the test does not
+    # depend on the pruned artifact or on live network extraction.
+    async def _fake_handle_item(item, modality, provider_config, message=None):
+        return f"ok:{getattr(item, 'payload', '')}"
+
+    monkeypatch.setattr(router, "_handle_item_with_provider", _fake_handle_item)
+
     router._prioritized_vision_route = AsyncMock(return_value=None)
     router._run_perception_notes = AsyncMock(return_value=("notes", None))
     router._invoke_text_flow = AsyncMock(return_value=BotAction(content="done"))

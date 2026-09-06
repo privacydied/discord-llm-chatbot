@@ -1,6 +1,5 @@
 """Contextual brain inference with enhanced context manager integration."""
 
-import re
 from typing import TYPE_CHECKING, Any, Optional
 
 import discord
@@ -24,6 +23,7 @@ async def contextual_brain_infer(
     *,
     perception_notes: str | None = None,
     extra_context: str | None = None,
+    retrieved_context: str | None = None,
     system_prompt: str | None = None,
 ) -> dict[str, Any]:
     """Enhanced brain inference with contextual conversation awareness.
@@ -34,6 +34,14 @@ async def contextual_brain_infer(
         bot: Bot instance (for accessing enhanced context manager)
         include_cross_user: Whether to include cross-user context in shared channels
         return_json_envelope: Whether to return JSON envelope format
+        perception_notes: Visual perception notes for the current turn
+        extra_context: Local scope block (thread tail / reply chain / ambient).
+            When present, the rolling history buffer is skipped: the local
+            block is authoritative for that scope (ambient interjections must
+            never inherit unrelated channel chatter).
+        retrieved_context: RAG / curated-memory block. Unlike extra_context
+            this NEVER suppresses rolling history -- retrieved knowledge
+            complements recent conversation, it must not substitute for it.
 
     Returns:
         Dict containing response_text, used_history, and fallback status
@@ -76,26 +84,16 @@ async def contextual_brain_infer(
         case = _scope.case.upper() if _scope.case else "LONE"
         scope_id = _scope.scope_id
 
-        # Locality-first policies
-        try:
-            mentioned_me = bot.user in (getattr(message, "mentions", None) or [])
-        except (AttributeError, TypeError):
-            mentioned_me = False
-        try:
-            content_has_signal = bool(re.search(r"[A-Za-z0-9]", prompt or ""))
-        except (TypeError, re.error):
-            content_has_signal = bool(prompt and prompt.strip())
-
-        # Skip history if:
-        # - We have an explicit local block (extra_context) for THREAD/REPLY/LONE
-        # - Or LONE @mention has substantive content
+        # Skip rolling history only when an explicit LOCAL scope block is
+        # present (thread tail / reply chain / ambient-local). The local block
+        # is authoritative for its scope; the rolling buffer may hold
+        # unrelated chatter (ambient case) or duplicate the same turns.
+        # Retrieved knowledge (RAG / curated memory) must NEVER trigger this
+        # skip -- it complements recent conversation, it does not replace it.
+        # (A previous lone-mention carve-out compared against a scope case
+        # that resolve_scope never returns; it was dead code and is removed:
+        # addressed follow-ups like "the video attached" need history.)
         skip_history = bool(extra_context)
-        if not skip_history:
-            try:
-                if mentioned_me and (case == "LONE") and content_has_signal:
-                    skip_history = True
-            except (AttributeError, TypeError) as e:
-                logger.debug(f"Failed to evaluate skip_history condition: {e}")
 
         if skip_history:
             # Optionally compute how many entries would have been dropped for visibility
@@ -172,9 +170,12 @@ async def contextual_brain_infer(
                 logger.debug(f"Failed to log perception injection breadcrumb: {e}")
 
         blocks = []
-        # Prepend mention/reply context before historical memory
+        # Prepend mention/reply context before historical memory; retrieved
+        # knowledge (RAG / curated memory) rides along without suppressing it.
         if extra_context:
             blocks.append(extra_context.strip())
+        if retrieved_context and str(retrieved_context).strip():
+            blocks.append(str(retrieved_context).strip())
         if history_block:
             blocks.append(history_block)
         if perception_block:
@@ -182,6 +183,73 @@ async def contextual_brain_infer(
 
         if blocks:
             contextual_prompt = "\n\n".join(blocks) + f"\n\nCurrent message: {prompt}"
+
+        # Structured observability: what did the model receive for this
+        # Discord message? Debug-safe metadata only, never raw content. [REH]
+        try:
+            _ref_id = None
+            try:
+                _ref = getattr(message, "reference", None)
+                _ref_mid = getattr(_ref, "message_id", None) if _ref is not None else None
+                _ref_id = str(_ref_mid) if _ref_mid is not None else None
+            except (AttributeError, TypeError, ValueError):
+                _ref_id = None
+            _ref_resolved = False
+            if _ref_id:
+                try:
+                    _ref_resolved = bot.enhanced_context_manager.get_turn_by_message_id(_ref_id) is not None
+                except (AttributeError, TypeError):
+                    _ref_resolved = False
+            _derived_count, _derived_kinds = 0, []
+            try:
+                _counted = bot.enhanced_context_manager.count_derived(context_entries)
+                _derived_count, _derived_kinds = int(_counted[0]), list(_counted[1])
+            except Exception as e:
+                logger.debug(f"Derived-note telemetry unavailable: {e}")
+            _guild = getattr(message, "guild", None)
+            _channel = getattr(message, "channel", None)
+            # Router stashes how an explicit reply was resolved
+            # (discord_resolved | discord_fetch | archive | miss) in dispatch
+            # metadata; surface it here so one log answers the whole query.
+            _archive_lookup: bool | None = None
+            try:
+                _router = getattr(bot, "router", None)
+                _meta = getattr(_router, "_dispatch_metadata", None)
+                _entry = _meta.get(getattr(message, "id", None), {}) if isinstance(_meta, dict) else {}
+                _via = _entry.get("reference_resolve") if isinstance(_entry, dict) else None
+                if isinstance(_via, str):
+                    _archive_lookup = _via == "archive"
+            except (AttributeError, TypeError):
+                _archive_lookup = None
+            _retrieved = bool(retrieved_context and str(retrieved_context).strip())
+            logger.info(
+                "context_build",
+                extra={
+                    "subsys": "mem.ctx",
+                    "event": "context_build",
+                    "guild_id": getattr(_guild, "id", None),
+                    "user_id": getattr(getattr(message, "author", None), "id", None),
+                    "msg_id": getattr(message, "id", None),
+                    "detail": {
+                        "channel_id": getattr(_channel, "id", None),
+                        "thread_id": getattr(_channel, "id", None) if isinstance(_channel, discord.Thread) else None,
+                        "recent_turn_count": len(context_entries or []),
+                        "history_skipped": bool(skip_history),
+                        "local_block": bool(extra_context),
+                        "retrieved_block": _retrieved,
+                        "memory_hits": _retrieved,
+                        "perception_block": bool(perception_notes),
+                        "referenced_msg_id": _ref_id,
+                        "referenced_msg_resolved": _ref_resolved,
+                        "archive_lookup": _archive_lookup,
+                        "derived_media_items": _derived_count,
+                        "derived_kinds": _derived_kinds,
+                    },
+                },
+            )
+        except Exception as e:
+            # Telemetry must never break the response path (mocks, odd shapes).
+            logger.debug(f"Failed to emit context_build breadcrumb: {e}")
 
         # Generate AI response
         ai_response = await brain_infer(contextual_prompt, system_prompt=system_prompt)
@@ -263,6 +331,7 @@ async def contextual_brain_infer_simple(
     *,
     perception_notes: str | None = None,
     extra_context: str | None = None,
+    retrieved_context: str | None = None,
     system_prompt: str | None = None,
 ) -> str:
     """Simplified contextual brain inference that returns just the response text.
@@ -284,6 +353,7 @@ async def contextual_brain_infer_simple(
         return_json_envelope=False,
         perception_notes=perception_notes,
         extra_context=extra_context,
+        retrieved_context=retrieved_context,
         system_prompt=system_prompt,
     )
     return result["response_text"]

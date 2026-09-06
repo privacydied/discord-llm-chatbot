@@ -189,6 +189,15 @@ try:
 except (TypeError, ValueError):
     MEMORY_ABORT_THRESHOLD_MB = 900
 
+# Minimum job-attributable RSS growth (MB) required before the absolute
+# threshold can trigger an abort. The guard measures whole-process RSS, which
+# includes baseline residents (other models, caches); without a growth floor
+# a process idling above the threshold aborts every job spuriously. [REH]
+try:
+    MEMORY_GROWTH_FLOOR_MB = int(os.getenv("STT_MEMORY_GROWTH_FLOOR_MB", "256"))
+except (TypeError, ValueError):
+    MEMORY_GROWTH_FLOOR_MB = 256
+
 STT_MAX_RAM_MB: int | None = None
 try:
     _stt_max_ram_raw = os.getenv("STT_MAX_RAM_MB")
@@ -682,6 +691,11 @@ class FFMpegPCMStream(BasePCMStream):
         self._spans = spans
         self._pre_timeout = max(pre_timeout, 1.0)
         self._stderr_task: asyncio.Task | None = None
+        # Tracks whether ffmpeg's stdout was consumed to natural EOF. Only a
+        # complete capture may be promoted to the PCM retry cache; a producer
+        # cancelled mid-stream (consumer abort, kill) leaves a truncated temp
+        # file that must never masquerade as full audio. [REH]
+        self._producer_ok = False
         self._monitor_tasks.append(asyncio.create_task(self._monitor()))
 
     async def start(self) -> None:
@@ -748,12 +762,21 @@ class FFMpegPCMStream(BasePCMStream):
                 self._total_samples += len(chunk) // self.bytes_per_sample
                 fh.write(chunk)
                 await self._queue.put(bytes(chunk))
+        # Natural EOF: the temp file holds complete audio and may back retries.
+        self._producer_ok = True
 
     async def finalize(self, success: bool) -> None:
         if self._finalized:
             return
         await super().finalize(success)
-        if success and not self._aborted and self._error is None:
+        # Preserve the PCM retry cache whenever the captured audio itself is
+        # intact -- even when the *consumer* aborted (memory guard, downgrade
+        # path). Previously any abort deleted the temp file, which guaranteed
+        # "PCM cache unavailable for STT retry" and forced a full re-download
+        # + re-preprocess (up to the 45s pre budget) on every retry. Only a
+        # preprocessing error or a truncated capture deletes it. [REH]
+        audio_intact = self._error is None and self._producer_ok and self._total_samples > 0
+        if audio_intact:
             _store_pcm_cache_from_temp(
                 self._cache_key,
                 self._temp_path,
@@ -1708,6 +1731,8 @@ async def _resolve_memory_abort(
     confirm: bool,
     process: psutil.Process,
     confirm_delay: float = _MEMORY_CONFIRM_DELAY_S,
+    baseline_rss_mb: float | None = None,
+    growth_floor_mb: float = MEMORY_GROWTH_FLOOR_MB,
 ) -> bool:
     """Decide whether to abort the in-progress transcription on high RSS.
 
@@ -1718,6 +1743,12 @@ async def _resolve_memory_abort(
     that never produced a second call left a real high-memory breach
     unresolved and the job simply completed anyway. [REH][PA]
 
+    The threshold is absolute process RSS, but an abort additionally requires
+    job-attributable *growth* above the baseline captured at job start: a
+    process idling at 1.2 GB for unrelated residents must not abort a job
+    that grew it by 30 MB. Pass baseline_rss_mb=None to keep the legacy
+    absolute-only behavior. [REH]
+
     Args:
         rss_mb: Most recently measured RSS, in MB.
         confirm: Whether to debounce via a re-measurement (True for short
@@ -1726,9 +1757,32 @@ async def _resolve_memory_abort(
             clips).
         process: psutil.Process handle to re-measure RSS from when confirming.
         confirm_delay: Seconds to wait before the confirming re-measurement.
+        baseline_rss_mb: Process RSS at job start, or None for legacy mode.
+        growth_floor_mb: Minimum growth over baseline that counts as a breach.
 
     """
     if rss_mb < MEMORY_ABORT_THRESHOLD_MB:
+        return False
+
+    def _breach_confirmed(reading: float) -> bool:
+        if reading < MEMORY_ABORT_THRESHOLD_MB:
+            return False
+        if baseline_rss_mb is None or baseline_rss_mb <= 0:
+            return True
+        growth = reading - baseline_rss_mb
+        if growth < growth_floor_mb:
+            with contextlib.suppress(Exception):
+                logger.info(
+                    "stt.guard.memory rss_mb=%.1f action=dismiss_baseline base_mb=%.1f growth_mb=%.1f floor_mb=%.1f",
+                    reading,
+                    baseline_rss_mb,
+                    growth,
+                    growth_floor_mb,
+                )
+            return False
+        return True
+
+    if not _breach_confirmed(rss_mb):
         return False
 
     if not confirm:
@@ -1744,7 +1798,7 @@ async def _resolve_memory_abort(
     except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
         rss_second = rss_mb
 
-    if rss_second >= MEMORY_ABORT_THRESHOLD_MB:
+    if _breach_confirmed(rss_second):
         with contextlib.suppress(Exception):
             logger.info("stt.guard.memory rss_mb=%.1f action=abort_partial", rss_second)
         return True
@@ -1865,9 +1919,21 @@ async def _transcribe_with_model(
     max_chunks = max(1, min(dynamic_limit, MAX_CHUNK_ABS_LIMIT))
     process = psutil.Process()
     confirm_memory_abort = pre.duration_in <= 90.0
+    # Baseline process RSS at job start: the guard aborts only on
+    # job-attributable *growth* past the absolute threshold, so unrelated
+    # residents (other models, caches) can't spuriously kill the job. [REH]
+    try:
+        baseline_rss_mb = process.memory_info().rss / (1024 * 1024)
+    except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
+        baseline_rss_mb = None
 
     async def _should_abort_for_memory(rss_mb: float) -> bool:
-        return await _resolve_memory_abort(rss_mb, confirm=confirm_memory_abort, process=process)
+        return await _resolve_memory_abort(
+            rss_mb,
+            confirm=confirm_memory_abort,
+            process=process,
+            baseline_rss_mb=baseline_rss_mb,
+        )
 
     async def _decode_chunk(chunk_audio: np.ndarray, language: str | None = None) -> tuple[list[Any], Any, float]:
         """Decode a single audio chunk with Whisper.

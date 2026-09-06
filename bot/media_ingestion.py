@@ -5,6 +5,7 @@ Handles smart routing between media extraction and web scraping flows.
 import asyncio
 import os
 import time
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Never
 
@@ -470,6 +471,18 @@ class MediaIngestionManager:
     async def _create_bot_action_from_media(self, media_result: MediaIngestionResult, message) -> BotAction:
         """Create BotAction from successful media processing."""
         try:
+            # Join the derived media understanding back into shared
+            # conversation state so later turns can refer back to it. [CA]
+            with suppress(Exception):
+                manager = getattr(getattr(self, "bot", None), "enhanced_context_manager", None)
+                if manager is not None and (media_result.content or "").strip():
+                    from .memory.turn_notes import build_note
+
+                    source = (media_result.metadata or {}).get("source") or media_result.source_type
+                    await manager.attach_derived_notes(
+                        message,
+                        [build_note(source, str((media_result.metadata or {}).get("title", "") or ""), media_result.content)],
+                    )
             # Get conversation context
             context_str = await self.bot.context_manager.get_context_string(message)
 

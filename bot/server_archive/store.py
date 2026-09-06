@@ -1183,6 +1183,79 @@ class ServerArchiveStore:
         offset = (page - 1) * page_size
         return await _to_thread(self._get_channel_messages_sync, channel_id, page, page_size, offset, after_id, before_id)
 
+    async def get_message_by_id(self, message_id: str) -> dict[str, Any] | None:
+        """Exact lookup of one archived message by Discord message ID.
+
+        ``message_id`` is the table PRIMARY KEY: this is a single indexed row
+        fetch -- no FTS, no scan. It is the deterministic fallback for
+        resolving an explicit Discord reply whose target is no longer
+        fetchable from the gateway (deleted, uncached, permission loss).
+        Returns None for unknown or soft-deleted messages. [REH][PA]
+        """
+        await self.initialize()
+        return await _to_thread(self._get_message_by_id_sync, str(message_id))
+
+    def _get_message_by_id_sync(self, message_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            conn = self._connect()
+            try:
+                row = conn.execute(
+                    """SELECT am.message_id, am.guild_id, am.channel_id, am.thread_id,
+                              am.content, am.clean_content, am.created_at, am.edited_at,
+                              am.author_id, am.reply_to_message_id, am.deleted_at,
+                              am.jump_url, am.metadata_json, am.has_attachments,
+                              au.username, au.global_name, au.display_name, au.bot
+                       FROM archive_messages am
+                       LEFT JOIN archive_users au ON am.author_id = au.user_id
+                       WHERE am.message_id = ? AND am.deleted_at IS NULL""",
+                    (message_id,),
+                ).fetchone()
+                if row is None:
+                    return None
+                r = dict(row)
+                mid = r["message_id"]
+                attachments: list[dict[str, Any]] = []
+                if r.get("has_attachments"):
+                    for att in conn.execute(
+                        "SELECT message_id, attachment_id, filename, content_type, size, url, proxy_url "
+                        "FROM archive_attachments WHERE message_id = ?",
+                        (mid,),
+                    ).fetchall():
+                        a = dict(att)
+                        attachments.append(
+                            {
+                                "id": a.get("attachment_id"),
+                                "filename": a.get("filename"),
+                                "content_type": a.get("content_type"),
+                                "size": a.get("size"),
+                                "url": a.get("url") or "",
+                                "proxy_url": a.get("proxy_url") or "",
+                            }
+                        )
+                username = r.get("username") or ""
+                display = r.get("display_name") or r.get("global_name") or username
+                return {
+                    "discord_message_id": mid,
+                    "message_id": mid,
+                    "guild_id": r.get("guild_id"),
+                    "channel_id": r.get("channel_id"),
+                    "thread_id": r.get("thread_id"),
+                    "content": r.get("content") or "",
+                    "clean_content": r.get("clean_content") or "",
+                    "created_at": r.get("created_at"),
+                    "edited_at": r.get("edited_at"),
+                    "author_id": r.get("author_id"),
+                    "author_username": username,
+                    "author_display_name": display,
+                    "author_is_bot": bool(r.get("bot")),
+                    "reply_to_message_id": r.get("reply_to_message_id"),
+                    "jump_url": r.get("jump_url") or "",
+                    "attachments_json": attachments,
+                    "metadata_json": r.get("metadata_json") or {},
+                }
+            finally:
+                conn.close()
+
     def _get_channel_messages_sync(
         self,
         channel_id: str,

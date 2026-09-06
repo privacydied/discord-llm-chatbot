@@ -10,6 +10,7 @@ import discord
 from bot.utils.logging import get_logger
 
 from .mention_context import MentionContextBlock, PackagedItem  # reuse packaging schema
+from .turn_notes import enrich_items_with_media_notes
 
 logger = get_logger(__name__)
 
@@ -55,7 +56,7 @@ def _sanitize_mentions(text: str, guild: discord.Guild | None) -> str:
         return text.strip()
 
 
-def _format_joined_text(items: list[PackagedItem]) -> str:
+def _format_joined_text(items: list[PackagedItem], media_notes: dict[str, str] | None = None) -> str:
     n = len(items)
     parts: list[str] = []
     for i, it in enumerate(items, start=1):
@@ -69,6 +70,11 @@ def _format_joined_text(items: list[PackagedItem]) -> str:
         header = f"[{i}/{n}] {it.author_name} – {ts}" if ts else f"[{i}/{n}] {it.author_name}"
         parts.append(header)
         parts.append(it.text_plain)
+        # Render stored multimodal results (transcripts, VL descriptions)
+        # under the raw message text so follow-ups resolve "the video". [REH]
+        note = (media_notes or {}).get(getattr(it, "id", ""))
+        if note:
+            parts.append(f"/media: {note}")
         parts.append("")
     return "\n".join(parts).strip()
 
@@ -226,7 +232,7 @@ async def collect_implicit_anchor_context(
                 ),
             )
 
-        joined_text = _format_joined_text(items) if items else ""
+        joined_text = _format_joined_text(items, enrich_items_with_media_notes(bot, message, items)) if items else ""
         anc = {
             "id": str(getattr(anchor, "id", "")),
             "author": getattr(anchor.author, "display_name", getattr(anchor.author, "name", "")),
@@ -345,7 +351,7 @@ async def collect_thread_tail_context(
             )
             items.append(it)
 
-        joined_text = _format_joined_text(items) if items else ""
+        joined_text = _format_joined_text(items, enrich_items_with_media_notes(bot, message, items)) if items else ""
 
         # Package block
         anc = {

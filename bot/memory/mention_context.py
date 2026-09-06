@@ -14,6 +14,7 @@ from typing import Any
 import discord
 
 from ..utils.logging import get_logger
+from .turn_notes import enrich_items_with_media_notes
 
 
 logger = get_logger(__name__)
@@ -182,7 +183,7 @@ def _sanitize_mentions(text: str, guild: discord.Guild | None) -> str:
         return text.strip()
 
 
-def _format_joined_text(items: list[PackagedItem]) -> str:
+def _format_joined_text(items: list[PackagedItem], media_notes: dict[str, str] | None = None) -> str:
     n = len(items)
     parts: list[str] = []
     for i, it in enumerate(items, start=1):
@@ -197,6 +198,11 @@ def _format_joined_text(items: list[PackagedItem]) -> str:
         header = f"[{i}/{n}] {it.author_name} \u2013 {ts}" if ts else f"[{i}/{n}] {it.author_name}"
         parts.append(header)
         parts.append(it.text_plain)
+        # Render stored multimodal results (transcripts, VL descriptions)
+        # under the raw message text so follow-ups resolve "the video". [REH]
+        note = (media_notes or {}).get(getattr(it, "id", ""))
+        if note:
+            parts.append(f"/media: {note}")
         parts.append("")
     return "\n".join(parts).strip()
 
@@ -432,7 +438,7 @@ def _package(
         )
         items.append(it)
 
-    joined_text = _format_joined_text(items)
+    joined_text = _format_joined_text(items, enrich_items_with_media_notes(bot, message, items))
     conv_id = str(getattr(message.channel, "id", "")) if case == THREAD_CASE else str(getattr(anchor, "id", ""))
     anc = None
     if anchor:
