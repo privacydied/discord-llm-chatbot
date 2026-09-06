@@ -578,10 +578,10 @@ async def generate_openai_response(
                 base_system_prompt = _load_prompt_cached(prompt_file_path)
             except FileNotFoundError:
                 msg = f"Prompt file not found: {prompt_file_path}"
-                raise APIError(msg)
+                raise APIError(msg) from None
             except Exception as e:
                 msg = f"Error reading prompt file {prompt_file_path}: {e}"
-                raise APIError(msg)
+                raise APIError(msg) from e
 
             # Combine base prompt, server context, and conversation history
             full_system_prompt = f"""{base_system_prompt}
@@ -650,7 +650,7 @@ Server Context: {server_context}"""
                 }
             except Exception as norm_error:
                 msg_0 = f"Response normalization failed: {type(norm_error).__name__}: {norm_error}"
-                raise APIError(msg_0)
+                raise APIError(msg_0) from norm_error
 
         _single_kwargs = dict(kwargs)
         _single_reasoning_eb = _reasoning_exclude_extra_body(api_base, config)
@@ -775,7 +775,7 @@ Server Context: {server_context}"""
                                 err.retry_after_seconds = retry_after
                         except Exception as e:
                             logger.debug(f"Failed to set retry_after_seconds: {e}")
-                        raise err
+                        raise err from None
                     except Exception as e:
                         # Normalize timeouts and log a compact line per attempt [REH]
                         elapsed_ms = int((time.monotonic() - t0) * 1000)
@@ -783,7 +783,7 @@ Server Context: {server_context}"""
                         if "timeout" in str(e).lower() or "timeout" in etype.lower():
                             logger.warning(f"TextGen timeout (model {selected_model}): {elapsed_ms}ms")
                             msg_0 = f"Request timeout after ~{elapsed_ms}ms for model {selected_model}"
-                            raise APIError(msg_0)
+                            raise APIError(msg_0) from e
                         raise
                     finally:
                         await _safe_aclose_openai_client(attempt_client)
@@ -865,7 +865,7 @@ Server Context: {server_context}"""
                             logger.debug(f"Failed to classify error retryability: {e}")
                     except Exception:
                         # Fallback to original error if wrapping fails
-                        raise base_err
+                        raise base_err from None
                     # Normal path: propagate a clean APIError up to the caller so it can be
                     # handled without dumping a full traceback in logs. [REH]
                     raise api_err
@@ -893,7 +893,7 @@ Server Context: {server_context}"""
                 if "timeout" in str(e).lower() or "TimeoutError" in str(type(e).__name__):
                     logger.warning(f"[OpenAI] ⏰ Request timeout after {config.get('TEXT_REQUEST_TIMEOUT', 30)}s: {e}")
                     msg_0 = f"Request timeout: {e!s}"
-                    raise APIError(msg_0)
+                    raise APIError(msg_0) from e
                 logger.exception(f"[OpenAI] ❌ API request failed: {e}")
                 raise
             logger.debug("[OpenAI] ✅ Received response from API")
@@ -905,7 +905,7 @@ Server Context: {server_context}"""
     except OpenAIAuthenticationError as e:
         logger.exception(f"OpenAI authentication failed: {e}")
         msg_0 = f"OpenAI authentication failed - check API key: {e!s}"
-        raise APIError(msg_0)
+        raise APIError(msg_0) from e
     except OpenAIRateLimitError as e:
         logger.warning(f"OpenAI rate limit exceeded: {e}")
         retry_after = None
@@ -925,7 +925,7 @@ Server Context: {server_context}"""
                 err.retry_after_seconds = retry_after
         except Exception as exc:
             logger.debug(f"Failed to set retry_after_seconds: {exc}")
-        raise err
+        raise err from None
     except OpenAIAPIError as e:
         _es = str(e).lower()
         _mod = ("flagged" in _es or "moderation" in _es or "self-harm" in _es or "self_harm" in _es or "requires moderation" in _es or "content_filter" in _es) and ("403" in _es or "400" in _es)
@@ -935,16 +935,16 @@ Server Context: {server_context}"""
             _err = APIError(f"Content blocked by moderation: {e!s}")
             _err.retryable = False
             _err.content_moderation = True
-            raise _err
+            raise _err from e
         elif _no_ep:
             logger.warning(f"[OpenAI] Model/endpoint not found: {e}")
             _err = APIError(f"Model not found (no endpoints): {e!s}")
             _err.retryable = False
-            raise _err
+            raise _err from e
         else:
             logger.exception(f"OpenAI API error: {e}")
             msg_0 = f"OpenAI API error: {e!s}"
-            raise APIError(msg_0)
+            raise APIError(msg_0) from e
     except httpx.HTTPStatusError as e:
         # Surface HTTP errors (e.g., 429 Too Many Requests from OpenRouter) as retriable APIError
         status = e.response.status_code if e.response is not None else "unknown"
@@ -977,7 +977,7 @@ Server Context: {server_context}"""
                 err.retry_after_seconds = retry_after
         except Exception as exc:
             logger.debug(f"Failed to set retry_after_seconds: {exc}")
-        raise err
+        raise err from None
     except APIError as e:
         # Already normalized, don't double-wrap or spam error-level logs
         logger.warning(f"[OpenAI] Retriable APIError: {e}")
@@ -995,7 +995,7 @@ Server Context: {server_context}"""
             exc_info=True,
         )
         msg_0 = f"Failed to generate OpenAI response: {error_details}"
-        raise APIError(msg_0)
+        raise APIError(msg_0) from e
 
 
 async def get_base64_image(image_url: str) -> str:
@@ -1031,7 +1031,7 @@ async def get_base64_image(image_url: str) -> str:
         except Exception as e:
             error_msg = f"Failed to process image file: {e}"
             logger.error(error_msg, exc_info=True)
-            raise APIError(error_msg)
+            raise APIError(error_msg) from e
 
     # Handle HTTP/HTTPS URLs
     elif image_url.startswith(("http://", "https://")):
@@ -1050,7 +1050,7 @@ async def get_base64_image(image_url: str) -> str:
         except Exception as e:
             error_msg = f"Failed to download image from URL: {e}"
             logger.error(error_msg, exc_info=True)
-            raise APIError(error_msg)
+            raise APIError(error_msg) from e
 
     # Already a data URL
     elif image_url.startswith("data:"):
@@ -1241,14 +1241,14 @@ async def _generate_vl_response_with_retry(
                             err.retry_after_seconds = retry_after
                     except Exception as exc:
                         logger.debug(f"Failed to set retry_after_seconds: {exc}")
-                    raise err
+                    raise err from None
                 except Exception as e:
                     elapsed_ms = int((time.monotonic() - t0) * 1000)
                     etype = type(e).__name__
                     if "timeout" in str(e).lower() or "timeout" in etype.lower():
                         logger.warning(f"VL timeout (model {selected_model}): {elapsed_ms}ms")
                         msg_1 = f"Request timeout after ~{elapsed_ms}ms for model {selected_model}"
-                        raise APIError(msg_1)
+                        raise APIError(msg_1) from e
                     raise
                 finally:
                     await _safe_aclose_openai_client(client)
@@ -1325,7 +1325,7 @@ async def _generate_vl_response_with_retry(
                     except Exception as exc:
                         logger.debug(f"Failed to classify error retryability: {exc}")
                 except Exception:
-                    raise base_err
+                    raise base_err from None
                 raise api_err
             exhaustion_error = APIError("All vision providers exhausted")
             exhaustion_error.vl_exhausted = True
