@@ -596,8 +596,8 @@ class VisionCommands(commands.Cog):
         async with aiohttp.ClientSession() as session, session.get(attachment.url) as resp:
             if resp.status == 200:
                 data = await resp.read()
-                with open(temp_path, "wb") as f:
-                    f.write(data)
+                # Off the event loop: attachments can be multi-MB [REH]
+                await asyncio.to_thread(temp_path.write_bytes, data)
             else:
                 msg = f"Failed to download attachment: HTTP {resp.status}"
                 raise VisionDownloadError(msg)
