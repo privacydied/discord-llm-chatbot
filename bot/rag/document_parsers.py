@@ -204,7 +204,7 @@ class DocumentParserFactory:
             except (ImportError, RuntimeError, OSError, ValueError, subprocess.CalledProcessError, FileNotFoundError) as e:
                 logger.exception(f"OCR fallback failed for {file_path}: {e}")
                 msg = f"Could not extract text from PDF: {e}"
-                raise ValueError(msg)
+                raise ValueError(msg) from e
 
         metadata["char_count"] = len(content)
         metadata["line_count"] = len(content.splitlines())
@@ -254,14 +254,14 @@ class DocumentParserFactory:
             from pdf2image import convert_from_path
         except ImportError as e:
             msg = f"OCR dependencies not available: {e}. Install with: pip install pdf2image"
-            raise ImportError(msg)
+            raise ImportError(msg) from e
 
         # Check if poppler-utils is available
         try:
             subprocess.run(["pdftoppm", "-h"], capture_output=True, check=True)  # nosec B603, B607
         except (subprocess.CalledProcessError, FileNotFoundError):
             msg = "poppler-utils not found. Install with: sudo apt-get install poppler-utils"
-            raise ImportError(msg)
+            raise ImportError(msg) from None
 
         logger.info(f"Using OCR to extract text from {file_path}")
 
@@ -272,7 +272,7 @@ class DocumentParserFactory:
         except (RuntimeError, OSError, ValueError, ImportError, subprocess.CalledProcessError, FileNotFoundError) as e:
             logger.exception(f"Failed to convert PDF to images: {e}")
             msg = f"Could not convert PDF to images: {e}"
-            raise ValueError(msg)
+            raise ValueError(msg) from e
 
         logger.info(f"Processing {len(images)} pages with OCR")
 
@@ -299,10 +299,10 @@ class DocumentParserFactory:
                     elif result:
                         content += result
 
-            except TimeoutError:
+            except TimeoutError as e:
                 logger.exception(f"OCR processing timed out for {file_path}")
                 msg = "OCR processing timed out - PDF may be too large or complex"
-                raise ValueError(msg)
+                raise ValueError(msg) from e
 
         return content
 
@@ -328,7 +328,7 @@ class DocumentParserFactory:
             from docx import Document
         except ImportError:
             msg = "python-docx not available. Install with: pip install python-docx"
-            raise ImportError(msg)
+            raise ImportError(msg) from None
 
         doc = Document(str(file_path))
 
@@ -356,7 +356,7 @@ class DocumentParserFactory:
             from ebooklib import epub
         except ImportError:
             msg = "ebooklib and beautifulsoup4 not available. Install with: pip install ebooklib beautifulsoup4"
-            raise ImportError(msg)
+            raise ImportError(msg) from None
 
         book = epub.read_epub(str(file_path))
 
@@ -440,7 +440,7 @@ class DocumentParserFactory:
 
         except (RuntimeError, OSError, ValueError, UnicodeDecodeError, AttributeError) as e:
             msg = f"Failed to parse MOBI file {file_path}: {e}"
-            raise ValueError(msg)
+            raise ValueError(msg) from e
 
 
 # Global factory instance
