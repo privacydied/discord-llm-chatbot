@@ -207,16 +207,16 @@ class OllamaClient:
                     "raw_response": response_data,
                 }
 
-        except TimeoutError:
+        except TimeoutError as e:
             msg = "Request timed out. The server is taking too long to respond."
-            raise OllamaAPIError(msg)
+            raise OllamaAPIError(msg) from e
         except aiohttp.ClientError as e:
             msg = f"Network error: {e!s}"
-            raise OllamaAPIError(msg)
+            raise OllamaAPIError(msg) from e
         except Exception as e:
             logger.error(f"Error in Ollama generate: {e}", exc_info=True)
             msg = f"An error occurred: {e!s}"
-            raise OllamaAPIError(msg)
+            raise OllamaAPIError(msg) from e
 
     async def generate_stream(
         self,
@@ -312,16 +312,16 @@ class OllamaClient:
                         logger.error(f"Error processing chunk: {e}", exc_info=True)
                         continue
 
-        except TimeoutError:
+        except TimeoutError as e:
             msg = "Request timed out. The server is taking too long to respond."
-            raise OllamaAPIError(msg)
+            raise OllamaAPIError(msg) from e
         except aiohttp.ClientError as e:
             msg = f"Network error: {e!s}"
-            raise OllamaAPIError(msg)
+            raise OllamaAPIError(msg) from e
         except Exception as e:
             logger.error(f"Error in Ollama generate_stream: {e}", exc_info=True)
             msg = f"An error occurred: {e!s}"
-            raise OllamaAPIError(msg)
+            raise OllamaAPIError(msg) from e
 
     async def list_models(self) -> list[dict[str, Any]]:
         """List available models from the Ollama API."""
@@ -343,7 +343,7 @@ class OllamaClient:
         except Exception as e:
             logger.error(f"Error listing models: {e}", exc_info=True)
             msg = f"Failed to list models: {e!s}"
-            raise OllamaAPIError(msg)
+            raise OllamaAPIError(msg) from e
 
     async def get_model_info(self, model_name: str) -> dict[str, Any] | None:
         """Get information about a specific model."""
@@ -427,12 +427,12 @@ async def generate_response(
                 raise OllamaAPIError(msg)
             try:
                 base_system_prompt = _load_prompt_cached(prompt_file_path)
-            except FileNotFoundError:
+            except FileNotFoundError as e:
                 msg = f"Prompt file not found: {prompt_file_path}"
-                raise OllamaAPIError(msg)
+                raise OllamaAPIError(msg) from e
             except (OSError, PermissionError, UnicodeDecodeError) as e:
                 msg = f"Error reading prompt file {prompt_file_path}: {e}"
-                raise OllamaAPIError(msg)
+                raise OllamaAPIError(msg) from e
 
             final_system_prompt = f"""{base_system_prompt}\n\nContext: {context}\n\nServer Context: {server_context}"""
 
@@ -466,7 +466,7 @@ async def generate_response(
     except Exception as e:
         logger.error(f"Error in generate_response: {e}", exc_info=True)
         msg = f"Failed to generate response: {e!s}"
-        raise OllamaAPIError(msg)
+        raise OllamaAPIError(msg) from e
 
 
 # Cleanup function to close the client
