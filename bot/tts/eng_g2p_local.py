@@ -1398,7 +1398,7 @@ def _load_real_vocab():
 
     except Exception as e:
         msg = f"Failed to load hardcoded Kokoro IPA vocabulary: {e}. No fallbacks allowed for English."
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e
 
 
 def _ipa_to_ids(phonemes: str) -> list[int]:

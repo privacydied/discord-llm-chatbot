@@ -299,10 +299,10 @@ class MultimodalSTTFallbackProvider:
 
         except aiohttp.ClientError as e:
             msg = f"OpenRouter API error: {e}"
-            raise InferenceError(msg)
-        except TimeoutError:
+            raise InferenceError(msg) from e
+        except TimeoutError as e:
             msg = f"OpenRouter API timeout after {self._timeout}s"
-            raise InferenceError(msg)
+            raise InferenceError(msg) from e
 
     def _build_multimodal_prompt(self, failure_reason: FailureClassification | None) -> str:
         """Build a prompt for multimodal models that includes context about the failure."""
@@ -359,7 +359,7 @@ class MultimodalSTTFallbackProvider:
                 return f.read()
         except Exception as e:
             msg = f"Failed to read audio file: {e}"
-            raise InferenceError(msg)
+            raise InferenceError(msg) from e
 
     def _encode_audio_base64(self, audio_bytes: bytes) -> str:
         """Encode audio data as base64."""
