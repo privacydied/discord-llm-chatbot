@@ -57,11 +57,11 @@ async def speak_infer(text: str) -> Path:
         reason = status.get("degraded_reason") or str(exc)
         logger.exception(f"🔊 TTS inference failed: {reason}")
         msg = f"Speech synthesis failed: {reason}"
-        raise TTSAudioError(msg)
+        raise TTSAudioError(msg) from exc
     except Exception as e:
         logger.exception(f"🔊 TTS inference failed: {e!s}")
         msg = f"Speech synthesis failed: {e!s}"
-        raise TTSAudioError(msg)
+        raise TTSAudioError(msg) from e
     finally:
         with contextlib.suppress(Exception):
             await manager.close()

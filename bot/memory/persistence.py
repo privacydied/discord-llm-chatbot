@@ -247,7 +247,7 @@ def _file_lock(path: Path, exclusive: bool = True, timeout: float | None = None)
         except OSError as e:
             if e.errno == 11:  # EWOULDBLOCK / EAGAIN
                 msg = f"Lock acquisition would block for {path}"
-                raise TimeoutError(msg)
+                raise TimeoutError(msg) from e
             raise
 
         yield lock_path

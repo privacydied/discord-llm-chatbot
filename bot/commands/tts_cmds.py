@@ -151,8 +151,8 @@ class TTSCommands(commands.Cog):
                 # Some MagicMocks raise when awaited; re-call without awaiting
                 try:
                     return func(*args, **kwargs)
-                except TypeError:
-                    raise e
+                except TypeError as inner:
+                    raise e from inner
 
         # 1) Attachment fast-path → delegate to router with one-time TTS
         guild_id = getattr(getattr(ctx, "guild", None), "id", None)

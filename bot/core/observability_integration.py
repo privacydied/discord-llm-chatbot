@@ -478,7 +478,7 @@ class ObservabilityManager:
             self.logger.info(f"✅ Loaded {len(prompts)} system prompts", extra={"subsys": "startup"})
         except (ImportError, AttributeError, TypeError, ValueError, OSError) as e:
             msg = f"Failed to load system prompts: {e}"
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from e
 
     async def _init_memory_system(self) -> None:
         """Initialize memory system."""
