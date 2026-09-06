@@ -49,7 +49,7 @@ def unload_idle_models(idle_seconds: float) -> int:
             if inst.model is not None and (now - inst._last_used) >= idle_seconds:
                 inst.model = None
                 unloaded += 1
-        except Exception as exc:
+        except (AttributeError, TypeError) as exc:
             logger.debug(f"fastembed idle unload skipped one instance: {exc}")
     if unloaded:
         logger.info(
@@ -67,7 +67,7 @@ def fastembed_supports(model_name: str) -> bool:
         from fastembed import TextEmbedding
 
         return any(m["model"] == model_name for m in TextEmbedding.list_supported_models())
-    except Exception as exc:  # ImportError or registry API drift [REH]
+    except Exception as exc:  # noqa: BLE001 - third-party import + registry drift (documented below); logged, False fallback [REH]
         logger.debug(f"fastembed availability check failed: {exc}")
         return False
 
@@ -109,7 +109,7 @@ class FastEmbedEmbedding(EmbeddingInterface):
             import onnxruntime as ort
 
             return {"graph_optimization_level": ort.GraphOptimizationLevel.ORT_ENABLE_BASIC}
-        except Exception:  # pragma: no cover - onnxruntime always present in prod
+        except Exception:  # pragma: no cover - onnxruntime always present in prod  # noqa: BLE001 - optional-dependency guard
             return None
 
     async def encode(self, texts: str | list[str]) -> np.ndarray:
