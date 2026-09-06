@@ -225,7 +225,7 @@ class NovitaAdapter(BaseVisionProvider):
                 message=f"Network error: {e!s}",
                 user_message="Network connection failed. Please try again.",
                 provider=VisionProvider.NOVITA,
-            )
+            ) from e
 
     async def _text_to_video(self, request: VisionRequest, model: str) -> VisionResponse:
         """Generate video from text using Novita.ai."""
@@ -287,7 +287,7 @@ class NovitaAdapter(BaseVisionProvider):
                 message=f"Network error: {e!s}",
                 user_message="Network connection failed. Please try again.",
                 provider=VisionProvider.NOVITA,
-            )
+            ) from e
 
     async def _image_to_video(self, request: VisionRequest, model: str) -> VisionResponse:
         """Generate video from image using Novita.ai."""
@@ -355,7 +355,7 @@ class NovitaAdapter(BaseVisionProvider):
                 message=f"Network error: {e!s}",
                 user_message="Network connection failed. Please try again.",
                 provider=VisionProvider.NOVITA,
-            )
+            ) from e
 
     async def _upload_image(self, image_path: Path) -> str:
         """Upload image to Novita.ai and return URL [RM]."""
@@ -390,7 +390,7 @@ class NovitaAdapter(BaseVisionProvider):
                 error_type=VisionErrorType.NETWORK_ERROR,
                 message=f"Image upload failed: {e!s}",
                 user_message="Failed to upload image. Please try again.",
-            )
+            ) from e
 
     async def _poll_for_completion(self, task_id: str, max_attempts: int = 60) -> dict[str, Any]:
         """Poll Novita.ai task until completion [PA]."""
@@ -450,7 +450,7 @@ class NovitaAdapter(BaseVisionProvider):
                     message=f"Polling failed: {e!s}",
                     user_message="Network error while checking generation status.",
                     provider=VisionProvider.NOVITA,
-                )
+                ) from e
 
         # Max attempts reached
         raise VisionError(

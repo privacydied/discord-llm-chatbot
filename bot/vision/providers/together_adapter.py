@@ -159,7 +159,7 @@ class TogetherAdapter(BaseVisionProvider):
                 message=f"Network error: {e!s}",
                 user_message="Network connection failed. Please check your connection and try again.",
                 provider=VisionProvider.TOGETHER,
-            )
+            ) from e
 
     async def _image_to_image(self, request: VisionRequest, model: str) -> VisionResponse:
         """Edit image using image-to-image pipeline."""
@@ -219,7 +219,7 @@ class TogetherAdapter(BaseVisionProvider):
                 message=f"Network error: {e!s}",
                 user_message="Network connection failed. Please try again.",
                 provider=VisionProvider.TOGETHER,
-            )
+            ) from e
 
     async def _process_image_response(self, data: dict[str, Any], request: VisionRequest) -> VisionResponse:
         """Process API response and save generated images."""
@@ -291,7 +291,7 @@ class TogetherAdapter(BaseVisionProvider):
                 error_type=VisionErrorType.VALIDATION_ERROR,
                 message=f"Failed to read image file: {e!s}",
                 user_message="Could not read the input image. Please try uploading again.",
-            )
+            ) from e
 
     async def _map_api_error(self, status_code: int, error_data: dict[str, Any]) -> VisionError:
         """Map Together.ai API errors to VisionError [REH]."""
