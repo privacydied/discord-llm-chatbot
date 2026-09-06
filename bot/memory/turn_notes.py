@@ -196,5 +196,5 @@ def enrich_items_with_media_notes(bot: object, trigger_message: object, items: o
             return {}
         notes = get_notes(ids, key)
         return dict(notes or {})
-    except Exception:
+    except Exception:  # noqa: BLE001 - duck-typed manager methods; contract is Never raises (see docstring)
         return {}

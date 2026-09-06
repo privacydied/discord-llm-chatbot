@@ -155,7 +155,7 @@ class MediaIngestionManager:
                 last_error = f"Media extraction timeout after {MEDIA_DOWNLOAD_TIMEOUT}s"
                 self.logger.warning(f"⏰ {last_error} for {url}")
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - boundary contract: NEVER raises; narrowing once excluded real STT errors (see below)
                 # Boundary contract: this helper NEVER raises — it returns
                 # (False, None, error) so callers can fall back gracefully.
                 # A lint-driven sweep (3abb61e) narrowed this to typed

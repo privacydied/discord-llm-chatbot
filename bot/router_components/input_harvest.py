@@ -197,6 +197,6 @@ def append_embed_related_urls(found_urls: list[str], embeds: Iterable[Any]) -> N
                 au = getattr(a, "url", None)
                 if au and au not in found_urls:
                     found_urls.append(au)
-        except Exception as exc:
+        except (AttributeError, TypeError) as exc:
             logger.debug(f"embed URL extraction failed: {exc}")
             continue

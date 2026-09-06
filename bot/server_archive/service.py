@@ -189,7 +189,8 @@ class ServerArchiveService:
             return None
         try:
             record = await self.store.get_message_by_id(str(message_id))
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 - sqlite/JSON/thread callee; logged, None fallback preserved
+            logger.debug(f"Archive message lookup failed for {message_id}: {exc}")
             return None
         if record is None:
             return None

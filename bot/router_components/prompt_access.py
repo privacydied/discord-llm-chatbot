@@ -24,7 +24,7 @@ def get_system_prompt(bot: Any, key: str, default: str | None = None) -> str | N
         if callable(getter):
             return getter(key, default)
         return default
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - getter is caller-supplied, exception type unbounded (see below)
         # Deliberately broad: the getter is caller-supplied, so the exception
         # type is unbounded.  Logged rather than swallowed silently.
         logger.debug("system_prompt lookup failed for key=%r: %s", key, exc)
