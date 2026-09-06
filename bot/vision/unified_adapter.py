@@ -360,7 +360,7 @@ class TogetherPlugin(ProviderPlugin):
                 message=f"Together.ai connection error: {e!s}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to vision service. Please try again.",
-            )
+            ) from e
 
     async def poll(self, job_id: str) -> UnifiedJobStatus:
         """Poll job status (Together.ai is typically immediate)."""
@@ -740,7 +740,7 @@ class NovitaPlugin(ProviderPlugin):
                 message=f"Novita.ai connection error: {e!s}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to vision service. Please try again.",
-            )
+            ) from e
 
     async def poll(self, job_id: str) -> UnifiedJobStatus:
         """Poll Novita.ai job status via async task-result endpoint [PA][REH]."""
@@ -1157,7 +1157,7 @@ class OpenRouterPlugin(ProviderPlugin):
                 message=f"{self.name} connection error: {e!s}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to vision service. Please try again.",
-            )
+            ) from e
 
     async def poll(self, job_id: str) -> UnifiedJobStatus:
         results = getattr(self, "_results", {})
@@ -1342,7 +1342,7 @@ class NvidiaPlugin(OpenRouterPlugin):
                 message=f"{self.name} connection error: {e!s}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to vision service. Please try again.",
-            )
+            ) from e
 
 
 # NotSoBot poll interval/timeout. NotSoBot's /utilities/ml/edit is async: it
@@ -1501,7 +1501,7 @@ class NotSoBotPlugin(ProviderPlugin):
                 message=f"NotSoBot connection error: {e!s}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to NotSoBot. Please try again.",
-            )
+            ) from e
 
     async def _get_query(self, url: str, headers: dict[str, str], params: dict[str, str]) -> str:
         try:
@@ -1517,7 +1517,7 @@ class NotSoBotPlugin(ProviderPlugin):
                 message=f"NotSoBot connection error: {e!s}",
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Unable to connect to NotSoBot. Please try again.",
-            )
+            ) from e
 
     def _raise_for_status(self, status: int, error_text: str) -> None:
         if status == 400:
@@ -2771,11 +2771,11 @@ class UnifiedVisionAdapter:
 
         except ValueError:
             msg = "Invalid job ID format"
-            raise VisionError(msg, VisionErrorType.VALIDATION_ERROR)
+            raise VisionError(msg, VisionErrorType.VALIDATION_ERROR) from None
         except Exception as e:
             self.logger.exception(f"Failed to fetch result for {full_job_id}: {e}")
             msg = f"Result fetch failed: {e}"
-            raise VisionError(msg, VisionErrorType.PROVIDER_ERROR)
+            raise VisionError(msg, VisionErrorType.PROVIDER_ERROR) from e
 
     async def cancel(self, full_job_id: str) -> bool:
         """Cancel job if provider supports it."""
