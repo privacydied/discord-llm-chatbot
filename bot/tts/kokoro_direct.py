@@ -234,7 +234,7 @@ class KokoroDirect:
             logger.debug(f"Initialized ONNX session with providers: {[p[0] for p in providers]}")
         except Exception as e:
             msg = f"Failed to initialize ONNX session: {e}"
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from e
 
     def _init_official_vocab(self) -> None:
         """Load and validate official IPA vocabulary against ONNX model."""
@@ -245,7 +245,7 @@ class KokoroDirect:
             logger.debug(f"Loaded official IPA vocab: {self.official_vocab.rows} entries")
         except Exception as e:
             msg = f"Failed to load official vocabulary: {e}"
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from e
 
     def _encode_ipa_official(self, ipa: str) -> list[int]:
         """Encode IPA using official vocabulary with validation."""
@@ -255,7 +255,7 @@ class KokoroDirect:
             return encode_ipa(ipa, maybe_onnx_session(self))
         except Exception as e:
             msg = f"Failed to encode IPA '{ipa}': {e}"
-            raise ValueError(msg)
+            raise ValueError(msg) from e
 
     def _load_voices(self) -> None:
         """Load voice embeddings from voices file."""
@@ -291,7 +291,7 @@ class KokoroDirect:
 
         except Exception as e:
             msg = f"Failed to load voice embeddings: {e}"
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from e
 
     def create(
         self,
@@ -585,13 +585,13 @@ class KokoroDirect:
                 if not token_ids:
                     msg = "Failed to encode IPA to token IDs (empty)"
                     raise ValueError(msg)
-            except UnsupportedIPASymbolError:
+            except UnsupportedIPASymbolError as e:
                 # Sanitize/normalize unsupported IPA and retry strictly
                 cleaned = self._sanitize_ipa(str(phonemes))
                 token_ids, matched_symbols = _encode_official(cleaned)
                 if not token_ids:
                     msg = "Failed to encode sanitized IPA to token IDs (empty)"
-                    raise ValueError(msg)
+                    raise ValueError(msg) from e
             self._last_matched_symbols = matched_symbols
 
             # Build inputs and run using the same path as text synthesis
@@ -665,7 +665,7 @@ class KokoroDirect:
                     try:
                         outputs = self.sess.run(None, rebuilt)
                     except Exception:
-                        raise e
+                        raise e from None
                 audio = _np().asarray(outputs[0]).reshape(-1).astype(_np().float32, copy=False)
 
             # Guard against empty audio
@@ -685,7 +685,7 @@ class KokoroDirect:
                 from bot.tts.errors import TTSWriteError
 
                 msg = f"Failed to write WAV: {e}"
-                raise TTSWriteError(msg)
+                raise TTSWriteError(msg) from e
             return temp_path
 
         except Exception as e:
@@ -818,14 +818,14 @@ class KokoroDirect:
                 # Ensure style
                 if voice_embedding is None:
                     msg = "Voice embedding is required for synthesis"
-                    raise ValueError(msg)
+                    raise ValueError(msg) from e
                 rebuilt["style"] = self._to_style_vector(voice_embedding)
                 rebuilt["speed"] = _np().array([float(speed)], dtype=_np().float32)
                 try:
                     outputs = self.sess.run(None, rebuilt)
                 except Exception:
                     # Give up and re-raise original error
-                    raise e
+                    raise e from None
             audio = _np().asarray(outputs[0]).reshape(-1).astype(_np().float32, copy=False)
         # Apply audio processing hygiene (no resample here; keep model SR)
         audio = self._apply_audio_processing(audio, SAMPLE_RATE)
@@ -976,7 +976,7 @@ class KokoroDirect:
 
         except Exception as e:
             msg = f"ONNX inference failed: {e}"
-            raise RuntimeError(msg)
+            raise RuntimeError(msg) from e
 
     def _sanitize_ipa(self, ipa: str) -> str:
         """Lightweight IPA sanitizer to improve compatibility with model vocab.
