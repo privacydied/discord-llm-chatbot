@@ -50,14 +50,14 @@ async def _safe_get(url: str) -> bytes | None:
     except UrlSafetyError as exc:
         logger.debug("rss.blocked url=%s reason=%s", url[:120], exc)
         return None
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # noqa: BLE001 - DNS layer unbounded beyond UrlSafetyError; logged, None fallback [REH]
         logger.debug("rss.validate_failed url=%s error=%s", url[:120], exc)
         return None
 
     try:
         client = await get_http_client()
         response = await client.get(url, config=_REQUEST, headers={"User-Agent": _BROWSER_UA})
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # noqa: BLE001 - abstracted HTTP client; logged, None fallback [REH]
         logger.debug("rss.fetch_failed url=%s error=%s", url[:120], exc)
         return None
 
@@ -73,7 +73,7 @@ def discover_feeds(html: str, base_url: str) -> list[str]:
         return []
     try:
         soup = BeautifulSoup(html, "html.parser")
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # noqa: BLE001 - third-party parser on untrusted HTML; logged, [] fallback [REH]
         logger.debug("rss.discover_parse_failed: %s", exc)
         return []
 
@@ -125,7 +125,7 @@ class RssNewsProvider(AbstractNewsProvider):
             return None
         try:
             return await self._resolve(url)
-        except Exception as exc:  # [REH] provider failure must not break the chain
+        except Exception as exc:  # noqa: BLE001 - Never-raises provider contract; logged, None fallback [REH]
             logger.debug("rss.fetch failed url=%s error=%s", url[:120], exc)
             return None
 

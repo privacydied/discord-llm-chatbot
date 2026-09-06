@@ -235,7 +235,7 @@ class FastClassifier:
             # Default to general URL
             return ClassificationResult(modality=InputModality.GENERAL_URL, host=host, confidence=0.5)
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError) as e:
             logger.warning(f"URL classification failed for {url}: {e}")
             return ClassificationResult(modality=InputModality.GENERAL_URL, confidence=0.1)
 
@@ -266,7 +266,7 @@ class FastClassifier:
             # Default to single image for unknown attachments
             return ClassificationResult(modality=InputModality.SINGLE_IMAGE, confidence=0.3)
 
-        except Exception as e:
+        except (AttributeError, TypeError) as e:
             logger.warning(f"Attachment classification failed: {e}")
             return ClassificationResult(modality=InputModality.SINGLE_IMAGE, confidence=0.1)
 
@@ -275,7 +275,7 @@ class FastClassifier:
         try:
             matches = _COMPILED_PATTERNS["inline_search"].findall(text)
             return [match.strip() for match in matches]
-        except Exception as e:
+        except (AttributeError, TypeError) as e:
             logger.warning(f"Inline search extraction failed: {e}")
             return []
 
@@ -287,7 +287,7 @@ class FastClassifier:
                 text = _COMPILED_PATTERNS["bot_mention"].sub("", text).strip()
 
             return bool(_COMPILED_PATTERNS["command_prefix"].match(text))
-        except Exception as e:
+        except (AttributeError, TypeError) as e:
             logger.warning(f"Command prefix check failed: {e}")
             return False
 
