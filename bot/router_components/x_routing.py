@@ -33,7 +33,7 @@ def extract_primary_tweet_id(url: str) -> str | None:
         candidate = parsed_primary_tweet_id(parsed)
         if candidate:
             return candidate
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"candidate extraction failed: {exc}")
 
     return parse_twitter_status_id(raw_url)
@@ -103,7 +103,7 @@ def compose_canonical_status_url(status_id: str) -> str:
 def is_twitter_url(url: str) -> bool:
     try:
         u = str(url)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
     if has_twitter_status_id(u):
         return True
@@ -117,7 +117,7 @@ def has_twitter_status_id(url: str) -> bool:
     """Return True when URL contains a parseable status ID."""
     try:
         return bool(parse_twitter_status_id(url))
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -127,7 +127,7 @@ def lower_or_empty(value: Any) -> str:
         return ""
     try:
         return str(value).lower()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return ""
 
 
@@ -152,7 +152,7 @@ def collect_x_candidate_urls(item: Any) -> list[str]:
     try:
         source_type = x_candidate_source_type(item)
         urls.extend(collect_candidate_urls_for_item_source(item, source_type))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"candidate URL collection failed: {exc}")
     return filtered_candidate_urls(urls)
 
@@ -283,7 +283,7 @@ def extract_url_host_lower(url: str) -> str:
     """Parse a URL host and normalize to lowercase; return empty string on failure."""
     try:
         return parsed_host_lower(parse_url_value(url))
-    except Exception:
+    except Exception:  # noqa: BLE001
         return ""
 
 
@@ -296,7 +296,7 @@ def extract_url_path(url: str) -> str:
     """Parse a URL path; return empty string on failure."""
     try:
         return parsed_url_path(parse_url_value(url))
-    except Exception:
+    except Exception:  # noqa: BLE001
         return ""
 
 
@@ -389,7 +389,7 @@ def tweet_media_url_path(url: Any) -> str:
         return ""
     try:
         return extract_url_path(lower_url_text_for_media_path(url))
-    except Exception:
+    except Exception:  # noqa: BLE001
         return ""
 
 
@@ -482,7 +482,7 @@ def normalize_x_url(url: str) -> str:
     try:
         p = parse_url_for_normalization(url)
         return compose_normalized_x_url_from_parsed(p)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return url
 
 
@@ -574,7 +574,7 @@ def unwrap_x_media_url(url: str) -> str:
             return url
         candidate = resolve_unwrap_x_media_candidate(parsed)
         return resolved_unwrap_x_media_url(candidate, fallback=url)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return url
 
 
@@ -688,7 +688,7 @@ def extract_x_api_primary_text(api_data: Any) -> str:
     try:
         tweet = extract_x_api_primary_tweet(api_data)
         return normalize_x_api_text((tweet or {}).get("text"))
-    except Exception:
+    except Exception:  # noqa: BLE001
         return ""
 
 
@@ -1098,7 +1098,7 @@ def extract_syndication_article_text(
     """Extract hydrated article text from syndication payload; fail open on extractor errors."""
     try:
         return article_extractor(node.get("article"))
-    except Exception:
+    except Exception:  # noqa: BLE001
         return ""
 
 
@@ -1254,7 +1254,7 @@ def extract_oembed_payload_from_response(
         return None
     try:
         obj = response.json()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
     return build_payload(obj)
 
@@ -2527,7 +2527,7 @@ def resolve_first_image_host(image_urls: list[str]) -> str:
         first_image_url = resolve_first_image_url(image_urls)
         if first_image_url:
             first_host = parse_image_host(first_image_url)
-    except Exception:
+    except Exception:  # noqa: BLE001
         first_host = ""
     return first_host
 
@@ -2547,7 +2547,7 @@ def first_list_item_or_empty(items: list[str]) -> str:
     try:
         if list_has_items(items):
             return items[0]
-    except Exception:
+    except Exception:  # noqa: BLE001
         return ""
     return ""
 
@@ -3013,7 +3013,7 @@ def collect_raw_urls_fail_open(*, items: list[str], texts: Iterable[str]) -> Non
     try:
         url_re = raw_url_extract_regex()
         collect_raw_urls_into_items(items, texts, url_re=url_re)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"raw URL collection failed: {exc}")
 
 

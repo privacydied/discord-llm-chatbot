@@ -228,12 +228,12 @@ class VisionIntentRouter:
             if "width" in size:
                 try:
                     params["width"] = int(size["width"])  # type: ignore[arg-type]
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"width parse failed: {exc}")
             if "height" in size:
                 try:
                     params["height"] = int(size["height"])  # type: ignore[arg-type]
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"height parse failed: {exc}")
         elif isinstance(size, str):
             m = re.search(r"(\d+)\s*[x×]\s*(\d+)", size)
@@ -241,14 +241,14 @@ class VisionIntentRouter:
                 try:
                     params["width"] = int(m.group(1))
                     params["height"] = int(m.group(2))
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"size string parse failed: {exc}")
 
         # batch → batch_size
         if "batch" in params and "batch_size" not in params:
             try:
                 params["batch_size"] = int(params["batch"])  # type: ignore[arg-type]
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"batch parse failed: {exc}")
 
         # negative → negative_prompt
@@ -260,7 +260,7 @@ class VisionIntentRouter:
         if provider_val is not None and "preferred_provider" not in params:
             try:
                 params["preferred_provider"] = VisionProvider(provider_val)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 # Leave unset if not a valid provider
                 logger.debug(f"provider enum parse failed: {exc}")
 

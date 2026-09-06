@@ -76,7 +76,7 @@ def _env_float(name: str, default: float) -> float:
     try:
         val = float(str(raw).strip())
         return val if val > 0 else default
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Invalid float for {name}: {exc}")
         return default
 
@@ -88,7 +88,7 @@ def _env_int(name: str, default: int) -> int:
     try:
         val = int(str(raw).strip())
         return val if val >= 0 else default
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Invalid int for {name}: {exc}")
         return default
 
@@ -108,7 +108,7 @@ def is_youtube_url(url: str) -> bool:
         parsed = urlparse(url)
         host = (parsed.netloc or "").lower()
         return host in _YT_HOSTS
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"URL parse failed: {exc}")
         return False
 
@@ -122,7 +122,7 @@ def is_youtube_shorts(url: str) -> bool:
             return False
         path = (parsed.path or "").strip()
         return path.startswith("/shorts/")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Shorts URL parse failed: {exc}")
         return False
 
@@ -147,7 +147,7 @@ def extract_youtube_video_id(url: str) -> str | None:
                 if path.startswith(prefix):
                     vid = path[len(prefix) :].split("/", 1)[0].strip()
                     return vid if _YT_ID_RE.fullmatch(vid) else None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Video ID extraction failed: {exc}")
         return None
     return None
@@ -228,7 +228,7 @@ def _extract_json_after_marker(text: str, marker: str) -> dict[str, Any] | None:
     raw = text[start:end]
     try:
         data = json.loads(raw)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"JSON extract failed: {exc}")
         return None
     return data if isinstance(data, dict) else None
@@ -298,7 +298,7 @@ def _parse_vtt_transcript(raw_text: str) -> str:
 def _parse_xml_transcript(raw_text: str) -> str:
     try:
         root = ET.fromstring(raw_text)  # nosec B314
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"XML parse failed: {exc}")
         return ""
 
@@ -327,7 +327,7 @@ def _parse_caption_payload(raw_text: str) -> str:
     if body.startswith("{") and '"events"' in body:
         try:
             data = json.loads(body)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Caption JSON parse failed: {exc}")
             data = None
         if isinstance(data, dict):
@@ -383,7 +383,7 @@ async def _fetch_text(url: str, timeout_s: float) -> str:
     )
     try:
         resp = await client.get(url, config=cfg)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return ""
     if resp.status_code != 200:
         return ""
@@ -432,7 +432,7 @@ def _parse_json_object(stdout: str) -> dict[str, Any] | None:
         data = json.loads(body)
         if isinstance(data, dict):
             return data
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"json parse failed: {exc}")
 
     for line in reversed(body.splitlines()):
@@ -441,7 +441,7 @@ def _parse_json_object(stdout: str) -> dict[str, Any] | None:
             continue
         try:
             data = json.loads(row)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"json line parse failed: {exc}")
             continue
         if isinstance(data, dict):
@@ -488,7 +488,7 @@ async def _run_ytdlp_probe(url: str, timeout_s: float) -> dict[str, Any] | None:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Failed to start yt-dlp process: {exc}")
         return None
 
@@ -497,11 +497,11 @@ async def _run_ytdlp_probe(url: str, timeout_s: float) -> dict[str, Any] | None:
     except TimeoutError:
         try:
             proc.kill()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to kill yt-dlp process: {exc}")
         try:
             await proc.communicate()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to wait for yt-dlp process: {exc}")
         return None
 
@@ -650,7 +650,7 @@ async def _resolve_via_ytdlp_captions(
     uploader = str(payload.get("uploader") or payload.get("channel") or uploader or "Unknown")
     try:
         duration_s = float(payload.get("duration") or duration_s or 0.0)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Duration parse failed: {exc}")
         duration_s = float(duration_s or 0.0)
 
@@ -713,7 +713,7 @@ def _load_cache(video_id: str, ttl_s: int) -> YouTubeTranscriptResult | None:
             cache_hit=True,
             cached_at=cached_at,
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Failed to load YouTube transcript cache: {exc}")
         return None
 
@@ -734,7 +734,7 @@ def _store_cache(result: YouTubeTranscriptResult) -> None:
     try:
         with path.open("w", encoding="utf-8") as fh:
             json.dump(payload, fh)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Failed to write YouTube transcript cache: {exc}")
 
 
@@ -773,7 +773,7 @@ async def resolve_youtube_transcript(url: str, force_refresh: bool = False) -> Y
             uploader = str(details.get("author") or uploader)
             try:
                 duration_s = float(details.get("lengthSeconds") or duration_s)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"Length seconds parse failed: {exc}")
                 duration_s = float(duration_s or 0.0)
 

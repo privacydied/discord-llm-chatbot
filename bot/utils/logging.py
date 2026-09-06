@@ -25,7 +25,7 @@ _queue_listener: "logging.handlers.QueueListener | None" = None
 def _rich_tracebacks_supported() -> bool:
     try:
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -110,7 +110,7 @@ class JsonlFormatter(logging.Formatter):
         # Detail prefers explicit record.detail; otherwise message
         try:
             message = record.getMessage()
-        except Exception:
+        except Exception:  # noqa: BLE001
             message = str(getattr(record, "msg", ""))
 
         detail: Any = getattr(record, "detail", None)
@@ -225,7 +225,7 @@ def init_logging() -> None:
         third_party_level = os.getenv("THIRD_PARTY_LOG_LEVEL", "WARNING").upper()
         for name in ("openai", "httpx", "aiohttp", "urllib3"):
             logging.getLogger(name).setLevel(third_party_level)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logging.getLogger(__name__).debug(f"third-party log level set failed: {exc}")
 
     # Quiet discord.py's self-healing reconnect tracebacks. Attached to the logger
@@ -245,7 +245,7 @@ def shutdown_logging_and_exit(exit_code: int) -> NoReturn:
     global _queue_listener
     try:
         logging.getLogger(__name__).info("Shutting down", extra={"subsys": "logging"})
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logging.getLogger(__name__).debug(f"shutdown log failed: {exc}")
     finally:
         try:
@@ -270,9 +270,9 @@ def cleanup_rich_handlers() -> None:
                 try:
                     h.rich_tracebacks = False
                     h.close()
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logging.getLogger(__name__).debug(f"RichHandler cleanup failed: {exc}")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logging.getLogger(__name__).debug(f"RichHandler cleanup outer failed: {exc}")
 
 
@@ -310,7 +310,7 @@ class SensitiveDataFilter(logging.Filter):
                 # Also scrub 'detail' if it's a dict-like stored as attribute
                 if hasattr(record, "detail") and isinstance(record.detail, dict):
                     self._scrub_dict_inplace(record.detail, secret_values)
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Never block logging on scrubber errors
             return True
         return True

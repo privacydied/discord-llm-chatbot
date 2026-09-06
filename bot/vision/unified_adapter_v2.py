@@ -236,7 +236,7 @@ class UnifiedVisionAdapter:
                         logger.info(f"provider.select | task={request.task.value} selected=none reason=no_pricing provider={provider_name}")
                         selection_reason = "no_pricing"
                         continue
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"Pricing estimate failed for {provider_name}: {exc}")
                     logger.info(f"provider.select | task={request.task.value} selected=none reason=no_pricing provider={provider_name}")
                     selection_reason = "no_pricing"
@@ -409,7 +409,7 @@ class UnifiedVisionAdapter:
                 filtered_order.append(provider_name)
                 self.logger.debug(f"Provider {provider_name} passed credential/health checks")
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning(f"Error checking provider {provider_name}: {e}")
                 continue
 
@@ -436,7 +436,7 @@ class UnifiedVisionAdapter:
             # Unknown provider - assume no credentials needed for now
             return True
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning(f"Error checking credentials for {provider_name}: {e}")
             return False
 
@@ -464,7 +464,7 @@ class UnifiedVisionAdapter:
             # Unknown provider - assume healthy
             return True
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning(f"Error checking health for {provider_name}: {e}")
             return False
 
@@ -481,6 +481,6 @@ try:
     from .unified_adapter import UnifiedVisionAdapter as _UnifiedVisionAdapterCanonical
 
     UnifiedVisionAdapter = _UnifiedVisionAdapterCanonical  # type: ignore
-except Exception as exc:
+except Exception as exc:  # noqa: BLE001
     # If canonical import fails (during partial installs/tests), do nothing.
     logger.debug(f"canonical unified adapter import failed: {exc}")

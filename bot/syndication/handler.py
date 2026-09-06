@@ -22,7 +22,7 @@ VL_PROMPT_GUIDELINES = (
 # Configurable via env `VL_CONCURRENCY_LIMIT` (optional; default 4)
 try:
     VL_CONCURRENCY_LIMIT: int = int(os.getenv("VL_CONCURRENCY_LIMIT", "4"))
-except Exception:
+except Exception:  # noqa: BLE001
     VL_CONCURRENCY_LIMIT = 4
 
 
@@ -62,7 +62,7 @@ async def handle_twitter_syndication_to_vl(
             "yes",
             "on",
         )
-    except Exception:
+    except Exception:  # noqa: BLE001
         debug_pick = False
     if debug_pick:
         try:
@@ -76,7 +76,7 @@ async def handle_twitter_syndication_to_vl(
             )
             if had_card and source != "card":
                 log.info("SYND_MEDIA_PICK | ignored_card_due_to_native=true")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             log.debug(f"SYND_MEDIA_PICK logging failed: {exc}")
 
     if not image_urls:
@@ -97,11 +97,11 @@ async def handle_twitter_syndication_to_vl(
         # Default to 1 image for deterministic latency; allow opt-in via env.
         try:
             global_vl_max = int(os.getenv("VL_MAX_IMAGES", "4"))
-        except Exception:
+        except Exception:  # noqa: BLE001
             global_vl_max = 4
         try:
             x_vl_max = int(os.getenv("X_SYNDICATION_VL_MAX_IMAGES", "1"))
-        except Exception:
+        except Exception:  # noqa: BLE001
             x_vl_max = 1
         if global_vl_max <= 0:
             global_vl_max = 4
@@ -137,7 +137,7 @@ async def handle_twitter_syndication_to_vl(
                                 log.debug(f"Downloaded image {i + 1} to {tmp_file.name}")
                         else:
                             log.warning(f"Failed to download image {i + 1}: HTTP {response.status}")
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     log.warning(f"Error downloading image {i + 1}: {e}")
 
         if not temp_paths:

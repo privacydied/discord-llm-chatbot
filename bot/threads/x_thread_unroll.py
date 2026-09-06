@@ -58,7 +58,7 @@ def _is_twitter_like(url: str) -> bool:
         host = urlparse(url).netloc.lower()
         host = host.removeprefix("www.")
         return host in _X_HOSTS or host.endswith(".twitter.com")
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 
@@ -66,7 +66,7 @@ def _extract_status_id_from_path(path: str) -> str | None:
     try:
         m = re.search(r"/status/(\d{5,20})(?:\D|$)", path)
         return m.group(1) if m else None
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -74,7 +74,7 @@ def _extract_handle_from_path(path: str) -> str | None:
     try:
         parts = [p for p in (path or "").split("/") if p]
         return parts[0] if parts else None
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -93,7 +93,7 @@ async def _expand_tco_if_needed(url: str, timeout_s: float) -> str:
         # GET with follow_redirects honors shared client setting
         r = await http.get(url, config=cfg)
         return str(r.request.url) if r is not None else url
-    except Exception:
+    except Exception:  # noqa: BLE001
         return url
 
 
@@ -104,7 +104,7 @@ async def _fetch_html_http(url: str, timeout_s: float) -> str | None:
     """
     try:
         http = await get_http_client()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         with contextlib.suppress(Exception):
             logger.debug(
                 "threads.x: http_client_unavailable",
@@ -146,7 +146,7 @@ async def _fetch_html_http(url: str, timeout_s: float) -> str | None:
                 },
             )
         return text
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         with contextlib.suppress(Exception):
             logger.debug(
                 "threads.x: http_fetch_error",
@@ -171,7 +171,7 @@ def _canonicalize_status_url(url: str) -> tuple[str, str | None, str | None]:
         tweet_id = _extract_status_id_from_path(p.path or "")
         handle = _extract_handle_from_path(p.path or "")
         return canonical, tweet_id, handle
-    except Exception:
+    except Exception:  # noqa: BLE001
         return url, None, None
 
 
@@ -233,7 +233,7 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: str | None) ->
                         "_dom_index": 0,
                     },
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # swallow and continue with empty blocks
             logger.debug(f"tweet block parsing failed: {exc}")
 
@@ -327,7 +327,7 @@ def _parse_tweet_blocks(html: str, canonical_url: str, op_handle: str | None) ->
                     "_dom_index": idx,
                 },
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"tweet block parsing failed: {exc}")
             continue
 
@@ -352,7 +352,7 @@ def _format_joined_text(author: str, items: list[TweetItem]) -> str:
             if ts:
                 dt = datetime.fromisoformat(ts)
                 ts = dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"timestamp normalization failed: {exc}")
         header = f"[{i}/{n}] @{author} – {ts}" if ts else f"[{i}/{n}] @{author}"
         parts.append(header)
@@ -369,7 +369,7 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> str | None:
     """
     try:
         from playwright.async_api import async_playwright
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         # Playwright not installed/available in this environment
         with contextlib.suppress(Exception):
             logger.debug(
@@ -415,7 +415,7 @@ async def _fetch_html_with_playwright(url: str, timeout_s: float) -> str | None:
             finally:
                 with contextlib.suppress(Exception):
                     await context.close()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         # Launch/navigation failure: log at WARNING so it is visible in
         # production, not buried at DEBUG.
         with contextlib.suppress(Exception):
@@ -461,7 +461,7 @@ async def unroll_author_thread(
             )
         if not tid:
             return None, "not_status"
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None, "normalize_failed"
 
     # Phase 1A: JSON mirror probe (fx/vx) to stitch minimal thread without browsers [PA]
@@ -478,7 +478,7 @@ async def unroll_author_thread(
                     },
                 )
             return ctx_json, None
-    except Exception:
+    except Exception:  # noqa: BLE001
         with contextlib.suppress(Exception):
             logger.debug(
                 "threads.x: json_probe_error",
@@ -516,7 +516,7 @@ async def unroll_author_thread(
             if blocks_try:
                 html = html_try
                 break
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         # Non-fatal; proceed to Playwright path
         logger.debug(f"http probe failed: {exc}")
 
@@ -542,7 +542,7 @@ async def unroll_author_thread(
                 html = await _fetch_html_with_playwright(mirror, min(timeout_s, 10.0))
                 if html:
                     break
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"mirror fetch failed: {exc}")
                 continue
 
@@ -603,7 +603,7 @@ async def unroll_author_thread(
         try:
             dt = datetime.fromisoformat(str(t))
             return (0, int(dt.timestamp()))
-        except Exception:
+        except Exception:  # noqa: BLE001
             return (1, int(b.get("_dom_index", 0)))
 
     chain_sorted = sorted(chain, key=ts_key)
@@ -690,7 +690,7 @@ async def _unroll_via_mirror_json(
 
     try:
         http = await get_http_client()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
     cfg = RequestConfig(
         connect_timeout=min(timeout_s / 3, 2.0),
@@ -705,7 +705,7 @@ async def _unroll_via_mirror_json(
             if r is None or r.status_code >= 400:
                 return None
             return r.json()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return None
 
     async def _vx(id_: str) -> dict[str, Any] | None:
@@ -714,7 +714,7 @@ async def _unroll_via_mirror_json(
             if r is None or r.status_code >= 400:
                 return None
             return r.json()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return None
 
     items: list[TweetItem] = []
@@ -757,7 +757,7 @@ async def _unroll_via_mirror_json(
         a = None
         try:
             a = (t.get("author") or {}).get("screen_name")
-        except Exception:
+        except Exception:  # noqa: BLE001
             a = None
         if not a:
             a = author_handle
@@ -771,7 +771,7 @@ async def _unroll_via_mirror_json(
             ts = t.get("created_timestamp")
             if isinstance(ts, (int, float)):
                 ts_iso = datetime.utcfromtimestamp(int(ts)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        except Exception:
+        except Exception:  # noqa: BLE001
             ts_iso = None
 
         if (len(items) + 1) > max_tweets or (sum(len(it.text_plain) for it in items) + len(text)) > max_chars:
@@ -795,7 +795,7 @@ async def _unroll_via_mirror_json(
             qaq = (q.get("author") or {}).get("screen_name")
             if qid and qaq and qaq.lower() == (author_handle or "").lower():
                 nxt = str(qid)
-        except Exception:
+        except Exception:  # noqa: BLE001
             nxt = None
         if not nxt:
             try:
@@ -808,7 +808,7 @@ async def _unroll_via_mirror_json(
                             if m:
                                 nxt = m.group(1)
                                 break
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"next tweet ID extraction failed: {exc}")
         current_id = nxt
 
@@ -865,7 +865,7 @@ async def _maybe_xapi_unroll(
         return None
     try:
         root = (r.json() or {}).get("data") or {}
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
     conv_id = root.get("conversation_id")
     if not conv_id:
@@ -886,7 +886,7 @@ async def _maybe_xapi_unroll(
     try:
         data = sr.json() or {}
         rows = list(data.get("data") or [])
-    except Exception:
+    except Exception:  # noqa: BLE001
         rows = []
     if root and not any(str(t.get("id")) == str(root.get("id")) for t in rows):
         rows.append(root)
@@ -898,7 +898,7 @@ async def _maybe_xapi_unroll(
         try:
             dt = datetime.fromisoformat(str(ts))
             return (0, int(dt.timestamp()))
-        except Exception:
+        except Exception:  # noqa: BLE001
             return (1, 0)
 
     rows_sorted = sorted(rows, key=_key)

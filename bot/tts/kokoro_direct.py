@@ -134,7 +134,7 @@ class KokoroDirect:
             import kokoro_onnx.tokenizer as ktok  # type: ignore
 
             self.tokenizer = getattr(ktok, "Tokenizer", object)()
-        except Exception:
+        except Exception:  # noqa: BLE001
             self.tokenizer = object()
 
     def _detect_tokenization_methods(self) -> set[TokenizationMethod]:
@@ -150,31 +150,31 @@ class KokoroDirect:
         try:
             if tok is not None and hasattr(tok, "encode"):
                 methods.add(TokenizationMethod.PHONEME_ENCODE)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"phoeneme_encode check failed: {exc}")
         try:
             if tok is not None and hasattr(tok, "phoneme_to_id"):
                 methods.add(TokenizationMethod.PHONEME_TO_ID)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"phoneme_to_id check failed: {exc}")
 
         # External phonemizers
         try:
             if shutil.which("espeak") or shutil.which("espeak-ng"):
                 methods.add(TokenizationMethod.ESPEAK)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"espeak check failed: {exc}")
         try:
             if importlib.util.find_spec("phonemizer") is not None:
                 methods.add(TokenizationMethod.PHONEMIZER)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"phonemizer check failed: {exc}")
 
         # Optional Misaki (Japanese). Only include if present.
         try:
             if importlib.util.find_spec("misaki") is not None:
                 methods.add(TokenizationMethod.MISAKI)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"misaki check failed: {exc}")
 
         self.available_tokenization_methods = methods
@@ -483,12 +483,12 @@ class KokoroDirect:
         """
         try:
             self._init_session()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Leave sess/onnx_session as-is; tests may patch these
             logger.debug(f"_init_session failed: {exc}")
         try:
             self._load_voices()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Voices are optional in some test paths
             logger.debug(f"_load_voices failed: {exc}")
 
@@ -604,7 +604,7 @@ class KokoroDirect:
             if self.sess is not None and hasattr(self.sess, "get_inputs"):
                 try:
                     input_names = [i.name for i in self.sess.get_inputs()]
-                except Exception:
+                except Exception:  # noqa: BLE001
                     input_names = []
 
             def _pick(names: list[str]) -> str | None:
@@ -664,7 +664,7 @@ class KokoroDirect:
                     rebuilt["speed"] = _np().array([float(speed)], dtype=_np().float32)
                     try:
                         outputs = self.sess.run(None, rebuilt)
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         raise e from None
                 audio = _np().asarray(outputs[0]).reshape(-1).astype(_np().float32, copy=False)
 
@@ -711,7 +711,7 @@ class KokoroDirect:
             self.sess = _ort().InferenceSession(self.model_path, providers=["CPUExecutionProvider"])
             self.onnx_session = self.sess
             self._session_initialized = True
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Leave as None if unavailable; some tests patch session methods
             self.sess = None
             self.onnx_session = None
@@ -727,7 +727,7 @@ class KokoroDirect:
                 self._voices_data = {k: data[k] for k in data.files}
                 self.voices = list(self._voices_data.keys())
                 self.default_voice = self.voices[0] if self.voices else None
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Optional; tests inject voices manually
             logger.debug(f"voice load failed: {exc}")
 
@@ -766,7 +766,7 @@ class KokoroDirect:
             try:
                 tokens = self.tokenizer.tokenize(text)
                 tokens = _np().array(tokens, dtype=_np().int64) if not isinstance(tokens, _np().ndarray) else tokens.astype(_np().int64, copy=False)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 tokens = _np().array([ord(c) % 256 for c in text], dtype=_np().int64)
 
         tokens = tokens.reshape(1, -1)
@@ -776,7 +776,7 @@ class KokoroDirect:
         if self.sess is not None and hasattr(self.sess, "get_inputs"):
             try:
                 input_names = [i.name for i in self.sess.get_inputs()]
-            except Exception:
+            except Exception:  # noqa: BLE001
                 input_names = []
 
         def _pick(names: list[str]) -> str | None:
@@ -823,7 +823,7 @@ class KokoroDirect:
                 rebuilt["speed"] = _np().array([float(speed)], dtype=_np().float32)
                 try:
                     outputs = self.sess.run(None, rebuilt)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     # Give up and re-raise original error
                     raise e from None
             audio = _np().asarray(outputs[0]).reshape(-1).astype(_np().float32, copy=False)
@@ -843,7 +843,7 @@ class KokoroDirect:
             # Apply fade-in/out (5ms)
             return self._apply_fade(audio, sample_rate, fade_ms=3)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Audio processing failed, using original: {e}")
             return audio
 

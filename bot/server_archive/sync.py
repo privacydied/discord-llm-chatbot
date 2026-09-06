@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 try:  # pragma: no cover - discord.py is available in the bot runtime
     import discord
-except Exception:  # pragma: no cover
+except Exception:  # pragma: no cover  # noqa: BLE001
     discord = None  # type: ignore[assignment]
 
 from .models import (
@@ -62,7 +62,7 @@ def _avatar_url(author: Any) -> str | None:
         if uid is not None:
             index = int(uid) % 6
             return f"https://cdn.discordapp.com/embed/avatars/{index}.png"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Avatar URL extraction failed: {exc}")
     return None
 
@@ -74,7 +74,7 @@ def _iso(value: Any) -> str | None:
         return value
     try:
         return value.isoformat()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return str(value)
 
 
@@ -388,7 +388,7 @@ def _guild_sync_targets(guild: Any) -> list[Any]:
                 if thread_id and thread_id not in seen and hasattr(thread, "history"):
                     targets.append(thread)
                     seen.add(thread_id)
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.debug("Server archive active_threads lookup failed", exc_info=True)
     return targets
 

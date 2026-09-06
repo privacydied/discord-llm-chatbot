@@ -110,7 +110,7 @@ class VoiceMessagePublisher:
                         ra = resp.headers.get("Retry-After")
                         if ra is not None:
                             err.retry_after_seconds = float(ra)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"Retry-After parse failed: {exc}")
                     raise err
                 return await resp.json()
@@ -146,7 +146,7 @@ class VoiceMessagePublisher:
                         ra = resp.headers.get("Retry-After")
                         if ra is not None:
                             err.retry_after_seconds = float(ra)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"Retry-After parse failed: {exc}")
                     raise err
                 return
@@ -199,7 +199,7 @@ class VoiceMessagePublisher:
                         ra = resp.headers.get("Retry-After")
                         if ra is not None:
                             err.retry_after_seconds = float(ra)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"Retry-After parse failed: {exc}")
                     raise err
                 return await resp.json()
@@ -234,7 +234,7 @@ class VoiceMessagePublisher:
                 self._attachments_timeout_s = att_to
                 self._upload_timeout_s = upl_to
                 self._message_post_timeout_s = msg_to
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Keep defaults on parse errors
             self.logger.debug(f"timeout config parse failed: {exc}")
         if not cfg.get("VOICE_ENABLE_NATIVE", False):
@@ -274,7 +274,7 @@ class VoiceMessagePublisher:
                     with open(audio_p, "rb") as f:
                         magic = f.read(4)
                         is_ogg = magic == b"OggS"
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"magic bytes check failed: {exc}")
 
             if is_ogg:
@@ -346,7 +346,7 @@ class VoiceMessagePublisher:
                     },
                 )
                 return VoicePublishResult(message=created_msg, ogg_path=ogg_p, ok=True)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 # If we cannot fetch, still consider it success if we got a valid JSON back
                 self.logger.debug(f"native voice fetch failed: {exc}")
                 self.logger.info(
@@ -370,7 +370,7 @@ class VoiceMessagePublisher:
                     if int(data.get("code", 0)) == VOICE_MSG_FORBIDDEN_CODE and isinstance(channel_id, int):
                         self._block(channel_id)
                         blocked = True
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"Error code parse failed: {exc}")
                     # Fallback string check
                     if str(VOICE_MSG_FORBIDDEN_CODE) in msg_text and isinstance(channel_id, int):
@@ -408,5 +408,5 @@ class VoiceMessagePublisher:
             data = json.loads(stdout.decode("utf-8", errors="ignore"))
             dur = float(data.get("format", {}).get("duration", 0.0))
             return float(round(dur))
-        except Exception:
+        except Exception:  # noqa: BLE001
             return None

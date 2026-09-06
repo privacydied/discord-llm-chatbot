@@ -197,7 +197,7 @@ class VisionJobStore:
 
                     jobs.append(job)
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.warning(f"Failed to load job {job_file.stem}: {e}")
                     continue
 
@@ -305,7 +305,7 @@ class VisionJobStore:
                         job_file.unlink()
                         cleaned_count += 1
 
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         self.logger.warning(f"Failed to cleanup job {job_file.name}: {e}")
                         continue
 
@@ -345,13 +345,13 @@ class VisionJobStore:
                         log_entry["actual_cost"] = ac.to_json_value()
                     elif ac is not None:
                         log_entry["actual_cost"] = Money(ac).to_json_value()
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     # Skip actual_cost if it cannot be normalized
                     logger.debug(f"actual_cost normalization failed: {exc}")
 
             await self._append_ledger_entry(log_entry)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Log errors but don't fail the main operation
             self.logger.debug(f"Progress log append failed: {e}")
 
@@ -369,9 +369,9 @@ class VisionJobStore:
                     try:
                         fd = f.fileno()  # type: ignore[attr-defined]
                         os.fsync(fd)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         logger.debug(f"fsync failed: {exc}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug(f"Ledger append failed: {e}")
 
     @asynccontextmanager
@@ -403,7 +403,7 @@ class VisionJobStore:
                         job_data = json.loads(await f.read())
                         state = job_data.get("state", "unknown")
                         state_counts[state] = state_counts.get(state, 0) + 1
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"job file read failed: {exc}")
                     continue
 

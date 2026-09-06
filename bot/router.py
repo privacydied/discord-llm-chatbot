@@ -187,7 +187,7 @@ logger = get_logger(__name__)
 
 try:
     from .video_ingest import DEFAULT_SPEEDUP as _DEFAULT_VIDEO_SPEEDUP
-except Exception:
+except Exception:  # noqa: BLE001
     _DEFAULT_VIDEO_SPEEDUP = 1.5
 
 X_STT_MIN_TIMEOUT_S = 120.0
@@ -354,7 +354,7 @@ def _detect_x_twitter_media(message: Message) -> XTwitterMediaInfo:
                             image_url = getattr(embed.image, "url", None)
                             if image_url:
                                 media_urls = [image_url]
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             logger.debug(f"Failed to extract embed image URL: {exc}")
 
         try:
@@ -368,7 +368,7 @@ def _detect_x_twitter_media(message: Message) -> XTwitterMediaInfo:
                 host = urlparse(image_url).netloc.lower()
                 if host in thumbnail_hosts and image_url not in direct_image_urls:
                     direct_image_urls.append(image_url)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to extract thumbnail URL: {exc}")
 
     if media_kind == "none" and direct_image_urls and not tweet_urls:
@@ -472,7 +472,7 @@ class Router:
                     "detail": {"values": routing_flags, "types": type_map},
                 },
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to log routing flags: {exc}")
         # Lazy-initialized X API client
         self._x_api_client: XApiClient | None = None
@@ -522,7 +522,7 @@ class Router:
                 _task = asyncio.create_task(self._vision_orchestrator.start())
                 _task.add_done_callback(lambda t: self.logger.error(f"Vision orchestrator start task failed: {t.exception()}") if t.exception() else None)
                 self.logger.debug("🚀 Vision Orchestrator start queued (router init)")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Non-fatal; lazy start path covers this if needed
             self.logger.debug(f"Failed to start vision orchestrator: {exc}")
 
@@ -531,7 +531,7 @@ class Router:
             ve = bool(self.config.get("VISION_ENABLED", True))
             vti = bool(self.config.get("VISION_T2I_ENABLED", True))
             self.logger.info(f"Vision flags | VISION_ENABLED={'on' if ve else 'off'} VISION_T2I_ENABLED={'on' if vti else 'off'}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"Failed to log vision flags: {exc}")
 
         # Load centralized VL prompt guidelines if available [CA]
@@ -543,7 +543,7 @@ class Router:
                 if content:
                     self._vl_prompt_guidelines = content
                     self.logger.debug("Loaded VL prompt guidelines from prompts/vl-prompt.txt")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Non-fatal; handler has built-in defaults
             logger.debug(f"Failed to load VL prompt guidelines: {exc}")
             self._vl_prompt_guidelines = None
@@ -626,7 +626,7 @@ class Router:
                 try:
                     api_data = await x_client.get_tweet_by_id(tweet_id)
                     return self._format_x_tweet_result(api_data, url)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"X API get_tweet_by_id failed: {exc}")
 
             if bool(cfg.get("X_SYNDICATION_ENABLED", True)):
@@ -634,10 +634,10 @@ class Router:
                     syn = await self._get_tweet_via_syndication(tweet_id)
                     if syn:
                         return self._format_syndication_result(syn, url)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"Tweet syndication failed: {exc}")
             return None
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"_resolve_x_tweet failed: {exc}")
             return None
 
@@ -664,7 +664,7 @@ class Router:
                 "stt.fail",
                 extra=payload,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to emit STT fail event: {exc}")
 
     def _emit_caption_only_fallback_event(self) -> None:
@@ -952,7 +952,7 @@ class Router:
                 caption = self._extract_syndication_text(payload)
                 if caption:
                     return caption
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to hydrate syndication payload: {exc}")
         return fallback_text
 
@@ -997,7 +997,7 @@ class Router:
                 },
             )
             return out
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"fxtwitter media hydration skipped: {exc}")
             return syn
 
@@ -1014,7 +1014,7 @@ class Router:
                     status_id,
                     syn,
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Syndication caption resolution failed: {exc}")
             tweet_text = ""
 
@@ -1029,13 +1029,13 @@ class Router:
             if r2.status_code == 200:
                 try:
                     fxj = r2.json()
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"Failed to parse fxtwitter JSON: {exc}")
                     fxj = {}
                 tnode = self._extract_fxtwitter_tweet_node(fxj)
                 if tnode:
                     tweet_text = self._extract_syndication_text(tnode)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"fxtwitter fallback failed: {exc}")
             pass
 
@@ -1052,7 +1052,7 @@ class Router:
                 syn,
                 fallback_text=fallback_text,
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Syndication caption resolution failed: {exc}")
         return fallback_text
 
@@ -1076,10 +1076,10 @@ class Router:
                     self.logger.info("text.anchor | visual_facts_detected=true (fallback)")
                 else:
                     self.logger.info("text.anchor | visual_facts_detected=true")
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"Failed to log visual anchor: {exc}")
             return anchored
-        except Exception:
+        except Exception:  # noqa: BLE001
             return None
 
     async def _get_x_api_client(self) -> XApiClient | None:
@@ -1183,7 +1183,7 @@ class Router:
                             continue
                         try:
                             data = resp.json()
-                        except Exception:
+                        except Exception:  # noqa: BLE001
                             self._metric_inc(
                                 "x.syndication.invalid_json",
                                 build_syndication_fetch_metric_payload(endpoint),
@@ -1211,12 +1211,12 @@ class Router:
                                     oembed_data = extract_oembed_payload_from_response(resp_oe)
                                     if oembed_data:
                                         data = oembed_data
-                                except Exception as exc:
+                                except Exception as exc:  # noqa: BLE001
                                     logger.debug(f"oEmbed fetch failed: {exc}")
                         # Break when we have usable data; otherwise continue to next variant
                         if _has_usable_payload(data):
                             break
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.info(
                         "Syndication fetch failed",
                         extra=build_syndication_fetch_failed_payload(
@@ -1268,7 +1268,7 @@ class Router:
                             chars=len(txt),
                         ),
                     )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"Failed to log x.text.resolve: {exc}")
                 return data
             finally:
@@ -1293,7 +1293,7 @@ class Router:
                 for tid in sorted_ids[:excess]:
                     self._syn_cache.pop(tid, None)
                     self._syn_locks.pop(tid, None)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to evict stale syndication entries: {exc}")
 
     async def _probe_twitter_syndication_images(self, url: str, status_id: str) -> list[str]:
@@ -1307,7 +1307,7 @@ class Router:
                 return []
             photos = syn.get("photos") or []
             return extract_syndication_photo_urls(photos)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug(f"Syndication image probe failed: {e}")
             return []
 
@@ -1332,7 +1332,7 @@ class Router:
                     )
             body = format_syndication_body_text(text)
             return f"{header_line}\n{body}"
-        except Exception:
+        except Exception:  # noqa: BLE001
             return format_syndication_error_fallback(url, syn_data)
 
     @staticmethod
@@ -1370,7 +1370,7 @@ class Router:
             return syn
         try:
             article_data = await self._fetch_x_article_from_fxtwitter(status_id)
-        except Exception:
+        except Exception:  # noqa: BLE001
             article_data = None
         if isinstance(article_data, dict) and article_data:
             merged = dict(syn)
@@ -1408,7 +1408,7 @@ class Router:
                             primary=ptid,
                         ),
                     )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Syndication payload processing failed: {exc}")
 
         caption = self._extract_syndication_text(syn)
@@ -1468,7 +1468,7 @@ class Router:
             return
         try:
             keys = [url, self._normalize_x_url(url)]
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to normalize X URL: {exc}")
             keys = [url]
         for key in keys:
@@ -1479,7 +1479,7 @@ class Router:
         try:
             while len(self._x_frontend_canon) > 256:
                 self._x_frontend_canon.popitem(last=False)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to bound frontend canon mapping: {exc}")
 
     def pop_gate_denied_reason(self, message_id: int) -> str | None:
@@ -1555,12 +1555,12 @@ class Router:
         try:
             path = Path(urlparse(url).path or "")
             ext = path.suffix.lower()
-        except Exception:
+        except Exception:  # noqa: BLE001
             ext = ""
         http = None
         try:
             http = await get_http_client()
-        except Exception:
+        except Exception:  # noqa: BLE001
             http = None
         if http is not None:
             cfg = RequestConfig(
@@ -1579,7 +1579,7 @@ class Router:
                         headers={"Range": "bytes=0-0"},
                     )
                     content_type = (resp.headers.get("content-type") or "").lower()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 try:
                     resp = await http.get(
                         url,
@@ -1587,7 +1587,7 @@ class Router:
                         headers={"Range": "bytes=0-0"},
                     )
                     content_type = (resp.headers.get("content-type") or "").lower()
-                except Exception:
+                except Exception:  # noqa: BLE001
                     content_type = ""
         if content_type.startswith("video/") or ext in {
             ".mp4",
@@ -1606,7 +1606,7 @@ class Router:
     def _log_media_kind_checked(self, url: str, content_type: str, decided: str) -> None:
         try:
             host = urlparse(url).netloc.lower()
-        except Exception:
+        except Exception:  # noqa: BLE001
             host = ""
         msg = f"media.kind_checked url_host={host or ''} ctype={content_type or ''} decided={decided or ''}"
         with suppress(Exception):
@@ -1671,7 +1671,7 @@ class Router:
                     p.fragment,
                 ),
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             return url
 
     def _extract_x_status_urls_from_text(self, text: str) -> list[str]:
@@ -1709,9 +1709,9 @@ class Router:
                     ref_message = await self._fetch_referenced_message(message)
                     if ref_message is not None:
                         texts.append(ref_message.content or "")
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"Failed to fetch referenced message: {exc}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to extract referenced message content: {exc}")
         # Extract URLs from combined text blobs
         raw_urls = extract_raw_urls_from_texts(texts)
@@ -1756,7 +1756,7 @@ class Router:
             if scope_case == "thread":
                 try:
                     k = int(self.config.get("THREAD_CONTEXT_TAIL_COUNT", 5))
-                except Exception:
+                except Exception:  # noqa: BLE001
                     k = 5
                 k = max(0, min(k, 40))
                 anchor = reply_target or message
@@ -1779,13 +1779,13 @@ class Router:
                         for cu in u:
                             if cu not in tail_urls:
                                 tail_urls.append(cu)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     tail_urls = []
                 if tail_urls:
                     return "tail", tail_urls
 
             return "none", []
-        except Exception:
+        except Exception:  # noqa: BLE001
             return "none", []
 
     async def _yt_dlp_probe(self, url: str, timeout_s: float = 8.0) -> dict[str, Any] | None:
@@ -1808,7 +1808,7 @@ class Router:
                 return None
             data = json.loads(stdout.decode(errors="ignore") or "{}")
             return data if isinstance(data, dict) else None
-        except Exception:
+        except Exception:  # noqa: BLE001
             return None
 
     def _normalize_x_url(self, url: str) -> str:
@@ -1858,7 +1858,7 @@ class Router:
         http = None
         try:
             http = await get_http_client()
-        except Exception:
+        except Exception:  # noqa: BLE001
             http = None
         primary_for_log: str | None = None
         frontend_for_log: str | None = None
@@ -1881,7 +1881,7 @@ class Router:
                 if any(path.endswith(sfx) for sfx in (".mp4", ".m3u8", ".webm")):
                     return candidate
                 return None
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return None
 
         def _collect_video_urls(node: Any) -> list[str]:
@@ -1918,7 +1918,7 @@ class Router:
                         for cand in sub:
                             if cand not in found:
                                 found.append(cand)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return found
             return found
 
@@ -1953,7 +1953,7 @@ class Router:
                             continue
                         try:
                             data = resp.json()
-                        except Exception:
+                        except Exception:  # noqa: BLE001
                             try:
                                 # If brotli is used and not auto-decoded, attempt manual decode [REH]
                                 enc = (resp.headers.get("content-encoding") or "").lower()
@@ -1963,9 +1963,9 @@ class Router:
 
                                         decoded = brotli.decompress(resp.content)
                                         data = json.loads(decoded.decode("utf-8", errors="replace"))
-                                    except Exception:
+                                    except Exception:  # noqa: BLE001
                                         data = json.loads(resp.text)
-                            except Exception:
+                            except Exception:  # noqa: BLE001
                                 data = {}
                         # Extract video URLs from common fx/vx payload shapes.
                         try:
@@ -1984,7 +1984,7 @@ class Router:
                                 for cand in _collect_video_urls(node):
                                     if cand not in videos:
                                         videos.append(cand)
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             logger.debug(f"Failed to extract video URLs from fx/vx data: {exc}")
                         # Best-effort regex sweep for escaped/wrapped URLs.
                         try:
@@ -1997,7 +1997,7 @@ class Router:
                                 cand = _normalize_video_candidate(m.group(0))
                                 if cand and cand not in videos:
                                     videos.append(cand)
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             logger.debug(f"Regex video URL extraction failed: {exc}")
                         # Extract photo URLs from common shapes
                         candidates: list[str] = []
@@ -2006,7 +2006,7 @@ class Router:
                             from .syndication.url_utils import (
                                 upgrade_pbs_to_orig,
                             )  # lazy import to avoid cycles
-                        except Exception:
+                        except Exception:  # noqa: BLE001
 
                             def upgrade_pbs_to_orig(u):  # fallback passthrough
                                 return u
@@ -2020,7 +2020,7 @@ class Router:
                                 u = p.get("url") or p.get("src") or p.get("href")
                                 if isinstance(u, str):
                                     candidates.append(upgrade_pbs_to_orig(u))
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             logger.debug(f"Failed to extract photos from fx/vx data: {exc}")
                         # Some variants: top-level 'photos'
                         for p in data.get("photos") or []:
@@ -2043,7 +2043,7 @@ class Router:
                                 pu = urlparse(u)
                                 host = (pu.netloc or "").lower()
                                 path = (pu.path or "").lower()
-                            except Exception as exc:
+                            except Exception as exc:  # noqa: BLE001
                                 logger.debug(f"Failed to parse URL for poster check: {exc}")
                                 host = ""
                                 path = ""
@@ -2065,7 +2065,7 @@ class Router:
                                             "detail": {"domain": host, "path": matched},
                                         },
                                     )
-                                except Exception as exc:
+                                except Exception as exc:  # noqa: BLE001
                                     self.logger.debug(f"video_poster logging failed: {exc}")
                                 continue  # do not accept poster as photo
                             if u not in uniq and self._is_direct_image_url(u):
@@ -2074,7 +2074,7 @@ class Router:
                             images.extend(uniq)
                         if videos or uniq:
                             break  # API success
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         self.logger.debug(f"x.syndication.api.error | host={host} err={e}")
 
         # Stage 2: HTML/meta fallback on fx/vx
@@ -2106,7 +2106,7 @@ class Router:
                                 from .syndication.url_utils import (
                                     upgrade_pbs_to_orig,
                                 )  # lazy import
-                            except Exception:
+                            except Exception:  # noqa: BLE001
 
                                 def upgrade_pbs_to_orig(u):  # fallback passthrough
                                     return u
@@ -2122,7 +2122,7 @@ class Router:
                             from .syndication.url_utils import (
                                 upgrade_pbs_to_orig,
                             )  # lazy import
-                        except Exception:
+                        except Exception:  # noqa: BLE001
 
                             def upgrade_pbs_to_orig(u):  # fallback passthrough
                                 return u
@@ -2142,7 +2142,7 @@ class Router:
                     if uniq:
                         images.extend(uniq)
                         break
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.debug(f"x.syndication.html.error | host={host} err={e}")
 
         # Deduplicate, cap to MAX, preserve order
@@ -2187,7 +2187,7 @@ class Router:
                 return None
             try:
                 payload = resp.json()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return None
             tweet = self._extract_fxtwitter_tweet_node(payload)
             if not tweet:
@@ -2225,7 +2225,7 @@ class Router:
             if not (normalized.get("title") or normalized.get("preview_text") or kept_blocks):
                 return None
             return normalized
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug(f"x.article.resolve.failed id={status_id} err={e}")
             return None
 
@@ -2240,7 +2240,7 @@ class Router:
                     prompt=("Describe this image in detail, focusing on key visual elements, objects, text, and context."),
                 )
                 notes = sanitize_vl_reply_text(notes or "")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 notes = None
         self.logger.info(f"🎯 Route: text (with perception) | images={len(img_urls)} | msg_id={message.id}")
         return await self._flow_process_text(
@@ -2290,7 +2290,7 @@ class Router:
             try:
                 if tmp_path and os.path.exists(tmp_path):
                     os.unlink(tmp_path)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"Failed to cleanup temp file: {exc}")
 
     async def _handle_image_with_model(
@@ -2314,7 +2314,7 @@ class Router:
                 if content:
                     return f"Image analysis: {content}"
                 return f"Image analysis: {name}"
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"Mock image analysis failed: {exc}")
                 return "Image analysis: mock image"
         try:
@@ -2342,7 +2342,7 @@ class Router:
                             image_url = embed.get("thumbnail", {}).get("url")
                         if not image_url:
                             image_url = embed.get("url")
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"Failed to extract image URL from embed: {exc}")
                     image_url = None
 
@@ -2439,7 +2439,7 @@ class Router:
                 return cached
         try:
             fetched = await channel.fetch_message(ref_id)
-        except Exception:
+        except Exception:  # noqa: BLE001
             fetched = None
         if fetched is not None:
             self._note_reference_via(message, "discord_fetch")
@@ -2553,7 +2553,7 @@ class Router:
                         },
                     )
             return hit
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"reply derived-reuse check failed: {exc}")
             return False
 
@@ -2629,7 +2629,7 @@ class Router:
                     },
                 )
             return shim
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"archived reference lookup failed: {exc}")
             return None
 
@@ -2710,7 +2710,7 @@ class Router:
         try:
             if isinstance(message.channel, discord.Thread):
                 in_bot_thread = getattr(message.channel, "owner_id", None) == self.bot.user.id
-        except Exception:
+        except Exception:  # noqa: BLE001
             in_bot_thread = False
 
         command_prefix = cfg.get("COMMAND_PREFIX", "!")
@@ -2718,7 +2718,7 @@ class Router:
             mention_prefix_pattern = rf"^<@!?{self.bot.user.id}>\s*"
             try:
                 clean_content = re.sub(mention_prefix_pattern, "", content)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 clean_content = content
         else:
             clean_content = ""
@@ -3083,7 +3083,7 @@ class Router:
             )
             self._metric_inc("ambient_reply_fired_total", {})
             return True
-        except Exception as _ambient_err:
+        except Exception as _ambient_err:  # noqa: BLE001
             self.logger.debug("ambient gate error (suppressed): %s", _ambient_err)
             return False
 
@@ -3115,7 +3115,7 @@ class Router:
             local_context = await build_ambient_local_context(message, background_limit=self._ambient_context_depth())
             self._metric_inc("ambient_context_build_total", {"mode": "scoped_local"})
             return local_context
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug("ambient local context build failed (suppressed): %s", exc)
             self._metric_inc("ambient_context_build_total", {"mode": "build_failed"})
             return ""
@@ -3207,7 +3207,7 @@ class Router:
                 try:
                     txt = re.sub(rf"^<@!?{self.bot.user.id}>\s*", "", txt).strip()
                     txt = re.sub(r"https?://\S+", "", txt).strip()
-                except Exception:
+                except Exception:  # noqa: BLE001
                     txt = txt.strip()
 
                 if not txt:  # No substantive content after mention removal
@@ -3264,7 +3264,7 @@ class Router:
                     if txt:
                         parts.append(txt)
                 return "\n".join(parts)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"docx parsing failed: {exc}")
 
         if ext_l == ".pdf" and PDF_SUPPORT and self.pdf_processor is not None:
@@ -3273,7 +3273,7 @@ class Router:
                 if isinstance(result, dict):
                     return str(result.get("text") or "")
                 return str(result or "")
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"pdf processing failed: {exc}")
 
         def _read_text() -> str:
@@ -3283,7 +3283,7 @@ class Router:
         try:
             # Off-load the blocking file read so we never stall the event loop. [PA]
             return await asyncio.to_thread(_read_text)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return ""
 
     async def _compat_dispatch_for_tests(self, message: Message, clean_content: str) -> ResponseMessage | None:
@@ -3303,7 +3303,7 @@ class Router:
             if modality_fn:
                 maybe_modality = modality_fn(message)
                 detected_modality = await maybe_modality if asyncio.iscoroutine(maybe_modality) else maybe_modality
-        except Exception:
+        except Exception:  # noqa: BLE001
             detected_modality = None
 
         modality_flow_map = {
@@ -3334,7 +3334,7 @@ class Router:
             if handler:
                 try:
                     result = await invoker(handler)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     result = ""
                 audio_path = None
                 if isinstance(result, ResponseMessage):
@@ -3358,7 +3358,7 @@ class Router:
                 handler = self._flows["process_attachments"]
                 try:
                     result = await handler(message, raw_content)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     result = ""
                 audio_path = None
                 if isinstance(result, ResponseMessage):
@@ -3405,7 +3405,7 @@ class Router:
         if "process_text" in self._flows:
             try:
                 response_text = await self._flows["process_text"](body)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 response_text = ""
         else:
             response_text = await brain_infer(body)
@@ -3414,7 +3414,7 @@ class Router:
         if modality == OutputModality.TTS and "generate_tts" in self._flows:
             try:
                 audio_path = await self._flows["generate_tts"](response_text)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 audio_path = None
 
         return ResponseMessage(content=response_text, text=response_text, audio_path=audio_path)
@@ -3424,7 +3424,7 @@ class Router:
         try:
             mentions = list(getattr(message, "mentions", []) or [])
             return getattr(self.bot, "user", None) in mentions
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
 
     def _feature_gate_response(
@@ -3506,7 +3506,7 @@ class Router:
             ctx = typing_factory()
             await ctx.__aenter__()
             entered = True
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             if channel_id is not None:
                 self._typing_suppressed_until[channel_id] = now + 60.0
             with suppress(Exception):
@@ -3547,7 +3547,7 @@ class Router:
             # Router debug flag from config [IV]
             try:
                 router_debug = bool(self.config.get("ROUTER_DEBUG", False))
-            except Exception:
+            except Exception:  # noqa: BLE001
                 router_debug = False
 
             # Listener-stage skips: self/bots and duplicates [IV]
@@ -3558,7 +3558,7 @@ class Router:
                 is_self = False
                 try:
                     is_self = bool(hasattr(self.bot, "user") and author and getattr(author, "id", None) == getattr(self.bot.user, "id", None))
-                except Exception:
+                except Exception:  # noqa: BLE001
                     is_self = False
                 if author_is_bot or is_self:
                     self.logger.info(
@@ -3570,13 +3570,13 @@ class Router:
                         },
                     )
                     return None
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"gate.skip bot/self check failed: {exc}")
 
             # Concurrency-safe dedupe [REH]
             try:
                 lock = self._processing_locks.setdefault(message.id, asyncio.Lock())
-            except Exception:
+            except Exception:  # noqa: BLE001
                 lock = asyncio.Lock()
             async with lock:
                 msg_id = getattr(message, "id", None)
@@ -3605,7 +3605,7 @@ class Router:
                             self._processed_recent_ts.pop(old_id, None)
                         self._processed_recent.append(msg_id)
                         self._processed_recent_ts[msg_id] = now
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"dedupe mark failed: {exc}")
 
             # Ingest started marker (single-shot)
@@ -3623,7 +3623,7 @@ class Router:
             # Run this BEFORE gating and typing() to avoid mock issues in tests
             try:
                 has_attachments = bool(getattr(message, "attachments", None)) and len(message.attachments) > 0
-            except Exception:
+            except Exception:  # noqa: BLE001
                 has_attachments = False
             cleaned_for_compat = re.sub(mention_re, "", content) if mention_re else content
             cleaned_for_compat = strip_leading_bot_mention(cleaned_for_compat, getattr(getattr(self.bot, "user", None), "id", None))
@@ -3636,7 +3636,7 @@ class Router:
                 try:
                     atts = list(getattr(message, "attachments", []) or [])
                     all_text_files = all_attachments_are_text(atts)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     all_text_files = False
 
                 if not all_text_files:
@@ -3667,7 +3667,7 @@ class Router:
             # Parse commands first so downstream paths can use cleaned content
             try:
                 parsed_command = parse_command(message, self.bot)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 parsed_command = None
             if parsed_command:
                 clean_content = parsed_command.cleaned_content or clean_content
@@ -3709,7 +3709,7 @@ class Router:
                         if clean_content == key or clean_content.startswith(f"{key} "):
                             matched = key
                             break
-                except Exception:
+                except Exception:  # noqa: BLE001
                     matched = None
                 if matched:
                     self.logger.info(f"Found command '{matched}', delegating to cog. (msg_id: {message.id})")
@@ -3732,12 +3732,12 @@ class Router:
                 # This mirrors the text-default behavior in core bot to avoid dead-ends. [IV][REH]
                 try:
                     is_mentioned = self._is_mentioned(message)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     is_mentioned = False
                 mention_re = self._get_mention_re()
                 try:
                     cleaned = re.sub(mention_re, "", content).strip() if mention_re else content.strip()
-                except Exception:
+                except Exception:  # noqa: BLE001
                     cleaned = content.strip()
                 cleaned = strip_leading_bot_mention(cleaned, getattr(getattr(self.bot, "user", None), "id", None))
 
@@ -3777,7 +3777,7 @@ class Router:
                 # 4. Compatibility fast-path for legacy tests: attachments + empty content (secondary safeguard)
                 try:
                     has_attachments = bool(getattr(message, "attachments", None)) and len(message.attachments) > 0
-                except Exception:
+                except Exception:  # noqa: BLE001
                     has_attachments = False
                 # Recompute a minimal cleaned content (strip mention prefix like above)
                 mention_re = self._get_mention_re()
@@ -3791,7 +3791,7 @@ class Router:
                     try:
                         atts = list(getattr(message, "attachments", []) or [])
                         all_text_files = all_attachments_are_text(atts)
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         all_text_files = False
 
                     if not all_text_files:
@@ -3846,7 +3846,7 @@ class Router:
                 # 5. Check for vision generation intent early (before multi-modal)
                 try:
                     prechecked = await self._prioritized_vision_route(message, context_str)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     prechecked = None
                     self.logger.debug(f"vision.precheck_exception | {e}")
                 if prechecked is not None:
@@ -3868,7 +3868,7 @@ class Router:
                 if getattr(self, "_x_early_resolve_enabled", False):
                     try:
                         layer, x_urls = await self._gather_prioritized_x_urls(scope_case, message, reply_target)
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         layer, x_urls = "none", []
                     if x_urls and not parsed_command:
                         self.logger.info(
@@ -3886,11 +3886,11 @@ class Router:
                             for u in x_urls:
                                 try:
                                     canonical_u = self._canonicalize_x_url(u)
-                                except Exception:
+                                except Exception:  # noqa: BLE001
                                     canonical_u = u
                                 try:
                                     normalized_u = self._normalize_x_url(canonical_u)
-                                except Exception:
+                                except Exception:  # noqa: BLE001
                                     normalized_u = canonical_u
                                 norm_urls.append(normalized_u)
                                 ctx = self._x_frontend_canon.get(normalized_u) or self._x_frontend_canon.get(canonical_u) or {}
@@ -3903,7 +3903,7 @@ class Router:
                                     frontend_hints[normalized_u] = frontend
                                 if primary:
                                     primary_hints[normalized_u] = primary
-                        except Exception:
+                        except Exception:  # noqa: BLE001
                             norm_urls = x_urls
                             frontend_hints = {}
                             primary_hints = {}
@@ -3919,7 +3919,7 @@ class Router:
                                 ),
                                 timeout=self._x_syn_timeout_s,
                             )
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001
                             resolved = {"kind": "unknown", "reason": f"exception:{e}"}
                         dt_ms = int((time.perf_counter() - t0) * 1000)
                         kind = (resolved or {}).get("kind", "unknown")
@@ -3948,7 +3948,7 @@ class Router:
                                     "msg_id": message.id,
                                 },
                             )
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             self.logger.debug(f"x.detect logging failed: {exc}")
 
                         url_for_stt = (resolved or {}).get("url") or base_context_url
@@ -3997,13 +3997,13 @@ class Router:
                                     url_for_stt = f"{url_for_stt}#ptid={ptid2}&uh={uhash2}"
                                     if frontend_selected:
                                         url_for_stt = f"{url_for_stt}&fe={frontend_selected}"
-                            except Exception as exc:
+                            except Exception as exc:  # noqa: BLE001
                                 self.logger.debug(f"media.selected breadcrumb failed: {exc}")
                             dur = (resolved or {}).get("duration")
                             host = None
                             try:
                                 host = urlparse(url_for_stt).netloc
-                            except Exception:
+                            except Exception:  # noqa: BLE001
                                 host = ""
                             self.logger.info(f"media.resolve: result=video url={host or url_for_stt} dur={int(dur) if isinstance(dur, (int, float)) else 'NA'}s")
                             with suppress(Exception):
@@ -4022,23 +4022,23 @@ class Router:
                                 timeout_override_raw = None
                                 try:
                                     timeout_override_raw = self.config.get("X_STT_TIMEOUT_S")
-                                except Exception:
+                                except Exception:  # noqa: BLE001
                                     timeout_override_raw = None
                                 stt_timeout: float | None
                                 stt_timeout = None
                                 if timeout_override_raw not in (None, ""):
                                     try:
                                         stt_timeout = float(timeout_override_raw)
-                                    except Exception:
+                                    except Exception:  # noqa: BLE001
                                         stt_timeout = None
                                 if stt_timeout is None or stt_timeout <= 0:
                                     try:
                                         stt_rtf = float(self.config.get("X_STT_TIMEOUT_RTF", X_STT_RTF_DEFAULT))
-                                    except Exception:
+                                    except Exception:  # noqa: BLE001
                                         stt_rtf = X_STT_RTF_DEFAULT
                                     try:
                                         speedup_cfg = float(self.config.get("VIDEO_SPEEDUP", _DEFAULT_VIDEO_SPEEDUP))
-                                    except Exception:
+                                    except Exception:  # noqa: BLE001
                                         speedup_cfg = _DEFAULT_VIDEO_SPEEDUP
                                     safe_speedup = speedup_cfg if speedup_cfg > 0 else _DEFAULT_VIDEO_SPEEDUP
                                     effective_duration = 0.0
@@ -4065,7 +4065,7 @@ class Router:
                                             "msg_id": message.id,
                                         },
                                     )
-                                except Exception as exc:
+                                except Exception as exc:  # noqa: BLE001
                                     self.logger.debug(f"stt.start logging failed: {exc}")
                                 stt_t0 = time.perf_counter()
                                 stt_res = await self._run_stt_job(
@@ -4091,7 +4091,7 @@ class Router:
                                             "msg_id": message.id,
                                         },
                                     )
-                                except Exception as exc:
+                                except Exception as exc:  # noqa: BLE001
                                     self.logger.debug(f"stt.ok logging failed: {exc}")
                                 self.logger.info(f"🎯 Route: stt_from_x_video | msg_id={message.id}")
                                 # Persist the derived understanding (tweet text +
@@ -4137,7 +4137,7 @@ class Router:
                                     content=("⚠️ I couldn't transcribe this video before timing out. Please try again or use a shorter clip."),
                                     error=True,
                                 )
-                            except Exception as e:
+                            except Exception as e:  # noqa: BLE001
                                 from bot.exceptions import NoAudioStreamError
 
                                 reason = "extract_error"
@@ -4155,7 +4155,7 @@ class Router:
                                         reason = "timeout"
                                     elif "whisper" in es:
                                         reason = "whisper_error"
-                                except Exception as exc:
+                                except Exception as exc:  # noqa: BLE001
                                     self.logger.debug(f"error classification failed: {exc}")
                                 if _is_no_audio:
                                     # Silent video: nothing to transcribe, but the still
@@ -4218,7 +4218,7 @@ class Router:
                                         "msg_id": message.id,
                                     },
                                 )
-                            except Exception as exc:
+                            except Exception as exc:  # noqa: BLE001
                                 self.logger.debug(f"x.photos.ok logging failed: {exc}")
                             with suppress(Exception):
                                 self.logger.info(
@@ -4237,7 +4237,7 @@ class Router:
                                         prompt=("Describe this image in detail, focusing on key visual elements, objects, text, and context."),
                                     )
                                     vl_notes = sanitize_vl_reply_text(vl_notes or "")
-                                except Exception:
+                                except Exception:  # noqa: BLE001
                                     vl_notes = None
                             tweet_caption = ""
                             try:
@@ -4258,7 +4258,7 @@ class Router:
                                         "msg_id": message.id,
                                     },
                                 )
-                            except Exception:
+                            except Exception:  # noqa: BLE001
                                 tweet_caption = ""
                             composed_input = self._compose_x_tweet_with_visual_facts(
                                 user_text=clean_content,
@@ -4307,7 +4307,7 @@ class Router:
                 try:
                     try:
                         total_budget = float(self.config.get("MULTIMODAL_TOTAL_BUDGET_S", 240.0))
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         total_budget = 240.0
                     with suppress(Exception):
                         self.logger.info(
@@ -4391,7 +4391,7 @@ class Router:
                         stale = [k for k in list(meta_dict.keys()) if k not in active_ids]
                         for k in stale:
                             meta_dict.pop(k, None)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"periodic cleanup failed: {exc}")
 
     def compute_streaming_eligibility(self, message: Message) -> dict[str, Any]:
@@ -4511,7 +4511,7 @@ class Router:
                 "domains": domains,
                 "reason": ",".join(reasons) or "none",
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Fail-closed to quiet mode for safety
             self.logger.debug(f"stream:eligibility_failed | {e}")
             return {
@@ -4584,16 +4584,16 @@ class Router:
                     try:
                         mod_label = getattr(modality, "name", "input").lower()
                         await message.reply(f"⚠️ Processing timed out for {mod_label}. Please try again.")
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"timeout reply failed: {exc}")
                     handler_res = None
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     try:
                         mod_label = getattr(modality, "name", "input").lower()
                         # safe_reply batches: media handlers wrap yt-dlp/ffmpeg stderr,
                         # which can exceed Discord's limit on its own. [REH]
                         await safe_reply(message, f"⚠️ An error occurred while processing {mod_label}: {exc}")
-                    except Exception as exc2:
+                    except Exception as exc2:  # noqa: BLE001
                         self.logger.debug(f"error reply failed: {exc2}")
                     handler_res = None
 
@@ -4609,7 +4609,7 @@ class Router:
                     base_text = re.sub(mention_pattern, "", base_text)
                 if base_text:
                     results.append(base_text)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"text extraction failed: {exc}")
 
             flow_fn = getattr(self, "_flow_process_text", None)
@@ -4628,7 +4628,7 @@ class Router:
         # Treat plain text attachments as prompt extensions, not standalone items
         try:
             items = [it for it in (items or []) if not (getattr(it, "source_type", None) == "attachment" and is_text_attachment(getattr(it, "payload", None)))]
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Non-fatal: fallback to original items list on any error
             self.logger.debug(f"text attachment filter failed: {exc}")
 
@@ -4678,7 +4678,7 @@ class Router:
                     truncated = False  # No truncation at harvest time
                     self.logger.info(f"📎 Reply image capture | from_msg={ref_message.id} count={len(reply_images)} kept={kept_count} truncated={truncated}")
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 # Non-fatal: continue without reply images if fetch fails
                 self.logger.debug(f"Reply image harvest failed: {e}")
 
@@ -4705,7 +4705,7 @@ class Router:
                         if added:
                             with suppress(Exception):
                                 self.logger.info(f"📎 Reply link capture | from_msg={ref_message.id} urls_added={added}")
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"reply link harvest failed: {exc}")
 
                     # 2) Harvest non-image attachments from referenced message (e.g., video, pdf)
@@ -4731,9 +4731,9 @@ class Router:
                         if added_atts:
                             with suppress(Exception):
                                 self.logger.info(f"📎 Reply attachment capture | from_msg={ref_message.id} attachments_added={added_atts}")
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"reply attachment harvest failed: {exc}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Non-fatal; continue without reply link harvest
             self.logger.debug(f"reply link/attachment harvest failed: {exc}")
 
@@ -4757,7 +4757,7 @@ class Router:
                     if added_urls:
                         with suppress(Exception):
                             self.logger.info(f"📎 Reply URL harvest | from_msg={ref_msg.id} urls_added={added_urls}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Do not fail dispatch on URL harvest errors
             self.logger.debug(f"reply URL harvest failed: {exc}")
 
@@ -4773,7 +4773,7 @@ class Router:
                     # 2) URLs present in the parent's embeds (e.g., tweets/YouTube share)
                     try:
                         ref_embeds = list(getattr(ref_msg, "embeds", []) or [])
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"embed extraction failed: {exc}")
                         ref_embeds = []
                     append_embed_related_urls(found_urls, ref_embeds)
@@ -4789,7 +4789,7 @@ class Router:
                         if added_urls:
                             with suppress(Exception):
                                 self.logger.info(f"📎 Reply URL harvest (unconditional) | from_msg={getattr(ref_msg, 'id', 'na')} urls_added={added_urls} now_items={len(items)}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"unconditional reply URL harvest failed: {exc}")
 
         # Collapse redundant reply-harvested URLs to one logical X status
@@ -4798,14 +4798,14 @@ class Router:
         try:
             if getattr(message, "reference", None) and not skip_ref_harvest:
                 self._prune_redundant_reply_media_items(message, items)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"reply media prune call failed: {exc}")
 
         # Process original text content (remove URLs that will be processed separately)
         original_text = message.content
         try:
             mentions = list(getattr(message, "mentions", []) or [])
-        except Exception:
+        except Exception:  # noqa: BLE001
             mentions = []
         if mentions and getattr(self.bot, "user", None) in mentions:
             original_text = strip_leading_bot_mention(original_text, getattr(getattr(self.bot, "user", None), "id", None))
@@ -4834,7 +4834,7 @@ class Router:
             url_ct = sum(1 for it in items if getattr(it, "source_type", None) == "url")
             att_ct = sum(1 for it in items if getattr(it, "source_type", None) == "attachment")
             self.logger.info(f"mm.items.after_harvest | count={len(items)} urls={url_ct} atts={att_ct} msg_id={message.id}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"post-harvest diagnostics failed: {exc}")
 
         # Thread-only UX fallback: if the trigger carried no meaningful text, adopt the reply target's text;
@@ -4843,7 +4843,7 @@ class Router:
             if _is_thread_channel(getattr(message, "channel", None)) and (not original_text or not original_text.strip()):
                 try:
                     rt, _ = await resolve_thread_reply_target(self.bot, message, self.config)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"thread reply target resolution failed: {exc}")
                     rt = None
                 adopted = False
@@ -4903,9 +4903,9 @@ class Router:
                                         },
                                     )
                                 break
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"thread history scan failed: {exc}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"thread text fallback failed: {exc}")
 
         # Reply-case UX fallback (non-thread): mention + reply with minimal text → adopt parent text. [REH][IV]
@@ -4916,7 +4916,7 @@ class Router:
                     minimal = True
                     try:
                         minimal = not bool(re.search(r"[A-Za-z0-9]", original_text or ""))
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"minimal text check failed: {exc}")
                         minimal = not bool(original_text and original_text.strip())
                     if minimal:
@@ -4926,7 +4926,7 @@ class Router:
                             try:
                                 # Strip mentions and URLs for better signal.
                                 rt_clean = strip_discord_mentions_and_urls(rt_raw)
-                            except Exception as exc:
+                            except Exception as exc:  # noqa: BLE001
                                 self.logger.debug(f"strip mentions/urls failed: {exc}")
                                 rt_clean = (ref_msg.content or "").strip()
                             try:
@@ -4955,9 +4955,9 @@ class Router:
                                                 },
                                             },
                                         )
-                            except Exception as exc:
+                            except Exception as exc:  # noqa: BLE001
                                 self.logger.debug(f"adopt_ok logging failed: {exc}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"reply text fallback failed: {exc}")
 
         # Ingest .txt attachments from the triggering message into the text prompt (first match only)
@@ -4972,7 +4972,7 @@ class Router:
                 first = txt_atts[0]
                 try:
                     bytes_total = int(getattr(first, "size", 0) or 0)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     bytes_total = 0
                 blob = await read_attachment_text(first, 262_144)
                 if blob:
@@ -4987,12 +4987,12 @@ class Router:
                         if len(txt_atts) > 1:
                             extra = len(txt_atts) - 1
                             self.logger.info(f"attachments.txt_ignored extra={extra}")
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"txt attachment logging failed: {exc}")
                 else:
                     with suppress(Exception):
                         self.logger.info("attachments.txt_reject reason=invalid_or_oversize")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Never break routing on attachment ingestion failure
             self.logger.debug(f"txt attachment ingestion failed: {exc}")
 
@@ -5004,7 +5004,7 @@ class Router:
             if prechecked is not None:
                 self._metric_inc("routing.vision.precedence", {"stage": "in_multimodal"})
                 return prechecked
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Never break dispatch because of a precheck failure
             self.logger.debug(f"routing.precedence.vision_check_failed | {e}")
 
@@ -5026,11 +5026,11 @@ class Router:
                     if ref_message is not None:
                         ref_imgs = collect_image_urls_from_message(ref_message)
                         ref_count = len(ref_imgs or [])
-                except Exception:
+                except Exception:  # noqa: BLE001
                     ref_count = 0
             cur_imgs = collect_image_urls_from_message(message) or []
             combined_count = ref_count + len(cur_imgs)
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Fallback to heuristic count from collected items
             for item in items:
                 if item.source_type == "attachment":
@@ -5046,7 +5046,7 @@ class Router:
         x_info_for_gate = None
         try:
             x_info_for_gate = _detect_x_twitter_media(message)
-        except Exception:
+        except Exception:  # noqa: BLE001
             x_info_for_gate = None
         x_hosts_for_gate = [
             "x.com",
@@ -5067,7 +5067,7 @@ class Router:
                 has_x_url = True
                 if self._is_twitter_status_url(raw_u):
                     x_status_urls_from_items.add(self._normalize_x_url(raw_u))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"twitter URL scan failed: {exc}")
 
         x_media_kind = "none"
@@ -5097,7 +5097,7 @@ class Router:
                         suppressed += 1
                         self._metric_inc("routing.twitter.thumb_suppressed", None)
                         continue
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     # On parse errors, keep the item
                     self.logger.debug(f"twitter thumbnail check failed: {exc}")
                 filtered_items.append(item)
@@ -5149,7 +5149,7 @@ class Router:
                 # Final visible truncation by sentence boundary
                 try:
                     max_final = int(self.config.get("TEXT_FINAL_MAX_CHARS", 420))
-                except Exception:
+                except Exception:  # noqa: BLE001
                     max_final = 420
                 if action and getattr(action, "content", None):
                     action.content = self._truncate_final_text(action.content, max_final)
@@ -5163,7 +5163,7 @@ class Router:
             # If user explicitly asked for media analysis but no media/URL is in scope → nag
             try:
                 wants_media = has_explicit_media_intent(original_text)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 wants_media = False
             if wants_media:
                 with suppress(Exception):
@@ -5189,7 +5189,7 @@ class Router:
                         "msg_id": getattr(message, "id", None),
                     },
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"text_default logging failed: {exc}")
 
             # "What's happening in the news today?" -- ground the answer in
@@ -5214,11 +5214,11 @@ class Router:
         #    item set to URLs only. [Feature-flag: ROUTING_WEB_LINK_PRECEDENCE]
         try:
             web_link_precedence = bool(self.config.get("ROUTING_WEB_LINK_PRECEDENCE", False))
-        except Exception:
+        except Exception:  # noqa: BLE001
             web_link_precedence = False
         try:
             url_items = [it for it in items if getattr(it, "source_type", None) == "url"]
-        except Exception:
+        except Exception:  # noqa: BLE001
             url_items = []
 
         # 2) Bare image default VL (if enabled): when only images are provided with no meaningful text,
@@ -5226,7 +5226,7 @@ class Router:
         #    to image attachments to minimize disruption. [Feature-flag: VL_DEFAULT_PROMPT_FOR_BARE_IMAGE]
         try:
             vl_default_for_bare_image = bool(self.config.get("VL_DEFAULT_PROMPT_FOR_BARE_IMAGE", True))
-        except Exception:
+        except Exception:  # noqa: BLE001
             vl_default_for_bare_image = True
         try:
             image_attachment_items = [
@@ -5237,7 +5237,7 @@ class Router:
                 and isinstance(it.payload.content_type, str)
                 and "image" in (it.payload.content_type or "").lower()
             ]
-        except Exception:
+        except Exception:  # noqa: BLE001
             image_attachment_items = []
 
         precedence_applied = False
@@ -5285,7 +5285,7 @@ class Router:
             except TimeoutError:
                 self.logger.warning(f"⏱️ Item {i} timed out (budget={selected_budget}s)")
                 return f"⏱️ Timed out after {selected_budget}s", False, selected_budget, 1
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning(f"❌ Item {i} failed: {e}")
                 return f"❌ Failed: {e}", False, time.time() - start_time, 1
 
@@ -5374,7 +5374,7 @@ class Router:
         """Bounded fan-out for parallel multimodal item processing. [PA][REH][CMV]"""
         try:
             val = int(self.config.get("MULTIMODAL_MAX_CONCURRENCY", MULTIMODAL_MAX_CONCURRENCY_DEFAULT))
-        except Exception:
+        except Exception:  # noqa: BLE001
             val = MULTIMODAL_MAX_CONCURRENCY_DEFAULT
         return max(1, val)
 
@@ -5393,7 +5393,7 @@ class Router:
                     extra={"event": "x.retry_policy.media_budget", "detail": {"url": str(item.payload)}},
                 )
                 return "media", media_budget
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"budget heuristic failed: {exc}")
         return "text", llm_budget
 
@@ -5492,7 +5492,7 @@ class Router:
             async with sem:
                 try:
                     modality = await map_item_to_modality(item)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.warning(f"❌ Item {i} modality mapping failed: {e}")
                     return i, item, InputModality.TEXT_ONLY, f"❌ Failed: {e}", False, 0.0, 1
                 retry_modality, budget = self._select_item_budget(modality, item, llm_budget, media_budget)
@@ -5615,7 +5615,7 @@ class Router:
             if m:
                 ext = m.group(1).lower()
                 suffix = f".{ext if ext != 'jpeg' else 'jpg'}"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"extension inference failed: {exc}")
         tmp_path = None
         try:
@@ -5688,7 +5688,7 @@ class Router:
             try:
                 if tmp_path and os.path.exists(tmp_path):
                     os.unlink(tmp_path)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"temp file cleanup failed: {exc}")
 
     async def _handle_video_url(self, item: InputItem, message: Message | None = None) -> str:
@@ -5713,7 +5713,7 @@ class Router:
                 try:
                     canonical_url = self._canonicalize_x_url(url)
                     normalized_url = self._normalize_x_url(canonical_url)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     canonical_url = url
                     normalized_url = url
                 frontend_hint: dict[str, str] = {}
@@ -5731,7 +5731,7 @@ class Router:
                         frontend_hints=frontend_hint,
                         primary_hints=primary_hint,
                     )
-                except Exception:
+                except Exception:  # noqa: BLE001
                     resolved = {"kind": "unknown"}
                 primary_selected = (resolved or {}).get("primary") or primary_ctx or self._parse_twitter_status_id(normalized_url) or ""
                 frontend_selected = (resolved or {}).get("frontend") or frontend_ctx
@@ -5766,7 +5766,7 @@ class Router:
                                 stt_target_url = f"{stt_target_url}#ptid={primary_selected}&uh={uhash}"
                                 if frontend_selected:
                                     stt_target_url = f"{stt_target_url}&fe={frontend_selected}"
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             self.logger.debug(f"X media breadcrumb failed: {exc}")
                     else:
                         # Poster hint or misclassification: fall back to original URL so downstream can degrade gracefully
@@ -5784,7 +5784,7 @@ class Router:
                     metadata = result.get("metadata") or {}
                     if metadata.get("demux_fallback"):
                         self.logger.info("x.media.demux_fallback used=true")
-                except Exception:
+                except Exception:  # noqa: BLE001
                     metadata = {}
 
             transcription: str | None = None
@@ -5846,16 +5846,16 @@ class Router:
                                     status_id=status_id,
                                     image_urls=imgs,
                                 )
-                            except Exception as exc:
+                            except Exception as exc:  # noqa: BLE001
                                 # Fallback: single-image VL without caption
                                 self.logger.debug(f"route_probed_twitter_images_with_caption failed: {exc}")
                                 try:
                                     desc = await self._vl_describe_image_from_url(imgs[0])
                                     return desc or "⚠️ Unable to analyze the images from this tweet."
-                                except Exception as exc:
+                                except Exception as exc:  # noqa: BLE001
                                     # Fall through to general handler on VL error
                                     self.logger.debug(f"vl_describe_image_from_url failed: {exc}")
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         self.logger.debug(f"x.syndication.probe.failed | {e}")
                 self.logger.info(f"🐦 No video in Twitter URL; routing to syndication/API path: {url}")
                 # Fallback: general URL handler which has X syndication logic
@@ -5879,7 +5879,7 @@ class Router:
                     )
                     if formatted:
                         return formatted
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"format_x_with_resolved_base_text_if_available failed: {exc}")
             # Fallback to existing user-friendly message for non-Twitter or when caption unavailable
             self.logger.info(f"ℹ️ Video inference: {ie}")
@@ -5921,7 +5921,7 @@ class Router:
             return None
         try:
             extract_res = await web_extractor.extract(url)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.info(f"stt.article_fallback.error reason={reason} err={exc}")
             return None
         if not getattr(extract_res, "success", False):
@@ -6065,7 +6065,7 @@ class Router:
                 context=context_str,
                 cfg=cfg,
             )
-        except Exception as exc:  # [REH] never let the tool path swallow a turn
+        except Exception as exc:  # noqa: BLE001 - tool sandbox; never swallows a turn [REH]
             self.logger.warning(
                 f"tools.flow_failed error={exc}",
                 extra={"subsys": "tools", "event": "tools.flow_failed"},
@@ -6131,7 +6131,7 @@ class Router:
         except TimeoutError:
             self.logger.warning(f"news.digest.timeout topic={query.topic}")
             return context_str
-        except Exception as exc:  # [REH] never break the text flow over a digest
+        except Exception as exc:  # noqa: BLE001 - digest is auxiliary; failure must not break text flow [REH]
             self.logger.warning(f"news.digest.failed topic={query.topic} error={exc}")
             return context_str
 
@@ -6355,7 +6355,7 @@ class Router:
                         },
                     )
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     # Classification failed - fall through to existing web scraping [REH]
                     self.logger.debug(f"url.classify.failed url={url[:80]} error={e}")
 
@@ -6363,12 +6363,12 @@ class Router:
             cfg = self.config
             try:
                 x_stt_probe_timeout = float(cfg.get("X_STT_PROBE_TIMEOUT_S", 60.0))
-            except Exception:
+            except Exception:  # noqa: BLE001
                 x_stt_probe_timeout = 60.0
             try:
                 # Prefer seconds; fallback to ms if provided
                 x_api_timeout_s = float(cfg.get("X_API_TIMEOUT_S", 0)) or (float(cfg.get("X_API_TIMEOUT_MS", 8000)) / 1000.0)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 x_api_timeout_s = 8.0
             try:
                 x_syn_call_timeout = float(
@@ -6377,15 +6377,15 @@ class Router:
                         max(getattr(self, "_x_syn_timeout_s", 3.0), 3.0) + 0.5,
                     ),
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 x_syn_call_timeout = max(getattr(self, "_x_syn_timeout_s", 3.0), 3.0) + 0.5
             try:
                 url_process_timeout = float(cfg.get("URL_PROCESS_TIMEOUT_S", 25.0))
-            except Exception:
+            except Exception:  # noqa: BLE001
                 url_process_timeout = 25.0
             try:
                 web_extract_timeout = float(cfg.get("WEB_EXTRACT_TIMEOUT_S", 30.0))
-            except Exception:
+            except Exception:  # noqa: BLE001
                 web_extract_timeout = 30.0
 
             api_data: dict[str, Any] | None = None
@@ -6424,7 +6424,7 @@ class Router:
                                     "detail": (detail or {}) | {"ms": dt_ms},
                                 },
                             )
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"{tag}.ok logging failed: {exc}")
                     return res, None
                 except TimeoutError:
@@ -6437,10 +6437,10 @@ class Router:
                                 "detail": (detail or {}) | {"ms": dt_ms, "timeout_s": timeout_s},
                             },
                         )
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"{tag}.timeout logging failed: {exc}")
                     return None, "timeout"
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     try:
                         dt_ms = int((_t.time() - t0) * 1000)
                         self.logger.info(
@@ -6450,7 +6450,7 @@ class Router:
                                 "detail": (detail or {}) | {"ms": dt_ms, "error": str(e)},
                             },
                         )
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"{tag}.fail logging failed: {exc}")
                     return None, "error"
 
@@ -6501,7 +6501,7 @@ class Router:
                                 "detail": {"reason": reason or "unroll_not_available"},
                             },
                         )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 # Failure: include exception details for visibility, but keep flow moving [REH]
                 with suppress(Exception):
                     self.logger.info(
@@ -6558,7 +6558,7 @@ class Router:
                                     },
                                 },
                             )
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             self.logger.debug(f"x.syndication.metadata logging failed: {exc}")
 
                         # Media-first branching: use robust extractor rather than only 'photos' [CA][REH]
@@ -6588,7 +6588,7 @@ class Router:
                                     },
                                 },
                             )
-                        except Exception:
+                        except Exception:  # noqa: BLE001
                             extracted_images = []
                             _syn_has_video = False
 
@@ -6675,7 +6675,7 @@ class Router:
                                     },
                                 },
                             )
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             self.logger.debug(f"x.syndication.image_only logging failed: {exc}")
 
                         if is_image_only and bool(cfg.get("TWITTER_IMAGE_ONLY_ENABLE", True)):
@@ -6738,7 +6738,7 @@ class Router:
                         if (not photos) and (not extracted_images):
                             try:
                                 status_id = self._resolve_twitter_status_id(url, tweet_id=tweet_id)
-                            except Exception:
+                            except Exception:  # noqa: BLE001
                                 status_id = ""
                             if status_id:
                                 imgs, _ = await _bounded(
@@ -6784,7 +6784,7 @@ class Router:
                                         "x.syndication.sparse.resolve",
                                         {"tweet_id": tweet_id or ""},
                                     )
-                                except Exception:
+                                except Exception:  # noqa: BLE001
                                     resolved_sparse = None
 
                                 sparse_kind, sparse_images, sparse_url = self._extract_sparse_media_resolution(
@@ -6912,7 +6912,7 @@ class Router:
                                     status_id=status_id,
                                     image_urls=imgs,
                                 )
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001
                             self.logger.debug(f"x.syndication.image_probe.failed | {e}")
 
                 # Tier 2 (optionally before API if syndication_first): X API [SFT]
@@ -7011,7 +7011,7 @@ class Router:
                                         photo_url,
                                         prompt=self._get_system_prompt("vl_prompt"),
                                     )
-                                except Exception:
+                                except Exception:  # noqa: BLE001
                                     desc = None
                                 if desc:
                                     analyzed += 1
@@ -7177,7 +7177,7 @@ class Router:
                     )
                     return ""
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.warning(f"url.ytdlp.failed url={url[:120]} error={e}")
                     return ""
 
@@ -7530,27 +7530,27 @@ class Router:
             try:
                 mention_re = self._get_mention_re()
                 content_clean = re.sub(mention_re, "", content) if mention_re else content
-            except Exception:
+            except Exception:  # noqa: BLE001
                 content_clean = content
 
             # Perception beats generation: if images or Twitter URLs are present, skip gen path
             try:
                 has_img_attachments = any((getattr(a, "content_type", "") or "").startswith("image/") for a in (getattr(message, "attachments", None) or []))
-            except Exception:
+            except Exception:  # noqa: BLE001
                 has_img_attachments = False
 
             # Include referenced message (reply target) for gating if present [REH][IV]
             ref_msg = None
             try:
                 ref_msg = await self._fetch_referenced_message(message)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"reference message fetch failed: {exc}")
                 ref_msg = None
 
             try:
                 if ref_msg:
                     has_img_attachments = has_img_attachments or any((getattr(a, "content_type", "") or "").startswith("image/") for a in (getattr(ref_msg, "attachments", None) or []))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"ref attachment check failed: {exc}")
 
             has_twitter_url = False
@@ -7559,7 +7559,7 @@ class Router:
                 if ref_msg:
                     url_candidates += re.findall(r"https?://\S+", getattr(ref_msg, "content", "") or "")
                 has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 has_twitter_url = False
 
             if has_img_attachments or has_twitter_url:
@@ -7588,7 +7588,7 @@ class Router:
                         user_id=str(getattr(getattr(message, "author", None), "id", "")),
                         guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
                     )
-                except Exception:
+                except Exception:  # noqa: BLE001
                     intent_result = None
 
                 if intent_result is None:
@@ -7688,7 +7688,7 @@ class Router:
                     try:
                         await self._vision_orchestrator.ensure_started()
                         vision_available = self._vision_available()  # Re-check after lazy start
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         self.logger.warning(f"Lazy orchestrator start failed: {e}")
 
                 if not vision_available:
@@ -7722,7 +7722,7 @@ class Router:
                             try:
                                 await self._vision_orchestrator.ensure_started()
                                 vision_available = self._vision_available()  # Re-check after lazy start
-                            except Exception as e:
+                            except Exception as e:  # noqa: BLE001
                                 self.logger.warning(f"Lazy orchestrator start failed: {e}")
 
                         if not vision_available:
@@ -7744,7 +7744,7 @@ class Router:
                     # Fall through to normal multimodal flow on errors
 
             return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Fail-safe: never break dispatch on precheck
             self.logger.debug(f"vision.precheck_failed | {e}")
             return None
@@ -7843,7 +7843,7 @@ class Router:
                         "detail": stats,
                     },
                 )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"reply media prune failed: {exc}")
         return stats
 
@@ -7875,10 +7875,10 @@ class Router:
                             "detail": {"notes": len(kept), "kinds": kinds},
                         },
                     )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"turn_derived logging failed: {exc}")
             return bool(ok)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"turn_derived.record_failed | {exc}")
             return False
 
@@ -7905,7 +7905,7 @@ class Router:
         perception_guard = False
         try:
             has_img_attachments = any((getattr(a, "content_type", "") or "").startswith("image/") for a in (getattr(message, "attachments", None) or []))
-        except Exception:
+        except Exception:  # noqa: BLE001
             has_img_attachments = False
         try:
             # IMPORTANT: check URLs on the original and referenced message, not sanitized content
@@ -7915,7 +7915,7 @@ class Router:
             ref_msg = None
             try:
                 ref_msg = await self._fetch_referenced_message(message)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 ref_msg = None
             if ref_msg:
                 with suppress(Exception):
@@ -7924,7 +7924,7 @@ class Router:
                     has_img_attachments = has_img_attachments or any((getattr(a, "content_type", "") or "").startswith("image/") for a in (getattr(ref_msg, "attachments", None) or []))
             has_any_url = bool(url_candidates)
             has_twitter_url = any(self._is_twitter_url(u) for u in url_candidates)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"vision guard URL check failed: {exc}")
             has_any_url = False
             has_twitter_url = False
@@ -7933,7 +7933,7 @@ class Router:
             try:
                 route = "attachments" if has_img_attachments else ("x_syndication" if has_twitter_url else "links")
                 self._metric_inc("vision.route.vl_only_bypass_t2i", {"route": route})
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"vision guard metric failed: {exc}")
             # Minimal breadcrumb for verification
             with suppress(Exception):
@@ -8010,7 +8010,7 @@ class Router:
                         # Include transcript captions unless disabled via env/config [IV][CMV]
                         include_transcript = os.getenv("TTS_INCLUDE_TRANSCRIPT", "true").lower() in ("1", "true", "yes", "on")
                         action.meta["include_transcript"] = include_transcript
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     # Never break dispatch on TTS flag evaluation
                     self.logger.debug(f"tts.flag_eval_failed | {e}")
                 return action
@@ -8039,7 +8039,7 @@ class Router:
                 space_idx = s.rfind(" ", 0, max_chars)
                 boundary = space_idx if space_idx != -1 else max_chars
             return s[:boundary].rstrip() + "…"
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Fallback hard cut
             return (text or "")[:max_chars].rstrip() + ("…" if len(text or "") > max_chars else "")
 
@@ -8068,7 +8068,7 @@ class Router:
                 extra={"event": "video.still.vl_ok", "msg_id": message.id, "detail": {"chars": len(notes)}},
             )
             return f"Video still frame (visual context): {notes}"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"video still perception skipped: {exc}")
             return None
 
@@ -8098,7 +8098,7 @@ class Router:
                 extra={"event": "video.still.vl_ok", "msg_id": message.id, "detail": {"chars": len(notes), "silent": True}},
             )
             return f"Video still frame (visual context; the video has NO audio): {notes}"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"silent video still perception skipped: {exc}")
             return None
 
@@ -8122,7 +8122,7 @@ class Router:
                         ref_id = getattr(ref_message, "id", None)
                         refs = collect_image_urls_from_message(ref_message) or []
                         image_refs.extend(refs)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.debug(f"perception: harvest(ref) failed | {e}")
             cur_refs = collect_image_urls_from_message(message) or []
             image_refs.extend(cur_refs)
@@ -8147,16 +8147,16 @@ class Router:
                     try:
                         if tmp_path:
                             os.unlink(tmp_path)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         self.logger.debug(f"temp cleanup failed: {exc}")
                     return None, "all_downloads_failed"
                 downloaded_path = tmp_path
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.debug(f"perception: download failed | {e}")
                 try:
                     if tmp_path:
                         os.unlink(tmp_path)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"temp cleanup failed: {exc}")
                 return None, "download_exception"
 
@@ -8166,7 +8166,7 @@ class Router:
                 # Prevent long hangs: cap VL notes time budget with a small timeout [REH][PA]
                 try:
                     timeout_s = float(self.config.get("VL_NOTES_TIMEOUT_S", 120.0))
-                except Exception:
+                except Exception:  # noqa: BLE001
                     timeout_s = 120.0
                 vision_result = await asyncio.wait_for(
                     see_infer(image_path=downloaded_path, prompt=prompt),
@@ -8187,7 +8187,7 @@ class Router:
                 # Sanitize and cap notes
                 try:
                     notes_max = int(self.config.get("VL_NOTES_MAX_CHARS", 600))
-                except Exception:
+                except Exception:  # noqa: BLE001
                     notes_max = 600
                 strip_reason = bool(self.config.get("VL_STRIP_REASONING", True))
                 notes = sanitize_vl_reply_text(raw_text, max_chars=notes_max, strip_reasoning=strip_reason)
@@ -8204,7 +8204,7 @@ class Router:
                         },
                     )
                 return None, "timeout"
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.debug(f"perception: see_infer failed | {e}", exc_info=True)
                 return None, "provider_error"
             finally:
@@ -8212,9 +8212,9 @@ class Router:
                 try:
                     if downloaded_path:
                         os.unlink(downloaded_path)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"temp cleanup failed: {exc}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug(f"perception: unexpected failure | {e}")
             return None, "unexpected"
 
@@ -8328,7 +8328,7 @@ class Router:
                 if memory_block:
                     retrieved_parts.append(memory_block)
                     enhanced_context = f"{enhanced_context}\n\n{memory_block}" if enhanced_context else memory_block
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.debug(f"persistent memory retrieval skipped: {e}")
 
         # 3. Use contextual brain inference if enhanced context manager is available and message is provided
@@ -8398,7 +8398,7 @@ class Router:
                             or _VERIFY_PATTERN_NOT_PIC.search(response_text or "")
                             or _VERIFY_PATTERN_JUST.search(response_text or "")
                         )
-                except Exception:
+                except Exception:  # noqa: BLE001
                     contradicts = False
 
                 if anchored_system and contradicts:
@@ -8420,7 +8420,7 @@ class Router:
                         )
                         if second and not any(p in (second or "").lower() for p in bad_phrases):
                             return BotAction(content=second)
-                    except Exception as _e:
+                    except Exception as _e:  # noqa: BLE001
                         self.logger.debug(f"text.anchor.guard.regen_failed | {_e}")
 
                     # Fallback: return the available visual evidence directly instead of letting
@@ -8449,12 +8449,12 @@ class Router:
                             vl_section = f"Perception notes:\n{perception_notes.strip()}"
                         vl_section = vl_section.strip() or "Visual analysis available, but failed to synthesize."
                         return BotAction(content=vl_section)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         # Last resort: return the first response anyway
                         self.logger.debug(f"vl_section synthesis failed: {exc}")
 
                 return BotAction(content=response_text)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning(f"Contextual brain inference failed, falling back to basic: {e}")
 
         # 4. Fallback to basic brain inference with enhanced context (including RAG).
@@ -8463,7 +8463,7 @@ class Router:
             try:
                 perception_block = f"Perception (from the image the user replied to):\n{perception_notes.strip()}"
                 enhanced_context = f"{enhanced_context}\n\n{perception_block}" if enhanced_context else perception_block
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"perception block construction failed: {exc}")
         # Basic fallback: apply the same visual-analysis anchoring when present
         anchored_system_fallback = self._build_visual_anchored_system_prompt(content_str, fallback=True, perception_notes=perception_notes)
@@ -8537,7 +8537,7 @@ class Router:
         safe_str = str(self.config.get("SEARCH_SAFE", "moderate")).lower()
         try:
             safesearch = SafeSearch(safe_str)
-        except Exception:
+        except Exception:  # noqa: BLE001
             safesearch = SafeSearch.MODERATE
         timeout_ms = int(self.config.get("DDG_TIMEOUT_MS", 5000)) if provider_name == "ddg" else int(self.config.get("CUSTOM_SEARCH_TIMEOUT_MS", 8000))
         max_concurrency = int(os.getenv("SEARCH_INLINE_MAX_CONCURRENCY", "3"))
@@ -8739,7 +8739,7 @@ class Router:
                     )
                     return BotAction(content=response_text)
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.warning(f"Contextual brain inference failed for video, falling back: {e}")
 
             # Fallback to basic brain inference
@@ -8795,7 +8795,7 @@ class Router:
                 else:
                     self.logger.warning(f"No attachments available to process (msg_id: {message.id})")
                     return BotAction(content="I didn't receive a file to process.")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.logger.warning(f"Attachment placeholder received but unable to access message.attachments (msg_id: {message.id})")
                 return BotAction(content="I didn't receive a file to process.")
 
@@ -8845,7 +8845,7 @@ class Router:
                         ),
                         None,
                     )
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"alternative attachment search failed: {exc}")
                     alt = None
                 if alt is not None:
@@ -8855,7 +8855,7 @@ class Router:
                 else:
                     # Nothing else to process; leave text ingestion to the normal path.
                     return BotAction(content="I didn't receive a file to process.")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"attachment type check failed: {exc}")
 
         # Process image attachments
@@ -9078,7 +9078,7 @@ class Router:
                 if txt_content:
                     evidence_parts.append(f"[TXT FILE]\n{txt_content}")
                     self.logger.info(f"Loaded .txt file: {len(txt_content)} chars")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning(f"Failed to read .txt file: {e}")
 
         # 2. DOC: Extract text from documents (PDF, DOCX, RTF, MD)
@@ -9129,7 +9129,7 @@ class Router:
             except InferenceError as ie:
                 self.logger.warning(f"STT failed for {av_att.filename}: {ie}")
                 evidence_parts.append(f"[{av_att.filename}: Audio transcription is temporarily unavailable. Please try sending your message as text.]")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning(f"STT failed for {av_att.filename}: {e}")
                 # Continue processing other attachments
 
@@ -9187,7 +9187,7 @@ class Router:
             from .syndication.extract import syndication_has_video
 
             return not syndication_has_video(syn_data)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return True
 
     async def _handle_image_only_tweet(self, url: str, syn_data: dict[str, Any], source: str = "syndication") -> str:
@@ -9539,7 +9539,7 @@ class Router:
             self.logger.error(f"❌ Vision job monitoring failed: {e}", exc_info=True)
             try:
                 await safe_edit(progress_msg, content=f"❌ **Monitoring Error**\nJob ID: `{job.job_id[:8]}`\nLost connection to job status. Please check back later.")
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"progress message edit failed: {exc}")  # Don't fail if message edit fails
             return BotAction(content="Job monitoring failed", error=True)
 
@@ -9728,7 +9728,7 @@ class Router:
         """
         try:
             return await safe_send(message.channel, content="🎨 Editing your image…")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"edit placeholder send failed: {exc}")
             return None
 
@@ -9827,7 +9827,7 @@ class Router:
                     ref_message = await self._fetch_referenced_message(message)
                     if ref_message is not None:
                         image_refs.extend(collect_image_urls_from_message(ref_message) or [])
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"reference image collect failed: {exc}")
             image_refs.extend(collect_image_urls_from_message(message) or [])
 
@@ -9858,7 +9858,7 @@ class Router:
                     with suppress(Exception):
                         os.unlink(tmp_path)
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.debug(f"Image download attempt failed: {e}")
                     continue
 
@@ -9896,7 +9896,7 @@ class Router:
                 max_chars = 0
                 try:
                     max_chars = int(self.config.get("VL_REPLY_MAX_CHARS", 420))
-                except Exception:
+                except Exception:  # noqa: BLE001
                     max_chars = 420
                 strip_reasoning = bool(self.config.get("VL_STRIP_REASONING", True))
                 final_text = sanitize_vl_reply_text(raw_text, max_chars=max_chars, strip_reasoning=strip_reasoning)
@@ -9912,7 +9912,7 @@ class Router:
                     with suppress(Exception):
                         os.unlink(tmp_path)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.info(f"Reply-image VL failed | reason=provider_error | error={str(e)[:100]}")
             self.logger.debug(f"Reply-image VL analysis failed: {e}", exc_info=True)
             return BotAction(content="Vision analysis failed. Please try again or re-upload the image.")
@@ -10061,7 +10061,7 @@ class Router:
 
             try:
                 await safe_edit(working_msg, embed=embed)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.debug(f"error embed edit failed: {exc}")  # Don't fail if edit fails
 
             return BotAction(
@@ -10095,7 +10095,7 @@ class Router:
                         try:
                             text = data.decode(encoding)
                             break
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             self.logger.debug(f"prompt decode failed ({encoding}): {exc}")
                             continue
 
@@ -10190,7 +10190,7 @@ class Router:
                 else:
                     # DM channel - assume we can attach files
                     can_attach_files = True
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning(f"Permission check failed, assuming no upload capability: {e}")
                 can_attach_files = False
 
@@ -10234,7 +10234,7 @@ class Router:
                         # Can't upload, just note the file path for fallback message
                         result_descriptions.append(f"🗂️ {filename} (saved locally)")
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.warning(f"Failed to prepare result {i}: {e}")
                     result_descriptions.append(f"❌ Result {i} preparation failed")
 
@@ -10249,7 +10249,7 @@ class Router:
                     else:
                         # Legacy numeric fallback
                         cost_str = f"${float(ac):.2f}"
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.debug(f"money.format_fallback | {e}")
                 cost_str = "N/A"
 
@@ -10287,11 +10287,11 @@ class Router:
                                     upload_meta.append((f.filename, None))
                             else:
                                 upload_meta.append((f.filename, None))
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             self.logger.debug(f"file size check failed: {exc}")
                             upload_meta.append((getattr(f, "filename", "unknown"), None))
                     self.logger.info("📤 Upload starting | files=" + ", ".join([f"{name} ({size} bytes)" if size is not None else name for name, size in upload_meta]))
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.debug(f"upload meta logging failed: {exc}")
                 try:
                     await original_msg.channel.send(files=files_to_upload)
@@ -10313,7 +10313,7 @@ class Router:
                     self.logger.exception(f"File upload failed: {e}")
                     fallback_content = f"✅ **Generation Complete**\nJob ID: `{job.job_id[:8]}`\n⚠️ **Upload Issue:** {str(e)[:100]}...\nFiles generated but upload failed. Please try again."
                     await original_msg.channel.send(content=fallback_content)
-                except Exception as perm_e:
+                except Exception as perm_e:  # noqa: BLE001
                     self.logger.warning(f"Permission check failed, attempting upload anyway: {perm_e}")
                     await original_msg.channel.send(files=files_to_upload)
 
@@ -10384,7 +10384,7 @@ class Router:
                 else:
                     # Fallback - metrics object doesn't have expected methods
                     pass
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 # Never let metrics failures break the application
                 self.logger.debug(f"Metrics increment failed for {metric_name}: {e}")
 
@@ -10403,7 +10403,7 @@ class Router:
                 has_any_url = bool(re.search(r"https?://\S+", raw_text))
                 if has_attachments or has_any_url:
                     return None
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug(f"early bail-out check failed: {exc}")
 
         # Determine if this is a DM or guild
@@ -10411,7 +10411,7 @@ class Router:
         if message is not None:
             try:
                 is_dm = isinstance(message.channel, discord.DMChannel)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 is_dm = False
 
         # Check if message mentions the bot (for guild handling)
@@ -10421,7 +10421,7 @@ class Router:
             try:
                 mentions = getattr(message, "mentions", [])
                 bot_mentioned = any(getattr(mention, "id", None) == bot_id for mention in mentions)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 bot_mentioned = False
 
         # Prepare content for pattern matching
@@ -10587,7 +10587,7 @@ class Router:
             if hasattr(response, "cost_info") and response.cost_info:
                 try:
                     cost_str = f"${response.cost_info.total:.4f}"
-                except Exception:
+                except Exception:  # noqa: BLE001
                     cost_str = "N/A"
             embed.add_field(name="Cost", value=cost_str, inline=True)
 

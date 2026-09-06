@@ -36,7 +36,7 @@ class DDGSearchProvider:
         try:
             logging.getLogger("ddgs").setLevel(logging.WARNING)
             logging.getLogger("duckduckgo_search").setLevel(logging.WARNING)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"ddgs log level suppression failed: {exc}")
 
     async def search(self, params: SearchQueryParams) -> SearchResults:
@@ -53,7 +53,7 @@ class DDGSearchProvider:
         # If explicitly requested, use legacy HTML endpoint only. [CMV]
         try:
             force_html = bool(self.cfg.get("DDG_FORCE_HTML"))
-        except Exception:
+        except Exception:  # noqa: BLE001
             force_html = False
         if force_html or (isinstance(self.endpoint, str) and "html.duckduckgo.com" in self.endpoint):
             return await self._search_via_html(query, params, timeout_s)
@@ -80,7 +80,7 @@ class DDGSearchProvider:
                                         params.max_results,
                                     ),
                                 )
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         # Try next fallback
                         logger.debug(f"ddgs package call failed: {exc}")
 
@@ -124,7 +124,7 @@ class DDGSearchProvider:
         except TimeoutError:
             logger.warning("DDGS call timed out")
             return []
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             name = type(e).__name__
             # Compact log for known ddgs exceptions (e.g., DDGSException)
             if "DDGSException" in name or "DDGSException" in repr(e):
@@ -142,7 +142,7 @@ class DDGSearchProvider:
             # Defensive: allow string passthrough
             s = str(ss).lower()
             return s if s in {"off", "moderate", "strict"} else "moderate"
-        except Exception:
+        except Exception:  # noqa: BLE001
             return "moderate"
 
     def _map_locale(self, locale: str | None) -> str | None:
@@ -161,7 +161,7 @@ class DDGSearchProvider:
                 SearchCategory.VIDEOS: "videos",
             }
             return mapping.get(cat, "text")
-        except Exception:
+        except Exception:  # noqa: BLE001
             return "text"
 
     def _invoke_ddgs(self, fn, query: str, region: str | None, safesearch: str, max_results: int):
@@ -269,7 +269,7 @@ class DDGSearchProvider:
             netloc_key = netloc.removeprefix("www.")
             dedup_key = f"{netloc_key}{path}?{query}" if query else f"{netloc_key}{path}"
             return norm, dedup_key
-        except Exception:
+        except Exception:  # noqa: BLE001
             return url, url
 
     def _score(self, r: SearchResult) -> int:
@@ -288,7 +288,7 @@ class DDGSearchProvider:
             # Penalize very long URLs
             score -= min(len(r.url) // 120, 2)
             return score
-        except Exception:
+        except Exception:  # noqa: BLE001
             return 0
 
     def _dedup_and_rank(self, items: list[SearchResult], max_results: int) -> SearchResults:
@@ -365,7 +365,7 @@ class DDGSearchProvider:
                         snippet=snippet,
                     ),
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.debug(f"DDG HTML parse error: {e}")
             return []
 

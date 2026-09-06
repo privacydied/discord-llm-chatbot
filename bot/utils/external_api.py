@@ -36,7 +36,7 @@ def _is_private_hostname(hostname: str) -> bool:
                 return True
     except socket.gaierror:
         pass  # Unresolvable hostname — let the API deal with it
-    except Exception:
+    except Exception:  # noqa: BLE001
         # On resolution errors, be conservative and block
         return True
     return False
@@ -97,7 +97,7 @@ async def external_screenshot(url: str) -> str | None:
         if _is_private_hostname(ssrf_hostname):
             logger.warning(f"⚠️ Skipping screenshot: private/internal IP target: {ssrf_hostname}")
             return None
-    except Exception:
+    except Exception:  # noqa: BLE001
         logger.warning("⚠️ Skipping screenshot: SSRF check failed")
         return None
 
@@ -108,7 +108,7 @@ async def external_screenshot(url: str) -> str | None:
     # Defensive: ensure we pass a proper str to urllib.parse.quote
     try:
         normalized_url_str = bytes(normalized_url).decode("utf-8", errors="replace") if isinstance(normalized_url, (bytes, bytearray)) else str(normalized_url)
-    except Exception:
+    except Exception:  # noqa: BLE001
         # Fallback to string coercion on any unexpected type
         normalized_url_str = str(normalized_url)
 
@@ -241,7 +241,7 @@ async def _playwright_screenshot(url: str) -> str | None:
     # Parse viewport
     try:
         width, height = [int(x) for x in vp.lower().split("x", 1)]
-    except Exception:
+    except Exception:  # noqa: BLE001
         width, height = 1280, 1024
 
     logger.info(f"Playwright screenshot starting for {url} [{width}x{height}]")

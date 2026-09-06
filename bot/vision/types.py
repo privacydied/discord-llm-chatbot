@@ -33,11 +33,11 @@ def _parse_vision_provider(value) -> VisionProvider | None:
             return VisionProvider(token)
         # Fallback: coerce to string
         return VisionProvider(str(value).strip().lower())
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"VisionProvider parse failed: {exc}")
         try:
             return VisionProvider("novita")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"VisionProvider default failed: {exc}")
             return None
 
@@ -247,7 +247,7 @@ class VisionRequest:
                     data["estimated_cost"] = None
                 else:
                     data["estimated_cost"] = Money(ec)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Tolerant: drop on parse failure
             logger.debug(f"Estimated cost parse failed: {exc}")
             data["estimated_cost"] = None
@@ -458,7 +458,7 @@ class VisionJob:
                         response_data["actual_cost"] = None
                     else:
                         response_data["actual_cost"] = Money(ac)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"Actual cost parse failed: {exc}")
                 response_data["actual_cost"] = None
             response = VisionResponse(**response_data)

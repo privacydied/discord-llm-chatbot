@@ -592,7 +592,7 @@ class NovitaPlugin(ProviderPlugin):
         if "steps" in norm:
             try:
                 norm["steps"] = max(1, min(int(norm["steps"]), 100))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"Steps normalization failed: {exc}")
                 norm.pop("steps", None)
 
@@ -600,7 +600,7 @@ class NovitaPlugin(ProviderPlugin):
         if "guidance_scale" in norm:
             try:
                 norm["guidance_scale"] = max(1.0, min(float(norm["guidance_scale"]), 20.0))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"Guidance scale normalization failed: {exc}")
                 norm.pop("guidance_scale", None)
 
@@ -608,7 +608,7 @@ class NovitaPlugin(ProviderPlugin):
         if "seed" in norm:
             try:
                 norm["seed"] = int(norm["seed"])
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"Seed normalization failed: {exc}")
                 norm.pop("seed", None)
 
@@ -627,7 +627,7 @@ class NovitaPlugin(ProviderPlugin):
                 if "height" in norm:
                     h = min(max_h, (max(256, int(norm["height"])) // 8) * 8)
                     norm["height"] = h
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Best-effort; leave as-is if parsing fails
             logger.debug(f"Novita size normalization failed: {exc}")
 
@@ -812,7 +812,7 @@ class NovitaPlugin(ProviderPlugin):
                     phase=f"Novita: {status.replace('TASK_STATUS_', '').lower()}",
                     provider_raw=data,
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return UnifiedJobStatus(
                 status=UnifiedStatus.RUNNING,
                 progress_percentage=0,
@@ -933,7 +933,7 @@ class OpenRouterPlugin(ProviderPlugin):
         try:
             m = (model or "").lower()
             return m.startswith("google/") or "gemini" in m
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Gemini model check failed: {exc}")
             return False
 
@@ -956,7 +956,7 @@ class OpenRouterPlugin(ProviderPlugin):
             r = w / h
             best = min(ratios, key=lambda x: abs(x[0] - r))
             return best[1]
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Aspect ratio calc failed: {exc}")
             return "1:1"
 
@@ -1108,7 +1108,7 @@ class OpenRouterPlugin(ProviderPlugin):
                                 if re.match(r"^[A-Za-z0-9+/=]+$", content[:100]):
                                     urls.append(f"data:image/png;base64,{content}")
                                     logger.debug("Detected raw base64 in message.content string")
-                            except Exception as exc:
+                            except Exception as exc:  # noqa: BLE001
                                 logger.debug(f"base64 validation failed: {exc}")
 
                 # Deduplicate while preserving order
@@ -1633,7 +1633,7 @@ class NotSoBotPlugin(ProviderPlugin):
                             provider_raw=data,
                         )
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 return UnifiedJobStatus(
                     status=UnifiedStatus.RUNNING,
                     progress_percentage=0,
@@ -1808,7 +1808,7 @@ class UnifiedVisionAdapter:
                 with open(config_path) as f:
                     self.provider_config = json.load(f)
                 self.logger.info(f"Loaded provider config from {config_path}")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning(f"Failed to load provider config: {e}")
                 self.provider_config = self._default_provider_config()
         else:
@@ -2030,7 +2030,7 @@ class UnifiedVisionAdapter:
             else:
                 key = self.config.get("VISION_API_KEY", "")
             return isinstance(key, str) and len(key.strip()) > 10
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Credential check failed for {provider_name}: {exc}")
             return False
 
@@ -2179,7 +2179,7 @@ class UnifiedVisionAdapter:
             )
             # Ensure Money type
             return money_est if isinstance(money_est, Money) else Money(money_est)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Cost estimate failed for {provider_name}: {exc}")
             return None
 
@@ -2420,7 +2420,7 @@ class UnifiedVisionAdapter:
                     self.logger.info(f"Selected provider: {provider_key} (cost: ${estimated_cost:.3f})")
                 return provider
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning(f"Cost estimation failed for {provider_key}: {e}")
                 continue
 
@@ -2490,7 +2490,7 @@ class UnifiedVisionAdapter:
                 last_error = exc
                 self.logger.warning(f"image.ladder.fail provider={provider_name} model={model_name} error={exc.message}")
                 continue
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 last_error = VisionError(
                     message=f"Unexpected error from {provider_name}: {exc}",
                     error_type=VisionErrorType.PROVIDER_ERROR,
@@ -2518,7 +2518,7 @@ class UnifiedVisionAdapter:
         if preferred_provider_obj is not None:
             try:
                 preferred_name = preferred_provider_obj.value.lower()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"Preferred provider value extraction failed: {exc}")
                 preferred_name = str(preferred_provider_obj).strip().lower()
 
@@ -2573,7 +2573,7 @@ class UnifiedVisionAdapter:
             try:
                 preferred_name = preferred_provider.value.lower()
                 provider_order = [preferred_name, *list(provider_order)]
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"preferred provider ordering failed: {exc}")
 
         # Promote the configured default provider to the front of the order.
@@ -2619,7 +2619,7 @@ class UnifiedVisionAdapter:
                     # Double-check provider health after lock acquisition
                     if not self._is_provider_healthy(provider_name):
                         continue
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning(f"Provider {provider_name} initialization failed: {e}")
                 continue
             # Belt-and-braces: skip if not configured/healthy
@@ -2848,7 +2848,7 @@ class UnifiedVisionAdapter:
             try:
                 cost = self._estimate_cost(provider, normalized)
                 estimates[provider_name] = cost
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning(f"Cost estimation failed for {provider_name}: {e}")
                 estimates[provider_name] = float("inf")
 

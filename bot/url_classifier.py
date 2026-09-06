@@ -96,7 +96,7 @@ async def detect_url_content_type(url: str) -> tuple[str | None, int | None]:
         if parsed.scheme not in ("http", "https"):
             logger.debug(f"url.probe skip non-http scheme={parsed.scheme} url={url[:80]}")
             return None, None
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None, None
 
     # SSRF protection: block requests to private/internal IPs
@@ -169,7 +169,7 @@ async def detect_url_content_type(url: str) -> tuple[str | None, int | None]:
     except httpx.RequestError as e:
         logger.debug(f"url.probe error url={url[:80]} error={e}")
         return None, None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.debug(f"url.probe unexpected error url={url[:80]} error={e}")
         return None, None
 
@@ -190,7 +190,7 @@ def _extract_filename_from_url(url: str) -> str | None:
                 filename = filename.split("?", 1)[0]
             return filename
         return None
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -352,7 +352,7 @@ async def download_url_to_temp(
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
             return None, f"Unsupported URL scheme: {parsed.scheme}"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return None, f"Invalid URL: {e}"
 
     # SSRF protection: block requests to private/internal IPs
@@ -435,5 +435,5 @@ async def download_url_to_temp(
         return None, f"Download timeout after {timeout}s"
     except httpx.RequestError as e:
         return None, f"Network error: {e}"
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return None, f"Download failed: {e}"

@@ -75,7 +75,7 @@ class XApiClient:
     async def aclose(self) -> None:
         try:
             await self._client.aclose()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.debug(f"XApiClient close error: {e}")
 
     async def __aenter__(self) -> Self:
@@ -108,7 +108,7 @@ class XApiClient:
             m = _X_URL_PATH_ID_RE.search(parsed.path or "")
             if m:
                 return m.group(1)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             # Fall through to raw regex search
             logger.debug(f"tweet ID URL parse failed: {exc}")
 
@@ -116,7 +116,7 @@ class XApiClient:
             m2 = _X_URL_PATH_ID_RE.search(value)
             if m2:
                 return m2.group(1)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"tweet ID raw regex failed: {exc}")
         return None
 
@@ -209,7 +209,7 @@ class XApiClient:
         detail = None
         try:
             detail = resp.json()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Response JSON parse failed: {exc}")
             detail = {"text": resp.text[:2000]}
         extra = {"detail": {"status": status, "has_token": self._has_token, "body": detail}}
@@ -230,7 +230,7 @@ class XApiClient:
             if retry_after:
                 try:
                     retry_after_secs = float(retry_after)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"Retry-After parse failed: {exc}")
                     retry_after_secs = None
             logger.warning(
@@ -242,7 +242,7 @@ class XApiClient:
             try:
                 if retry_after_secs and retry_after_secs > 0:
                     err.retry_after_seconds = float(retry_after_secs)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"retry_after parse failed: {exc}")
             # Allow retries via decorator
             raise err

@@ -148,7 +148,7 @@ def _patch_openai_httpx_wrapper_destructor() -> None:
     try:
         openai = _require_openai()
         wrapper_cls = openai._base_client.AsyncHttpxClientWrapper
-    except Exception:
+    except Exception:  # noqa: BLE001
         return
 
     if getattr(wrapper_cls, "_hermes_safe_del", False):
@@ -163,7 +163,7 @@ def _patch_openai_httpx_wrapper_destructor() -> None:
             import asyncio
 
             asyncio.get_running_loop().create_task(self.aclose())
-        except Exception:
+        except Exception:  # noqa: BLE001
             return
 
     wrapper_cls.__del__ = _safe_del
@@ -201,7 +201,7 @@ def _schedule_http_client_close(http_client: Any) -> None:
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(http_client.aclose())
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.debug(f"Failed to schedule http_client close: {e}")
 
 
@@ -320,7 +320,7 @@ async def _aclose_one(obj: Any) -> None:
         result = closer()
         if inspect.isawaitable(result):
             await result
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"aclose failed | {type(exc).__name__}: {exc}")
 
 
@@ -474,7 +474,7 @@ async def _safe_aclose_openai_client(client: Any) -> None:
             logger.debug("openai.client.close_ignored missing_transport")
             return
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"openai.client.close_failed | {type(exc).__name__}: {exc}")
 
 
@@ -528,7 +528,7 @@ async def generate_openai_response(
         # Prefer TEXTGEN_TIMEOUT_SECONDS; fall back to TEXT_REQUEST_TIMEOUT; default 45s
         try:
             timeout_seconds = float(config.get("TEXTGEN_TIMEOUT_SECONDS", config.get("TEXT_REQUEST_TIMEOUT", "45")))
-        except Exception:
+        except Exception:  # noqa: BLE001
             timeout_seconds = 45.0
 
         client = _make_openai_async_client(
@@ -626,7 +626,7 @@ Server Context: {server_context}"""
                     from .vl.postprocess import sanitize_model_output
 
                     usable_content = sanitize_model_output(content)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     usable_content = content
                 if not str(usable_content or "").strip():
                     msg_0 = f"Empty text response from model {used_model}"
@@ -762,9 +762,9 @@ Server Context: {server_context}"""
                                             retry_after = val - now if val > now + 1 else val
                                             if retry_after < 0:
                                                 retry_after = 0.0
-                                        except Exception:
+                                        except Exception:  # noqa: BLE001
                                             retry_after = None
-                        except Exception:
+                        except Exception:  # noqa: BLE001
                             retry_after = None
                         extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""
                         logger.warning(f"OpenAI HTTP error during fallback attempt: {status_code} {he}{extra}")
@@ -773,7 +773,7 @@ Server Context: {server_context}"""
                         try:
                             if retry_after is not None:
                                 err.retry_after_seconds = retry_after
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001
                             logger.debug(f"Failed to set retry_after_seconds: {e}")
                         raise err from None
                     except Exception as e:
@@ -861,9 +861,9 @@ Server Context: {server_context}"""
                             api_err.retryable = False
                             if _is_moderation:
                                 api_err.content_moderation = True
-                        except Exception as e:
+                        except Exception as e:  # noqa: BLE001
                             logger.debug(f"Failed to classify error retryability: {e}")
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         # Fallback to original error if wrapping fails
                         raise base_err from None
                     # Normal path: propagate a clean APIError up to the caller so it can be
@@ -916,14 +916,14 @@ Server Context: {server_context}"""
                 ra = resp.headers.get("retry-after") or resp.headers.get("Retry-After")
                 if ra is not None:
                     retry_after = float(ra)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to parse retry-after header: {exc}")
             retry_after = None
         err = APIError(f"OpenAI rate limit exceeded: {e!s}" + (f" (retry-after={retry_after}s)" if retry_after is not None else ""))
         try:
             if retry_after is not None:
                 err.retry_after_seconds = retry_after
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to set retry_after_seconds: {exc}")
         raise err from None
     except OpenAIAPIError as e:
@@ -965,9 +965,9 @@ Server Context: {server_context}"""
                             retry_after = val - now if val > now + 1 else val
                             if retry_after < 0:
                                 retry_after = 0.0
-                        except Exception:
+                        except Exception:  # noqa: BLE001
                             retry_after = None
-        except Exception:
+        except Exception:  # noqa: BLE001
             retry_after = None
         extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""
         logger.warning(f"OpenAI HTTP error: {status} {e}{extra}")
@@ -975,7 +975,7 @@ Server Context: {server_context}"""
         try:
             if retry_after is not None:
                 err.retry_after_seconds = retry_after
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to set retry_after_seconds: {exc}")
         raise err from None
     except APIError as e:
@@ -1199,7 +1199,7 @@ async def _generate_vl_response_with_retry(
                     # Extract response content
                     try:
                         response_text = response.choices[0].message.content or ""
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         response_text = ""
 
                     # Empty completion is a soft failure — retry with next model [REH]
@@ -1230,7 +1230,7 @@ async def _generate_vl_response_with_retry(
                             ra = hdrs.get("retry-after") or hdrs.get("Retry-After")
                             if ra is not None:
                                 retry_after = float(ra)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         logger.debug(f"Failed to parse retry-after header: {exc}")
                         retry_after = None
                     extra = f" (retry-after={retry_after}s)" if retry_after is not None else ""
@@ -1239,7 +1239,7 @@ async def _generate_vl_response_with_retry(
                     try:
                         if retry_after is not None:
                             err.retry_after_seconds = retry_after
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         logger.debug(f"Failed to set retry_after_seconds: {exc}")
                     raise err from None
                 except Exception as e:
@@ -1259,7 +1259,7 @@ async def _generate_vl_response_with_retry(
         # so this must be long enough for large images and slow free OpenRouter VL models. [REH]
         try:
             per_item_budget = float(config.get("VISION_PER_ITEM_BUDGET", 45.0))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to parse VISION_PER_ITEM_BUDGET: {exc}")
             per_item_budget = 45.0
         # Clamp to the ambient deadline, exactly as the text ladder does. This VL
@@ -1322,9 +1322,9 @@ async def _generate_vl_response_with_retry(
                             api_err.retryable = False
                         if _is_mod:
                             api_err.content_moderation = True
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         logger.debug(f"Failed to classify error retryability: {exc}")
-                except Exception:
+                except Exception:  # noqa: BLE001
                     raise base_err from None
                 raise api_err
             exhaustion_error = APIError("All vision providers exhausted")
@@ -1354,7 +1354,7 @@ async def _generate_vl_response_with_retry(
 
     try:
         timeout_seconds = float(config.get("VL_REQUEST_TIMEOUT", "30"))
-    except Exception:
+    except Exception:  # noqa: BLE001
         timeout_seconds = 30.0
 
     single_api_key, single_base_url, single_provider = _resolve_openai_compatible_endpoint(
@@ -1424,7 +1424,7 @@ async def _generate_vl_response_with_retry(
 
         try:
             response_text = response.choices[0].message.content or ""
-        except Exception:
+        except Exception:  # noqa: BLE001
             response_text = ""
 
         # Empty completion is a soft failure — retry or fail [REH]

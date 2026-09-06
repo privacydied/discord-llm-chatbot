@@ -70,7 +70,7 @@ def _default_system_prompt(cfg: dict[str, Any]) -> str | None:
         from bot.openai_backend import _load_prompt_cached
 
         return _load_prompt_cached(path)
-    except Exception as exc:  # [REH] a missing persona must not block the loop
+    except Exception as exc:  # [REH] a missing persona must not block the loop  # noqa: BLE001
         logger.debug("tools.prompt_file_unavailable error=%s", exc)
         return None
 
@@ -153,7 +153,7 @@ def _extract(response: Any) -> tuple[str, str]:
         from bot.vl.postprocess import sanitize_model_output
 
         content = sanitize_model_output(raw) or ""
-    except Exception:  # [REH] sanitiser must never cost us the answer
+    except Exception:  # [REH] sanitiser must never cost us the answer  # noqa: BLE001
         content = raw
     return content.strip(), _reasoning_of(message)
 
@@ -193,7 +193,7 @@ def _reasoning_extra_body(cfg: dict[str, Any]) -> dict[str, Any]:
         base = str(cfg.get("OPENAI_API_BASE") or "").lower()
         provider = "openrouter" if "openrouter" in base else ("nvidia" if "nvidia.com" in base else "openai")
         return _reasoning_exclude_extra_body(provider, cfg) or {}
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # [REH]  # noqa: BLE001
         logger.debug("tools.reasoning_extra_body_unavailable error=%s", exc)
         return {}
 
@@ -263,7 +263,7 @@ async def _force_answer(
         kwargs["extra_body"] = extra_body
     try:
         response = await client.chat.completions.create(**kwargs)
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # [REH]  # noqa: BLE001
         logger.warning("tools.force_answer_failed error=%s", exc)
         return None
 
@@ -300,7 +300,7 @@ async def run_tool_conversation(
 
     try:
         client, model = _client_for(config, timeout_s)
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # [REH]  # noqa: BLE001
         logger.warning("tools.client_failed error=%s", exc)
         return None
     if not model:
@@ -328,7 +328,7 @@ async def run_tool_conversation(
             if extra_body:
                 create_kwargs["extra_body"] = extra_body
             response = await client.chat.completions.create(**create_kwargs)
-        except Exception as exc:  # [REH] model may not support tools at all
+        except Exception as exc:  # [REH] model may not support tools at all  # noqa: BLE001
             logger.warning("tools.completion_failed iteration=%d error=%s", iteration, exc)
             return None
 

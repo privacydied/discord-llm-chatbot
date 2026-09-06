@@ -133,7 +133,7 @@ def is_bot_wall(text: str | None) -> str | None:
 def _host_of(url: str) -> str:
     try:
         return (urlsplit(url).hostname or "").lower()
-    except Exception:
+    except Exception:  # noqa: BLE001
         return ""
 
 
@@ -358,7 +358,7 @@ class WebExtractionService:
             last_error = f"network_error:{e.__class__.__name__}"
             last_tier = "A"
             logger.info(f"Tier A network error for {url}: {str(e)[:160]}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             last_error = f"exception:{e.__class__.__name__}"
             last_tier = "A"
             logger.debug(f"Tier A exception for {url}: {str(e)[:200]}")
@@ -383,7 +383,7 @@ class WebExtractionService:
                     last_error = res_c.error or last_error
                     last_tier = "C"
                     logger.info(f"Tier C returned thin content for {url}; trying Tier B")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 last_error = f"exception:{e.__class__.__name__}"
                 last_tier = "C"
                 logger.info(f"Tier C exception for {url}: {str(e)[:200]}")
@@ -400,7 +400,7 @@ class WebExtractionService:
                         return res_b
                     last_error = res_b.error or last_error
                     last_tier = "B"
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 last_error = f"exception:{e.__class__.__name__}"
                 last_tier = "B"
                 logger.info(f"Tier B exception for {url}: {str(e)[:200]}")
@@ -443,7 +443,7 @@ class WebExtractionService:
     async def _tier_b_playwright(self, url: str) -> ExtractionResult | None:
         try:
             from playwright.async_api import async_playwright
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Playwright import failed: {exc}")
             return None
         timeout_ms = int(TIER_B_TIMEOUT_S * 1000)
@@ -471,11 +471,11 @@ class WebExtractionService:
                                 await route.continue_()
                             else:
                                 await route.abort()
-                        except Exception as exc:
+                        except Exception as exc:  # noqa: BLE001
                             logger.debug(f"Route handler failed: {exc}")
                             try:
                                 await route.abort()
-                            except Exception as exc2:
+                            except Exception as exc2:  # noqa: BLE001
                                 logger.debug(f"Route abort failed: {exc2}")
 
                     await page.route("**/*", _route_handler)
@@ -564,7 +564,7 @@ class WebExtractionService:
                     return res
                 last_err = (res.error if res else "no response") or last_err
                 logger.info(f"Tier C endpoint failed (attempt {attempt + 1}) for {url}: {last_err}")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 last_err = f"exception:{e.__class__.__name__}"
                 logger.info(f"Tier C endpoint exception (attempt {attempt + 1}) for {url}: {str(e)[:160]}")
             if attempt < max(1, int(TIER_C_RETRIES)) - 1:
@@ -670,7 +670,7 @@ class WebExtractionService:
                                     if norm:
                                         text_candidates.append(norm)
                                         break
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         # best-effort only
                         logger.debug(f"tweet text extraction failed: {exc}")
         else:

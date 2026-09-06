@@ -136,7 +136,7 @@ class TTSManager:
         except TimeoutError:
             self._warmup_status = "failed"
             logger.warning("tts:warmup timeout after %.0fs", timeout)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self._warmup_status = "failed"
             logger.warning("tts:warmup error=%s", type(exc).__name__)
         # In all cases: non-fatal, normal synthesis proceeds with cold/warm timeout.
@@ -166,7 +166,7 @@ class TTSManager:
             try:
                 if path.is_file():
                     total_bytes += path.stat().st_size
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"cache stat failed: {exc}")
                 continue
         return {
@@ -183,7 +183,7 @@ class TTSManager:
             try:
                 if path.is_file() and path.stat().st_mtime < cutoff:
                     path.unlink(missing_ok=True)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 logger.debug("Failed to purge cache file %s", path, exc_info=True)
 
     @staticmethod
@@ -451,7 +451,7 @@ class TTSManager:
             result = close()
             if inspect.isawaitable(result):
                 await result
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.debug("TTS engine close failed", exc_info=True)
 
     async def __aenter__(self) -> Self:

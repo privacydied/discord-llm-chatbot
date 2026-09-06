@@ -55,7 +55,7 @@ def _load_lexicon() -> dict[str, str]:
                 _LEXICON_CACHE = json.load(f)
                 logger.debug("Loaded English lexicon: %d entries", len(_LEXICON_CACHE))
                 return _LEXICON_CACHE
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning("Failed to load lexicon_en.json: %s", e)
 
     _LEXICON_CACHE = {}
@@ -1149,7 +1149,7 @@ def _get_official_tokenizer():
         _OFFICIAL_TOKENIZER = Tokenizer()
         _OFFICIAL_TOKENIZER_STATE = "ready"
         logger.debug("Initialized official Kokoro tokenizer for IPA phonemization")
-    except Exception:  # pragma: no cover - dependency may be missing
+    except Exception:  # pragma: no cover - dependency may be missing  # noqa: BLE001
         _OFFICIAL_TOKENIZER = None
         _OFFICIAL_TOKENIZER_STATE = "failed"
         logger.debug(
@@ -1188,7 +1188,7 @@ def _configure_official_tokenizer_tmpdir() -> Path | None:
 
     try:
         candidate.mkdir(parents=True, exist_ok=True)
-    except Exception as dir_error:  # pragma: no cover - defensive
+    except Exception as dir_error:  # pragma: no cover - defensive  # noqa: BLE001
         logger.warning(
             "Unable to prepare espeak temporary directory %s: %s",
             candidate,
@@ -1219,7 +1219,7 @@ def _attempt_official_tokenizer(tokenizer, text: str) -> str | None:
     for attempt in range(2):
         try:
             ipa = _phonemize_with_official(tokenizer, text)
-        except Exception as exc:  # pragma: no cover - depends on runtime setup
+        except Exception as exc:  # pragma: no cover - depends on runtime setup  # noqa: BLE001
             logger.debug(
                 "Official Kokoro tokenizer attempt %d for '%s' failed: %s",
                 attempt + 1,

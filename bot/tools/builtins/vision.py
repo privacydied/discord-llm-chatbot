@@ -86,7 +86,7 @@ def _image_refs(message: Any) -> list[Any]:
         from bot.modality import collect_image_urls_from_message
 
         return list(collect_image_urls_from_message(message) or [])
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # [REH]  # noqa: BLE001
         logger.debug("tool.view_image.harvest_failed error=%s", exc)
         return []
 
@@ -96,7 +96,7 @@ async def _find_image(channel: Any, anchor: Any, posts_ago: int | None) -> tuple
     limit = posts_ago if posts_ago else MAX_IMAGE_LOOKBACK
     try:
         history = [msg async for msg in channel.history(limit=limit, before=anchor)]
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         name = type(exc).__name__
         if name == "Forbidden":
             return "missing permission to read message history in this channel"
@@ -221,7 +221,7 @@ async def _describe(url: str, question: str, cfg: dict[str, Any], identity: str 
     except UrlSafetyError as exc:
         logger.warning("tool.view_image.blocked_url reason=%s", exc)
         return None
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # [REH]  # noqa: BLE001
         logger.debug("tool.view_image.validate_failed error=%s", exc)
         return None
 
@@ -229,7 +229,7 @@ async def _describe(url: str, question: str, cfg: dict[str, Any], identity: str 
         from bot.single_flight_cache import CacheFamily, get_cache
 
         cache = get_cache(cfg)
-    except Exception as exc:  # [REH] cache must never be load-bearing
+    except Exception as exc:  # [REH] cache must never be load-bearing  # noqa: BLE001
         logger.debug("tool.view_image.cache_unavailable error=%s", exc)
         try:
             return await _run_vl(url, question)
@@ -248,7 +248,7 @@ async def _describe(url: str, question: str, cfg: dict[str, Any], identity: str 
         )
     except _VisionUnavailable:
         return None
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # [REH]  # noqa: BLE001
         logger.warning("tool.view_image.cache_failed error=%s", exc)
         return None
 

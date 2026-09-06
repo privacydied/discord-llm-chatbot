@@ -78,7 +78,7 @@ def _reclaim_memory(cfg: dict[str, Any]) -> float:
             manager = get_stt_manager_if_initialized()
             if manager is not None:
                 manager.evict_idle_models()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"STT cache eviction during memory reclaim skipped: {exc}")
 
     _malloc_trim()
@@ -116,13 +116,13 @@ def _unload_idle_models(bot: commands.Bot, cfg: dict[str, Any]) -> None:
         manager = get_stt_manager_if_initialized()
         if manager is not None:
             freed = manager.evict_if_idle(ttl) > 0
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Idle STT unload skipped: {exc}")
     try:
         tts_manager = getattr(bot, "tts_manager", None)
         if tts_manager is not None and hasattr(tts_manager, "unload_if_idle"):
             freed = tts_manager.unload_if_idle(ttl) or freed
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Idle TTS unload skipped: {exc}")
     try:
         import sys
@@ -131,7 +131,7 @@ def _unload_idle_models(bot: commands.Bot, cfg: dict[str, Any]) -> None:
         fe_mod = sys.modules.get("bot.rag.fastembed_embedding")
         if fe_mod is not None:
             freed = fe_mod.unload_idle_models(ttl) > 0 or freed
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"Idle fastembed unload skipped: {exc}")
     if freed:
         import gc
@@ -269,7 +269,7 @@ class TaskManager:
         # Stop janitor first
         try:
             await stop_janitor()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Error stopping janitor: {e}")
 
         # Stop vision model discovery
@@ -277,7 +277,7 @@ class TaskManager:
             from bot.vision.free_model_discovery import stop_discovery_refresh
 
             await stop_discovery_refresh()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Error stopping vision model discovery: {e}")
 
         # Stop text model discovery
@@ -285,31 +285,31 @@ class TaskManager:
             from bot.vision.free_text_discovery import stop_discovery_refresh as stop_text_discovery_refresh
 
             await stop_text_discovery_refresh()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Error stopping text model discovery: {e}")
 
         # Stop curated memory service
         try:
             await stop_memory_service()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Error stopping curated memory service: {e}")
 
         # Stop memory distiller service
         try:
             await stop_memory_distiller()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Error stopping memory distiller service: {e}")
 
         # Stop server archive service
         try:
             await stop_native_server_archive_service()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Error stopping server archive service: {e}")
         for task_name, task in self.tasks.items():
             try:
                 task.cancel()
                 logger.debug(f"Cancelled task: {task_name}")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning(f"Error cancelling task {task_name}: {e}")
 
         # Wait for tasks to complete
@@ -451,7 +451,7 @@ class TaskManager:
                 if tts_manager is not None:
                     await asyncio.to_thread(tts_manager.purge_old_cache)
                     logger.debug("TTS cache purge completed")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning(f"Error during TTS cache purge: {e}")
 
         cleanup_old_logs.current_interval = interval_hours

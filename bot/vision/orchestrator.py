@@ -101,7 +101,7 @@ class VisionOrchestrator:
             adapter = getattr(self.gateway, "adapter", None)
             try:
                 from .types import VisionTask  # local import to avoid cycles
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"VisionTask import failed: {exc}")
                 VisionTask = None
             if adapter and getattr(adapter, "providers", None):
@@ -111,7 +111,7 @@ class VisionOrchestrator:
                         modes = caps.get("modes", []) if isinstance(caps, dict) else []
                         if VisionTask and hasattr(VisionTask, "TEXT_TO_IMAGE") and (VisionTask.TEXT_TO_IMAGE in modes):
                             available_providers.append(provider_name)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         logger.debug(f"provider capability check failed: {exc}")
                         continue
 
@@ -270,7 +270,7 @@ class VisionOrchestrator:
                 provider = self.gateway.providers.get(job.provider_assigned)
                 if provider:
                     await provider.cancel_job(job.response.provider_job_id)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.debug(f"Provider cancellation failed: {e}")
 
         self.logger.info(f"Job {job_id[:8]} cancelled by user {user_id}")
@@ -307,7 +307,7 @@ class VisionOrchestrator:
                 from .types import VisionTask as _VT
 
                 request.task in getattr(_VT, "__members__", {}) and False  # placeholder
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"VisionTask import check failed: {exc}")
             # Explicitly decide using names to avoid import issues
             task_name = getattr(request.task, "name", str(request.task))
@@ -323,7 +323,7 @@ class VisionOrchestrator:
                 model=request.preferred_model or request.model,
             )
             return self._ensure_money(cost)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Default tiny estimate when pricing is unknown/unavailable
             self.logger.warning(f"Cost estimation failed (fallback to minimum): {e}")
             # Tests expect TEXT_TO_IMAGE fallback to $0.04 [CMV]
@@ -342,7 +342,7 @@ class VisionOrchestrator:
             if x is None:
                 return Money("0.006")
             return Money(x)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"Money conversion failed: {exc}")
             return Money("0.006")
 
@@ -426,7 +426,7 @@ class VisionOrchestrator:
                                 estimated_cost=self._ensure_money(job.request.estimated_cost),
                                 actual_cost=actual_cost_money,
                             )
-                    except Exception as parse_exc:
+                    except Exception as parse_exc:  # noqa: BLE001
                         # Usage parser failed on a completed job — charge
                         # conservatively using the configured fallback cost.
                         fallback = self.config.get("VISION_BUDGET_PARSE_FALLBACK_COST_USD", 0.02)

@@ -372,7 +372,7 @@ class VideoIngestionManager:
         cfg = load_config()
         try:
             max_mb = int(cfg.get("MAX_ATTACHMENT_SIZE_MB", 25))
-        except Exception:
+        except Exception:  # noqa: BLE001
             max_mb = 25
         self._size_guard_bytes = max_mb * 1024 * 1024
         logger.info(f"🎥 VideoIngestionManager initialized with cache={self.cache_dir} size_guard={self._size_guard_bytes // (1024 * 1024)}MB")
@@ -385,7 +385,7 @@ class VideoIngestionManager:
                 data = json.load(f)
             if isinstance(data, dict):
                 return data
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.warning(f"⚠️ Failed to load video cache index: {exc}")
         return {}
 
@@ -393,7 +393,7 @@ class VideoIngestionManager:
         try:
             with open(self.cache_index_path, "w") as f:
                 json.dump(self._index, f, indent=2)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.warning(f"⚠️ Failed to persist video cache index: {exc}")
 
     def _purge_if_stale(self, key: str) -> dict[str, Any] | None:
@@ -417,7 +417,7 @@ class VideoIngestionManager:
                     logger.info("🗑️ Cache entry expired key=%s age_days=%s", key, age_days)
                     try:
                         raw_path.unlink(missing_ok=True)
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         logger.debug(
                             "⚠️ Failed to delete expired cache file %s: %s",
                             raw_path,
@@ -426,7 +426,7 @@ class VideoIngestionManager:
                     self._index.pop(key, None)
                     self._save_cache_index()
                     return None
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug("⚠️ Cache entry parse failed key=%s err=%s", key, exc)
         return entry
 
@@ -434,7 +434,7 @@ class VideoIngestionManager:
     def _is_supported_url(url: str) -> bool:
         try:
             base_url = url.split("#", 1)[0]
-        except Exception:
+        except Exception:  # noqa: BLE001
             base_url = url
         return any(re.match(pattern, base_url) for pattern in SUPPORTED_PATTERNS)
 
@@ -465,7 +465,7 @@ class VideoIngestionManager:
                 fragment="",
             )
             return urlunparse(canonical)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return url
 
     @staticmethod
@@ -473,7 +473,7 @@ class VideoIngestionManager:
         try:
             parsed = urlparse(url)
             return (parsed.netloc or "").lower() == "d.vxinstagram.com" and VideoIngestionManager._is_supported_instagram_content_path(parsed.path)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return False
 
     @staticmethod
@@ -512,7 +512,7 @@ class VideoIngestionManager:
 
         try:
             media_url = await asyncio.to_thread(_worker)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug("vxinstagram direct media resolution failed: %s", exc)
             return None
 
@@ -574,7 +574,7 @@ class VideoIngestionManager:
             if isinstance(abr, str):
                 try:
                     abr = float(abr)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     abr = float("inf")
             abr_pref_penalty = 0 if abr <= 96 else abr
             size = fmt.get("filesize") or fmt.get("filesize_approx") or float("inf")
@@ -598,13 +598,13 @@ class VideoIngestionManager:
             if isinstance(abr, str):
                 try:
                     abr = float(abr)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     abr = float("inf")
             abr_pref_penalty = 0 if abr <= 128 else abr
             height = fmt.get("height")
             try:
                 height_val = int(height) if height is not None else 0
-            except Exception:
+            except Exception:  # noqa: BLE001
                 height_val = 0
             size = fmt.get("filesize") or fmt.get("filesize_approx") or float("inf")
             return (
@@ -657,7 +657,7 @@ class VideoIngestionManager:
 
                 # For short URLs like /t/ZP8UxRTSU, the path is the key
                 return f"tiktok://{path}"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"tiktok URL normalization failed: {exc}")
         return url
 
@@ -682,7 +682,7 @@ class VideoIngestionManager:
                 # /player/ or /player/v1/ URLs are embed URLs
                 if path.startswith("/player"):
                     return True
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"tiktok player URL check failed: {exc}")
         return False
 
@@ -723,7 +723,7 @@ class VideoIngestionManager:
                         video_id = path[len(prefix) :].split("/")[0].split("?")[0]
                         if video_id and len(video_id) >= 6:
                             return f"youtube://video/{video_id}"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"youtube URL normalization failed: {exc}")
         return url
 
@@ -737,7 +737,7 @@ class VideoIngestionManager:
             parsed = urlparse(url)
             host = parsed.netloc.lower()
             return _DOMAIN_EXTRACTOR_MAP.get(host)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"extractor lookup failed: {exc}")
             return None
 
@@ -895,7 +895,7 @@ class VideoIngestionManager:
                     shutil.copyfileobj(resp, fh)
             try:
                 return int(content_length) if content_length else None
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return None
 
         try:
@@ -1015,7 +1015,7 @@ class VideoIngestionManager:
             try:
                 path.rename(target)
                 path = target
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.debug(f"suffix rename failed: {exc}")
         return path
 
@@ -1155,7 +1155,7 @@ class VideoIngestionManager:
             try:
                 if isinstance(content_length, str):
                     content_length = float(content_length)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 content_length = None
             if isinstance(content_length, float):
                 content_length = int(content_length)
@@ -1264,7 +1264,7 @@ class VideoIngestionManager:
                 raw_cache_path.parent.mkdir(parents=True, exist_ok=True)
                 try:
                     shutil.move(str(raw_download), raw_cache_path)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.warning(
                         "⚠️ Failed to move download into cache (%s → %s): %s",
                         raw_download,
@@ -1367,7 +1367,7 @@ class VideoIngestionManager:
         raw_cache_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             shutil.move(str(temp_path), raw_cache_path)
-        except Exception:
+        except Exception:  # noqa: BLE001
             shutil.copy2(str(temp_path), raw_cache_path)
             Path(temp_path).unlink(missing_ok=True)
 

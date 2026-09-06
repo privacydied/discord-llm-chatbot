@@ -102,7 +102,7 @@ class KokoroONNXEngine(BaseEngine):
                     if not hasattr(_ew, "set_library"):
                         _ew.set_library = staticmethod(lambda *_, **__: None)
                     logger.debug("Patched EspeakWrapper with no-op methods")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 # Non-fatal; continue and let Kokoro attempt init
                 logger.debug("EspeakWrapper patch not applied", exc_info=True)
 
@@ -115,11 +115,11 @@ class KokoroONNXEngine(BaseEngine):
                     import unittest.mock as _um
 
                     is_mock = isinstance(current_tok, (_um.Mock, _um.MagicMock))  # type: ignore
-                except Exception:
+                except Exception:  # noqa: BLE001
                     is_mock = False
                 if is_mock or current_tok is None:
                     self.engine.tokenizer = self.tokenizer
-            except Exception:
+            except Exception:  # noqa: BLE001
                 # Non-fatal if underlying object disallows setting attributes
                 logger.debug(
                     "Could not set engine.tokenizer attribute; continuing",
@@ -148,7 +148,7 @@ class KokoroONNXEngine(BaseEngine):
                     exc,
                     extra={"subsys": "tts", "event": "english_ipa.fallback"},
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 logger.warning(
                     "English IPA pipeline crashed; falling back to registry path",
                     extra={"subsys": "tts", "event": "english_ipa.fallback"},
@@ -265,7 +265,7 @@ class KokoroONNXEngine(BaseEngine):
                         )
                         matched = list(getattr(kd, "_last_matched_symbols", []))
                     result_container[0] = (path, matched)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     exception_container[0] = exc
 
             synthesis_thread = threading.Thread(target=synthesis_target)
@@ -331,7 +331,7 @@ class KokoroONNXEngine(BaseEngine):
             _p = _P(wav_path)
             if _p.exists():
                 _p.unlink()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"wav cleanup failed: {exc}")
 
         self._synthesis_initialized = True
@@ -381,14 +381,14 @@ class KokoroONNXEngine(BaseEngine):
             lex_text, changed = apply_lexicon(text, self.language)
             if changed:
                 text = lex_text
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"lexicon apply failed: {exc}")
 
         # Ensure engine is loaded for registry path since tests may construct without calling load()
         if self.engine is None:
             try:
                 self.load()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 logger.debug(
                     "Lazy load of Kokoro engine failed; continuing with fallbacks",
                     exc_info=True,
@@ -419,7 +419,7 @@ class KokoroONNXEngine(BaseEngine):
                         result = inv()
                     except TypeError:
                         continue
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         logger.debug(f"generate_audio attempt failed: {exc}")
                         continue
                     if inspect.isawaitable(result):
@@ -433,7 +433,7 @@ class KokoroONNXEngine(BaseEngine):
                         logger.info("kokoro.registry.found name=generate_audio mode=engine async=false")
                         return wav_bytes
                 logger.debug("generate_audio variants did not yield recognizable audio; continuing to fallbacks")
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Fall through to Misaki/probing
             logger.debug("generate_audio path failed; falling back", exc_info=True)
 
@@ -448,11 +448,11 @@ class KokoroONNXEngine(BaseEngine):
 
                     fallback = misaki_espeak.EspeakFallback(british=False)
                     logger.debug("Misaki espeak fallback available")
-                except Exception:
+                except Exception:  # noqa: BLE001
                     fallback = None
                     logger.debug("Misaki espeak fallback not available; proceeding without it")
                 self._g2p = misaki_en.G2P(trf=False, british=False, fallback=fallback)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self._g2p = None
             finally:
                 self._g2p_initialized = True
@@ -472,7 +472,7 @@ class KokoroONNXEngine(BaseEngine):
                     # Treat presence of obvious unknown markers as invalid phonemes
                     if any(ch in s for ch in ("?", "❓", "�")):
                         invalid_marker = True
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     logger.debug(f"phoneme validation failed: {exc}")
 
                 empty_or_blank = (not phonemes) or (isinstance(phonemes, str) and not phonemes.strip())
@@ -489,7 +489,7 @@ class KokoroONNXEngine(BaseEngine):
                                 logger.info("kokoro.registry.found name=create mode=engine async=false")
                                 return wav_bytes
                             logger.debug("create(is_phonemes=True) returned unrecognized audio format; continuing to probing methods")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 # Fall through to generic probing quietly
                 logger.debug(
                     "Phoneme path failed; falling back to generic probing",
@@ -536,7 +536,7 @@ class KokoroONNXEngine(BaseEngine):
                 try:
                     sig = inspect.signature(meth)
                     param_names = list(sig.parameters.keys())
-                except Exception:
+                except Exception:  # noqa: BLE001
                     param_names = []
 
                 if name in ("create", "_create_audio", "create_audio"):
@@ -604,7 +604,7 @@ class KokoroONNXEngine(BaseEngine):
                     for vk in voice_keys:
                         for tk in text_keys:
                             patterns.append(lambda vk=vk, tk=tk: meth(**{vk: self.voice, tk: text}))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 # If building patterns fails, skip this method gracefully
                 logger.debug(f"pattern building failed for {name}: {exc}")
                 continue
@@ -615,7 +615,7 @@ class KokoroONNXEngine(BaseEngine):
                 except TypeError:
                     # Signature mismatch for this pattern, try next
                     continue
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     # Unexpected failure in this pattern, try next one
                     logger.debug(f"pattern invocation failed for {name}: {exc}")
                     continue
@@ -646,7 +646,7 @@ class KokoroONNXEngine(BaseEngine):
         try:
             callables = [a for a in dir(self.engine) if callable(getattr(self.engine, a, None)) and not a.startswith("__")]
             logger.debug(f"Kokoro engine callable methods: {callables}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.debug(f"callable introspection failed: {exc}")
 
         direct_candidates = ["generate_waveform", "create"]
@@ -716,7 +716,7 @@ class KokoroONNXEngine(BaseEngine):
             return audio_bytes
         except TTSError:
             raise
-        except Exception:
+        except Exception:  # noqa: BLE001
             logger.debug("KokoroDirect fallback unavailable or failed", exc_info=True)
 
         logger.error(
@@ -741,16 +741,16 @@ class KokoroONNXEngine(BaseEngine):
             # Already bytes, try to read as WAV
             try:
                 y, sr = sf.read(io.BytesIO(data), always_2d=False, dtype="float32")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return bytes(data)  # Return as-is if we can't read it
 
         elif isinstance(data, io.BytesIO):
             try:
                 y, sr = sf.read(data, always_2d=False, dtype="float32")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 try:
                     return data.getvalue()
-                except Exception:
+                except Exception:  # noqa: BLE001
                     return None
 
         elif isinstance(data, dict):
@@ -782,7 +782,7 @@ class KokoroONNXEngine(BaseEngine):
             # File path
             try:
                 y, sr = sf.read(str(data), always_2d=False, dtype="float32")
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return None
 
         else:
@@ -794,7 +794,7 @@ class KokoroONNXEngine(BaseEngine):
         if not isinstance(y, np.ndarray):
             try:
                 y = np.array(y, dtype=np.float32)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return None
 
         # Ensure we have valid audio data
@@ -824,7 +824,7 @@ class KokoroONNXEngine(BaseEngine):
             p = Path(wav_path)
             with open(p, "rb") as f:
                 return f.read()
-        except Exception:
+        except Exception:  # noqa: BLE001
             # If anything goes wrong, return empty bytes to avoid hard failures in tests
             return b""
 
@@ -873,7 +873,7 @@ class KokoroONNXEngine(BaseEngine):
             sf.write(buf, y_int16, 48000, format="WAV", subtype="PCM_16")
             return buf.getvalue()
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Failed to resample audio for Discord voice: {e}")
             return wav_bytes  # Return original if resampling fails
 

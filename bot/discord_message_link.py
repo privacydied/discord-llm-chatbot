@@ -116,7 +116,7 @@ async def _resolve_channel(bot: Any, channel_id: int, timeout_s: float) -> Any |
         return await asyncio.wait_for(fetch(channel_id), timeout=timeout_s)
     except (TimeoutError, asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException):
         return None
-    except Exception as exc:  # defensive: never let link resolution crash the router
+    except Exception as exc:  # defensive: never let link resolution crash the router  # noqa: BLE001
         logger.debug(f"discord_link.channel_fetch_failed id={channel_id} error={exc}")
         return None
 
@@ -144,7 +144,7 @@ async def _as_member(channel: Any, requester: Any, timeout_s: float = DEFAULT_FE
         return await asyncio.wait_for(fetch_member(user_id), timeout=timeout_s)
     except (TimeoutError, asyncio.TimeoutError, discord.NotFound, discord.Forbidden, discord.HTTPException):
         return None
-    except Exception as exc:  # defensive: permission checks must never crash routing
+    except Exception as exc:  # defensive: permission checks must never crash routing  # noqa: BLE001
         logger.debug(f"discord_link.member_fetch_failed id={user_id} error={exc}")
         return None
 
@@ -158,7 +158,7 @@ def _member_can_read(channel: Any, member: Any) -> bool:
         return False
     try:
         perms = perms_for(member)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.debug(f"discord_link.perms_failed error={exc}")
         return False
     return bool(getattr(perms, "view_channel", False) and getattr(perms, "read_message_history", False))
