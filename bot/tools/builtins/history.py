@@ -182,7 +182,7 @@ async def read_channel_history(ctx: ToolContext, arguments: dict[str, Any]) -> T
     limit = posts_ago + count - 1
     try:
         collected = [msg async for msg in channel.history(limit=limit, before=ctx.message)]
-    except Exception as exc:  # [REH] permissions, rate limits, gateway issues
+    except Exception as exc:  # noqa: BLE001 - tool sandbox; fault classified above, must not break the turn [REH]
         name = type(exc).__name__
         if name == "Forbidden":
             return ToolResult.failure("missing permission to read message history in this channel")

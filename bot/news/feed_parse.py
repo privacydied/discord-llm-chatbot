@@ -59,7 +59,7 @@ def html_to_text(markup: str) -> str:
         return ""
     try:
         soup = BeautifulSoup(markup, "html.parser")
-    except Exception as exc:  # [REH]
+    except Exception as exc:  # noqa: BLE001 - third-party parser on untrusted markup; logged, markup fallback [REH]
         logger.debug("feed html_to_text failed: %s", exc)
         return markup.strip()
     for tag in soup(["script", "style"]):
@@ -141,7 +141,7 @@ def parse_feed(raw: bytes) -> list[FeedEntry]:
     try:
         # Parser disables entity resolution, DTD loading and network access. [SFT]
         root = etree.fromstring(raw, parser=_hardened_parser())
-    except Exception as exc:  # [REH] malformed feed is not an error worth raising
+    except Exception as exc:  # noqa: BLE001 - malformed feed is not an error worth raising; logged, [] fallback [REH]
         logger.debug("feed parse failed: %s", exc)
         return []
     if root is None:

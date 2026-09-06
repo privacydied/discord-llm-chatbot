@@ -57,7 +57,7 @@ async def cleanup_tts() -> None:
     for p in d.glob("*.wav"):
         try:
             p.unlink()
-        except Exception as exc:
+        except OSError as exc:
             # Best-effort cleanup for tests
             logger.debug(f"temp wav cleanup failed: {exc}")
 

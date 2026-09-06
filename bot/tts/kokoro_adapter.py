@@ -39,7 +39,7 @@ try:
     from kokoro_onnx import Kokoro as _RealKokoro  # type: ignore
 
     _IMPORT_ERR: Exception | None = None
-except Exception as e:  # pragma: no cover - exercised only when kokoro_onnx missing
+except Exception as e:  # pragma: no cover - exercised only when kokoro_onnx missing  # noqa: BLE001 - optional-dependency import guard
     _RealKokoro = None  # type: ignore
     _IMPORT_ERR = e
 

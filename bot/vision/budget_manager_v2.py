@@ -240,7 +240,7 @@ class VisionBudgetManager:
                     migrated += 1
             self.budgets_file.rename(self.budgets_file.with_suffix(".json.migrated"))
             logger.info(f"Migrated {migrated} user budget(s) from legacy budgets.json to per-user files")
-        except Exception as exc:
+        except (OSError, ValueError, TypeError, AttributeError) as exc:
             logger.warning(f"Legacy budgets.json migration failed (will retry next start): {exc}")
 
     def _atomic_write_json(self, file_path: Path, data: Any) -> None:
