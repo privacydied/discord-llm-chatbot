@@ -654,7 +654,7 @@ class TokenizerRegistry:
                 return phonemize(text, language="en-us", backend="espeak", strip=True)
             except ImportError:
                 msg = "phonemizer not available"
-                raise TokenizerError(msg)
+                raise TokenizerError(msg) from None
 
         elif tokenizer in ("espeak", "espeak-ng"):
             try:
@@ -667,7 +667,7 @@ class TokenizerRegistry:
                 raise TokenizerError(msg)
             except (subprocess.SubprocessError, FileNotFoundError):
                 msg = f"{tokenizer} not available"
-                raise TokenizerError(msg)
+                raise TokenizerError(msg) from None
 
         elif tokenizer == "g2p_en":
             try:
@@ -678,7 +678,7 @@ class TokenizerRegistry:
                 return " ".join(phonemes)
             except ImportError:
                 msg = "g2p_en not available"
-                raise TokenizerError(msg)
+                raise TokenizerError(msg) from None
 
         elif tokenizer == "misaki":
             try:
@@ -692,7 +692,7 @@ class TokenizerRegistry:
                 return result
             except ImportError:
                 msg = "misaki not available"
-                raise TokenizerError(msg)
+                raise TokenizerError(msg) from None
 
         else:
             msg = f"Unsupported tokenizer: {tokenizer}"

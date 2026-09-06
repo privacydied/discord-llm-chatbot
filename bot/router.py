@@ -7218,7 +7218,7 @@ class Router:
         except Exception as e:
             self.logger.error(f"Error processing general url: {e}", exc_info=True)
             msg = f"Failed to process URL: {item.payload}"
-            raise DispatchEmptyError(msg)
+            raise DispatchEmptyError(msg) from e
 
     # ---------------------------------------------------------------------------
     # URL-based media/document handlers (routes URLs through attachment pipelines) [CA][REH]
