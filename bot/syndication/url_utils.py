@@ -41,7 +41,7 @@ def upgrade_pbs_to_orig(url: str) -> str:
         new_qs = urlencode(qs, doseq=True)
 
         return urlunparse((p.scheme, p.netloc, path, p.params, new_qs, p.fragment))
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         # absolutely never break on URL upgrade; just return original
         return url
 
@@ -62,5 +62,5 @@ def pbs_base_key(url: str) -> str:
             return f"pbs:{path}"
         # For other hosts, ignore query for dedup
         return f"{hostname}:{path}"
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         return url

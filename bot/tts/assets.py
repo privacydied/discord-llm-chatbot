@@ -74,7 +74,7 @@ async def _ensure_file(url: str, dest: Path, force: bool) -> None:
             extra={"subsys": "tts.assets", "event": "download", "detail": str(dest)},
         )
         return
-    except Exception:
+    except Exception:  # noqa: BLE001 - fallback contract: any aiohttp-path failure retries via requests (logged below)
         logger.warning(
             "⚠ aiohttp failed; falling back to requests",
             extra={"subsys": "tts.assets"},
@@ -110,7 +110,7 @@ async def ensure_kokoro_assets(out_dir: Path = Path("tts"), force: bool = False)
                         "detail": str(legacy),
                     },
                 )
-        except Exception:
+        except OSError:
             logger.warning(
                 "⚠ Failed to remove legacy asset",
                 extra={"subsys": "tts.assets", "detail": str(legacy)},

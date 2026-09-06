@@ -37,7 +37,7 @@ async def read_attachment_text(att: discord.Attachment, limit_bytes: int = 262_1
             try:
                 text = data.decode(encoding)
                 break
-            except Exception as exc:
+            except (ValueError, TypeError) as exc:
                 logger.debug(f"decoding failed ({encoding}): {exc}")
                 continue
         if not text:
@@ -47,6 +47,6 @@ async def read_attachment_text(att: discord.Attachment, limit_bytes: int = 262_1
         text = text.replace("\x00", "")
         text = re.sub(r"\s+", " ", text).strip()
         return text or None
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         # Keep silent; caller decides on fallback/logging
         return None

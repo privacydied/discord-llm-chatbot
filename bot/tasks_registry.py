@@ -41,7 +41,7 @@ class TaskEntry:
                 exc = self.task.exception()
             except asyncio.CancelledError:
                 return TaskState.CANCELLED
-            except Exception:
+            except Exception:  # noqa: BLE001 - task-state probe must not raise; CancelledError handled above
                 return TaskState.FAILED
             if exc is None:
                 return TaskState.COMPLETED
@@ -127,7 +127,7 @@ class BackgroundTaskRegistry:
             try:
                 done = entry.task.done()
                 cancelled = entry.task.cancelled()
-            except Exception:
+            except Exception:  # noqa: BLE001 - best-effort snapshot of possibly-dead tasks; defaults below
                 done = True
                 cancelled = False
             result.append(
