@@ -129,7 +129,7 @@ async def wav_bytes_to_voice_memo_async(
                     uploaded_filename = upload_info.get("upload_filename") or upload_info.get("uploaded_filename")
                 except (KeyError, IndexError, TypeError) as e:
                     msg = f"Invalid upload response format: {e}"
-                    raise VoiceMemoError(msg)
+                    raise VoiceMemoError(msg) from e
 
                 # Step 2: Upload file to provided URL (no bot Authorization header)
                 ogg_bytes = ogg_path.read_bytes()
@@ -180,7 +180,7 @@ async def wav_bytes_to_voice_memo_async(
         if isinstance(e, VoiceMemoError):
             raise
         msg = f"Unexpected error: {e}"
-        raise VoiceMemoError(msg)
+        raise VoiceMemoError(msg) from e
 
 
 def wav_bytes_to_voice_memo(

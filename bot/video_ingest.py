@@ -841,7 +841,7 @@ class VideoIngestionManager:
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_s)
-        except TimeoutError:
+        except TimeoutError as e:
             with contextlib.suppress(Exception):
                 proc.kill()
             # Per-attempt subprocess timeout: WARNING without a traceback and WITHOUT the
@@ -851,7 +851,7 @@ class VideoIngestionManager:
             # the router emits once the whole STT op is genuinely exhausted [REH][CSD].
             logger.warning("⚠️ subprocess timeout stage=%s after=%.0fs", label, timeout_s)
             msg = f"{label} timed out after {timeout_s:.0f}s"
-            raise VideoIngestError(msg)
+            raise VideoIngestError(msg) from e
         if proc.returncode != 0:
             err = stderr.decode(errors="replace").strip()
             msg = f"{label} failed: {err or 'unknown error'}"
@@ -951,7 +951,7 @@ class VideoIngestionManager:
             metadata = json.loads(stdout.decode())
         except json.JSONDecodeError as exc:
             msg = f"Failed to parse yt-dlp metadata: {exc}"
-            raise VideoIngestError(msg)
+            raise VideoIngestError(msg) from exc
 
         ytdlp_probe_cache.put(identity, signature, metadata)
         self._log_probe_resolution(metadata)
