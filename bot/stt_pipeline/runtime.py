@@ -41,7 +41,7 @@ def parse_stt_max_ram_mb() -> int | None:
         if value is not None and value <= 0:
             return None
         return value
-    except Exception:
+    except (AttributeError, ValueError, TypeError):
         return None
 
 
@@ -58,7 +58,7 @@ async def ensure_stt_manager_ready(manager: Any) -> bool:
         try:
             if not bool(is_available()):
                 return False
-        except Exception:
+        except Exception:  # noqa: BLE001 - duck-typed manager/stub probe; False fallback
             return False
 
     ensure_ready = getattr(manager, "ensure_ready", None)
@@ -70,5 +70,5 @@ async def ensure_stt_manager_ready(manager: Any) -> bool:
         if hasattr(ready, "__await__"):
             ready = await ready
         return bool(ready)
-    except Exception:
+    except Exception:  # noqa: BLE001 - duck-typed readiness probe incl. legacy stubs; False fallback
         return False

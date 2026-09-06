@@ -64,7 +64,7 @@ def _preload_cpu_threads() -> None:
         return
     try:
         torch.set_num_threads(_CPU_THREADS)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - optional-torch tuning probe; logged, no-op fallback
         logger.debug(f"torch thread setting failed: {exc}")
 
 
@@ -137,7 +137,7 @@ def _device_for_runtime() -> str:
 
         if ctranslate2.get_cuda_device_count() > 0:
             return "cuda"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - third-party CUDA probe; logged, cpu fallback
         logger.debug(f"CUDA detection failed: {exc}")
     return "cpu"
 
@@ -307,7 +307,7 @@ class STTManager:
                     download_root=_CACHE_DIR,
                     local_files_only=_LOCAL_ONLY,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - model-load retry contract: any primary failure retries degraded (logged below)
                 # retry without cache hints for parity with legacy path
                 logger.warning(
                     "Primary model load failed (size=%s compute=%s): %s. Retrying without cache hints.",

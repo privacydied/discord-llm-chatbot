@@ -133,7 +133,7 @@ class MultimodalSTTFallbackProvider:
                         result.provider = model_info["name"]
                         return result
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - multi-provider fan-out; logged, tries next model
                     last_error = e
                     logger.warning(f"[MultimodalSTT] Model {model_info['name']} failed: {e}")
                     continue
@@ -142,7 +142,7 @@ class MultimodalSTTFallbackProvider:
             msg = f"All multimodal fallback models failed. Last error: {last_error}"
             raise InferenceError(msg)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - never-raises wrapper; returns error result below
             # Return error result
             return FallbackTranscriptResult(
                 text="",
@@ -387,7 +387,7 @@ class MultimodalSTTFallbackProvider:
                     if sample_rate > 0:
                         # rough estimate assuming 1 channel, 16-bit
                         duration_s = raw_bytes / (sample_rate * 2)
-        except Exception as exc:
+        except (struct.error, IndexError, TypeError, ValueError) as exc:
             logger.debug(f"audio duration estimation failed: {exc}")
 
         if duration_s is not None and duration_s > self._max_audio_duration_s:
