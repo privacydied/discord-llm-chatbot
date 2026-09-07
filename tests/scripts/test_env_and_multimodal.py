@@ -194,7 +194,7 @@ class TestVenvEnforcement:
         # In a real .venv, sys.prefix should contain '.venv'
         try:
             check_venv_activation()
-        except Exception as e:
+        except (RuntimeError, OSError):
             # This is expected if not running in .venv
             pass
 

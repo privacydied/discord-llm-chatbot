@@ -152,7 +152,7 @@ class TestSharedHttpClient:
                 try:
                     response = await client.get("https://httpbin.org/json")
                     responses.append(response)
-                except Exception:
+                except (ConnectionError, OSError, RuntimeError):
                     # Skip test if httpbin is not available
                     pytest.skip("External HTTP service not available")
 
@@ -189,7 +189,7 @@ class TestSharedHttpClient:
                         "https://nonexistent.example/test",
                         config=RequestConfig(connect_timeout=0.1, max_retries=1),
                     )
-                except Exception:
+                except (ConnectionError, TimeoutError, RuntimeError, OSError):
                     failure_count += 1
 
             # Circuit breaker should trigger after failures

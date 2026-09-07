@@ -1141,10 +1141,8 @@ class VideoIngestionManager:
             # Even when they miss and we fall through to audio decode, YouTube is
             # streamable and low-risk, so it gets a much higher ceiling than the
             # 10m audio cap that applies to TikTok / direct-media URLs. [REH][IV]
-            is_youtube = (expected_extractor == "youtube")
-            duration_ceiling = (
-                MAX_DURATION_SECONDS_YOUTUBE if is_youtube else MAX_DURATION_SECONDS
-            )
+            is_youtube = expected_extractor == "youtube"
+            duration_ceiling = MAX_DURATION_SECONDS_YOUTUBE if is_youtube else MAX_DURATION_SECONDS
             if duration and duration_ceiling and duration > duration_ceiling:
                 msg = f"Video too long: {duration:.1f}s (max {duration_ceiling}s)"
                 raise VideoIngestError(msg)

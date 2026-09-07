@@ -44,10 +44,13 @@ ENABLE_TIER_C = os.getenv("WEBEX_ENABLE_TIER_C", "1").strip() not in {
     "False",
 }
 TIER_C_TIMEOUT_S = float(os.getenv("WEBEX_TIER_C_TIMEOUT_S", "15.0"))
-TIER_C_READER_BASE = os.getenv(
-    "WEBEX_TIER_C_READER",
-    "https://r.jina.ai/",
-).rstrip("/") + "/"
+TIER_C_READER_BASE = (
+    os.getenv(
+        "WEBEX_TIER_C_READER",
+        "https://r.jina.ai/",
+    ).rstrip("/")
+    + "/"
+)
 # jina.ai is per-IP rate-limited: rapid repeated requests push it into a
 # sustained "paywall landing page" phase, which is WORSE than a single request.
 # So we do few retries with spacing -- hammering defeats the purpose. The bare
@@ -96,14 +99,8 @@ BLOCKED_HOST_SUFFIXES: tuple[str, ...] = (
 )
 
 # Human-facing messages for bot-wall failures. [PAY]
-BOT_WALL_GENERIC_MSG = (
-    "This page is behind a bot-check (security challenge / CAPTCHA) that this "
-    "server can't pass automatically."
-)
-BOT_WALL_BLOCKED_HOST_MSG = (
-    "this capture host blocks automated access from this server; try the "
-    "original source URL or web.archive.org if a public snapshot exists"
-)
+BOT_WALL_GENERIC_MSG = "This page is behind a bot-check (security challenge / CAPTCHA) that this server can't pass automatically."
+BOT_WALL_BLOCKED_HOST_MSG = "this capture host blocks automated access from this server; try the original source URL or web.archive.org if a public snapshot exists"
 
 # Optional Wayback fallback: when the tiered extractor fails and archive.org has
 # a public snapshot of the target, fetch that instead. Gated by env so it can be
@@ -146,7 +143,7 @@ def is_blocked_host(url: str) -> bool:
 def _bot_wall_marker_from_error(error: str | None) -> str | None:
     if not error or not error.startswith("bot_wall:"):
         return None
-    return error[len("bot_wall:"):] or "challenge"
+    return error[len("bot_wall:") :] or "challenge"
 
 
 async def _wayback_snapshot(url: str) -> str | None:
@@ -186,13 +183,8 @@ class ExtractionResult:
         if not self.success:
             if self.bot_wall_marker is not None:
                 if is_blocked_host(self.canonical_url or ""):
-                    return (
-                        f"⚠️ Extraction failed ({self.tier_used}): "
-                        f"{BOT_WALL_BLOCKED_HOST_MSG}"
-                    )
-                return (
-                    f"⚠️ Extraction failed ({self.tier_used}): {BOT_WALL_GENERIC_MSG}"
-                )
+                    return f"⚠️ Extraction failed ({self.tier_used}): {BOT_WALL_BLOCKED_HOST_MSG}"
+                return f"⚠️ Extraction failed ({self.tier_used}): {BOT_WALL_GENERIC_MSG}"
             return f"⚠️ Extraction failed ({self.tier_used}): {self.error or 'unknown error'}"
         text_snippet = (self.text or "").strip()
         if len(text_snippet) > 800:
@@ -332,9 +324,7 @@ class WebExtractionService:
                 from bot.news import thin_content
 
                 if thin_content.assess(res.text, min_chars=TIER_A_MIN_CHARS).is_thin:
-                    logger.info(
-                        f"Tier A success but thin ({len(res.text or '')} chars) for {url}; cascading to B/C"
-                    )
+                    logger.info(f"Tier A success but thin ({len(res.text or '')} chars) for {url}; cascading to B/C")
                     res = ExtractionResult(
                         success=False,
                         tier_used="A",
@@ -514,6 +504,7 @@ class WebExtractionService:
         from urllib.parse import urlsplit
 
         parts = urlsplit(url)
+
         # Two jina.ai shapes exist: bare r.jina.ai/<url> (pass https:// through)
         # and r.jina.ai/http/<url> (target scheme must be http://). Build the
         # target per-base so we don't get 422/403 from a mismatched scheme.
@@ -548,7 +539,8 @@ class WebExtractionService:
             # easily clear the threshold. [PAY]
             if len(text.split()) < TIER_C_MIN_WORDS:
                 return ExtractionResult(
-                    success=False, tier_used="C",
+                    success=False,
+                    tier_used="C",
                     error="reader returned paywall/teaser (insufficient body)",
                 )
             return ExtractionResult(success=True, tier_used="C", canonical_url=url, text=text, author=None, raw_json_present=False)
@@ -586,12 +578,12 @@ class WebExtractionService:
         # First single-'# ' H1 heading line = article start (nav uses '## ').
         for i in range(len(raw)):
             if raw[i] in ("\n", "\r") and raw[i + 1 : i + 3] == "# ":
-                return raw[i + 1:].strip()
+                return raw[i + 1 :].strip()
         # Fallback: drop everything up to and including a 'Markdown Content:' label.
         marker = "Markdown Content:"
         idx = raw.find(marker)
         if idx != -1:
-            return raw[idx + len(marker):].strip()
+            return raw[idx + len(marker) :].strip()
         return raw.strip()
 
     # --- Parsers --- [CSD]

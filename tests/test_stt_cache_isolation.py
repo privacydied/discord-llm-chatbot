@@ -49,7 +49,7 @@ def _normalize_youtube_url(url: str) -> str:
                     video_id = path[len(prefix) :].split("/")[0].split("?")[0]
                     if video_id and len(video_id) >= 6:
                         return f"youtube://video/{video_id}"
-    except Exception:
+    except (ValueError, AttributeError, TypeError):
         pass
     return url
 
@@ -77,7 +77,7 @@ def _normalize_tiktok_url(url: str) -> str:
                 return f"tiktok://video/{video_id}"
 
             return f"tiktok://{path}"
-    except Exception:
+    except (ValueError, AttributeError, TypeError):
         pass
     return url
 

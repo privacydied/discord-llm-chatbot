@@ -203,7 +203,7 @@ def test_env_vision_ladder_is_authoritative_and_not_clobbered(
         from bot.config import invalidate_config_cache
 
         invalidate_config_cache()
-    except Exception:
+    except (ImportError, AttributeError):
         pass
 
     summary = mgr.refresh_from_env()

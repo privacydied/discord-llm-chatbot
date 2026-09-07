@@ -91,7 +91,7 @@ class TestUpgradePbsToOrig:
                 result = upgrade_pbs_to_orig(url)
                 # Should return input unchanged for malformed URLs
                 assert result == url
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 pytest.fail(f"upgrade_pbs_to_orig should never throw, got: {e}")
 
         # Test pbs.twimg.com URLs that are valid enough to upgrade

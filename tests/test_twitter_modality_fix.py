@@ -70,7 +70,7 @@ async def test_twitter_url_routing() -> bool:
                 else:
                     return False
 
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError):
             return False
 
     return True

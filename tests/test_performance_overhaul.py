@@ -183,7 +183,7 @@ class TestTemplateCaching:
             await cache.get_template(file_path="/fake/path/prompt.template")
             msg = "Expected exception for non-existent file"
             raise AssertionError(msg)
-        except Exception as e:
+        except (OSError, FileNotFoundError) as e:
             # Should handle file not found gracefully
             assert "No such file or directory" in str(e)
 
@@ -623,7 +623,7 @@ class TestIntegrationAndSoak:
                 timing_manager.complete_tracker(tracker)
                 successful_completions += 1
 
-            except Exception:
+            except Exception:  # noqa: BLE001
                 # Failure is expected, system should handle gracefully
                 timing_manager.complete_tracker(tracker)
 

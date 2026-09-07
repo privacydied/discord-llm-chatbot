@@ -118,7 +118,7 @@ def synthesize():
         os.unlink(wav_path)  # Remove temp file
 
         return send_file(ogg_path, mimetype="audio/ogg")
-    except Exception as e:
+    except (RuntimeError, OSError, ValueError, TypeError) as e:
         return {"error": f"TTS generation failed: {e!s}"}, 500
 
 

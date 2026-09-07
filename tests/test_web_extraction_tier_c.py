@@ -5,6 +5,7 @@ HTTP hop. Tier C is the headless-safe substitute for a browser paywall-bypass
 extension, which the automation Chromium build cannot load via --load-extension.
 [PAY]
 """
+
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -17,8 +18,7 @@ _JINA_BODY = (
     "Title: Ghosting, pressure, the cost of dinner\n\n"
     "URL Source: http://www.thetimes.com/...\n\n"
     "Published Time: 2026-08-10\n\n"
-    "Markdown Content:\n"
-    + "Male friends I know say they feel cornered by women wanting to settle down "
+    "Markdown Content:\n" + "Male friends I know say they feel cornered by women wanting to settle down "
     "and they're tired of being painted as the bad guys. " * 40
 )
 
@@ -28,9 +28,7 @@ async def test_tier_c_reader_strips_wrapper_and_returns_body() -> None:
     svc = WebExtractionService()
     req = httpx.Request("GET", "https://r.jina.ai/http/" + _TIMES_URL)
     fake_resp = httpx.Response(200, text=_JINA_BODY, request=req)
-    with patch.object(svc, "_get_client", AsyncMock()), patch(
-        "httpx.AsyncClient"
-    ) as mock_client:
+    with patch.object(svc, "_get_client", AsyncMock()), patch("httpx.AsyncClient") as mock_client:
         ctx = AsyncMock()
         ctx.__aenter__.return_value.get.return_value = fake_resp
         mock_client.return_value = ctx
@@ -50,14 +48,13 @@ async def test_tier_c_reader_passes_raw_url_through() -> None:
     svc = WebExtractionService()
     captured = {}
 
-    with patch.object(svc, "_get_client", AsyncMock()), patch(
-        "httpx.AsyncClient"
-    ) as mock_client:
+    with patch.object(svc, "_get_client", AsyncMock()), patch("httpx.AsyncClient") as mock_client:
         ctx = AsyncMock()
+
         def fake_get(url):
             captured["url"] = url
-            return httpx.Response(200, text="Markdown Content:\n" + ("hello world body with enough words to pass the minimum length guard. " * 40),
-                                  request=httpx.Request("GET", url))
+            return httpx.Response(200, text="Markdown Content:\n" + ("hello world body with enough words to pass the minimum length guard. " * 40), request=httpx.Request("GET", url))
+
         ctx.__aenter__.return_value.get.side_effect = fake_get
         mock_client.return_value = ctx
         res = await svc._tier_c_reader("https://example.com/a b?x=1&y=2")
@@ -71,13 +68,9 @@ async def test_tier_c_reader_passes_raw_url_through() -> None:
 @pytest.mark.asyncio
 async def test_tier_c_reader_empty_body_is_failure() -> None:
     svc = WebExtractionService()
-    with patch.object(svc, "_get_client", AsyncMock()), patch(
-        "httpx.AsyncClient"
-    ) as mock_client:
+    with patch.object(svc, "_get_client", AsyncMock()), patch("httpx.AsyncClient") as mock_client:
         ctx = AsyncMock()
-        ctx.__aenter__.return_value.get.return_value = httpx.Response(
-            200, text="", request=httpx.Request("GET", "https://r.jina.ai/http/x")
-        )
+        ctx.__aenter__.return_value.get.return_value = httpx.Response(200, text="", request=httpx.Request("GET", "https://r.jina.ai/http/x"))
         mock_client.return_value = ctx
         res = await svc._tier_c_reader(_TIMES_URL)
 
@@ -91,18 +84,10 @@ async def test_tier_c_reader_accepts_long_article_with_subscribe_cta() -> None:
     # Regression: a real article ends with a "[Subscribe now]" CTA. The paywall
     # marker must not reject a long article that merely mentions subscriptions.
     svc = WebExtractionService()
-    body = (
-        "Markdown Content:\n"
-        + ("Male friends I know say they feel cornered by women wanting to settle down. " * 40)
-        + "\n\n[Subscribe now](https://www.thetimes.com/subscribe) for unlimited access."
-    )
-    with patch.object(svc, "_get_client", AsyncMock()), patch(
-        "httpx.AsyncClient"
-    ) as mock_client:
+    body = "Markdown Content:\n" + ("Male friends I know say they feel cornered by women wanting to settle down. " * 40) + "\n\n[Subscribe now](https://www.thetimes.com/subscribe) for unlimited access."
+    with patch.object(svc, "_get_client", AsyncMock()), patch("httpx.AsyncClient") as mock_client:
         ctx = AsyncMock()
-        ctx.__aenter__.return_value.get.return_value = httpx.Response(
-            200, text=body, request=httpx.Request("GET", "https://r.jina.ai/http/x")
-        )
+        ctx.__aenter__.return_value.get.return_value = httpx.Response(200, text=body, request=httpx.Request("GET", "https://r.jina.ai/http/x"))
         mock_client.return_value = ctx
         res = await svc._tier_c_reader(_TIMES_URL)
 
@@ -115,17 +100,15 @@ async def test_tier_c_reader_accepts_long_article_with_subscribe_cta() -> None:
 async def test_extract_falls_through_to_tier_c_when_a_and_b_fail() -> None:
     svc = WebExtractionService()
     svc._tier_b_available = False
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(success=False, tier_used="A", error="no text")
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=False, tier_used="A", error="no text"))
     # Force Tier C on even though the global default may vary
     import bot.web_extraction_service as wes
 
-    with patch.object(wes, "ENABLE_TIER_C", True), patch.object(
-        svc, "_tier_c_reader"
-    ) as mock_c:
+    with patch.object(wes, "ENABLE_TIER_C", True), patch.object(svc, "_tier_c_reader") as mock_c:
         mock_c.return_value = ExtractionResult(
-            success=True, tier_used="C", canonical_url=_TIMES_URL,
+            success=True,
+            tier_used="C",
+            canonical_url=_TIMES_URL,
             text="x" * 900,  # non-thin so it is returned
         )
         res = await svc.extract(_TIMES_URL)
@@ -142,19 +125,15 @@ async def test_extract_prefers_tier_c_over_tier_b() -> None:
     # wins so a paywalled page rendered by Playwright doesn't block the bypass.
     svc = WebExtractionService()
     svc._tier_b_available = True
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(success=False, tier_used="A", error="no text")
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=False, tier_used="A", error="no text"))
     import bot.web_extraction_service as wes
 
-    with patch.object(wes, "ENABLE_TIER_C", True), patch.object(
-        svc, "_tier_c_reader"
-    ) as mock_c, patch.object(svc, "_tier_b_playwright") as mock_b:
-        mock_c.return_value = ExtractionResult(
-            success=True, tier_used="C", canonical_url=_TIMES_URL, text="x" * 900
-        )
+    with patch.object(wes, "ENABLE_TIER_C", True), patch.object(svc, "_tier_c_reader") as mock_c, patch.object(svc, "_tier_b_playwright") as mock_b:
+        mock_c.return_value = ExtractionResult(success=True, tier_used="C", canonical_url=_TIMES_URL, text="x" * 900)
         mock_b.return_value = ExtractionResult(
-            success=True, tier_used="B", canonical_url=_TIMES_URL,
+            success=True,
+            tier_used="B",
+            canonical_url=_TIMES_URL,
             text="paywalled page rendered by chromium with the wall still up",
         )
         res = await svc.extract(_TIMES_URL)
@@ -172,19 +151,11 @@ async def test_extract_cascades_to_tier_c_on_thin_tier_a_success() -> None:
     # cascade to Tier C so the reader proxy can fetch the real article.
     svc = WebExtractionService()
     svc._tier_b_available = False
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(
-            success=True, tier_used="A", canonical_url=_TIMES_URL, text="Short teaser only."
-        )
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=True, tier_used="A", canonical_url=_TIMES_URL, text="Short teaser only."))
     import bot.web_extraction_service as wes
 
-    with patch.object(wes, "ENABLE_TIER_C", True), patch.object(
-        svc, "_tier_c_reader"
-    ) as mock_c:
-        mock_c.return_value = ExtractionResult(
-            success=True, tier_used="C", canonical_url=_TIMES_URL, text="x" * 900
-        )
+    with patch.object(wes, "ENABLE_TIER_C", True), patch.object(svc, "_tier_c_reader") as mock_c:
+        mock_c.return_value = ExtractionResult(success=True, tier_used="C", canonical_url=_TIMES_URL, text="x" * 900)
         res = await svc.extract(_TIMES_URL)
 
     assert res.success is True
@@ -196,14 +167,10 @@ async def test_extract_cascades_to_tier_c_on_thin_tier_a_success() -> None:
 async def test_extract_skips_tier_c_when_disabled() -> None:
     svc = WebExtractionService()
     svc._tier_b_available = False
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(success=False, tier_used="A", error="no text")
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=False, tier_used="A", error="no text"))
     import bot.web_extraction_service as wes
 
-    with patch.object(wes, "ENABLE_TIER_C", False), patch.object(
-        svc, "_tier_c_reader"
-    ) as mock_c:
+    with patch.object(wes, "ENABLE_TIER_C", False), patch.object(svc, "_tier_c_reader") as mock_c:
         res = await svc.extract(_TIMES_URL)
 
     assert res.success is False

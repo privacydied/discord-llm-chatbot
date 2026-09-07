@@ -484,9 +484,7 @@ class CuratedMemoryCurator:
         # still requires a first-person or bot-directed anchor, not a bare
         # "prefer" anywhere in the sentence (that also matches idle chatter
         # like "most people prefer pizza"). [SFT]
-        return bool(re.search(r"\b(?:you should |please )?prefer\b(?:\s+\w+){1,6}", lower)) and bool(
-            re.search(r"\b(?:i|me|my|you)\b", lower)
-        )
+        return bool(re.search(r"\b(?:you should |please )?prefer\b(?:\s+\w+){1,6}", lower)) and bool(re.search(r"\b(?:i|me|my|you)\b", lower))
 
     @staticmethod
     def _is_recurring_instruction(lower: str) -> bool:

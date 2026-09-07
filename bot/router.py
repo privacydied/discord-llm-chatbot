@@ -7137,10 +7137,7 @@ class Router:
             from bot.news import thin_content
 
             if thin_content.assess(content, min_chars=thin_content.DEFAULT_MIN_ARTICLE_CHARS).is_thin:
-                self.logger.info(
-                    f"🧭 Thin content ({len(content)} chars) from process_url; "
-                    f"trying tiered extractor (reader proxy) for {url}"
-                )
+                self.logger.info(f"🧭 Thin content ({len(content)} chars) from process_url; trying tiered extractor (reader proxy) for {url}")
                 extract_res, _ = await _bounded(
                     web_extractor.extract(url),
                     web_extract_timeout,

@@ -38,7 +38,7 @@ async def test_tts_returns_path() -> None:
         with contextlib.suppress(ValueError):
             await tts_manager.generate_tts("")
 
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError) as e:
         pass
     finally:
         await tts_manager.close()

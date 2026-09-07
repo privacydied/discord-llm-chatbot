@@ -70,7 +70,7 @@ def test_vocab_sanity() -> bool | None:
 
             return True
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return False
 
     except ImportError as e:
@@ -122,7 +122,7 @@ def test_longest_match_encoding():
 
             return all_good
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return False
 
     except ImportError as e:
@@ -142,7 +142,7 @@ def test_english_registry_block() -> bool | None:
             return False
         except RuntimeError as e:
             return "IPA-only path" in str(e)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return False
 
     except ImportError as e:
@@ -163,7 +163,7 @@ def test_g2p_no_plain_a() -> bool | None:
                     pass
                 else:
                     pass
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 pass
 
         return True
@@ -188,7 +188,7 @@ def test_voice_memo_sender() -> bool | None:
                 pass
             else:
                 pass
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             pass
 
         return True
@@ -212,7 +212,7 @@ def main():
         try:
             if test():
                 passed += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             pass
 
     if passed == len(tests):

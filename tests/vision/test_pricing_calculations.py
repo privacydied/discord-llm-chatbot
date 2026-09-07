@@ -306,7 +306,7 @@ class TestGatewayActualCostCalculation(unittest.TestCase):
                     duration_seconds=getattr(request, "duration_seconds", 4.0) or 4.0,
                     model=getattr(request, "preferred_model", None) or getattr(request, "model", None),
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return Money("0.006")
 
         self.gateway._calculate_actual_cost = mock_calculate_actual_cost

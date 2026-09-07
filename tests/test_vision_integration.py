@@ -54,7 +54,7 @@ class TestVisionIntegration:
         try:
             gateway = VisionGateway(self.config)
             assert gateway is not None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             msg = f"VisionGateway initialization failed: {e}"
             raise AssertionError(msg)
 
@@ -63,7 +63,7 @@ class TestVisionIntegration:
         try:
             job_store = VisionJobStore(self.config)
             assert job_store is not None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             msg = f"VisionJobStore initialization failed: {e}"
             raise AssertionError(msg)
 
@@ -72,7 +72,7 @@ class TestVisionIntegration:
         try:
             intent_router = VisionIntentRouter(self.config)
             assert intent_router is not None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             msg = f"VisionIntentRouter initialization failed: {e}"
             raise AssertionError(msg)
 
@@ -81,7 +81,7 @@ class TestVisionIntegration:
         try:
             safety_filter = VisionSafetyFilter(self.config)
             assert safety_filter is not None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             msg = f"VisionSafetyFilter initialization failed: {e}"
             raise AssertionError(msg)
 
@@ -90,7 +90,7 @@ class TestVisionIntegration:
         try:
             budget_manager = VisionBudgetManager(self.config)
             assert budget_manager is not None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             msg = f"VisionBudgetManager initialization failed: {e}"
             raise AssertionError(msg)
 
@@ -99,7 +99,7 @@ class TestVisionIntegration:
         try:
             artifact_cache = VisionArtifactCache(self.config)
             assert artifact_cache is not None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             msg = f"VisionArtifactCache initialization failed: {e}"
             raise AssertionError(msg)
 
@@ -116,7 +116,7 @@ class TestVisionIntegration:
             assert request.task == VisionTask.TEXT_TO_IMAGE
             assert request.prompt == "A beautiful sunset"
             assert request.user_id == "test_user_123"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             msg = f"VisionRequest creation failed: {e}"
             raise AssertionError(msg)
 
@@ -126,7 +126,7 @@ class TestVisionIntegration:
         try:
             orchestrator = VisionOrchestrator(self.config)
             assert orchestrator is not None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             msg = f"VisionOrchestrator initialization failed: {e}"
             raise AssertionError(msg)
         finally:
@@ -156,7 +156,7 @@ def main() -> int | None:
 
         return 0
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         import traceback
 
         traceback.print_exc()

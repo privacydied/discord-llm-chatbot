@@ -60,7 +60,7 @@ async def test_exact_production_error_handling() -> bool | None:
 
                 return True
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 return False
 
 

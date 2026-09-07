@@ -11,11 +11,7 @@ from bot.public_output import SAFE_FALLBACK_MESSAGE, extract_public_reply_text
 
 class TestLeakSalvage:
     def test_single_leak_line_is_stripped_not_fatal(self) -> None:
-        content = (
-            "The match ended 2-1 with a late winner in stoppage time.\n"
-            "Checking the MODE GATE for this one.\n"
-            "Overall it was a deserved result given the second-half pressure."
-        )
+        content = "The match ended 2-1 with a late winner in stoppage time.\nChecking the MODE GATE for this one.\nOverall it was a deserved result given the second-half pressure."
         result = extract_public_reply_text(content)
         assert result != SAFE_FALLBACK_MESSAGE
         assert "MODE GATE" not in result
@@ -54,7 +50,7 @@ class TestContiguousLeakRegion:
         content = (
             "Checking the MODE GATE for this request.\n"
             'So MODE = "POLITICAL" since B is true but A is false?\n'
-            'Wait, let me re-read: "if A true AND B true → MODE = \'POLITICAL\'"\n'
+            "Wait, let me re-read: \"if A true AND B true → MODE = 'POLITICAL'\"\n"
             "POLITICAL MODE it is then.\n"
             "the actual answer is that the election result was certified last week and turnout hit a record."
         )

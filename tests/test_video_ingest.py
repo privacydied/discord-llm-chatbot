@@ -207,7 +207,9 @@ async def test_fetch_uses_canonical_instagram_url_for_ytdlp(manager: VideoIngest
 
 @pytest.mark.asyncio
 async def test_long_youtube_bypasses_audio_duration_cap(
-    manager: VideoIngestionManager, tmp_path: Path, monkeypatch,
+    manager: VideoIngestionManager,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """A long YouTube (e.g. 45m) must NOT be rejected by the 10m audio cap.
 
@@ -258,7 +260,9 @@ async def test_long_youtube_bypasses_audio_duration_cap(
 
 @pytest.mark.asyncio
 async def test_long_non_youtube_still_rejected_by_duration_cap(
-    manager: VideoIngestionManager, tmp_path: Path, monkeypatch,
+    manager: VideoIngestionManager,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """Non-YouTube (TikTok) long videos keep the flat 10m audio cap. [REH][IV]"""
     url = "https://www.tiktok.com/@user/video/longtiktok123"
@@ -292,27 +296,27 @@ async def test_long_non_youtube_still_rejected_by_duration_cap(
 
 @pytest.mark.asyncio
 async def test_youtube_duration_cap_disabled_via_env(
-    manager: VideoIngestionManager, tmp_path: Path, monkeypatch,
+    manager: VideoIngestionManager,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """VIDEO_MAX_DURATION_YOUTUBE=0 disables the ceiling entirely for YouTube."""
     # Patch the module global in place (no reload — reload leaks module state
     # into sibling tests in the same session). [REH]
-    monkeypatch.setattr(
-        "bot.video_ingest.MAX_DURATION_SECONDS_YOUTUBE", 0
-    )
+    monkeypatch.setattr("bot.video_ingest.MAX_DURATION_SECONDS_YOUTUBE", 0)
     monkeypatch.setattr(manager, "_probe_metadata", lambda u, t: _yt_probe_coro(7200, u))
     downloaded = {}
+
     async def _fake_dl_async(su, fi, ex, od, ts):
         return _fake_dl(downloaded, su, od, "yt0")
+
     monkeypatch.setattr(
         manager,
         "_download_audio",
         _fake_dl_async,
     )
 
-    result = await manager.fetch_and_prepare_url_audio(
-        "https://www.youtube.com/watch?v=yt0", force_refresh=True
-    )
+    result = await manager.fetch_and_prepare_url_audio("https://www.youtube.com/watch?v=yt0", force_refresh=True)
     assert result.metadata.source_type == "youtube"
     assert downloaded.get("url") == "https://www.youtube.com/watch?v=yt0"
 

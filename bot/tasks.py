@@ -49,6 +49,7 @@ def _sweep_old_logs(logs_dir: str, cutoff_time: float) -> int:
             logger.warning(f"Error deleting log file {log_file}: {e}")
     return deleted
 
+
 # Global task registry
 _background_tasks: dict[str, tasks.Loop] = {}
 _running_tasks: list[asyncio.Task] = []

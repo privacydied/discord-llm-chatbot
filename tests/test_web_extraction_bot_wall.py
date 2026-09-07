@@ -49,11 +49,7 @@ async def test_bot_wall_tier_a_fast_fails_skips_b() -> None:
     Playwright launch (the ~26s waste), and a bot_wall_marker is set."""
     svc = WebExtractionService()
     svc._tier_b_available = True
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(
-            success=True, tier_used="A", canonical_url="https://archive.is/ppfcf", text=_bot_wall_html()
-        )
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=True, tier_used="A", canonical_url="https://archive.is/ppfcf", text=_bot_wall_html()))
     svc._tier_c_reader = AsyncMock(return_value=ExtractionResult(success=True, tier_used="C", text="x"))
     svc._tier_b_playwright = AsyncMock(return_value=ExtractionResult(success=True, tier_used="B", text="x"))
 
@@ -68,11 +64,7 @@ async def test_bot_wall_tier_a_fast_fails_skips_b() -> None:
 @pytest.mark.asyncio
 async def test_blocked_host_message_via_to_message() -> None:
     svc = WebExtractionService()
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(
-            success=True, tier_used="A", canonical_url="https://archive.is/ppfcf", text=_bot_wall_html()
-        )
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=True, tier_used="A", canonical_url="https://archive.is/ppfcf", text=_bot_wall_html()))
     res = await svc.extract("https://archive.is/ppfcf")
     msg = res.to_message()
     assert BOT_WALL_BLOCKED_HOST_MSG in msg
@@ -82,11 +74,7 @@ async def test_blocked_host_message_via_to_message() -> None:
 @pytest.mark.asyncio
 async def test_generic_bot_wall_message_for_unknown_host() -> None:
     svc = WebExtractionService()
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(
-            success=True, tier_used="A", canonical_url="https://example.com/x", text=_bot_wall_html()
-        )
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=True, tier_used="A", canonical_url="https://example.com/x", text=_bot_wall_html()))
     res = await svc.extract("https://example.com/x")
     msg = res.to_message()
     assert BOT_WALL_GENERIC_MSG in msg
@@ -99,14 +87,8 @@ async def test_non_bot_wall_still_cascades() -> None:
     positive)."""
     svc = WebExtractionService()
     svc._tier_b_available = True
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(success=False, tier_used="A", error="no text", text="")
-    )
-    svc._tier_c_reader = AsyncMock(
-        return_value=ExtractionResult(
-            success=True, tier_used="C", canonical_url="https://example.com", text="real article body " * 100
-        )
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=False, tier_used="A", error="no text", text=""))
+    svc._tier_c_reader = AsyncMock(return_value=ExtractionResult(success=True, tier_used="C", canonical_url="https://example.com", text="real article body " * 100))
     res = await svc.extract("https://example.com")
     assert res.success is True
     assert res.tier_used == "C"
@@ -142,11 +124,7 @@ async def test_wayback_fallback_skipped_on_bot_wall() -> None:
     """Bot-wall failures must NOT trigger a Wayback lookup (the requested page
     is unreachable, not missing) -- keeps the specific bot-wall message."""
     svc = WebExtractionService()
-    svc._tier_a_httpx = AsyncMock(
-        return_value=ExtractionResult(
-            success=True, tier_used="A", canonical_url="https://archive.is/ppfcf", text=_bot_wall_html()
-        )
-    )
+    svc._tier_a_httpx = AsyncMock(return_value=ExtractionResult(success=True, tier_used="A", canonical_url="https://archive.is/ppfcf", text=_bot_wall_html()))
     with patch("bot.web_extraction_service._wayback_snapshot", AsyncMock(return_value="https://web.archive.org/web/2024/https://archive.is/ppfcf")) as wb:
         res = await svc.extract("https://archive.is/ppfcf")
     wb.assert_not_called()

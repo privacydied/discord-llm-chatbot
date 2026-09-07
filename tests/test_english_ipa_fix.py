@@ -100,7 +100,7 @@ def test_english_ipa_fix() -> bool | None:
             # Remove our log capture handler
             logging.getLogger().removeHandler(capture_handler)
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         import traceback
 
         traceback.print_exc()

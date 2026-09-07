@@ -52,11 +52,11 @@ async def main() -> bool | None:
             import subprocess
 
             subprocess.run(["aplay", str(output_path)], check=True)
-        except Exception as e:
+        except (OSError, FileNotFoundError, RuntimeError) as e:
             pass
 
         return True
-    except Exception as e:
+    except (RuntimeError, OSError) as e:
         import traceback
 
         traceback.print_exc()

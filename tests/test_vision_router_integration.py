@@ -113,7 +113,7 @@ async def test_vision_router_integration() -> bool:
                 else:
                     pass
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 pass
 
         # Test _invoke_text_flow with vision intent
@@ -157,7 +157,7 @@ async def test_vision_router_integration() -> bool:
             progress_bar = router._create_progress_bar(75)
             assert len(progress_bar) > 0, "Progress bar should not be empty"
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         import traceback
 
         traceback.print_exc()
@@ -210,7 +210,7 @@ async def test_vision_orchestrator_startup() -> bool:
         # Test shutdown
         await orchestrator.shutdown()
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         import traceback
 
         traceback.print_exc()

@@ -66,7 +66,7 @@ async def test_novita_image_generation() -> bool | None:
             return True
         return False
 
-    except Exception as e:
+    except (RuntimeError, OSError, ImportError):
         return False
 
     finally:

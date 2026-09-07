@@ -30,7 +30,7 @@ def test_env_and_model_integration() -> bool:
     # Test 2: Required environment variables
     try:
         validate_required_env()
-    except Exception as e:
+    except (RuntimeError, OSError, ValueError):
         return False
 
     # Test 3: Prompt files
@@ -38,7 +38,7 @@ def test_env_and_model_integration() -> bool:
         validate_prompt_files()
         prompt_file = config.get("PROMPT_FILE")
         vl_prompt_file = config.get("VL_PROMPT_FILE")
-    except Exception as e:
+    except (RuntimeError, OSError, ValueError):
         return False
 
     # Test 4: Image detection logic

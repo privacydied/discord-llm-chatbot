@@ -35,7 +35,7 @@ class _MessageProcessorMock:
         author_is_bot = bool(getattr(author, "bot", False))
         try:
             author_is_self = getattr(author, "id", None) == getattr(self._bot_stub.user, "id", None)
-        except Exception:
+        except (AttributeError, TypeError):
             author_is_self = False
         if author_is_bot or author_is_self:
             return False  # Drop bot/self messages

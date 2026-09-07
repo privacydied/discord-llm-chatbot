@@ -1217,8 +1217,7 @@ class ServerArchiveStore:
                 attachments: list[dict[str, Any]] = []
                 if r.get("has_attachments"):
                     for att in conn.execute(
-                        "SELECT message_id, attachment_id, filename, content_type, size, url, proxy_url "
-                        "FROM archive_attachments WHERE message_id = ?",
+                        "SELECT message_id, attachment_id, filename, content_type, size, url, proxy_url FROM archive_attachments WHERE message_id = ?",
                         (mid,),
                     ).fetchall():
                         a = dict(att)

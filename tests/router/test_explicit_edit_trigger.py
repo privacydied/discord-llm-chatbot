@@ -119,9 +119,7 @@ async def test_explicit_edit_trigger_routes_to_edit_job(monkeypatch) -> None:
         "parse_explicit_edit_trigger",
         lambda t: ExplicitEditInvocation(prompt="make this guy chinese -steps 10"),
     )
-    router._run_conversational_edit_job = AsyncMock(
-        return_value=BotAction(content="", files=["edited.png"])
-    )
+    router._run_conversational_edit_job = AsyncMock(return_value=BotAction(content="", files=["edited.png"]))
 
     # authored_text after mention strip = "edit: make this guy chinese -steps 10"
     action = await router._maybe_route_conversational_edit(msg, "edit: make this guy chinese -steps 10")
@@ -147,9 +145,7 @@ async def test_explicit_edit_trigger_without_colon_routes(monkeypatch) -> None:
 
     resolved = ResolvedEditImage(data=b"img", content_type="image/png", source="current")
     monkeypatch.setattr(router_mod, "resolve_edit_source_image", AsyncMock(return_value=resolved))
-    router._run_conversational_edit_job = AsyncMock(
-        return_value=BotAction(content="", files=["edited.png"])
-    )
+    router._run_conversational_edit_job = AsyncMock(return_value=BotAction(content="", files=["edited.png"]))
 
     action = await router._maybe_route_conversational_edit(msg, "edit make him a superhero")
 
@@ -175,9 +171,7 @@ async def test_explicit_trigger_skips_heuristic(monkeypatch) -> None:
         "classify_edit_intent",
         lambda *a, **kw: EditIntentResult(is_edit=False),
     )
-    router._run_conversational_edit_job = AsyncMock(
-        return_value=BotAction(content="", files=["edited.png"])
-    )
+    router._run_conversational_edit_job = AsyncMock(return_value=BotAction(content="", files=["edited.png"]))
 
     action = await router._maybe_route_conversational_edit(msg, "edit: something totally neutral")
 
@@ -214,9 +208,7 @@ async def test_heuristic_still_works_when_explicit_does_not_match(monkeypatch) -
 
     resolved = ResolvedEditImage(data=b"img", content_type="image/png", source="current")
     monkeypatch.setattr(router_mod, "resolve_edit_source_image", AsyncMock(return_value=resolved))
-    router._run_conversational_edit_job = AsyncMock(
-        return_value=BotAction(content="", files=["edited.png"])
-    )
+    router._run_conversational_edit_job = AsyncMock(return_value=BotAction(content="", files=["edited.png"]))
 
     action = await router._maybe_route_conversational_edit(msg, "give this man a beard")
 
@@ -254,9 +246,7 @@ async def test_explicit_trigger_uses_invocation_type_in_log(monkeypatch) -> None
 
     resolved = ResolvedEditImage(data=b"img", content_type="image/png", source="current")
     monkeypatch.setattr(router_mod, "resolve_edit_source_image", AsyncMock(return_value=resolved))
-    router._run_conversational_edit_job = AsyncMock(
-        return_value=BotAction(content="", files=["edited.png"])
-    )
+    router._run_conversational_edit_job = AsyncMock(return_value=BotAction(content="", files=["edited.png"]))
 
     with patch.object(router.logger, "info") as mock_info:
         await router._maybe_route_conversational_edit(msg, "edit: make him tall")

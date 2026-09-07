@@ -36,7 +36,7 @@ def _normalize_tiktok_url(url: str) -> str:
 
             # For short URLs like /t/ZP8UxRTSU, the path is the key
             return f"tiktok://{path}"
-    except Exception:
+    except (ValueError, AttributeError, TypeError):
         pass
     return url
 
@@ -52,7 +52,7 @@ def _is_tiktok_player_url(url: str) -> bool:
             path = parsed.path or ""
             if path.startswith("/player"):
                 return True
-    except Exception:
+    except (ValueError, AttributeError, TypeError):
         pass
     return False
 

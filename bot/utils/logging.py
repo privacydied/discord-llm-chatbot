@@ -73,12 +73,7 @@ class ReconnectNoiseFilter(logging.Filter):
         self._count = 0
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if (
-            record.name == "discord.client"
-            and record.levelno >= logging.ERROR
-            and isinstance(record.msg, str)
-            and record.msg.startswith(_RECONNECT_NOISE_PREFIX)
-        ):
+        if record.name == "discord.client" and record.levelno >= logging.ERROR and isinstance(record.msg, str) and record.msg.startswith(_RECONNECT_NOISE_PREFIX):
             self._count += 1
             record.levelno = logging.WARNING
             record.levelname = "WARNING"

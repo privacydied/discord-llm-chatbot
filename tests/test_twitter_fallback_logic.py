@@ -76,7 +76,7 @@ async def test_twitter_fallback_behavior() -> bool:
                         # Verify that _handle_image was called (fallback happened)
                         mock_handle_image.assert_called_once_with(item)
 
-                    except Exception as e:
+                    except (ValueError, TypeError, AttributeError) as e:
                         return False
         else:
             # Mock successful video processing
@@ -89,7 +89,7 @@ async def test_twitter_fallback_behavior() -> bool:
                 try:
                     result = await router._handle_video_url(item)
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     return False
 
     return True

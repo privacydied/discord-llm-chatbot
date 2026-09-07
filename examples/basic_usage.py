@@ -49,7 +49,7 @@ async def demo_chat() -> None:
             # Generate a response
             await generate_response(prompt=message, user_id=user_id, max_tokens=200, temperature=0.7)
 
-        except Exception:
+        except (RuntimeError, OSError, TypeError):
             pass
 
         # Small delay between messages
@@ -113,7 +113,7 @@ async def demo_search() -> None:
             for _i, _memory in enumerate(results["memories"][:2], 1):
                 pass
 
-    except Exception:
+    except (RuntimeError, OSError):
         pass
 
 
@@ -135,7 +135,7 @@ async def demo_web() -> None:
         if result and not result.get("error"):
             result.get("content", {})
 
-    except Exception:
+    except (ConnectionError, OSError, ValueError, TypeError):
         pass
 
 
@@ -178,7 +178,7 @@ async def demo_pdf() -> None:
             if value:  # Only show non-empty fields
                 pass
 
-    except Exception:
+    except (OSError, ValueError, RuntimeError):
         pass
     finally:
         # Clean up the sample PDF
@@ -199,7 +199,7 @@ async def main() -> None:
         await demo_web()
         await demo_pdf()
 
-    except Exception:
+    except (ConnectionError, OSError, RuntimeError):
         pass
     finally:
         # Clean up

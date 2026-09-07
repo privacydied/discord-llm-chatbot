@@ -26,9 +26,7 @@ STILL_SEEK_FRACTION = 0.33  # one-third in: usually past intros/title cards
 STILL_FALLBACK_SEEK_S = 1.0
 STILL_JPEG_QUALITY = "3"  # ffmpeg -q:v (2-5 = high quality)
 
-STILL_VL_PROMPT = (
-    "This is a single still frame captured from a video. Describe what is visibly happening: people, objects, text on screen, setting, and any notable action. Be concise and factual."
-)
+STILL_VL_PROMPT = "This is a single still frame captured from a video. Describe what is visibly happening: people, objects, text on screen, setting, and any notable action. Be concise and factual."
 
 
 def _ffmpeg_bin() -> str:

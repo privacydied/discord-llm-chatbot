@@ -150,7 +150,7 @@ def test_document_parsing(test_dir) -> None:
                 else:
                     pass
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 pass
 
 
@@ -178,7 +178,7 @@ def test_chunking_strategies() -> None:
             if result.chunks:
                 preview = result.chunks[0][:80].replace("\n", " ")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             pass
 
 

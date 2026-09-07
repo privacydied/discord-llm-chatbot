@@ -217,9 +217,7 @@ class TestParseEditFlags:
         assert result.errors == ()
 
     def test_all_flags_parsed_and_stripped_from_prompt(self) -> None:
-        result = ce.parse_edit_flags(
-            "make him a superhero -seed 7 -steps 20 -strength 0.6 -guidance 9.5 -provider together -use some/model"
-        )
+        result = ce.parse_edit_flags("make him a superhero -seed 7 -steps 20 -strength 0.6 -guidance 9.5 -provider together -use some/model")
         assert result.prompt == "make him a superhero"
         assert result.seed == 7
         assert result.steps == 20

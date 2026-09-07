@@ -49,7 +49,7 @@ async def test_retry_respects_retry_after_bound() -> None:
     start = time.perf_counter()
     try:
         await retry_async(_always_fails_with_retry_after, cfg)
-    except Exception:
+    except (RuntimeError, ValueError):
         # Expected to fail after retries exhausted
         elapsed = time.perf_counter() - start
         # We expect at least ~max_delay because Retry-After=5 was bounded to 0.2 and max(delay, 0.2) applies
