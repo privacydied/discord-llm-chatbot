@@ -5,13 +5,13 @@ _LEADING_MODE_PREAMBLE_RE = re.compile(
     \A
     (?:
         [\s\u200b\u200c\u200d\ufeff]*
-        [>*_`~\s]*
-        mode
-        [\s*_`~]*
+        [>*_`\~]*
+        (?:mode|behavior)
+        [\s*_`\~]*
         [:=\-\u2013\u2014\u2015]
-        [\s*_`~]*
-        (?:normal|political|contradiction)
-        [\s*_`~.!]*
+        [\s*_`\~]*
+        (?:normal|political|contradiction|topical|requested_lens)
+        [\s*_`\~.!]*
         (?:\r?\n|$)
     )+
     """,
@@ -21,12 +21,12 @@ _LEADING_MODE_PREAMBLE_RE = re.compile(
 _COMPACT_AB_MODE_RE = re.compile(
     r"""
     \A
-    [>*_`~\s]*
+    [>*_`\~\s]*
     A:\s*(?:true|false)
     [\s]+
     B:\s*(?:true|false)
     [\s]+
-    MODE:\s*(?:normal|political|contradiction)
+    (?:MODE|behavior):\s*(?:normal|political|contradiction|topical|requested_lens)
     (?:
         [\s]+
         (.+)
@@ -52,7 +52,7 @@ def _strip_wrappers(line: str) -> str:
 def _is_mode_line(line: str) -> bool:
     return bool(
         re.match(
-            r"^mode:\s*(?:normal|political|contradiction)$",
+            r"^(?:mode|behavior):\s*(?:normal|political|contradiction|topical|requested_lens)$",
             _strip_wrappers(line),
             re.IGNORECASE,
         )
