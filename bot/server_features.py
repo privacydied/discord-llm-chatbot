@@ -39,7 +39,7 @@ FEATURE_DEFAULTS: dict[str, bool] = {
     "web_extraction": True,
     "x_twitter_extraction": True,
     "rag": True,
-    "ambient_reply": False,
+    "ambient_reply": True,
 }
 
 
