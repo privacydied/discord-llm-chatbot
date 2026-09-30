@@ -1043,8 +1043,8 @@ class EnhancedRetryManager:
                                 "invalid api key",
                                 "bad api key",
                             )
-                        ) and ("401" in msg_lower or "403" in msg_lower):
-                            logger.exception(f"❌ Authentication failure for {provider_key}; aborting ladder: {type(e).__name__}: {e}")
+                        ) and ("401" in msg_lower or "403" in msg_lower) and "502" not in msg_lower:
+                            logger.error(f"❌ Authentication failure for {provider_key}; aborting ladder: {type(e).__name__}: {e}")
                             total_time = time.time() - start_time
                             return RetryResult(
                                 success=False,
