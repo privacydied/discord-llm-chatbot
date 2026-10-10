@@ -27,7 +27,7 @@
   * **X/Twitter** → Thread unrolling of author self-replies, syndication probes with image→VL routing.
 * **Embed Fixes (SaucyBot port)**
   * Automatically replies to social/art links with an embed-friendly version so videos play inline in Discord — no mention needed.
-  * x.com / twitter.com → vxtwitter.com, Instagram → kkinstagram.com, Bluesky → bskx.app, TikTok → vxtiktok.com, Reddit → rxddit.com, Pixiv → phixiv.net, DeviantArt → fixdeviantart.com, FurAffinity → xfuraffinity.net (NSFW channels only).
+  * x.com / twitter.com → vxtwitter.com, Instagram → kkinstagram.com, Bluesky → bskx.app, TikTok → vxtiktok.com, Reddit → rxddit.com, Pixiv → phixiv.net, DeviantArt → fixdeviantart.com, FurAffinity → xfuraffinity.net (NSFW channels only), ppv.* stream pages → preview card.
   * Hides the original link preview (needs **Manage Messages**). See [Embed Fixes](#embed-fixes-saucybot-port).
 * **Vision Generation**
   * Image & video generation with provider budgeting, safety filtering, job management, artifact caching, and cost tracking.
@@ -468,6 +468,7 @@ Python port of [SaucyBot](https://github.com/Sn0wCrack/saucybot-discord)'s link 
 | `deviantart` | `deviantart.com/…/art/…` | `fixdeviantart.com` |
 | `furaffinity` ⚠️ | `/view/…`, `/full/…` | `xfuraffinity.net` |
 | `reddit_media` ⚠️ | `reddit.com/media?url=…` | the direct media URL |
+| `ppv` | `ppv.st`, `ppv.tj`, `ppvs.pk`, `ppv.rw`, `ppv.ms`, `ppv.bi`, `ppv.ug` `/live/…` | bot-built card: event title, poster, category, source, start time, live status, viewers (links back to the posted page) |
 
 ⚠️ NSFW sites — only fixed in NSFW channels while `EMBED_FIX_RESTRICT_NSFW=true`.
 

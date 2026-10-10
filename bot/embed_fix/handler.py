@@ -21,6 +21,7 @@ from bot.core.output import safe_reply
 from bot.server_features import is_server_feature_enabled
 from bot.utils.logging import get_logger
 
+from . import ppv
 from .sites import DEFAULT_MAX_LINKS, EmbedFix, find_fixes, is_ignored, parse_domain_overrides, parse_site_list
 
 logger = get_logger(__name__)
@@ -28,6 +29,7 @@ logger = get_logger(__name__)
 FEATURE_NAME = "embed_fix"
 _DISCORD_TIMEOUT_S = 10.0
 _DISCORD_ERRORS = (discord.HTTPException, asyncio.TimeoutError)
+_MAX_EMBEDS = 10  # Discord's per-message embed cap
 # Re-check points (seconds between checks) for the late-unfurl race; total ~15s.
 SUPPRESS_RECHECK_DELAYS_S: tuple[float, ...] = (2.0, 4.0, 9.0)
 
@@ -106,20 +108,37 @@ async def _guild_allows(guild_id: int) -> bool:
         return True
 
 
-async def _send_fixes(message: discord.Message, fixes: list[EmbedFix]) -> bool:
-    content = "\n".join(fix.rewritten for fix in fixes)
+async def _render(fixes: list[EmbedFix]) -> tuple[str | None, list[discord.Embed], list[EmbedFix]]:
+    """Split fixes into reply text (rewritten links) and bot-built cards."""
+    links = [fix for fix in fixes if not fix.card]
+    card_fixes = [fix for fix in fixes if fix.card]
+    cards = await ppv.build_cards([fix.rewritten for fix in card_fixes[:_MAX_EMBEDS]]) if card_fixes else []
+    sent = links + (card_fixes if cards else [])
+    return ("\n".join(fix.rewritten for fix in links) or None), cards, sent
+
+
+async def _send_fixes(message: discord.Message, fixes: list[EmbedFix]) -> list[EmbedFix]:
+    content, cards, sent = await _render(fixes)
+    if not content and not cards:
+        return []
     try:
         await asyncio.wait_for(
-            safe_reply(message, content, mention_author=False, allowed_mentions=discord.AllowedMentions.none()),
+            safe_reply(
+                message,
+                content,
+                embeds=cards or None,
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            ),
             timeout=_DISCORD_TIMEOUT_S,
         )
     except discord.NotFound:
         logger.debug(f"embed_fix.original_deleted | msg_id={message.id}")
-        return False
+        return []
     except _DISCORD_ERRORS as exc:
         logger.warning(f"embed_fix.reply_failed | msg_id={message.id} error={exc}")
-        return False
-    return True
+        return []
+    return sent
 
 
 async def _suppress_once(message: discord.Message) -> bool:
@@ -195,7 +214,10 @@ async def maybe_fix_embeds(message: discord.Message, config: Mapping[str, Any] |
         logger.debug(f"embed_fix.skip | reason=missing_permissions msg_id={message.id}")
         return []
     fixes = filter_nsfw(fixes, message.channel, restrict=settings.restrict_nsfw)
-    if not fixes or not await _send_fixes(message, fixes):
+    if not fixes:
+        return []
+    fixes = await _send_fixes(message, fixes)
+    if not fixes:
         return []
     logger.info(
         f"embed_fix.sent | msg_id={message.id} sites={','.join(sorted({f.site for f in fixes}))} count={len(fixes)}",

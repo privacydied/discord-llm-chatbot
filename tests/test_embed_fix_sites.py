@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from bot.embed_fix.sites import SITE_IDS, find_fixes, is_ignored, parse_domain_overrides, parse_site_list, rewrite_url
+from bot.embed_fix.sites import SITE_IDS, find_fixes, page_slug, is_ignored, parse_domain_overrides, parse_site_list, rewrite_url
 
 
 @pytest.mark.parametrize(
@@ -127,4 +127,36 @@ def test_ignore_tags(content, ignored):
 def test_parse_site_list():
     assert parse_site_list(" Twitter, reddit ,,") == frozenset({"twitter", "reddit"})
     assert parse_site_list(None) == frozenset()
-    assert {"twitter", "instagram", "bluesky", "furaffinity", "reddit_media", "pixiv", "deviantart", "tiktok", "reddit"} == SITE_IDS
+    assert {"twitter", "instagram", "bluesky", "furaffinity", "reddit_media", "pixiv", "deviantart", "tiktok", "reddit", "ppv"} == SITE_IDS
+
+
+PPV_SLUG = "misfits-boxing-joey-essex-vs-dapper-laughs-30174"
+
+
+@pytest.mark.parametrize("host", ["ppv.st", "ppv.tj", "ppvs.pk", "ppv.rw", "ppv.ms", "ppv.bi", "ppv.ug", "www.ppvs.pk", "PPVS.PK"])
+def test_ppv_links_become_cards_on_posted_host(host):
+    fixes = find_fixes(f"watch https://{host}/live/{PPV_SLUG}?ref=x tonight")
+    assert len(fixes) == 1
+    fix = fixes[0]
+    assert fix.site == "ppv" and fix.card is True and fix.nsfw is False
+    assert fix.rewritten == f"https://{host.lower().removeprefix('www.')}/live/{PPV_SLUG}"
+    assert page_slug(fix.rewritten) == PPV_SLUG
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://ppv.st/", "https://ppv.st/category/boxing", "https://notppv.st/live/x-1", "https://ppv.stream/live/x-1", "https://api.ppv.st/live/x-1"],
+)
+def test_ppv_non_matching(url):
+    assert find_fixes(url) == []
+
+
+def test_page_slug_rejects_untrusted_urls():
+    assert page_slug("https://ppv.st/live/abc-1") == "abc-1"
+    assert page_slug("https://evil.com/live/abc-1") is None
+    assert page_slug("https://ppv.st/live/../../api") is None
+    assert page_slug("") is None
+
+
+def test_rewrite_fixes_are_not_cards():
+    assert all(not f.card for f in find_fixes("https://x.com/a/status/1 https://instagram.com/p/A"))

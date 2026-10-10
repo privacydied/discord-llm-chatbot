@@ -10,7 +10,9 @@ Ported from Sn0wCrack/saucybot-discord (v2):
   VixBluesky host SaucyBot's client calls).
 SaucyBot fetches APIs for Pixiv and DeviantArt; here they use the public
 rewrite proxies phixiv.net and fixdeviantart.com instead. TikTok and Reddit
-posts are additions (not in SaucyBot) for in-client video playback.
+posts are additions (not in SaucyBot) for in-client video playback. ppv.*
+stream pages have no proxy, so they are marked ``card`` and get a bot-built
+embed (see ppv.py).
 """
 
 from __future__ import annotations
@@ -42,6 +44,9 @@ class EmbedSite:
     default_domain: str
     build: Builder
     nsfw: bool = False
+    # card=True: no proxy domain exists; the bot builds its own embed card for
+    # the (canonicalised) original URL instead of posting a rewritten link.
+    card: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +58,7 @@ class EmbedFix:
     rewritten: str
     nsfw: bool
     position: int
+    card: bool = False
 
 
 def _compile(pattern: str) -> re.Pattern[str]:
@@ -102,6 +108,23 @@ def _build_tiktok(m: re.Match[str], domain: str) -> str:
 
 def _build_reddit(m: re.Match[str], domain: str) -> str:
     return f"https://{domain}/{m['path']}"
+
+
+# ppv.st and the mirrors the site lists itself (Nuxt config apiDomains).
+PPV_DOMAINS: tuple[str, ...] = ("ppv.st", "ppv.tj", "ppvs.pk", "ppv.rw", "ppv.ms", "ppv.bi", "ppv.ug", "ppv.to", "ppv.cx")
+_PPV_HOSTS = "|".join(re.escape(domain) for domain in PPV_DOMAINS)
+_PPV_PAGE_RE = re.compile(rf"^https://(?:{_PPV_HOSTS})/live/(?P<slug>[A-Za-z0-9-]+)$", re.IGNORECASE)
+
+
+def _build_ppv(m: re.Match[str], _domain: str) -> str:
+    # Canonical page URL on the host the user posted; the card links back to it.
+    return f"https://{m['host'].lower()}/live/{m['slug']}"
+
+
+def page_slug(url: str) -> str | None:
+    """Slug of a canonical ppv page URL produced by the ppv site, else None."""
+    match = _PPV_PAGE_RE.match(url or "")
+    return match["slug"] if match else None
 
 
 # Every pattern is anchored on the scheme and an exact host, so "fox.com",
@@ -171,6 +194,13 @@ SITES: tuple[EmbedSite, ...] = (
         default_domain="rxddit.com",
         build=_build_reddit,
     ),
+    EmbedSite(
+        identifier="ppv",
+        pattern=_compile(rf"https?://(?:www\.)?(?P<host>{_PPV_HOSTS})/live/(?P<slug>[A-Za-z0-9-]+)"),
+        default_domain="",
+        build=_build_ppv,
+        card=True,
+    ),
 )
 
 SITE_IDS: frozenset[str] = frozenset(site.identifier for site in SITES)
@@ -206,7 +236,7 @@ def _site_fixes(site: EmbedSite, content: str, domain: str) -> Iterable[EmbedFix
     for match in site.pattern.finditer(content):
         rewritten = site.build(match, domain)
         if rewritten:
-            yield EmbedFix(site.identifier, match.group(0), rewritten, site.nsfw, match.start())
+            yield EmbedFix(site.identifier, match.group(0), rewritten, site.nsfw, match.start(), site.card)
 
 
 def find_fixes(
