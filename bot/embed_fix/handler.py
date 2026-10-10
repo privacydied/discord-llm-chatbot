@@ -28,6 +28,8 @@ logger = get_logger(__name__)
 FEATURE_NAME = "embed_fix"
 _DISCORD_TIMEOUT_S = 10.0
 _DISCORD_ERRORS = (discord.HTTPException, asyncio.TimeoutError)
+# Re-check points (seconds between checks) for the late-unfurl race; total ~15s.
+SUPPRESS_RECHECK_DELAYS_S: tuple[float, ...] = (2.0, 4.0, 9.0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,12 +122,52 @@ async def _send_fixes(message: discord.Message, fixes: list[EmbedFix]) -> bool:
     return True
 
 
-async def _suppress_original(message: discord.Message) -> None:
+async def _suppress_once(message: discord.Message) -> bool:
     # Raw edit is fine here: flags only, no text crosses the output boundary.
     try:
         await asyncio.wait_for(message.edit(suppress=True), timeout=_DISCORD_TIMEOUT_S)
+    except discord.NotFound:
+        logger.debug(f"embed_fix.suppress_skipped | reason=deleted msg_id={message.id}")
+        return False
     except _DISCORD_ERRORS as exc:
-        logger.debug(f"embed_fix.suppress_failed | msg_id={message.id} error={exc}")
+        logger.warning(f"embed_fix.suppress_failed | msg_id={message.id} error={exc}")
+        return False
+    return True
+
+
+async def _refetch(message: discord.Message) -> discord.Message | None:
+    try:
+        return await asyncio.wait_for(message.channel.fetch_message(message.id), timeout=_DISCORD_TIMEOUT_S)
+    except discord.NotFound:
+        return None
+    except _DISCORD_ERRORS as exc:
+        logger.debug(f"embed_fix.refetch_failed | msg_id={message.id} error={exc}")
+        return None
+
+
+def _embeds_visible(current: discord.Message) -> bool:
+    return bool(current.embeds) or not current.flags.suppress_embeds
+
+
+async def _suppress_original(message: discord.Message) -> None:
+    """Hide the original link preview, and keep it hidden.
+
+    Discord unfurls links asynchronously after the message is created. When
+    the suppress PATCH lands before the unfurl finishes, the unfurl can attach
+    the embed afterwards, so a single immediate suppress works only sometimes.
+    Re-check on a short schedule and re-suppress when the embed came back.
+    """
+    if not await _suppress_once(message):
+        return
+    for delay in SUPPRESS_RECHECK_DELAYS_S:
+        await asyncio.sleep(delay)
+        current = await _refetch(message)
+        if current is None:
+            return
+        if _embeds_visible(current):
+            logger.info(f"embed_fix.suppress_reapplied | msg_id={message.id} after_s={delay}")
+            if not await _suppress_once(message):
+                return
 
 
 def _collect_fixes(message: discord.Message, settings: EmbedFixSettings) -> list[EmbedFix]:
@@ -155,10 +197,12 @@ async def maybe_fix_embeds(message: discord.Message, config: Mapping[str, Any] |
     fixes = filter_nsfw(fixes, message.channel, restrict=settings.restrict_nsfw)
     if not fixes or not await _send_fixes(message, fixes):
         return []
-    if settings.suppress_original and perms.manage_messages:
-        await _suppress_original(message)
     logger.info(
         f"embed_fix.sent | msg_id={message.id} sites={','.join(sorted({f.site for f in fixes}))} count={len(fixes)}",
         extra={"event": "embed_fix.sent", "msg_id": message.id, "count": len(fixes)},
     )
+    if settings.suppress_original and perms.manage_messages:
+        await _suppress_original(message)
+    elif settings.suppress_original:
+        logger.info(f"embed_fix.suppress_skipped | reason=no_manage_messages channel={getattr(message.channel, 'id', None)} msg_id={message.id}")
     return fixes

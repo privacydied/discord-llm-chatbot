@@ -42,6 +42,7 @@ def reply(monkeypatch):
     mock = AsyncMock()
     monkeypatch.setattr(h, "safe_reply", mock)
     monkeypatch.setattr(h, "is_server_feature_enabled", lambda guild_id, feature: True)
+    monkeypatch.setattr(h, "SUPPRESS_RECHECK_DELAYS_S", ())
     return mock
 
 
@@ -158,9 +159,67 @@ async def test_suppress_failure_is_swallowed(reply):
     assert await h.maybe_fix_embeds(msg, {})
 
 
+# --- late-unfurl race: Discord can attach the embed AFTER our suppress ------
+
+
+def _snapshot(*, embeds, suppressed):
+    return SimpleNamespace(embeds=[object()] * embeds, flags=SimpleNamespace(suppress_embeds=suppressed))
+
+
+async def test_resuppresses_when_unfurl_lands_after_first_suppress(reply, monkeypatch):
+    monkeypatch.setattr(h, "SUPPRESS_RECHECK_DELAYS_S", (0, 0, 0))
+    msg = _message("https://x.com/a/status/1")
+    msg.channel.fetch_message = AsyncMock(
+        side_effect=[
+            _snapshot(embeds=1, suppressed=False),  # unfurl raced the first PATCH
+            _snapshot(embeds=0, suppressed=True),
+            _snapshot(embeds=0, suppressed=True),
+        ]
+    )
+    assert await h.maybe_fix_embeds(msg, {})
+    assert msg.edit.await_count == 2
+    assert all(call.kwargs == {"suppress": True} for call in msg.edit.await_args_list)
+    assert msg.channel.fetch_message.await_count == 3
+
+
+async def test_no_resuppress_when_suppression_held(reply, monkeypatch):
+    monkeypatch.setattr(h, "SUPPRESS_RECHECK_DELAYS_S", (0, 0))
+    msg = _message("https://x.com/a/status/1")
+    msg.channel.fetch_message = AsyncMock(return_value=_snapshot(embeds=0, suppressed=True))
+    assert await h.maybe_fix_embeds(msg, {})
+    msg.edit.assert_awaited_once_with(suppress=True)
+    assert msg.channel.fetch_message.await_count == 2
+
+
+async def test_recheck_stops_when_original_deleted(reply, monkeypatch):
+    monkeypatch.setattr(h, "SUPPRESS_RECHECK_DELAYS_S", (0, 0, 0))
+    msg = _message("https://x.com/a/status/1")
+    msg.channel.fetch_message = AsyncMock(side_effect=discord.NotFound(SimpleNamespace(status=404, reason="x"), "gone"))
+    assert await h.maybe_fix_embeds(msg, {})
+    assert msg.channel.fetch_message.await_count == 1
+    msg.edit.assert_awaited_once()
+
+
+async def test_no_recheck_when_first_suppress_forbidden(reply, monkeypatch):
+    monkeypatch.setattr(h, "SUPPRESS_RECHECK_DELAYS_S", (0, 0, 0))
+    msg = _message("https://x.com/a/status/1")
+    msg.edit = AsyncMock(side_effect=discord.Forbidden(SimpleNamespace(status=403, reason="x"), "no"))
+    msg.channel.fetch_message = AsyncMock()
+    assert await h.maybe_fix_embeds(msg, {})
+    msg.channel.fetch_message.assert_not_awaited()
+
+
+async def test_missing_manage_messages_is_logged(reply, caplog):
+    msg = _message("https://x.com/a/status/1", channel=_channel(perms=_perms(manage_messages=False)))
+    with caplog.at_level("INFO"):
+        assert await h.maybe_fix_embeds(msg, {})
+    assert any("no_manage_messages" in r.getMessage() for r in caplog.records)
+
+
 async def test_real_safe_reply_keeps_url_intact(monkeypatch):
     """The public-output sanitizer must not mangle the rewritten URL."""
     monkeypatch.setattr(h, "is_server_feature_enabled", lambda guild_id, feature: True)
+    monkeypatch.setattr(h, "SUPPRESS_RECHECK_DELAYS_S", ())
     msg = _message("https://x.com/some_user/status/1234567890123456789?s=20")
     await h.maybe_fix_embeds(msg, {})
     msg.reply.assert_awaited_once()
