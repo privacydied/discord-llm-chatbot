@@ -275,6 +275,13 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "AMBIENT_REPLY_GLOBAL_COOLDOWN_S": _safe_int(env_getter("AMBIENT_REPLY_GLOBAL_COOLDOWN_S", None), "600", "AMBIENT_REPLY_GLOBAL_COOLDOWN_S"),
         "AMBIENT_REPLY_CHANNELS": _clean_env_value(env_getter("AMBIENT_REPLY_CHANNELS", "")) or "",
         "AMBIENT_REPLY_QUIET_HOURS": _clean_env_value(env_getter("AMBIENT_REPLY_QUIET_HOURS", "")) or "",
+        # EMBED FIX — SaucyBot-style link rewrites (x.com -> vxtwitter.com, ...)
+        "EMBED_FIX_ENABLED": _parse_bool_str(_clean_env_value(env_getter("EMBED_FIX_ENABLED", None)), True),
+        "EMBED_FIX_DISABLED_SITES": _clean_env_value(env_getter("EMBED_FIX_DISABLED_SITES", "")) or "",
+        "EMBED_FIX_DOMAIN_OVERRIDES": _clean_env_value(env_getter("EMBED_FIX_DOMAIN_OVERRIDES", "")) or "",
+        "EMBED_FIX_MAX_LINKS": _safe_int(env_getter("EMBED_FIX_MAX_LINKS", None), "8", "EMBED_FIX_MAX_LINKS"),
+        "EMBED_FIX_SUPPRESS_ORIGINAL": _parse_bool_str(_clean_env_value(env_getter("EMBED_FIX_SUPPRESS_ORIGINAL", None)), True),
+        "EMBED_FIX_RESTRICT_NSFW": _parse_bool_str(_clean_env_value(env_getter("EMBED_FIX_RESTRICT_NSFW", None)), True),
         # PROMPT FILES - CRITICAL FOR MULTIMODAL FUNCTIONALITY
         "PROMPT_FILE": _clean_env_value(env_getter("PROMPT_FILE", None)),
         "VL_PROMPT_FILE": _clean_env_value(env_getter("VL_PROMPT_FILE", None)),

@@ -42,6 +42,7 @@ from bot.public_output import (
     sanitize_public_message_payload,
     sanitize_public_text,
 )
+from bot.embed_fix import maybe_fix_embeds, might_have_fixable_link
 from bot.server_archive import start_server_archive_service, stop_server_archive_service
 from bot.tts.errors import SynthesisError
 from bot.utils.logging import get_logger
@@ -2372,6 +2373,11 @@ class LLMBot(commands.Bot):
         if not await self.message_processor.on_message(message):
             return
 
+        # SaucyBot-style link-embed fixing. Runs BEFORE the router gate because
+        # link posts are rarely addressed to the bot; side effect only, never
+        # consumes the message.
+        self._schedule_embed_fix(message)
+
         # --- SSOT gate: check gating before enqueuing heavy work [IV] ---
         try:
             if self.router is not None and not self._is_long_running_admin_command(message):
@@ -2417,6 +2423,17 @@ class LLMBot(commands.Bot):
 
         # Delegate regular message queueing to MessageProcessor
         await self.message_processor.enqueue(message)
+
+    def _schedule_embed_fix(self, message: discord.Message) -> None:
+        """Fire-and-track the embed-fix reply; cheap prefilter avoids a task per chat line."""
+        if not self.config.get("EMBED_FIX_ENABLED", True) or not might_have_fixable_link(message):
+            return
+        try:
+            task = asyncio.create_task(maybe_fix_embeds(message, self.config), name=f"embed_fix:{message.id}")
+        except RuntimeError as exc:
+            self.logger.debug(f"embed_fix.schedule_failed | {exc}")
+            return
+        self._track_background_task(task)
 
     async def load_profiles(self) -> None:
         """Load user and server memory profiles."""
