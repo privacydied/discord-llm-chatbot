@@ -77,7 +77,7 @@ Notes:
 
 ## Runtime Flags
 - `REQUIRE_MENTION_IN_GUILDS` (default `1`): require an explicit mention before routing guild messages.
-- `ALLOW_REPLY_TO_BOT_WITHOUT_MENTION` (default `1`): allow guild follow-ups that are direct replies to the bot even without a fresh mention.
+- `ALLOW_REPLY_TO_BOT_WITHOUT_MENTION` (default `0`): respond to guild replies to the bot sent with the reply ping off. By default only ping-on replies (Discord puts the bot in `message.mentions`) or explicit mentions trigger it.
 - `DM_REQUIRE_MENTION` (default `0`): enable if you want DMs to require an explicit mention.
 
 ## Tests (described)

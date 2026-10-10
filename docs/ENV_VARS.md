@@ -321,5 +321,5 @@
 | Name | Default | Description |
 | --- | --- | --- |
 | `REQUIRE_MENTION_IN_GUILDS` | `1` | Require an explicit bot mention before the router processes guild messages. |
-| `ALLOW_REPLY_TO_BOT_WITHOUT_MENTION` | `1` | Permit follow-up replies to the bot without a fresh mention in guilds. |
+| `ALLOW_REPLY_TO_BOT_WITHOUT_MENTION` | `0` | Respond to guild replies to the bot even when the reply ping is turned off. Default `0`: a reply with the ping off ("@ OFF") gets no response; ping on, or an explicit @mention, still triggers the bot. |
 | `DM_REQUIRE_MENTION` | `0` | Enforce mention requirements inside DMs (disabled by default). |

@@ -216,6 +216,8 @@ _EXTRACTION_ONLY_MODALITIES = (
 # collapse those into a single fetch. [PA][RM]
 REF_MSG_CACHE_MAX_SIZE = 256
 REF_MSG_CACHE_TTL_S = 5.0
+# Gate denial reason: reply to the bot with Discord's reply ping turned off.
+GATE_REASON_REPLY_PING_OFF = "reply_ping_off"
 
 # --- Hoisted static compiled regex patterns (compiled once at import). [PA][CMV] ---
 # Direct vision trigger tokens (DM/optional-mention + always-allowed phrases).
@@ -2699,7 +2701,7 @@ class Router:
         context = "dm" if is_dm else "guild"
 
         require_mention_in_guilds = cfg.get("REQUIRE_MENTION_IN_GUILDS", True)
-        allow_reply_without_mention = cfg.get("ALLOW_REPLY_TO_BOT_WITHOUT_MENTION", True)
+        allow_reply_without_mention = cfg.get("ALLOW_REPLY_TO_BOT_WITHOUT_MENTION", False)
         dm_require_mention = cfg.get("DM_REQUIRE_MENTION", False)
 
         mention_detected = self._mentions_bot(message)
@@ -2804,6 +2806,12 @@ class Router:
             )
             self._metric_inc("gate.allowed", {"reason": "dm"})
             return True
+
+        # Discord "reply with ping off": a reply to the bot that does not ping it
+        # is the author opting out of a response. Honour it before every other
+        # guild allowance (vision trigger, ambient, legacy reply/thread triggers).
+        if is_reply and not mention_detected and not allow_reply_without_mention:
+            return self._block_quiet_reply(message, context)
 
         # Guild handling with mention requirement
         if require_mention_in_guilds:
@@ -3019,6 +3027,24 @@ class Router:
             },
         )
         self._metric_inc("gate.blocked", {"reason": "not_addressed"})
+        return False
+
+    def _block_quiet_reply(self, message: Message, context: str) -> bool:
+        """Deny a reply to the bot sent with the reply ping turned off."""
+        self._gate_denied[message.id] = GATE_REASON_REPLY_PING_OFF
+        self.logger.info(
+            f"gate.block | reason={GATE_REASON_REPLY_PING_OFF} msg_id={message.id}",
+            extra={
+                "event": "gate.block",
+                "reason": GATE_REASON_REPLY_PING_OFF,
+                "msg_id": message.id,
+                "context": context,
+                "mention_detected": False,
+                "reply_to_bot": True,
+                "guild_id": getattr(message.guild, "id", None),
+            },
+        )
+        self._metric_inc("gate.blocked", {"reason": GATE_REASON_REPLY_PING_OFF})
         return False
 
     def _try_ambient_reply(self, message: Message, context: str) -> bool:
