@@ -32,6 +32,19 @@ _FIELD_MAX = 256
 
 
 async def fetch_stream(session: aiohttp.ClientSession, slug: str) -> Mapping[str, Any] | None:
+    """Return the stream record for *slug*, falling back to its parent event.
+
+    Alternate-source pages (".../tex-ou/skycast") are not API records of their
+    own; the parent event (".../tex-ou") carries the same title and poster.
+    """
+    record = await _fetch_slug(session, slug)
+    parent = slug.rpartition("/")[0]
+    if record is None and parent.count("/") >= 1:
+        record = await _fetch_slug(session, parent)
+    return record
+
+
+async def _fetch_slug(session: aiohttp.ClientSession, slug: str) -> Mapping[str, Any] | None:
     """Return the stream record for *slug*, trying each API base in turn."""
     for base in PPV_API_BASES:
         try:

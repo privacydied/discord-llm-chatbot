@@ -113,7 +113,11 @@ def _build_reddit(m: re.Match[str], domain: str) -> str:
 # ppv.st and the mirrors the site lists itself (Nuxt config apiDomains).
 PPV_DOMAINS: tuple[str, ...] = ("ppv.st", "ppv.tj", "ppvs.pk", "ppv.rw", "ppv.ms", "ppv.bi", "ppv.ug", "ppv.to", "ppv.cx")
 _PPV_HOSTS = "|".join(re.escape(domain) for domain in PPV_DOMAINS)
-_PPV_PAGE_RE = re.compile(rf"^https://(?:{_PPV_HOSTS})/live/(?P<slug>[A-Za-z0-9-]+)$", re.IGNORECASE)
+# Slugs are one or more path segments, e.g. "nfl-network" or
+# "cfb/2026-10-10/tex-ou" (+ "/skycast" for an alternate source). No dots, so
+# "../" can never reach the API path.
+_PPV_SLUG = r"[A-Za-z0-9-]+(?:/[A-Za-z0-9-]+){0,3}"
+_PPV_PAGE_RE = re.compile(rf"^https://(?:{_PPV_HOSTS})/live/(?P<slug>{_PPV_SLUG})$", re.IGNORECASE)
 
 
 def _build_ppv(m: re.Match[str], _domain: str) -> str:
@@ -196,7 +200,7 @@ SITES: tuple[EmbedSite, ...] = (
     ),
     EmbedSite(
         identifier="ppv",
-        pattern=_compile(rf"https?://(?:www\.)?(?P<host>{_PPV_HOSTS})/live/(?P<slug>[A-Za-z0-9-]+)"),
+        pattern=_compile(rf"https?://(?:www\.)?(?P<host>{_PPV_HOSTS})/live/(?P<slug>{_PPV_SLUG})"),
         default_domain="",
         build=_build_ppv,
         card=True,

@@ -106,6 +106,25 @@ async def test_fetch_stream_all_fail():
     assert await ppv.fetch_stream(_session(_Resp(404, {}), _Resp(404, {})), SLUG) is None
 
 
+async def test_fetch_stream_multi_segment_slug_used_verbatim():
+    session = _session(_Resp(200, {"success": True, "data": RECORD}))
+    assert await ppv.fetch_stream(session, "cfb/2026-10-10/tex-ou") == RECORD
+    assert session.get.call_args.args[0] == "https://api.ppv.st/api/streams/cfb/2026-10-10/tex-ou"
+
+
+async def test_fetch_stream_alt_source_falls_back_to_parent_event():
+    missing = {"success": False, "error": "Item not found"}
+    session = _session(_Resp(200, missing), _Resp(200, missing), _Resp(200, {"success": True, "data": RECORD}))
+    assert await ppv.fetch_stream(session, "cfb/2026-10-10/tex-ou/skycast") == RECORD
+    assert session.get.call_args.args[0] == "https://api.ppv.st/api/streams/cfb/2026-10-10/tex-ou"
+
+
+async def test_fetch_stream_never_falls_back_to_bare_category():
+    session = _session(_Resp(404, {}), _Resp(404, {}))
+    assert await ppv.fetch_stream(session, "cfb/2026-10-10") is None
+    assert session.get.call_count == 2
+
+
 async def test_build_cards_drops_failures_and_bad_urls(monkeypatch):
     async def fake_fetch(session, slug):
         return RECORD if slug == SLUG else None

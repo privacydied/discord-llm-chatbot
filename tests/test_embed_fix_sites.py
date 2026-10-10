@@ -151,8 +151,26 @@ def test_ppv_non_matching(url):
     assert find_fixes(url) == []
 
 
+@pytest.mark.parametrize(
+    ("posted", "slug"),
+    [
+        ("https://ppvs.pk/live/cfb/2026-10-10/tex-ou", "cfb/2026-10-10/tex-ou"),
+        ("https://ppvs.pk/live/cfb/2026-10-10/tex-ou/skycast", "cfb/2026-10-10/tex-ou/skycast"),
+        ("https://ppvs.pk/live/cfb/2026-10-10/tex-ou/?x=1", "cfb/2026-10-10/tex-ou"),
+    ],
+)
+def test_ppv_multi_segment_slugs(posted, slug):
+    fixes = find_fixes(posted)
+    assert [fix.rewritten for fix in fixes] == [f"https://ppvs.pk/live/{slug}"]
+    assert page_slug(fixes[0].rewritten) == slug
+
+
 def test_page_slug_rejects_untrusted_urls():
     assert page_slug("https://ppv.st/live/abc-1") == "abc-1"
+    assert page_slug("https://ppv.st/live/a/b/c/d") == "a/b/c/d"
+    assert page_slug("https://ppv.st/live/a/b/c/d/e") is None
+    assert page_slug("https://ppv.st/live/a/../api") is None
+    assert page_slug("https://ppv.st/live/a//b") is None
     assert page_slug("https://evil.com/live/abc-1") is None
     assert page_slug("https://ppv.st/live/../../api") is None
     assert page_slug("") is None
