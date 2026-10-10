@@ -25,6 +25,10 @@
   * **Documents** → docx/txt ingestion.
   * **URLs** → Web extraction, X/Twitter syndication (fxtwitter/vxtwitter), screenshot fallback.
   * **X/Twitter** → Thread unrolling of author self-replies, syndication probes with image→VL routing.
+* **Embed Fixes (SaucyBot port)**
+  * Automatically replies to social/art links with an embed-friendly version so videos play inline in Discord — no mention needed.
+  * x.com / twitter.com → vxtwitter.com, Instagram → kkinstagram.com, Bluesky → bskx.app, TikTok → vxtiktok.com, Reddit → rxddit.com, Pixiv → phixiv.net, DeviantArt → fixdeviantart.com, FurAffinity → xfuraffinity.net (NSFW channels only).
+  * Hides the original link preview (needs **Manage Messages**). See [Embed Fixes](#embed-fixes-saucybot-port).
 * **Vision Generation**
   * Image & video generation with provider budgeting, safety filtering, job management, artifact caching, and cost tracking.
   * Provider ladder: Together.ai → Novita.ai (image *generation/editing*); NVIDIA NIM additionally serves text-to-image only, not editing — its hosted GenAI endpoint only accepts 3 canned demo images, not arbitrary uploads. OpenRouter is **not** in this ladder: verified against its live catalogue that every model capable of image output is paid, so there is currently no free img2img fallback to default to (adding one back requires a specific, deliberately chosen paid model, not a bare capability claim).
@@ -446,6 +450,40 @@ uv run python -m bot.main
   - Post a single tweet → behavior unchanged.
   - Interleaved replies by others → only author tweets included.
   - Toggle `TWITTER_UNROLL_ENABLED=false` → identical to prior behavior.
+
+---
+
+### Embed Fixes (SaucyBot port)
+
+Python port of [SaucyBot](https://github.com/Sn0wCrack/saucybot-discord)'s link rewriting. When someone posts a supported link in a server channel, the bot replies with an embed-friendly URL (so videos/images play inline) and hides the original message's preview. It runs on every message (no mention needed) and does not stop normal bot handling.
+
+| Site | Matches | Rewritten to |
+| ---- | ------- | ------------ |
+| `twitter` | `x.com`, `twitter.com`, `mobile.twitter.com`, `nitter.net` status links | `vxtwitter.com` |
+| `instagram` | `/p/`, `/reel/`, `/reels/`, `/tv/` | `www.kkinstagram.com` |
+| `bluesky` | `bsky.app/profile/…/post/…` | `bskx.app` |
+| `tiktok` | `tiktok.com/@user/video/…`, `vm.`/`vt.tiktok.com` | `vxtiktok.com` |
+| `reddit` | `/r/…/comments/…`, `/r/…/s/…` | `rxddit.com` |
+| `pixiv` | `pixiv.net/artworks/…` | `phixiv.net` |
+| `deviantart` | `deviantart.com/…/art/…` | `fixdeviantart.com` |
+| `furaffinity` ⚠️ | `/view/…`, `/full/…` | `xfuraffinity.net` |
+| `reddit_media` ⚠️ | `reddit.com/media?url=…` | the direct media URL |
+
+⚠️ NSFW sites — only fixed in NSFW channels while `EMBED_FIX_RESTRICT_NSFW=true`.
+
+- **Opt out per message:** wrap the link in `<…>` or `||…||` (spoiler) and the bot leaves it alone.
+- **Permissions:** Send Messages + Embed Links + Read Message History (+ Send Messages in Threads for threads). **Manage Messages** is needed to hide the original preview. DMs are ignored.
+- **Per server:** `!feature embed_fix off|on` (aliases `saucy`, `linkfix`, `embeds`).
+- The original preview is re-checked for ~15s and hidden again if Discord attaches it late. The Discord app may briefly keep showing the old preview until it refreshes.
+
+| Name | Default | Notes |
+| ---- | ------- | ----- |
+| `EMBED_FIX_ENABLED` | `true` | Global switch |
+| `EMBED_FIX_DISABLED_SITES` | — | e.g. `reddit,tiktok` (site names from the table) |
+| `EMBED_FIX_DOMAIN_OVERRIDES` | — | e.g. `twitter=fixupx.com,instagram=vxinstagram.com` |
+| `EMBED_FIX_MAX_LINKS` | `8` | Max links fixed per message |
+| `EMBED_FIX_SUPPRESS_ORIGINAL` | `true` | Hide the original preview |
+| `EMBED_FIX_RESTRICT_NSFW` | `true` | NSFW sites only in NSFW channels |
 
 ---
 
