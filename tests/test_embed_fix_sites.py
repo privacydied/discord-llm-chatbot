@@ -23,9 +23,10 @@ from bot.embed_fix.sites import SITE_IDS, find_fixes, is_ignored, parse_domain_o
         ("https://x.com/i/web/status/20", "https://vxtwitter.com/i/web/status/20"),
         ("https://twitter.com/jack/statuses/20", "https://vxtwitter.com/jack/status/20"),
         # Instagram (SaucyBot VxInstagram: p / reel / reels)
-        ("https://www.instagram.com/p/ABC123/", "https://vxinstagram.com/p/ABC123/"),
-        ("https://instagram.com/reel/C0de_-x/?igsh=xyz", "https://vxinstagram.com/reel/C0de_-x/"),
-        ("https://m.instagram.com/reels/XYZ", "https://vxinstagram.com/reels/XYZ/"),
+        ("https://www.instagram.com/p/ABC123/", "https://www.kkinstagram.com/p/ABC123/"),
+        ("https://instagram.com/reel/C0de_-x/?igsh=xyz", "https://www.kkinstagram.com/reel/C0de_-x/"),
+        ("https://m.instagram.com/reels/XYZ", "https://www.kkinstagram.com/reels/XYZ/"),
+        ("https://www.instagram.com/reel/DFeXBh7xtkI/?igsh=abc", "https://www.kkinstagram.com/reel/DFeXBh7xtkI/"),
         # Bluesky (VixBluesky host)
         ("https://bsky.app/profile/bsky.app/post/3l6oveex3ii2l", "https://bskx.app/profile/bsky.app/post/3l6oveex3ii2l"),
         # FurAffinity (XFurAffinity)
@@ -59,6 +60,8 @@ def test_rewrites(url, expected):
         "https://x.com/jack",  # profile, not a post
         "https://x.com/jack/likes",
         "https://www.instagram.com/someuser/",
+        "https://www.kkinstagram.com/p/ABC/",  # already fixed
+        "https://kkinstagram.com/reel/ABC/",
         "https://vxinstagram.com/p/ABC/",
         "https://xfuraffinity.net/view/1/",
         "https://www.reddit.com/media?url=javascript%3Aalert(1)",
@@ -74,7 +77,7 @@ def test_non_matching_urls(url):
 def test_multiple_links_in_message_order_and_deduped():
     content = "look https://www.instagram.com/p/A1/ and https://x.com/a/status/1 and again https://twitter.com/a/status/1"
     fixes = find_fixes(content)
-    assert [f.rewritten for f in fixes] == ["https://vxinstagram.com/p/A1/", "https://vxtwitter.com/a/status/1"]
+    assert [f.rewritten for f in fixes] == ["https://www.kkinstagram.com/p/A1/", "https://vxtwitter.com/a/status/1"]
     assert [f.site for f in fixes] == ["instagram", "twitter"]
 
 

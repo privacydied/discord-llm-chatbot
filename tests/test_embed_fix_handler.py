@@ -60,7 +60,7 @@ async def test_replies_with_fixed_link_and_suppresses_original(reply):
 async def test_multiple_links_go_in_one_reply(reply):
     msg = _message("https://x.com/a/status/1 https://instagram.com/reel/AB")
     await h.maybe_fix_embeds(msg, {})
-    assert reply.await_args.args[1] == "https://vxtwitter.com/a/status/1\nhttps://vxinstagram.com/reel/AB/"
+    assert reply.await_args.args[1] == "https://vxtwitter.com/a/status/1\nhttps://www.kkinstagram.com/reel/AB/"
 
 
 async def test_no_suppress_without_manage_messages(reply):
