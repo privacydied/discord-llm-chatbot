@@ -28,6 +28,17 @@ from bot.memory.identity import is_self_recall_intent, resolve_memory_subject_us
 from bot.memory.persistent_store import MemoryRecord
 from bot.memory.service import CuratedMemoryService
 
+
+def _flat_where(where):
+    """Flatten Chroma's {"$and": [{...}, {...}]} into one equality dict."""
+    if where and "$and" in where:
+        merged = {}
+        for clause in where["$and"]:
+            merged.update(clause)
+        return merged
+    return where or {}
+
+
 # ---- helpers ----------------------------------------------------------------
 
 _NOW = datetime.now(UTC).isoformat()
@@ -96,7 +107,7 @@ def _fake_semantic_store(records: dict | None = None):
         results = []
         for mid, payload in records.items():
             meta = payload.get("metadata", {})
-            if where and any(meta.get(k) != v for k, v in where.items()):
+            if any(meta.get(k) != v for k, v in _flat_where(where).items()):
                 continue
             results.append(
                 {
@@ -400,7 +411,7 @@ class TestSensitiveMemoryDisclosure:
         assert "dark mode" in block
 
     @pytest.mark.asyncio
-    async def test_all_sensitive_returns_safe_ack_message(self, svc_with_sensitive) -> None:
+    async def test_all_sensitive_injects_nothing(self, svc_with_sensitive) -> None:
         # Remove safe record temporarily
         del svc_with_sensitive.store._records["mem-safe"]
         block = await svc_with_sensitive.build_prompt_block(
@@ -412,8 +423,8 @@ class TestSensitiveMemoryDisclosure:
             max_chars=500,
             allow_sensitive=False,
         )
-        assert "personal memories" in block
-        assert "won't repeat sensitive" in block
+        # No canned sentence: the model echoed it into unrelated replies.
+        assert block == ""
 
 
 # ---- Orphan memories (missing user_id) --------------------------------------

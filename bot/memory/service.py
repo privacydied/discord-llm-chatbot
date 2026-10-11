@@ -19,6 +19,32 @@ from .semantic_store import CuratedMemorySemanticStore
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_MIN_RELEVANCE = 0.25
+# Framing matters as much as selection: these are background notes about the
+# person being answered, not instructions, and not conversation topics.
+MEMORY_BLOCK_HEADER = "Notes on the user you're replying to (old chats, may be stale). Use one only if it helps with this message; never bring them up otherwise:"
+
+
+def render_memory_block(items: list[dict[str, Any]], *, max_chars: int) -> str:
+    """Render selected memories under MEMORY_BLOCK_HEADER, deduped and length-capped."""
+    lines: list[str] = [MEMORY_BLOCK_HEADER]
+    used = len(MEMORY_BLOCK_HEADER) + 1
+    seen: set[str] = set()
+    for item in items:
+        record = item.get("record") or {}
+        # Curated summary only, never the raw message text (no transcripts in prompts).
+        line = f"- {str(record.get('summary') or item.get('document') or '').strip()}"
+        key = line.casefold()
+        if not line[2:].strip() or key in seen:
+            continue
+        if used + len(line) + 1 > max_chars:
+            break
+        seen.add(key)
+        lines.append(line)
+        used += len(line) + 1
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 _memory_service: CuratedMemoryService | None = None
 _memory_service_lock = asyncio.Lock()
 
@@ -35,6 +61,9 @@ class CuratedMemoryService:
         self.collection_name = str(cfg.get("PERSISTENT_MEMORY_CHROMA_COLLECTION", "curated_memories"))
         self.top_k = int(cfg.get("PERSISTENT_MEMORY_TOP_K", 6))
         self.max_prompt_chars = int(cfg.get("PERSISTENT_MEMORY_MAX_PROMPT_CHARS", 1200))
+        # Minimum cosine similarity between the message and a memory before it
+        # may enter a prompt. Unrelated memories score ~0.1-0.22 with MiniLM.
+        self.min_relevance = float(cfg.get("PERSISTENT_MEMORY_MIN_RELEVANCE", DEFAULT_MIN_RELEVANCE))
         self.default_ttl_days = int(cfg.get("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS", 180))
         self.temp_ttl_days = int(cfg.get("PERSISTENT_MEMORY_TEMP_TTL_DAYS", 14))
         self.min_importance = float(cfg.get("PERSISTENT_MEMORY_MIN_IMPORTANCE", 0.55))
@@ -262,6 +291,8 @@ class CuratedMemoryService:
                 continue
             for item in results:
                 metadata = item.get("metadata") or {}
+                if float(item.get("semantic_score", 0.0)) < self.min_relevance:
+                    continue
                 if not self._scope_allows(
                     metadata,
                     scope_name,
@@ -391,25 +422,12 @@ class CuratedMemoryService:
             )
 
         if not filtered:
-            # If we had candidates but all were sensitive, acknowledge it
-            if candidates_before > 0 and sensitive_count > 0:
-                return "I have some personal memories saved for you, but I won't repeat sensitive details casually here."
+            # Never inject a canned sentence here: the model repeats prompt
+            # text, so "I have some personal memories saved for you..." used
+            # to show up in replies that had nothing to do with memory.
             return ""
 
-        max_chars = int(max_chars or self.max_prompt_chars)
-        lines: list[str] = ["Relevant long-term memory:"]
-        used = len(lines[0]) + 1
-        for item in filtered:
-            record = item["record"]
-            summary = str(record.get("summary") or item.get("document") or "").strip()
-            if not summary:
-                continue
-            line = f"- {summary}"
-            if used + len(line) + 1 > max_chars:
-                break
-            lines.append(line)
-            used += len(line) + 1
-        return "\n".join(lines) if len(lines) > 1 else ""
+        return render_memory_block(filtered, max_chars=int(max_chars or self.max_prompt_chars))
 
     async def _persist_batch(self, candidates: list[MemoryCandidate]) -> dict[str, int]:
         if not candidates:
@@ -508,7 +526,8 @@ class CuratedMemoryService:
             # If semantic search fails, allow insertion.
             return candidate
 
-        SIMILARITY_THRESHOLD = 0.85
+        # Cosine scale (semantic_store.cosine_from_l2); 0.91 == the old 1/(1+d) 0.85.
+        SIMILARITY_THRESHOLD = 0.91
         for item in results:
             metadata = item.get("metadata") or {}
             if metadata.get("source") != "inferred_curated" or float(metadata.get("confidence", 1)) < 0.4:
@@ -658,12 +677,15 @@ class CuratedMemoryService:
         filters: list[tuple[str, dict[str, Any], float]] = []
         if user_id is not None:
             filters.append(("user", {"user_id": str(user_id)}, 0.04))
-        if guild_id is not None:
-            filters.append(("guild", {"guild_id": str(guild_id)}, 0.06))
-        if channel_id is not None:
-            filters.append(("channel", {"channel_id": str(channel_id)}, 0.08))
-        if thread_id is not None:
-            filters.append(("thread", {"thread_id": str(thread_id)}, 0.1))
+        for name, value, boost in (("guild", guild_id, 0.06), ("channel", channel_id, 0.08), ("thread", thread_id, 0.1)):
+            if value is None:
+                continue
+            where: dict[str, Any] = {f"{name}_id": str(value)}
+            if user_id is not None:
+                # Owner-scoped at query time: otherwise other users' memories
+                # fill the top_k slots and are only dropped afterwards.
+                where = {"$and": [where, {"user_id": str(user_id)}]}
+            filters.append((name, where, boost))
         return filters
 
 

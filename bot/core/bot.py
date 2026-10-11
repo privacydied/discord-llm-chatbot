@@ -31,6 +31,7 @@ from bot.memory import (
     stop_memory_service,
 )
 from bot.memory.context_manager import ContextManager
+from bot.memory.curator import strip_user_mentions
 from bot.memory.enhanced_context_manager import EnhancedContextManager
 from bot.memory.thread_tail import (
     _is_thread_channel,
@@ -1006,11 +1007,14 @@ class LLMBot(commands.Bot):
                 # scored gate was handed unscored text, so importance defaulted to 0.0
                 # and every message was denied "below_threshold".  Let the curator decide.
                 with suppress(Exception):
+                    bot_user_id = getattr(self.user, "id", None)
                     self._track_background_task(
                         asyncio.create_task(
                             enqueue_inferred_memory(
                                 user_id=str(message.author.id),
-                                text=message.content,
+                                # Drop "@bot" so only mentions of other people remain;
+                                # the curator rejects text that names another member.
+                                text=strip_user_mentions(message.content, bot_user_id),
                                 guild_id=str(message.guild.id) if getattr(message, "guild", None) else None,
                                 channel_id=str(message.channel.id) if getattr(message, "channel", None) else None,
                                 thread_id=str(message.channel.id) if isinstance(message.channel, discord.Thread) else None,

@@ -27,6 +27,25 @@ from .persistent_store import MemoryRecord
 
 logger = logging.getLogger(__name__)
 
+# A raw Discord user mention (<@123> / <@!123>). Callers strip mentions of the
+# bot itself first (strip_user_mentions), so any mention left names a person.
+MAX_INFERRED_CHARS = 280
+# Chat often drops the "?": "what was his relationship w guenon". Polite
+# requests ("can you", "could you", "would you") are instructions, not questions.
+_QUESTION_OPENER_RE = re.compile(
+    r"^\s*(?:what|why|how|who|whom|whose|when|where|which|was|were|did|does|"
+    r"(?:can|could|would|will)(?!\s+(?:you|u)\b))\b"
+)
+_BOT_ACTION_VERBS = r"(?:call|ping|mention|use|say|send|reply|respond|talk|answer|speak|tag|dm)"
+_USER_MENTION_RE = re.compile(r"<@!?\d+>")
+
+
+def strip_user_mentions(text: str, user_id: Any) -> str:
+    """Remove every mention of *user_id* (normally the bot) from raw message text."""
+    if not text or user_id in (None, ""):
+        return text or ""
+    return re.sub(rf"<@!?{re.escape(str(user_id))}>", " ", text).strip()
+
 
 @dataclass(slots=True)
 class MemoryCandidate:
@@ -186,6 +205,17 @@ class CuratedMemoryCurator:
                 source_message_id,
                 reason="too_short",
             )
+        if len(text) > MAX_INFERRED_CHARS:
+            # Durable facts about a person are short; long messages are rants,
+            # pasted output or analysis, and get stored whole when accepted.
+            return self._log_inferred_decision(
+                user_id,
+                guild_id,
+                channel_id,
+                thread_id,
+                source_message_id,
+                reason="too_long",
+            )
 
         if self._looks_sensitive(text):
             return self._log_inferred_decision(
@@ -331,11 +361,26 @@ class CuratedMemoryCurator:
         lower = text.lower()
         if self._looks_quoted_or_external_content(lower):
             return "reject_quoted_or_external_content"
+        if self._looks_pasted_block(text):
+            return "reject_pasted_block"
+        if "?" in lower or _QUESTION_OPENER_RE.match(lower):
+            # A question asks for information; it is not a fact about the asker.
+            return "reject_question"
+        if _USER_MENTION_RE.search(text):
+            # Text naming another member is about them, not the speaker, and
+            # must not become a memory attached to the speaker.
+            return "reject_mentions_other_user"
         if self._looks_sensitive_generalization(lower):
             return "reject_sensitive_generalization"
         if self._looks_world_claim(lower):
             return "reject_world_claim"
         return None
+
+    @staticmethod
+    def _looks_pasted_block(text: str) -> bool:
+        """Code fences or quote blocks: pasted output, not the user's own words."""
+        stripped = text.lstrip()
+        return "```" in text or stripped.startswith(">")
 
     @staticmethod
     def _has_project_anchor(lower: str) -> bool:
@@ -499,13 +544,17 @@ class CuratedMemoryCurator:
         # "from now on" / "going forward" / "henceforth" — strong future markers
         if bool(re.search(r"\bfrom\s+now\s+on\b", lower)):
             return True
-        if bool(re.search(r"\bgoing\s+forward\b", lower)):
+        # Only the sentence-adverb use ("going forward, ..."), not motion
+        # ("strafing ... as going forward or backward").
+        if bool(re.search(r"(?:^|[.!;]\s*)going\s+forward\b|\bgoing\s+forward\s*[,:]", lower)):
             return True
         if bool(re.search(r"\bhenceforth\b", lower)):
             return True
 
-        # "always" with bot addressee or followed by content
-        if bool(re.search(r"\byou\s+(?:should\s+|must\s+|have\s+to\s+)?always\b", lower)):
+        # "always" with bot addressee or followed by content. Bare "you always"
+        # / "you never" is generic-you chat ("you never really realize...",
+        # "im always right and you always agree"), so a modal is required.
+        if bool(re.search(r"\byou\s+(?:should|must|have\s+to|need\s+to)\s+always\b", lower)):
             return True
         # "please always X" / imperative "always X" — a command directed at
         # the bot, not a narrative claim about someone/something else (e.g.
@@ -515,11 +564,14 @@ class CuratedMemoryCurator:
         if bool(re.search(r"^\s*always\b(?:\s+\w+){1,}", lower)):
             return True
 
-        # "you should never", "you must never", "you never" — bot-directed
-        if bool(re.search(r"\byou\s+(?:should\s+|must\s+|have\s+to\s+)?never\b", lower)):
+        # "you should never", "you must never" — bot-directed (modal required)
+        if bool(re.search(r"\byou\s+(?:should|must|have\s+to|need\s+to)\s+never\b", lower)):
             return True
         # "don't do/use/say X again"
         if bool(re.search(r"\bdon't\s+(?:do|say|use|assume)\b.*\bagain\b", lower)):
+            return True
+        # Imperative "never/don't call me X", "never ping me" at message start.
+        if re.search(rf"^\s*(?:please\s+)?(?:never|don'?t|do\s+not)\s+{_BOT_ACTION_VERBS}\b", lower):
             return True
         # "never do X again"
         return bool(bool(re.search(r"\bnever\s+(?:do|say|use|assume)\b.*\bagain\b", lower)))
@@ -704,7 +756,7 @@ class CuratedMemoryCurator:
 
     def _summarize(self, text: str, context_type: str) -> str:
         prefix_map = {
-            "user_preference": "Prefers",
+            "user_preference": "They said:",  # first-person text: "Prefers i have depression" was wrong
             "project_fact": "Project fact:",
             "server_fact": "Server fact:",
             "conversation_decision": "Decision:",

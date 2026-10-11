@@ -78,7 +78,7 @@ class TestInferredAllowed:
             ("from now on, answer in one paragraph", "recurring_instruction"),
             ("always use metric units in your responses", "recurring_instruction"),
             ("you should never call me dude", "recurring_instruction"),
-            ("you always provide such detailed answers", "recurring_instruction"),
+            ("you should always provide detailed answers", "recurring_instruction"),
             # Strong memory
             ("remember that I prefer short replies", "user_preference"),
             # Bot corrections
@@ -152,7 +152,7 @@ class TestRecurringInstructionSpecificity:
             "from now on, answer in one paragraph",
             "going forward, use UK English",
             "don't say that again about my code",
-            "you always provide such detailed answers",
+            "you should always provide detailed answers",
             "you should never call me dude",
         ],
     )

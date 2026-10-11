@@ -322,6 +322,13 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
             "1200",
             "PERSISTENT_MEMORY_MAX_PROMPT_CHARS",
         ),
+        # Min cosine similarity (0-1) between a message and a memory before the
+        # memory may enter the prompt; unrelated memories score ~0.1-0.22.
+        "PERSISTENT_MEMORY_MIN_RELEVANCE": _safe_float(
+            env_getter("PERSISTENT_MEMORY_MIN_RELEVANCE", None),
+            "0.25",
+            "PERSISTENT_MEMORY_MIN_RELEVANCE",
+        ),
         # Memory semantic dedupe & resource caps [Phase 6-9]
         "MEMORY_SEMANTIC_DEDUPE_ENABLED": _low_resource_bool("MEMORY_SEMANTIC_DEDUPE_ENABLED", True, True),
         "MEMORY_MAX_TEXT_CHARS": _low_resource_int("MEMORY_MAX_TEXT_CHARS", 500, 300),

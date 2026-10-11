@@ -67,6 +67,7 @@
 | `MAX_SERVER_MEMORY` | `—` | Maximum server memory. |
 | `MAX_TEXT_ATTACHMENT_SIZE` | `—` | Maximum text attachment size. |
 | `MAX_USER_MEMORY` | `1000` | Maximum user memory. |
+| `PERSISTENT_MEMORY_MIN_RELEVANCE` | `0.25` | Minimum cosine similarity (0-1) between the incoming message and a curated memory before it is injected into the prompt. Unrelated memories score ~0.1-0.22. |
 | `MEDIA_DOWNLOAD_TIMEOUT` | `60` | Timeout for media download in seconds. |
 | `MEDIA_FALLBACK_MODELS` | `—` | Configuration for media fallback models. |
 | `MEDIA_FALLBACK_TIMEOUTS` | `—` | Configuration for media fallback timeouts. |

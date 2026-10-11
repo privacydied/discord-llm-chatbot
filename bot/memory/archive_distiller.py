@@ -12,7 +12,7 @@ from uuid import uuid4
 from bot.config import load_config
 from bot.server_archive.service import get_server_archive_service
 
-from .curator import CuratedMemoryCurator, MemoryCandidate
+from .curator import CuratedMemoryCurator, MemoryCandidate, strip_user_mentions
 from .service import get_memory_service
 
 logger = logging.getLogger(__name__)
@@ -391,7 +391,10 @@ class MemoryArchiveDistiller:
         for message in messages:
             if self.exclude_bot_messages and self._as_bool(message.get("author_bot")):
                 continue
-            text = self._normalize_text(message.get("clean_content") or message.get("content") or "")
+            # Raw content first: clean_content renders <@id> as "@name", which
+            # would hide mentions of other members from the curator's check.
+            raw = message.get("content") or message.get("clean_content") or ""
+            text = self._normalize_text(strip_user_mentions(raw, getattr(getattr(self.bot, "user", None), "id", None)))
             if not text or len(text) < 16:
                 continue
             if self._looks_blocked(text):

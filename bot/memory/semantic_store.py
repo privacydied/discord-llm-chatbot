@@ -17,6 +17,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def cosine_from_l2(distance: Any) -> float:
+    """Cosine similarity in [0, 1] from Chroma's default squared-L2 distance.
+
+    Embeddings are unit-normalised, so ``d = 2 - 2*cos``. The old
+    ``1 / (1 + d)`` squeezed every result into ~0.33-1.0, so unrelated
+    memories still looked like decent matches.
+    """
+    try:
+        cos = 1.0 - float(distance) / 2.0
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, cos))
+
+
 class CuratedMemorySemanticStore:
     """Wrapper over the existing ChromaDB stack for curated memories only."""
 
@@ -116,21 +130,17 @@ class CuratedMemorySemanticStore:
         effective_top_k = min(int(top_k), semantic_top_k_cfg, chroma_max)
         effective_top_k = max(1, effective_top_k)
 
-        # Keyword prefilter before embedding to reduce search surface [Phase 6-9]
-        query_words = set(query.lower().split())
-        kw_tokens = {w for w in query_words if len(w) > 2}
-        kw_where_doc: dict[str, Any] | None = where_document
-        if kw_tokens and kw_where_doc is None:
-            # Require at least one keyword token to appear in stored document
-            kw_where_doc = {"$contains": " ".join(kw_tokens)}
-
+        # No keyword prefilter: the old one joined every query word into ONE
+        # "$contains" substring, so real sentences matched nothing while
+        # one-word messages ("yo") matched everything. Relevance is gated by
+        # the caller on semantic_score instead.
         query_embedding = await self.embedding.encode_single(query)
         result = await asyncio.to_thread(
             self.collection.query,
             query_embeddings=[query_embedding.tolist()],
             n_results=effective_top_k,
             where=where,
-            where_document=kw_where_doc,
+            where_document=where_document,
             include=["metadatas", "documents", "distances"],
         )
 
@@ -145,13 +155,12 @@ class CuratedMemorySemanticStore:
         items: list[dict[str, Any]] = []
         for memory_id, document_text, metadata, distance in zip(ids, documents, metadatas, distances, strict=False):
             metadata = metadata or {}
-            similarity = 1.0 / (1.0 + float(distance))
             items.append(
                 {
                     "memory_id": memory_id,
                     "document": document_text,
                     "metadata": metadata,
-                    "semantic_score": similarity,
+                    "semantic_score": cosine_from_l2(distance),
                 },
             )
         return items

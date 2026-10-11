@@ -11,7 +11,17 @@ from bot.memory.curator import CuratedMemoryCurator
 from bot.memory.ingestion_queue import CuratedMemoryIngestionQueue
 from bot.memory.persistent_store import MemoryRecord, PersistentMemoryStore
 from bot.memory.scoring import combined_score, recency_score
-from bot.memory.service import CuratedMemoryService
+from bot.memory.service import MEMORY_BLOCK_HEADER, CuratedMemoryService
+
+
+def _flat_where(where):
+    """Flatten Chroma's {"$and": [{...}, {...}]} into one equality dict."""
+    if where and "$and" in where:
+        merged = {}
+        for clause in where["$and"]:
+            merged.update(clause)
+        return merged
+    return where or {}
 
 
 class FakeSemanticStore:
@@ -56,7 +66,7 @@ class FakeSemanticStore:
         results = []
         for payload in self.records.values():
             metadata = payload["metadata"]
-            if where and any(metadata.get(key) != value for key, value in where.items()):
+            if any(metadata.get(key) != value for key, value in _flat_where(where).items()):
                 continue
             if query.lower() not in (payload["document"] or "").lower():
                 continue
@@ -162,7 +172,7 @@ async def test_explicit_memory_add_stores_sqlite_and_semantic(service) -> None:
 
     stored = await service.store.get_memory(record.memory_id)
     assert stored is not None
-    assert stored.summary == "Prefers I prefer dark mode"
+    assert stored.summary == "They said: I prefer dark mode"
     assert service.semantic_store.upserts
     memory_id, document, metadata = service.semantic_store.upserts[0]
     assert memory_id == record.memory_id
@@ -511,11 +521,11 @@ async def test_top_k_and_max_prompt_chars_are_enforced(tmp_path) -> None:
         thread_id=None,
         query="fact",
         top_k=20,
-        max_chars=180,
+        max_chars=300,
     )
     assert fake_semantic.calls[0]["top_k"] == 8
-    assert len(block) <= 180
-    assert block.startswith("Relevant long-term memory:")
+    assert len(block) <= 300
+    assert block.startswith(MEMORY_BLOCK_HEADER)
     assert block.count("\n- ") <= 1
 
 
