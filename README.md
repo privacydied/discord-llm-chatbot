@@ -472,6 +472,7 @@ Python port of [SaucyBot](https://github.com/Sn0wCrack/saucybot-discord)'s link 
 
 ⚠️ NSFW sites — only fixed in NSFW channels while `EMBED_FIX_RESTRICT_NSFW=true`.
 
+- **Tweet translation:** foreign-language tweets get `/en` appended (language from the FxTwitter API), so the embed shows an English translation. English tweets, and links that already end in a language code or `/original`, are left as posted. If the lookup fails the plain link is sent.
 - **Opt out per message:** wrap the link in `<…>` or `||…||` (spoiler) and the bot leaves it alone.
 - **Permissions:** Send Messages + Embed Links + Read Message History (+ Send Messages in Threads for threads). **Manage Messages** is needed to hide the original preview. DMs are ignored.
 - **Per server:** `!feature embed_fix off|on` (aliases `saucy`, `linkfix`, `embeds`).
@@ -485,6 +486,7 @@ Python port of [SaucyBot](https://github.com/Sn0wCrack/saucybot-discord)'s link 
 | `EMBED_FIX_MAX_LINKS` | `8` | Max links fixed per message |
 | `EMBED_FIX_SUPPRESS_ORIGINAL` | `true` | Hide the original preview |
 | `EMBED_FIX_RESTRICT_NSFW` | `true` | NSFW sites only in NSFW channels |
+| `EMBED_FIX_TRANSLATE_TO` | `en` | Foreign-language tweets get `/en` appended so the proxy shows a translation; English tweets and links that already end in a language code are left alone. Empty disables |
 
 ---
 

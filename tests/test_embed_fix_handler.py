@@ -37,6 +37,12 @@ def _message(content, *, channel=None, guild=True, author_bot=False):
     return msg
 
 
+@pytest.fixture(autouse=True)
+def _no_tweet_lang_lookup(monkeypatch):
+    # Keep handler tests offline: every tweet reads as English (no /en suffix).
+    monkeypatch.setattr(h.translate, "fetch_lang", AsyncMock(return_value="en"))
+
+
 @pytest.fixture
 def reply(monkeypatch):
     mock = AsyncMock()

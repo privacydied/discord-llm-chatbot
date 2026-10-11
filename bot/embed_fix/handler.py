@@ -21,7 +21,7 @@ from bot.core.output import safe_reply
 from bot.server_features import is_server_feature_enabled
 from bot.utils.logging import get_logger
 
-from . import ppv
+from . import ppv, translate
 from .sites import DEFAULT_MAX_LINKS, EmbedFix, find_fixes, is_ignored, parse_domain_overrides, parse_site_list
 
 logger = get_logger(__name__)
@@ -44,6 +44,7 @@ class EmbedFixSettings:
     max_links: int = DEFAULT_MAX_LINKS
     suppress_original: bool = True
     restrict_nsfw: bool = True
+    translate_to: str | None = translate.DEFAULT_TARGET_LANG
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any] | None) -> EmbedFixSettings:
@@ -55,6 +56,7 @@ class EmbedFixSettings:
             max_links=int(cfg.get("EMBED_FIX_MAX_LINKS", DEFAULT_MAX_LINKS) or 0),
             suppress_original=bool(cfg.get("EMBED_FIX_SUPPRESS_ORIGINAL", True)),
             restrict_nsfw=bool(cfg.get("EMBED_FIX_RESTRICT_NSFW", True)),
+            translate_to=translate.parse_target(cfg.get("EMBED_FIX_TRANSLATE_TO")),
         )
 
 
@@ -216,7 +218,7 @@ async def maybe_fix_embeds(message: discord.Message, config: Mapping[str, Any] |
     fixes = filter_nsfw(fixes, message.channel, restrict=settings.restrict_nsfw)
     if not fixes:
         return []
-    fixes = await _send_fixes(message, fixes)
+    fixes = await _send_fixes(message, await translate.apply(fixes, settings.translate_to))
     if not fixes:
         return []
     logger.info(
