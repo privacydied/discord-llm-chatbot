@@ -65,7 +65,7 @@ class EmbedFixSettings:
             suppress_original=bool(cfg.get("EMBED_FIX_SUPPRESS_ORIGINAL", True)),
             restrict_nsfw=bool(cfg.get("EMBED_FIX_RESTRICT_NSFW", True)),
             translate_to=translate.parse_target(cfg.get("EMBED_FIX_TRANSLATE_TO")),
-            upload_media=bool(cfg.get("EMBED_FIX_UPLOAD_MEDIA", True)),
+            upload_media=bool(cfg.get("EMBED_FIX_UPLOAD_MEDIA", False)),
         )
 
 

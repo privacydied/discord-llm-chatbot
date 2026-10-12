@@ -15,6 +15,7 @@ from bot.embed_fix import instagram as ig
 
 REEL = "https://www.instagram.com/reel/DTZPUbgkSzn/"
 MB = 1024 * 1024
+UPLOAD_ON = {"EMBED_FIX_UPLOAD_MEDIA": True}
 
 # Trimmed copy of a real oginstagram reel page.
 OG_REEL_HTML = """<html><head>
@@ -340,7 +341,7 @@ def _ig_post(*files, username="u"):
 async def test_instagram_media_and_card_replace_link(reply, monkeypatch):
     monkeypatch.setattr(h.instagram, "fetch_post", AsyncMock(return_value=_ig_post(ig.MediaFile("instagram_AB.mp4", b"vid"))))
     msg = _message("look https://x.com/a/status/1 https://www.instagram.com/reel/AB/")
-    sent = await h.maybe_fix_embeds(msg, {})
+    sent = await h.maybe_fix_embeds(msg, UPLOAD_ON)
     args, kwargs = reply.await_args
     assert args[1] == "https://vxtwitter.com/a/status/1"
     (file,) = kwargs["files"]
@@ -354,13 +355,13 @@ async def test_instagram_media_and_card_replace_link(reply, monkeypatch):
 
 async def test_failed_download_falls_back_to_oginstagram_link(reply, monkeypatch):
     monkeypatch.setattr(h.instagram, "fetch_post", AsyncMock(return_value=None))
-    await h.maybe_fix_embeds(_message("https://www.instagram.com/reel/AB/"), {})
+    await h.maybe_fix_embeds(_message("https://www.instagram.com/reel/AB/"), UPLOAD_ON)
     args, kwargs = reply.await_args
     assert args[1] == "https://www.oginstagram.com/reel/AB/"
     assert kwargs["files"] is None and kwargs["embeds"] is None
 
 
-@pytest.mark.parametrize(("msg_kwargs", "config"), [({"attach_files": False}, {}), ({}, {"EMBED_FIX_UPLOAD_MEDIA": False})])
+@pytest.mark.parametrize(("msg_kwargs", "config"), [({"attach_files": False}, UPLOAD_ON), ({}, {})])
 async def test_no_download_without_attach_files_or_when_disabled(reply, monkeypatch, msg_kwargs, config):
     monkeypatch.setattr(h.instagram, "fetch_post", AsyncMock())
     await h.maybe_fix_embeds(_message("https://www.instagram.com/reel/AB/", **msg_kwargs), config)
@@ -375,7 +376,7 @@ async def test_multiple_posts_share_budget_and_get_one_card_each(reply, monkeypa
         AsyncMock(side_effect=[_ig_post(ig.MediaFile("a.mp4", b"x" * 100)), _ig_post(ig.MediaFile("b.jpg", b"y"), username="v")]),
     )
     msg = _message("https://www.instagram.com/reel/A/ https://www.instagram.com/p/B/", filesize_limit=10 * MB)
-    await h.maybe_fix_embeds(msg, {})
+    await h.maybe_fix_embeds(msg, UPLOAD_ON)
     budgets = [c.kwargs["max_bytes"] for c in h.instagram.fetch_post.await_args_list]
     assert budgets == [ig.upload_budget(10 * MB), ig.upload_budget(10 * MB) - 100]
     kwargs = reply.await_args.kwargs
@@ -388,7 +389,7 @@ async def test_multiple_posts_share_budget_and_get_one_card_each(reply, monkeypa
 async def test_video_post_with_og_video_goes_out_as_link_for_discord_unfurl(reply, monkeypatch):
     h.instagram.has_link_video.return_value = True
     monkeypatch.setattr(h.instagram, "fetch_post", AsyncMock())
-    await h.maybe_fix_embeds(_message("https://www.instagram.com/reel/AB/"), {})
+    await h.maybe_fix_embeds(_message("https://www.instagram.com/reel/AB/"), UPLOAD_ON)
     h.instagram.fetch_post.assert_not_awaited()
     args, kwargs = reply.await_args
     assert args[1] == "https://www.oginstagram.com/reel/AB/"
@@ -398,7 +399,7 @@ async def test_video_post_with_og_video_goes_out_as_link_for_discord_unfurl(repl
 async def test_link_video_check_skipped_when_link_host_overridden(reply, monkeypatch):
     h.instagram.has_link_video.return_value = True
     monkeypatch.setattr(h.instagram, "fetch_post", AsyncMock(return_value=_ig_post(ig.MediaFile("a.mp4", b"v"))))
-    await h.maybe_fix_embeds(_message("https://www.instagram.com/reel/AB/"), {"EMBED_FIX_DOMAIN_OVERRIDES": "instagram=www.kkinstagram.com"})
+    await h.maybe_fix_embeds(_message("https://www.instagram.com/reel/AB/"), {**UPLOAD_ON, "EMBED_FIX_DOMAIN_OVERRIDES": "instagram=www.kkinstagram.com"})
     h.instagram.has_link_video.assert_not_awaited()
     assert [f.filename for f in reply.await_args.kwargs["files"]] == ["a.mp4"]
 

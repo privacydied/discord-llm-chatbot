@@ -287,7 +287,7 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         # Append /<lang> to foreign-language tweet links so the proxy translates them; empty disables.
         "EMBED_FIX_TRANSLATE_TO": _clean_env_value(env_getter("EMBED_FIX_TRANSLATE_TO", "en")).lower(),
         # Download Instagram media and attach it (falls back to the proxy link).
-        "EMBED_FIX_UPLOAD_MEDIA": _parse_bool_str(_clean_env_value(env_getter("EMBED_FIX_UPLOAD_MEDIA", None)), True),
+        "EMBED_FIX_UPLOAD_MEDIA": _parse_bool_str(_clean_env_value(env_getter("EMBED_FIX_UPLOAD_MEDIA", None)), False),
         # PROMPT FILES - CRITICAL FOR MULTIMODAL FUNCTIONALITY
         "PROMPT_FILE": _clean_env_value(env_getter("PROMPT_FILE", None)),
         "VL_PROMPT_FILE": _clean_env_value(env_getter("VL_PROMPT_FILE", None)),
