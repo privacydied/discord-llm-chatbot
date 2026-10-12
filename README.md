@@ -27,7 +27,7 @@
   * **X/Twitter** → Thread unrolling of author self-replies, syndication probes with image→VL routing.
 * **Embed Fixes (SaucyBot port)**
   * Automatically replies to social/art links with an embed-friendly version so videos play inline in Discord — no mention needed.
-  * x.com / twitter.com → vxtwitter.com, Instagram → video/photo attached inline under an Instagram-style card (oginstagram.com link as fallback), Bluesky → bskx.app, TikTok → vxtiktok.com, Reddit → rxddit.com, Pixiv → phixiv.net, DeviantArt → fixdeviantart.com, FurAffinity → xfuraffinity.net (NSFW channels only), ppv.* stream pages → preview card.
+  * x.com / twitter.com → vxtwitter.com, Instagram → videos via oginstagram.com (Discord plays them inside the card), photos attached inside an Instagram-style card, Bluesky → bskx.app, TikTok → vxtiktok.com, Reddit → rxddit.com, Pixiv → phixiv.net, DeviantArt → fixdeviantart.com, FurAffinity → xfuraffinity.net (NSFW channels only), ppv.* stream pages → preview card.
   * Hides the original link preview (needs **Manage Messages**). See [Embed Fixes](#embed-fixes-saucybot-port).
 * **Vision Generation**
   * Image & video generation with provider budgeting, safety filtering, job management, artifact caching, and cost tracking.
@@ -486,7 +486,7 @@ Python port of [SaucyBot](https://github.com/Sn0wCrack/saucybot-discord)'s link 
 | `EMBED_FIX_MAX_LINKS` | `8` | Max links fixed per message |
 | `EMBED_FIX_SUPPRESS_ORIGINAL` | `true` | Hide the original preview |
 | `EMBED_FIX_RESTRICT_NSFW` | `true` | NSFW sites only in NSFW channels |
-| `EMBED_FIX_UPLOAD_MEDIA` | `true` | Instagram posts are downloaded and attached so they play inline, with an Instagram-style card (name, @handle, avatar, caption, post time, likes/comments). Media sources in order: yt-dlp, oginstagram, kkinstagram. Needs **Attach Files**; capped at the server's upload limit. Any failure or a file too big falls back to the oginstagram link |
+| `EMBED_FIX_UPLOAD_MEDIA` | `true` | Video posts are sent as an oginstagram link, which Discord unfurls with the video playing inside the card (bot-built embeds cannot hold video). Photo posts, and videos oginstagram cannot serve, are downloaded and attached with an Instagram-style card (name, @handle, avatar, caption, post time, likes/comments). Media sources in order: yt-dlp, oginstagram, kkinstagram. Needs **Attach Files**; capped at the server's upload limit. Any failure or a file too big falls back to the oginstagram link |
 | `EMBED_FIX_TRANSLATE_TO` | `en` | Foreign-language tweets get `/en` appended so the proxy shows a translation; English tweets and links that already end in a language code are left alone. Empty disables |
 
 ---

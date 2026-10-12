@@ -15,6 +15,7 @@ import io
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any
+from urllib.parse import urlsplit
 
 import discord
 
@@ -140,7 +141,9 @@ class _Uploads:
 async def _fetch_uploads(fixes: list[EmbedFix], max_bytes: int) -> _Uploads:
     """Download media (+ a styled card) for upload-site fixes within one shared byte budget.
 
-    Fixes that got no media fall back to their proxy link.
+    Video posts oginstagram can embed are skipped on purpose: a bot embed can't
+    hold video, but Discord's unfurl of the oginstagram link plays it inside
+    the card. Those, and fixes that got no media, go out as the proxy link.
     """
     out = _Uploads([], [], set())
     for fix in [f for f in fixes if f.site in UPLOAD_SITES][:_MAX_UPLOAD_POSTS]:
@@ -148,6 +151,9 @@ async def _fetch_uploads(fixes: list[EmbedFix], max_bytes: int) -> _Uploads:
         slots = instagram.MAX_ITEMS - len(out.files)
         if room <= 0 or slots <= 0:
             break
+        if urlsplit(fix.rewritten).hostname == instagram.OG_HOST and await instagram.has_link_video(fix.original):
+            # Discord's unfurl of the oginstagram link puts the video inside the card.
+            continue
         post = await instagram.fetch_post(fix.original, max_bytes=room)
         if post is None or not post.files:
             continue

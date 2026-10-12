@@ -43,6 +43,7 @@ def _no_tweet_lang_lookup(monkeypatch):
     monkeypatch.setattr(h.translate, "fetch_lang", AsyncMock(return_value="en"))
     # ...and no Instagram downloads: every post falls back to the proxy link.
     monkeypatch.setattr(h.instagram, "fetch_post", AsyncMock(return_value=None))
+    monkeypatch.setattr(h.instagram, "has_link_video", AsyncMock(return_value=False))
 
 
 @pytest.fixture

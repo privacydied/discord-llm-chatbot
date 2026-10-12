@@ -329,6 +329,7 @@ def reply(monkeypatch):
     monkeypatch.setattr(h, "is_server_feature_enabled", lambda guild_id, feature: True)
     monkeypatch.setattr(h, "SUPPRESS_RECHECK_DELAYS_S", ())
     monkeypatch.setattr(h.translate, "fetch_lang", AsyncMock(return_value="en"))
+    monkeypatch.setattr(h.instagram, "has_link_video", AsyncMock(return_value=False))
     return mock
 
 
@@ -382,3 +383,33 @@ async def test_multiple_posts_share_budget_and_get_one_card_each(reply, monkeypa
     assert [c.author.name for c in kwargs["embeds"]] == ["@u", "@v"]
     assert kwargs["embeds"][1].image.url == "attachment://b.jpg"
     assert reply.await_args.args[1] is None
+
+
+async def test_video_post_with_og_video_goes_out_as_link_for_discord_unfurl(reply, monkeypatch):
+    h.instagram.has_link_video.return_value = True
+    monkeypatch.setattr(h.instagram, "fetch_post", AsyncMock())
+    await h.maybe_fix_embeds(_message("https://www.instagram.com/reel/AB/"), {})
+    h.instagram.fetch_post.assert_not_awaited()
+    args, kwargs = reply.await_args
+    assert args[1] == "https://www.oginstagram.com/reel/AB/"
+    assert kwargs["files"] is None and kwargs["embeds"] is None
+
+
+async def test_link_video_check_skipped_when_link_host_overridden(reply, monkeypatch):
+    h.instagram.has_link_video.return_value = True
+    monkeypatch.setattr(h.instagram, "fetch_post", AsyncMock(return_value=_ig_post(ig.MediaFile("a.mp4", b"v"))))
+    await h.maybe_fix_embeds(_message("https://www.instagram.com/reel/AB/"), {"EMBED_FIX_DOMAIN_OVERRIDES": "instagram=www.kkinstagram.com"})
+    h.instagram.has_link_video.assert_not_awaited()
+    assert [f.filename for f in reply.await_args.kwargs["files"]] == ["a.mp4"]
+
+
+@pytest.mark.parametrize(
+    ("html", "expected"),
+    [(OG_REEL_HTML, True), ('<meta property="og:image" content="https://og/1.jpg">', False), (None, False)],
+)
+async def test_has_link_video(monkeypatch, html, expected):
+    get_text = AsyncMock(return_value=html)
+    monkeypatch.setattr(ig, "_get_text", get_text)
+    assert await ig.has_link_video("https://www.instagram.com/reels/AB/") is expected
+    assert get_text.await_args.args[1] == "https://www.oginstagram.com/reel/AB/"
+    assert await ig.has_link_video("https://x.com/a") is False

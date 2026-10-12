@@ -223,6 +223,27 @@ async def _from_og(session: aiohttp.ClientSession, code: str, kind: str) -> tupl
     return og_post_meta(parse_og(html)) if html else ([], PostMeta())
 
 
+async def has_link_video(post_url: str, *, timeout_s: float = 8.0) -> bool:
+    """True when oginstagram's page for the post carries a playable og:video.
+
+    Bot-built embeds can never contain video; only Discord's own unfurl of a
+    page with og:video (+ type/size, which oginstagram sets) plays inside the
+    card. For such posts the plain oginstagram link is the better reply.
+    """
+    code = shortcode(post_url)
+    if not code:
+        return False
+    kind = "reel" if re.search(r"/reels?/", post_url, re.IGNORECASE) else "p"
+    timeout = aiohttp.ClientTimeout(total=timeout_s)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            html = await _get_text(session, f"https://{OG_HOST}/{kind}/{code}/")
+    except TimeoutError:
+        return False
+    video = parse_og(html).get("og:video", "") if html else ""
+    return video.startswith("https://")
+
+
 async def _avatar(session: aiohttp.ClientSession, username: str | None) -> str | None:
     if not username or not _USERNAME_RE.match(username):
         return None
