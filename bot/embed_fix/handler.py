@@ -11,6 +11,7 @@ router / LLM path still sees every link post.
 from __future__ import annotations
 
 import asyncio
+import io
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -21,7 +22,7 @@ from bot.core.output import safe_reply
 from bot.server_features import is_server_feature_enabled
 from bot.utils.logging import get_logger
 
-from . import ppv, translate
+from . import instagram, ppv, translate
 from .sites import DEFAULT_MAX_LINKS, EmbedFix, find_fixes, is_ignored, parse_domain_overrides, parse_site_list
 
 logger = get_logger(__name__)
@@ -30,6 +31,11 @@ FEATURE_NAME = "embed_fix"
 _DISCORD_TIMEOUT_S = 10.0
 _DISCORD_ERRORS = (discord.HTTPException, asyncio.TimeoutError)
 _MAX_EMBEDS = 10  # Discord's per-message embed cap
+# Uploads take longer than a text reply (several MB from the NAS).
+_UPLOAD_TIMEOUT_S = 60.0
+# Sites whose media the bot downloads and attaches instead of linking a proxy.
+UPLOAD_SITES = frozenset({"instagram"})
+_MAX_UPLOAD_POSTS = 4
 # Re-check points (seconds between checks) for the late-unfurl race; total ~15s.
 SUPPRESS_RECHECK_DELAYS_S: tuple[float, ...] = (2.0, 4.0, 9.0)
 
@@ -45,6 +51,7 @@ class EmbedFixSettings:
     suppress_original: bool = True
     restrict_nsfw: bool = True
     translate_to: str | None = translate.DEFAULT_TARGET_LANG
+    upload_media: bool = True
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any] | None) -> EmbedFixSettings:
@@ -57,6 +64,7 @@ class EmbedFixSettings:
             suppress_original=bool(cfg.get("EMBED_FIX_SUPPRESS_ORIGINAL", True)),
             restrict_nsfw=bool(cfg.get("EMBED_FIX_RESTRICT_NSFW", True)),
             translate_to=translate.parse_target(cfg.get("EMBED_FIX_TRANSLATE_TO")),
+            upload_media=bool(cfg.get("EMBED_FIX_UPLOAD_MEDIA", True)),
         )
 
 
@@ -110,29 +118,65 @@ async def _guild_allows(guild_id: int) -> bool:
         return True
 
 
-async def _render(fixes: list[EmbedFix]) -> tuple[str | None, list[discord.Embed], list[EmbedFix]]:
-    """Split fixes into reply text (rewritten links) and bot-built cards."""
-    links = [fix for fix in fixes if not fix.card]
+@dataclass(slots=True)
+class _Rendered:
+    content: str | None
+    cards: list[discord.Embed]
+    files: list[instagram.MediaFile]
+    sent: list[EmbedFix]
+
+
+def _can_upload(message: discord.Message, perms: discord.Permissions | None, settings: EmbedFixSettings) -> bool:
+    return settings.upload_media and perms is not None and bool(perms.attach_files) and message.guild is not None
+
+
+async def _fetch_uploads(fixes: list[EmbedFix], max_bytes: int) -> tuple[list[instagram.MediaFile], set[int]]:
+    """Download media for upload-site fixes within one shared byte budget.
+
+    Returns the files and the positions of fixes that got media; the rest
+    fall back to their proxy link.
+    """
+    files: list[instagram.MediaFile] = []
+    done: set[int] = set()
+    for fix in [f for f in fixes if f.site in UPLOAD_SITES][:_MAX_UPLOAD_POSTS]:
+        room = min(max_bytes - sum(len(f.data) for f in files), max_bytes)
+        slots = instagram.MAX_ITEMS - len(files)
+        if room <= 0 or slots <= 0:
+            break
+        got = (await instagram.fetch_media(fix.original, max_bytes=room))[:slots]
+        if got:
+            files.extend(got)
+            done.add(fix.position)
+    return files, done
+
+
+async def _render(fixes: list[EmbedFix], *, upload_budget: int = 0) -> _Rendered:
+    """Split fixes into uploaded media, reply text (rewritten links) and bot-built cards."""
+    files, uploaded = await _fetch_uploads(fixes, upload_budget) if upload_budget > 0 else ([], set())
+    links = [fix for fix in fixes if not fix.card and fix.position not in uploaded]
     card_fixes = [fix for fix in fixes if fix.card]
     cards = await ppv.build_cards([fix.rewritten for fix in card_fixes[:_MAX_EMBEDS]]) if card_fixes else []
-    sent = links + (card_fixes if cards else [])
-    return ("\n".join(fix.rewritten for fix in links) or None), cards, sent
+    sent = [fix for fix in fixes if fix.position in uploaded] + links + (card_fixes if cards else [])
+    sent.sort(key=lambda fix: fix.position)
+    return _Rendered("\n".join(fix.rewritten for fix in links) or None, cards, files, sent)
 
 
-async def _send_fixes(message: discord.Message, fixes: list[EmbedFix]) -> list[EmbedFix]:
-    content, cards, sent = await _render(fixes)
-    if not content and not cards:
+async def _send_fixes(message: discord.Message, fixes: list[EmbedFix], *, upload_budget: int = 0) -> list[EmbedFix]:
+    rendered = await _render(fixes, upload_budget=upload_budget)
+    if not rendered.content and not rendered.cards and not rendered.files:
         return []
+    files = [discord.File(io.BytesIO(media.data), filename=media.filename) for media in rendered.files]
     try:
         await asyncio.wait_for(
             safe_reply(
                 message,
-                content,
-                embeds=cards or None,
+                rendered.content,
+                embeds=rendered.cards or None,
+                files=files or None,
                 mention_author=False,
                 allowed_mentions=discord.AllowedMentions.none(),
             ),
-            timeout=_DISCORD_TIMEOUT_S,
+            timeout=_UPLOAD_TIMEOUT_S if files else _DISCORD_TIMEOUT_S,
         )
     except discord.NotFound:
         logger.debug(f"embed_fix.original_deleted | msg_id={message.id}")
@@ -140,7 +184,9 @@ async def _send_fixes(message: discord.Message, fixes: list[EmbedFix]) -> list[E
     except _DISCORD_ERRORS as exc:
         logger.warning(f"embed_fix.reply_failed | msg_id={message.id} error={exc}")
         return []
-    return sent
+    if files:
+        logger.info(f"embed_fix.uploaded | msg_id={message.id} files={len(files)} bytes={sum(len(m.data) for m in rendered.files)}")
+    return rendered.sent
 
 
 async def _suppress_once(message: discord.Message) -> bool:
@@ -218,7 +264,8 @@ async def maybe_fix_embeds(message: discord.Message, config: Mapping[str, Any] |
     fixes = filter_nsfw(fixes, message.channel, restrict=settings.restrict_nsfw)
     if not fixes:
         return []
-    fixes = await _send_fixes(message, await translate.apply(fixes, settings.translate_to))
+    budget = instagram.upload_budget(getattr(message.guild, "filesize_limit", None)) if _can_upload(message, perms, settings) else 0
+    fixes = await _send_fixes(message, await translate.apply(fixes, settings.translate_to), upload_budget=budget)
     if not fixes:
         return []
     logger.info(

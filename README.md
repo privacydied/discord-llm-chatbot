@@ -27,7 +27,7 @@
   * **X/Twitter** → Thread unrolling of author self-replies, syndication probes with image→VL routing.
 * **Embed Fixes (SaucyBot port)**
   * Automatically replies to social/art links with an embed-friendly version so videos play inline in Discord — no mention needed.
-  * x.com / twitter.com → vxtwitter.com, Instagram → kkinstagram.com, Bluesky → bskx.app, TikTok → vxtiktok.com, Reddit → rxddit.com, Pixiv → phixiv.net, DeviantArt → fixdeviantart.com, FurAffinity → xfuraffinity.net (NSFW channels only), ppv.* stream pages → preview card.
+  * x.com / twitter.com → vxtwitter.com, Instagram → video/photo downloaded and attached inline (kkinstagram.com link as fallback), Bluesky → bskx.app, TikTok → vxtiktok.com, Reddit → rxddit.com, Pixiv → phixiv.net, DeviantArt → fixdeviantart.com, FurAffinity → xfuraffinity.net (NSFW channels only), ppv.* stream pages → preview card.
   * Hides the original link preview (needs **Manage Messages**). See [Embed Fixes](#embed-fixes-saucybot-port).
 * **Vision Generation**
   * Image & video generation with provider budgeting, safety filtering, job management, artifact caching, and cost tracking.
@@ -460,7 +460,7 @@ Python port of [SaucyBot](https://github.com/Sn0wCrack/saucybot-discord)'s link 
 | Site | Matches | Rewritten to |
 | ---- | ------- | ------------ |
 | `twitter` | `x.com`, `twitter.com`, `mobile.twitter.com`, `nitter.net` status links | `vxtwitter.com` |
-| `instagram` | `/p/`, `/reel/`, `/reels/`, `/tv/` | `www.kkinstagram.com` |
+| `instagram` | `/p/`, `/reel/`, `/reels/`, `/tv/` | media uploaded as an attachment; `www.kkinstagram.com` link if that fails |
 | `bluesky` | `bsky.app/profile/…/post/…` | `bskx.app` |
 | `tiktok` | `tiktok.com/@user/video/…`, `vm.`/`vt.tiktok.com` | `vxtiktok.com` |
 | `reddit` | `/r/…/comments/…`, `/r/…/s/…` | `rxddit.com` |
@@ -486,6 +486,7 @@ Python port of [SaucyBot](https://github.com/Sn0wCrack/saucybot-discord)'s link 
 | `EMBED_FIX_MAX_LINKS` | `8` | Max links fixed per message |
 | `EMBED_FIX_SUPPRESS_ORIGINAL` | `true` | Hide the original preview |
 | `EMBED_FIX_RESTRICT_NSFW` | `true` | NSFW sites only in NSFW channels |
+| `EMBED_FIX_UPLOAD_MEDIA` | `true` | Instagram posts are downloaded (yt-dlp for videos, the kkinstagram redirect for photos) and attached so they play inline. Needs **Attach Files**; capped at the server's upload limit. Any failure or a file too big falls back to the kkinstagram link |
 | `EMBED_FIX_TRANSLATE_TO` | `en` | Foreign-language tweets get `/en` appended so the proxy shows a translation; English tweets and links that already end in a language code are left alone. Empty disables |
 
 ---

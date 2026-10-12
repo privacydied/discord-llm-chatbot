@@ -41,6 +41,8 @@ def _message(content, *, channel=None, guild=True, author_bot=False):
 def _no_tweet_lang_lookup(monkeypatch):
     # Keep handler tests offline: every tweet reads as English (no /en suffix).
     monkeypatch.setattr(h.translate, "fetch_lang", AsyncMock(return_value="en"))
+    # ...and no Instagram downloads: every post falls back to the proxy link.
+    monkeypatch.setattr(h.instagram, "fetch_media", AsyncMock(return_value=[]))
 
 
 @pytest.fixture
