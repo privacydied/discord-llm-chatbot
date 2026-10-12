@@ -98,7 +98,6 @@ class PostMeta:
     likes: int | None = None
     comments: int | None = None
     avatar_url: str | None = None
-    thumbnail_url: str | None = None
 
     def merged(self, other: PostMeta) -> PostMeta:
         """Fill fields this one lacks from *other*."""
@@ -150,14 +149,8 @@ def _ytdlp_post(post_url: str) -> tuple[list[str], PostMeta]:
         published=datetime.fromtimestamp(timestamp, tz=UTC) if timestamp else None,
         likes=_as_int(info.get("like_count") if "like_count" in info else first.get("like_count")),
         comments=_as_int(info.get("comment_count") if "comment_count" in info else first.get("comment_count")),
-        thumbnail_url=_https(info.get("thumbnail") or first.get("thumbnail")),
     )
     return urls, meta
-
-
-def _https(value: Any) -> str | None:
-    text = str(value or "")
-    return text if text.startswith("https://") else None
 
 
 async def _from_ytdlp(post_url: str) -> tuple[list[str], PostMeta]:
@@ -222,7 +215,6 @@ def og_post_meta(og: dict[str, str]) -> tuple[list[str], PostMeta]:
         display_name=(m["name"] or None) if m else None,
         caption=og.get("og:image:alt") or og.get("og:description") or None,
         published=_parse_time(og.get("article:published_time")),
-        thumbnail_url=_https(og.get("og:image")) if og.get("og:video") else None,
     )
 
 
@@ -374,26 +366,3 @@ def build_card(post: InstagramPost) -> discord.Embed:
     if first is not None and first.is_image:
         embed.set_image(url=f"attachment://{first.filename}")
     return embed
-
-
-# ---- bot-hosted embed page ---------------------------------------------------
-
-
-async def fetch_thumbnail(url: str | None, *, max_bytes: int = 5 * 1024 * 1024, timeout_s: float = 15.0) -> MediaFile | None:
-    """Poster frame for a video post (og:image on the hosted page)."""
-    if not url:
-        return None
-    timeout = aiohttp.ClientTimeout(total=timeout_s)
-    try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            got = await _download(session, url, max_bytes)
-    except TimeoutError:
-        return None
-    if got is None or not got[1].startswith("image/"):
-        return None
-    return MediaFile(f"thumb.{_extension(url, got[1])}", got[0])
-
-
-def stats_line(meta: PostMeta) -> str | None:
-    parts = [f"❤️ {_count(meta.likes)}" if meta.likes is not None else "", f"💬 {_count(meta.comments)}" if meta.comments else ""]
-    return "  ".join(p for p in parts if p) or None
