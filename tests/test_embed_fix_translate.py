@@ -95,7 +95,7 @@ async def test_apply_appends_target_only_to_foreign_tweets(monkeypatch):
         "https://vxtwitter.com/b/status/2",
         "https://vxtwitter.com/c/status/3",
         "https://vxtwitter.com/d/status/4/ja",
-        "https://www.kkinstagram.com/reel/AB/",
+        "https://www.oginstagram.com/reel/AB/",
     ]
     assert translate.fetch_lang.await_count == 3
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import io
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import discord
@@ -130,35 +130,44 @@ def _can_upload(message: discord.Message, perms: discord.Permissions | None, set
     return settings.upload_media and perms is not None and bool(perms.attach_files) and message.guild is not None
 
 
-async def _fetch_uploads(fixes: list[EmbedFix], max_bytes: int) -> tuple[list[instagram.MediaFile], set[int]]:
-    """Download media for upload-site fixes within one shared byte budget.
+@dataclass(slots=True)
+class _Uploads:
+    files: list[instagram.MediaFile]
+    cards: list[discord.Embed]
+    positions: set[int]
 
-    Returns the files and the positions of fixes that got media; the rest
-    fall back to their proxy link.
+
+async def _fetch_uploads(fixes: list[EmbedFix], max_bytes: int) -> _Uploads:
+    """Download media (+ a styled card) for upload-site fixes within one shared byte budget.
+
+    Fixes that got no media fall back to their proxy link.
     """
-    files: list[instagram.MediaFile] = []
-    done: set[int] = set()
+    out = _Uploads([], [], set())
     for fix in [f for f in fixes if f.site in UPLOAD_SITES][:_MAX_UPLOAD_POSTS]:
-        room = min(max_bytes - sum(len(f.data) for f in files), max_bytes)
-        slots = instagram.MAX_ITEMS - len(files)
+        room = max_bytes - sum(len(f.data) for f in out.files)
+        slots = instagram.MAX_ITEMS - len(out.files)
         if room <= 0 or slots <= 0:
             break
-        got = (await instagram.fetch_media(fix.original, max_bytes=room))[:slots]
-        if got:
-            files.extend(got)
-            done.add(fix.position)
-    return files, done
+        post = await instagram.fetch_post(fix.original, max_bytes=room)
+        if post is None or not post.files:
+            continue
+        post = replace(post, files=post.files[:slots])
+        out.files.extend(post.files)
+        out.cards.append(instagram.build_card(post))
+        out.positions.add(fix.position)
+    return out
 
 
 async def _render(fixes: list[EmbedFix], *, upload_budget: int = 0) -> _Rendered:
-    """Split fixes into uploaded media, reply text (rewritten links) and bot-built cards."""
-    files, uploaded = await _fetch_uploads(fixes, upload_budget) if upload_budget > 0 else ([], set())
-    links = [fix for fix in fixes if not fix.card and fix.position not in uploaded]
+    """Split fixes into uploaded media (+ cards), reply text (rewritten links) and bot-built cards."""
+    uploads = await _fetch_uploads(fixes, upload_budget) if upload_budget > 0 else _Uploads([], [], set())
+    links = [fix for fix in fixes if not fix.card and fix.position not in uploads.positions]
     card_fixes = [fix for fix in fixes if fix.card]
-    cards = await ppv.build_cards([fix.rewritten for fix in card_fixes[:_MAX_EMBEDS]]) if card_fixes else []
-    sent = [fix for fix in fixes if fix.position in uploaded] + links + (card_fixes if cards else [])
+    room = _MAX_EMBEDS - len(uploads.cards)
+    cards = await ppv.build_cards([fix.rewritten for fix in card_fixes[:room]]) if card_fixes and room > 0 else []
+    sent = [fix for fix in fixes if fix.position in uploads.positions] + links + (card_fixes if cards else [])
     sent.sort(key=lambda fix: fix.position)
-    return _Rendered("\n".join(fix.rewritten for fix in links) or None, cards, files, sent)
+    return _Rendered("\n".join(fix.rewritten for fix in links) or None, uploads.cards + cards, uploads.files, sent)
 
 
 async def _send_fixes(message: discord.Message, fixes: list[EmbedFix], *, upload_budget: int = 0) -> list[EmbedFix]:

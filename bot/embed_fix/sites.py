@@ -5,7 +5,7 @@ embed-friendly URL on a proxy domain (x.com -> vxtwitter.com, ...). Everything
 here is pure: no Discord objects, no I/O, so it is cheap to test.
 
 Ported from Sn0wCrack/saucybot-discord (v2):
-  Twitter (VxTwitter.cs), Instagram (VxInstagram.cs; target switched to kkinstagram), FurAffinity
+  Twitter (VxTwitter.cs), Instagram (VxInstagram.cs; target switched to oginstagram), FurAffinity
   (XFurAffinity.cs), Reddit media (Reddit.cs), Bluesky (bskx.app, the
   VixBluesky host SaucyBot's client calls).
 SaucyBot fetches APIs for Pixiv and DeviantArt; here they use the public
@@ -148,7 +148,9 @@ SITES: tuple[EmbedSite, ...] = (
     EmbedSite(
         identifier="instagram",
         pattern=_compile(r"https?://(?:www\.|m\.)?instagram\.com/(?P<kind>p|reels?|tv)/(?P<code>[A-Za-z0-9_-]+)"),
-        default_domain="www.kkinstagram.com",
+        # oginstagram serves a real og: page (video/photo, author, caption) that
+        # Discord unfurls; kkinstagram only 302s to the file and no longer embeds.
+        default_domain="www.oginstagram.com",
         build=_build_instagram,
     ),
     EmbedSite(
