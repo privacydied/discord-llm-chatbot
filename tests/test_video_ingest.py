@@ -602,3 +602,31 @@ async def test_hear_infer_from_url_video_ingest_error(monkeypatch, stub_hear) ->
 
 if __name__ == "__main__":  # pragma: no cover - convenience for local runs
     pytest.main([__file__, "-q"])
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://cdn.example.com/clips/a.mp4",
+        "https://nasirjones.wyvern-alligator.ts.net:8443/m/kApJqz6mOUud1T0G5ex9ng/1.mp4",
+        "https://files.example.org/x/Song.MP3?sig=abc&exp=1",
+        "http://host/a.webm",
+    ],
+)
+def test_direct_media_files_on_any_host_are_supported(manager: VideoIngestionManager, url: str) -> None:
+    """Router-classified direct video/audio files must reach yt-dlp, not fail the allowlist."""
+    assert manager._is_supported_url(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com/page.html",
+        "https://example.com/a.mp4.html",
+        "https://example.com/watch?file=a.mp4",
+        "ftp://example.com/a.mp4",
+        "https://example.com/",
+    ],
+)
+def test_non_media_urls_stay_unsupported(manager: VideoIngestionManager, url: str) -> None:
+    assert not manager._is_supported_url(url)

@@ -66,6 +66,11 @@ MEDIA_BUDGET_FLOOR_S = 15.0
 VXINSTAGRAM_RESOLVE_TIMEOUT_S = 10.0
 
 # Supported URL patterns - must match MEDIA_CAPABLE_DOMAINS from media_capability.py
+DIRECT_MEDIA_URL_RE = re.compile(
+    r"^https?://[^/\s?#]+/[^\s?#]*\.(?:mp4|m4v|mov|webm|mkv|m4a|mp3|aac|ogg|oga|opus|wav|flac)(?:\?[^\s#]*)?$",
+    re.IGNORECASE,
+)
+
 SUPPORTED_PATTERNS = [
     # ---------- YouTube (full set of common forms) ----------
     r"https?://(?:www\.)?youtube\.com/watch\?(?:.*&)?v=[0-9A-Za-z_-]{6,}",
@@ -436,7 +441,12 @@ class VideoIngestionManager:
             base_url = url.split("#", 1)[0]
         except Exception:  # noqa: BLE001
             base_url = url
-        return any(re.match(pattern, base_url) for pattern in SUPPORTED_PATTERNS)
+        if any(re.match(pattern, base_url) for pattern in SUPPORTED_PATTERNS):
+            return True
+        # Direct media files on any host (the router's classifier already
+        # routed them here as video/audio files); yt-dlp's generic extractor
+        # downloads these, so refusing them only broke transcription.
+        return bool(DIRECT_MEDIA_URL_RE.match(base_url))
 
     @staticmethod
     def _is_supported_instagram_content_path(path: str) -> bool:
