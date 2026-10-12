@@ -288,6 +288,17 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "EMBED_FIX_TRANSLATE_TO": _clean_env_value(env_getter("EMBED_FIX_TRANSLATE_TO", "en")).lower(),
         # Download Instagram media and attach it (falls back to the proxy link).
         "EMBED_FIX_UPLOAD_MEDIA": _parse_bool_str(_clean_env_value(env_getter("EMBED_FIX_UPLOAD_MEDIA", None)), True),
+        # Bot-hosted embed pages (bot/embed_host): own public OG/ActivityPub pages
+        # so Discord plays video inside the card. Used only once a GET of
+        # EMBED_HOST_PUBLIC_URL/healthz reaches this server.
+        "EMBED_HOST_ENABLED": _parse_bool_str(_clean_env_value(env_getter("EMBED_HOST_ENABLED", None)), False),
+        "EMBED_HOST_BIND": _clean_env_value(env_getter("EMBED_HOST_BIND", "127.0.0.1")),
+        "EMBED_HOST_PORT": _safe_int(env_getter("EMBED_HOST_PORT", None), "8012", "EMBED_HOST_PORT"),
+        "EMBED_HOST_PUBLIC_URL": _clean_env_value(env_getter("EMBED_HOST_PUBLIC_URL", "")),
+        "EMBED_HOST_DIR": _clean_env_value(env_getter("EMBED_HOST_DIR", "./data/embed_host")),
+        "EMBED_HOST_TTL_DAYS": _safe_float(env_getter("EMBED_HOST_TTL_DAYS", None), "14", "EMBED_HOST_TTL_DAYS"),
+        "EMBED_HOST_MAX_TOTAL_GB": _safe_float(env_getter("EMBED_HOST_MAX_TOTAL_GB", None), "5", "EMBED_HOST_MAX_TOTAL_GB"),
+        "EMBED_HOST_MAX_FILE_MB": _safe_float(env_getter("EMBED_HOST_MAX_FILE_MB", None), "100", "EMBED_HOST_MAX_FILE_MB"),
         # PROMPT FILES - CRITICAL FOR MULTIMODAL FUNCTIONALITY
         "PROMPT_FILE": _clean_env_value(env_getter("PROMPT_FILE", None)),
         "VL_PROMPT_FILE": _clean_env_value(env_getter("VL_PROMPT_FILE", None)),

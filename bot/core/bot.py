@@ -44,6 +44,7 @@ from bot.public_output import (
     sanitize_public_text,
 )
 from bot.embed_fix import maybe_fix_embeds, might_have_fixable_link
+from bot.embed_host import start_embed_host, stop_embed_host
 from bot.server_archive import start_server_archive_service, stop_server_archive_service
 from bot.tts.errors import SynthesisError
 from bot.utils.logging import get_logger
@@ -2504,6 +2505,8 @@ class LLMBot(commands.Bot):
 
             # --- Dashboard server ---
             self._track_background_task(asyncio.create_task(self._start_dashboard(), name="dashboard_start"))
+            # --- Public embed host (separate from the dashboard; read-only pages) ---
+            self._track_background_task(asyncio.create_task(start_embed_host(self.config), name="embed_host_start"))
         except Exception as e:
             self.logger.error(f"Failed to set up background tasks: {e}", exc_info=True)
 
@@ -2876,6 +2879,11 @@ class LLMBot(commands.Bot):
                     await dashboard.stop()
             except (RuntimeError, OSError, AttributeError) as e:
                 self.logger.warning(f"Error stopping dashboard server: {e}")
+
+            try:
+                await stop_embed_host()
+            except (RuntimeError, OSError) as e:
+                self.logger.warning(f"Error stopping embed host: {e}")
 
             # Close Vision Orchestrator (if initialized either on bot or via router fallback)
             try:

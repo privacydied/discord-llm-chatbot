@@ -23,7 +23,9 @@ from bot.core.output import safe_reply
 from bot.server_features import is_server_feature_enabled
 from bot.utils.logging import get_logger
 
-from . import instagram, ppv, translate
+from bot.embed_host import get_embed_host
+
+from . import hosted, instagram, ppv, translate
 from .sites import DEFAULT_MAX_LINKS, EmbedFix, find_fixes, is_ignored, parse_domain_overrides, parse_site_list
 
 logger = get_logger(__name__)
@@ -164,9 +166,34 @@ async def _fetch_uploads(fixes: list[EmbedFix], max_bytes: int) -> _Uploads:
     return out
 
 
+async def _host_one(host: Any, fix: EmbedFix) -> EmbedFix:
+    try:
+        url = await hosted.publish_instagram(host, fix.original)
+    except Exception as exc:  # never let hosting break the reply; the proxy path still works
+        logger.warning(f"embed_fix.hosted.failed | url={fix.original} error={exc}")
+        url = None
+    return replace(fix, rewritten=url, card=False) if url else fix
+
+
+async def _apply_hosted(fixes: list[EmbedFix]) -> tuple[list[EmbedFix], set[int]]:
+    """Swap hosted-site links for the bot's own embed page (video inside the card).
+
+    Only while the embed host is up and its public URL verified; failures keep
+    the original fix, which then takes the upload / proxy path.
+    """
+    host = get_embed_host()
+    targets = [f for f in fixes if f.site in hosted.HOSTED_SITES][:_MAX_UPLOAD_POSTS]
+    if host is None or not host.ready or not targets:
+        return fixes, set()
+    done = {f.position: f for f in await asyncio.gather(*(_host_one(host, f) for f in targets)) if host.owns(f.rewritten)}
+    return [done.get(f.position, f) for f in fixes], set(done)
+
+
 async def _render(fixes: list[EmbedFix], *, upload_budget: int = 0) -> _Rendered:
-    """Split fixes into uploaded media (+ cards), reply text (rewritten links) and bot-built cards."""
-    uploads = await _fetch_uploads(fixes, upload_budget) if upload_budget > 0 else _Uploads([], [], set())
+    """Split fixes into hosted/uploaded media (+ cards), reply text (rewritten links) and bot-built cards."""
+    fixes, hosted_positions = await _apply_hosted(fixes)
+    pending = [f for f in fixes if f.position not in hosted_positions]
+    uploads = await _fetch_uploads(pending, upload_budget) if upload_budget > 0 else _Uploads([], [], set())
     links = [fix for fix in fixes if not fix.card and fix.position not in uploads.positions]
     card_fixes = [fix for fix in fixes if fix.card]
     room = _MAX_EMBEDS - len(uploads.cards)
