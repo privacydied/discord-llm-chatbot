@@ -13,6 +13,7 @@ import asyncio
 import contextlib
 import json
 import os
+import stat
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,16 @@ async def _get_lock(path: str) -> asyncio.Lock:
         if path not in _locks:
             _locks[path] = asyncio.Lock()
         return _locks[path]
+
+
+_DEFAULT_MODE = 0o600
+
+
+def _target_mode(path: Path) -> int:
+    try:
+        return stat.S_IMODE(os.stat(path).st_mode)
+    except OSError:
+        return _DEFAULT_MODE
 
 
 async def write_json_atomic(path: Path, data: Any) -> None:
@@ -59,6 +70,10 @@ async def write_json_atomic(path: Path, data: Any) -> None:
             # Use tempfile on same filesystem so os.replace() is atomic
             fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.tmp")
             try:
+                # Keep the target's mode (default 0600). mkstemp asks for 0600, but
+                # on ACL filesystems (Synology synoacl) new files inherit 0777, and
+                # os.replace() would then reset a chmod'd file on every save.
+                os.fchmod(fd, _target_mode(path))
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2, ensure_ascii=False)
                     f.flush()

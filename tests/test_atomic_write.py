@@ -219,3 +219,19 @@ async def test_large_write_remains_valid(tmp_dir) -> None:
 
     assert result == data
     assert len(result["big_list"]) == 10000
+
+
+async def test_write_keeps_target_mode_and_defaults_to_0600(tmp_path):
+    """A replaced file keeps its mode; new files are 0600 even if the FS hands out 0777."""
+    import os
+    import stat
+
+    from bot.atomic_json import write_json_atomic
+
+    new = tmp_path / "new.json"
+    await write_json_atomic(new, {"a": 1})
+    assert stat.S_IMODE(os.stat(new).st_mode) == 0o600
+
+    os.chmod(new, 0o640)
+    await write_json_atomic(new, {"a": 2})
+    assert stat.S_IMODE(os.stat(new).st_mode) == 0o640
