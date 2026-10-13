@@ -27,7 +27,7 @@
   * **X/Twitter** → Thread unrolling of author self-replies, syndication probes with image→VL routing.
 * **Embed Fixes (SaucyBot port)**
   * Automatically replies to social/art links with an embed-friendly version so videos play inline in Discord — no mention needed.
-  * x.com / twitter.com → vxtwitter.com, Instagram → oginstagram.com, Bluesky → bskx.app, TikTok → vxtiktok.com, Reddit → rxddit.com, Pixiv → phixiv.net, DeviantArt → fixdeviantart.com, FurAffinity → xfuraffinity.net (NSFW channels only), ppv.* stream pages → preview card.
+  * x.com / twitter.com → vxtwitter.com, Instagram → oginstagram.com, Bluesky → bskx.app, TikTok → vxtiktok.com, Reddit → vxreddit.com, Pixiv → phixiv.net, DeviantArt → fixdeviantart.com, FurAffinity → xfuraffinity.net (NSFW channels only), ppv.* stream pages → preview card.
   * Hides the original link preview (needs **Manage Messages**). See [Embed Fixes](#embed-fixes-saucybot-port).
 * **Vision Generation**
   * Image & video generation with provider budgeting, safety filtering, job management, artifact caching, and cost tracking.
@@ -463,7 +463,7 @@ Python port of [SaucyBot](https://github.com/Sn0wCrack/saucybot-discord)'s link 
 | `instagram` | `/p/`, `/reel/`, `/reels/`, `/tv/` | `www.oginstagram.com` (set `EMBED_FIX_UPLOAD_MEDIA=true` to download + attach instead) |
 | `bluesky` | `bsky.app/profile/…/post/…` | `bskx.app` |
 | `tiktok` | `tiktok.com/@user/video/…`, `vm.`/`vt.tiktok.com` | `vxtiktok.com` |
-| `reddit` | `/r/…/comments/…`, `/r/…/s/…` | `rxddit.com` |
+| `reddit` | `/r/…/comments/…`, `/r/…/s/…` | `vxreddit.com` |
 | `pixiv` | `pixiv.net/artworks/…` | `phixiv.net` |
 | `deviantart` | `deviantart.com/…/art/…` | `fixdeviantart.com` |
 | `furaffinity` ⚠️ | `/view/…`, `/full/…` | `xfuraffinity.net` |

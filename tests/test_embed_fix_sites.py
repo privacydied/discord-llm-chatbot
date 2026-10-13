@@ -41,7 +41,7 @@ from bot.embed_fix.sites import SITE_IDS, find_fixes, page_slug, is_ignored, par
         # Additions beyond SaucyBot
         ("https://www.tiktok.com/@user.name/video/7300000000000000000", "https://vxtiktok.com/@user.name/video/7300000000000000000"),
         ("https://vm.tiktok.com/ZMabc123/", "https://vm.vxtiktok.com/ZMabc123/"),
-        ("https://old.reddit.com/r/videos/comments/abc12/title_here/", "https://rxddit.com/r/videos/comments/abc12/title_here"),
+        ("https://old.reddit.com/r/videos/comments/abc12/title_here/", "https://vxreddit.com/r/videos/comments/abc12/title_here"),
     ],
 )
 def test_rewrites(url, expected):

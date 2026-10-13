@@ -197,7 +197,9 @@ SITES: tuple[EmbedSite, ...] = (
     EmbedSite(
         identifier="reddit",
         pattern=_compile(r"https?://(?:www\.|old\.|new\.)?reddit\.com/(?P<path>r/\w+/(?:comments|s)/[A-Za-z0-9_]+(?:/[A-Za-z0-9_]+)?)"),
-        default_domain="rxddit.com",
+        # rxddit.com returns 502 for every post (checked with the Discordbot UA);
+        # vxreddit serves full og: tags incl. og:video and resolves /s/ share links.
+        default_domain="vxreddit.com",
         build=_build_reddit,
     ),
     EmbedSite(
