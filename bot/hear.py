@@ -339,8 +339,10 @@ class STTJob:
         self.temp_handle: tempfile.NamedTemporaryFile | None = None
         self.temp_path: Path | None = None
         self.transcript: TranscriptResult | None = None
-        self.status = "ok"
         self.abort_reason: str | None = None
+        # Only finish_success() may set "ok"; a job that is cancelled or closed
+        # without finishing must finalize as "fail", not log a false stt.ok.
+        self.status = "pending"
         self.chunks_done = 0
         self.dur_done_s = 0.0
         self.result_payload: Any = None
@@ -625,6 +627,13 @@ class BasePCMStream:
         if self._finalized:
             return
         self._finalized = True
+        if self._producer_task is not None and not self._producer_task.done():
+            # The consumer has stopped (cancel / timeout / abort) while the
+            # producer is still running: nothing drains the bounded queue, so
+            # the producer blocks on put() and waiting for it never returns.
+            # That hung the cancelled job, and with it the user's serial queue
+            # until restart. Abort first (cancels producer, kills ffmpeg). [REH]
+            await self.abort()
         await self.wait_finished()
 
     async def _produce(self) -> None:
@@ -2341,6 +2350,9 @@ async def hear_infer(audio: Path | discord.Attachment) -> str:
                 log_summary=_log_summary,
             )
             return await job.finish_success(result_text)
+    except asyncio.CancelledError:
+        job.abort_reason = job.abort_reason or "cancelled"
+        raise
     except RAMGuardExceeded as exc:
         await _stt_pipeline()["abort_and_finish_failure"](
             job=job,
@@ -2550,6 +2562,9 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False, language: s
                     result.setdefault("metadata", {})["media_path"] = str(download.raw_path)
 
             return await job.finish_success(result)
+    except asyncio.CancelledError:
+        job.abort_reason = job.abort_reason or "cancelled"
+        raise
     except RAMGuardExceeded as exc:
         await _stt_pipeline()["abort_and_finish_failure"](
             job=job,

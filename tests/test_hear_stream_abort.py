@@ -29,6 +29,49 @@ async def test_abort_finalize_does_not_hang_with_full_queue() -> None:
     await asyncio.wait_for(stream.finalize(success=False), timeout=1.0)
 
 
+class _EndlessProducerStream(BasePCMStream):
+    """ffmpeg-like producer: more audio than the consumer will ever read."""
+
+    async def _produce(self) -> None:
+        while True:
+            await self._queue.put(b"x")
+
+
+@pytest.mark.asyncio
+async def test_finalize_without_abort_does_not_hang_when_consumer_was_cancelled() -> None:
+    """Regression: router's STT timeout cancelled the consumer; cleanup called
+    finalize() directly (no abort) and waited forever on the blocked producer,
+    stalling that user's message queue until restart."""
+    stream = _EndlessProducerStream(sample_rate=16000, frame_samples=160, queue_depth=2)
+
+    async def consume() -> None:
+        async for _ in stream.iter_frames():
+            await asyncio.sleep(3600)  # stand-in for a long whisper chunk
+
+    consumer = asyncio.create_task(consume())
+    await asyncio.sleep(0.05)
+    consumer.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await consumer
+
+    await asyncio.wait_for(stream.finalize(success=True), timeout=1.0)
+    assert stream._producer_task is not None and stream._producer_task.done()
+
+
+@pytest.mark.asyncio
+async def test_unfinished_stt_job_finalizes_as_fail_not_ok(caplog) -> None:
+    """A cancelled/closed job must not log stt.ok; only finish_success sets ok."""
+    job = hear.STTJob(kind="url", spans=SimpleNamespace(), ram_guard=SimpleNamespace())
+    caplog.set_level("INFO", logger="bot.hear")
+    await job.close()
+    assert job.status == "fail"
+    assert "stt.ok" not in caplog.text
+
+    done = hear.STTJob(kind="url", spans=SimpleNamespace(), ram_guard=SimpleNamespace())
+    await done.finish_success({"text": "hi"})
+    assert done.status == "ok"
+
+
 # ---------------------------------------------------------------------------
 # _preprocess_audio must drain ffmpeg's stdout eagerly, not defer it to
 # whenever the caller first calls iter_frames(). Regression: ffmpeg starts
