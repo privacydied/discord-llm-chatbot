@@ -288,6 +288,10 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "EMBED_FIX_TRANSLATE_TO": _clean_env_value(env_getter("EMBED_FIX_TRANSLATE_TO", "en")).lower(),
         # Download Instagram media and attach it (falls back to the proxy link).
         "EMBED_FIX_UPLOAD_MEDIA": _parse_bool_str(_clean_env_value(env_getter("EMBED_FIX_UPLOAD_MEDIA", None)), False),
+        # Replies to embed-fix posts need a typed @bot; the reply ping alone is ignored.
+        "EMBED_FIX_REPLY_REQUIRES_MENTION": _parse_bool_str(
+            _clean_env_value(env_getter("EMBED_FIX_REPLY_REQUIRES_MENTION", None)), True
+        ),
         # PROMPT FILES - CRITICAL FOR MULTIMODAL FUNCTIONALITY
         "PROMPT_FILE": _clean_env_value(env_getter("PROMPT_FILE", None)),
         "VL_PROMPT_FILE": _clean_env_value(env_getter("VL_PROMPT_FILE", None)),

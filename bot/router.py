@@ -44,6 +44,7 @@ from .document_ingest import ingest_document_attachment, ingest_document_from_ur
 from .enhanced_retry import ProviderConfig, get_retry_manager
 from .evidence import EvidenceBundle
 from .exceptions import APIError, DispatchEmptyError, VisionDownloadError
+from .embed_fix.sites import is_embed_fix_post
 from .hear import hear_infer, hear_infer_from_url
 from .http_client import RequestConfig, get_http_client
 from .memory import build_memory_prompt_block
@@ -218,6 +219,9 @@ REF_MSG_CACHE_MAX_SIZE = 256
 REF_MSG_CACHE_TTL_S = 5.0
 # Gate denial reason: reply to the bot with Discord's reply ping turned off.
 GATE_REASON_REPLY_PING_OFF = "reply_ping_off"
+# Gate denial reason: reply to an embed-fix post (vxtwitter etc.) that only
+# carries Discord's automatic reply ping, not a typed @mention of the bot.
+GATE_REASON_EMBED_FIX_REPLY = "embed_fix_reply"
 
 # --- Hoisted static compiled regex patterns (compiled once at import). [PA][CMV] ---
 # Direct vision trigger tokens (DM/optional-mention + always-allowed phrases).
@@ -2813,6 +2817,12 @@ class Router:
         if is_reply and not mention_detected and not allow_reply_without_mention:
             return self._block_quiet_reply(message, context)
 
+        # Replies to embed-fix posts are usually about the link, not the bot.
+        # Discord's reply ping is on by default, so it does not count here; the
+        # user opts in by typing @bot in the reply. Same rule for every site.
+        if is_reply and self._is_unaddressed_embed_fix_reply(message):
+            return self._block_embed_fix_reply(message, context)
+
         # Guild handling with mention requirement
         if require_mention_in_guilds:
             if mention_detected:
@@ -3027,6 +3037,35 @@ class Router:
             },
         )
         self._metric_inc("gate.blocked", {"reason": "not_addressed"})
+        return False
+
+    def _is_unaddressed_embed_fix_reply(self, message: Message) -> bool:
+        """Reply to an embed-fix post whose text does not @mention the bot."""
+        cfg = self.config
+        if not cfg.get("EMBED_FIX_REPLY_REQUIRES_MENTION", True):
+            return False
+        bot_id = getattr(getattr(self.bot, "user", None), "id", None)
+        if bot_id is not None and re.search(rf"<@!?{bot_id}>", message.content or ""):
+            return False
+        reference = getattr(message, "reference", None)
+        target = getattr(reference, "resolved", None) or getattr(reference, "cached_message", None)
+        return is_embed_fix_post(target, cfg.get("EMBED_FIX_DOMAIN_OVERRIDES"))
+
+    def _block_embed_fix_reply(self, message: Message, context: str) -> bool:
+        """Deny a ping-only reply to an embed-fix post."""
+        self._gate_denied[message.id] = GATE_REASON_EMBED_FIX_REPLY
+        self.logger.info(
+            f"gate.block | reason={GATE_REASON_EMBED_FIX_REPLY} msg_id={message.id}",
+            extra={
+                "event": "gate.block",
+                "reason": GATE_REASON_EMBED_FIX_REPLY,
+                "msg_id": message.id,
+                "context": context,
+                "reply_to_bot": True,
+                "guild_id": getattr(message.guild, "id", None),
+            },
+        )
+        self._metric_inc("gate.blocked", {"reason": GATE_REASON_EMBED_FIX_REPLY})
         return False
 
     def _block_quiet_reply(self, message: Message, context: str) -> bool:

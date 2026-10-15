@@ -190,6 +190,9 @@ async def _send_fixes(message: discord.Message, fixes: list[EmbedFix], *, upload
                 files=files or None,
                 mention_author=False,
                 allowed_mentions=discord.AllowedMentions.none(),
+                # Persistent marker (flags.suppress_notifications) the router
+                # gate uses to tell embed-fix posts apart from chat replies.
+                silent=True,
             ),
             timeout=_UPLOAD_TIMEOUT_S if files else _DISCORD_TIMEOUT_S,
         )

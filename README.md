@@ -486,6 +486,7 @@ Python port of [SaucyBot](https://github.com/Sn0wCrack/saucybot-discord)'s link 
 | `EMBED_FIX_MAX_LINKS` | `8` | Max links fixed per message |
 | `EMBED_FIX_SUPPRESS_ORIGINAL` | `true` | Hide the original preview |
 | `EMBED_FIX_RESTRICT_NSFW` | `true` | NSFW sites only in NSFW channels |
+| `EMBED_FIX_REPLY_REQUIRES_MENTION` | `true` | A reply to one of the bot's embed-fix posts (any site) does not trigger the bot, even with Discord's reply ping on. Type `@bot` in the reply to talk to it |
 | `EMBED_FIX_UPLOAD_MEDIA` | `false` | Off (default): Instagram links are rewritten to `www.oginstagram.com`, which Discord unfurls with the video inside the card. On: video posts are sent as an oginstagram link, which Discord unfurls with the video playing inside the card (bot-built embeds cannot hold video). Photo posts, and videos oginstagram cannot serve, are downloaded and attached with an Instagram-style card (name, @handle, avatar, caption, post time, likes/comments). Media sources in order: yt-dlp, oginstagram, kkinstagram. Needs **Attach Files**; capped at the server's upload limit. Any failure or a file too big falls back to the oginstagram link |
 | `EMBED_FIX_TRANSLATE_TO` | `en` | Foreign-language tweets get `/en` appended so the proxy shows a translation; English tweets and links that already end in a language code are left alone. Empty disables |
 

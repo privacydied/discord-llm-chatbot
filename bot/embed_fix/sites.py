@@ -278,3 +278,43 @@ def rewrite_url(url: str, *, overrides: Mapping[str, str] | None = None) -> str 
     """Rewrite a single URL, or ``None`` when no site matches it."""
     fixes = find_fixes(url, overrides=overrides, limit=1)
     return fixes[0].rewritten if fixes else None
+
+
+_URL_TOKEN_RE = re.compile(r"^<?https?://(?P<host>[^/\s?#:>]+)[^\s>]*>?$", re.IGNORECASE)
+
+
+def proxy_hosts(overrides: Mapping[str, str] | None = None) -> frozenset[str]:
+    """Hosts the bot's embed-fix replies link to (defaults + configured overrides)."""
+    hosts = {site.default_domain for site in SITES if site.default_domain}
+    hosts.update((overrides or {}).values())
+    return frozenset(host.lower().removeprefix("www.") for host in hosts)
+
+
+def is_proxy_link_reply(content: str, overrides: Mapping[str, str] | None = None) -> bool:
+    """True when *content* is nothing but embed-fix proxy links (one or more).
+
+    Recognises embed-fix replies sent before they carried the silent flag.
+    """
+    tokens = (content or "").split()
+    if not tokens:
+        return False
+    hosts = proxy_hosts(overrides)
+    for token in tokens:
+        match = _URL_TOKEN_RE.match(token)
+        if match is None or match["host"].lower().removeprefix("www.") not in hosts:
+            return False
+    return True
+
+
+def is_embed_fix_post(message: object, overrides: str | Mapping[str, str] | None = None) -> bool:
+    """True when *message* is one of the bot's embed-fix replies.
+
+    New ones carry the silent flag; older ones are recognised by content made
+    only of proxy links. Caller checks the author is the bot.
+    """
+    if message is None:
+        return False
+    flags = getattr(message, "flags", None)
+    if getattr(flags, "suppress_notifications", False):
+        return True
+    return is_proxy_link_reply(getattr(message, "content", "") or "", parse_domain_overrides(overrides))
