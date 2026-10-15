@@ -22,8 +22,7 @@ BASE_CONFIG = {
     "DM_REQUIRE_MENTION": False,
     "COMMAND_PREFIX": "!",
 }
-SILENT = SimpleNamespace(suppress_notifications=True)
-LOUD = SimpleNamespace(suppress_notifications=False)
+CARD = [SimpleNamespace(url="https://ppv.to/live/x")]
 
 
 def _router(**overrides) -> Router:
@@ -36,10 +35,10 @@ def _router(**overrides) -> Router:
     return router
 
 
-def _reply(target_content: str | None, *, flags=LOUD, ping: bool = True, typed_mention: bool = False) -> MagicMock:
+def _reply(target_content: str | None, *, embeds=(), ping: bool = True, typed_mention: bool = False) -> MagicMock:
     """A reply to a bot message, shaped like discord.py (ping ON -> bot in mentions)."""
     bot_user = SimpleNamespace(id=BOT_ID)
-    target = SimpleNamespace(author=bot_user, content=target_content, flags=flags)
+    target = SimpleNamespace(author=bot_user, content=target_content, embeds=list(embeds))
     message = MagicMock()
     message.id = 4321
     message.channel = MagicMock(spec=discord.TextChannel)
@@ -52,18 +51,18 @@ def _reply(target_content: str | None, *, flags=LOUD, ping: bool = True, typed_m
 
 
 @pytest.mark.parametrize(
-    "content, flags",
+    "content, embeds",
     [
-        ("https://vxtwitter.com/a/status/1", LOUD),  # pre-flag post, link only
-        ("https://www.oginstagram.com/reel/AB", LOUD),
-        ("https://vxreddit.com/r/x/comments/1\nhttps://vxtiktok.com/@a/video/2", LOUD),
-        (None, SILENT),  # card / upload post with no text
-        ("https://ppv.to/live/x", SILENT),
+        ("https://vxtwitter.com/a/status/1", ()),
+        ("https://www.oginstagram.com/reel/AB", ()),
+        ("https://vxreddit.com/r/x/comments/1\nhttps://vxtiktok.com/@a/video/2", ()),
+        (None, CARD),  # ppv card post, no text
+        ("", [SimpleNamespace(url="https://www.instagram.com/p/AB/")]),  # upload card
     ],
 )
-def test_ping_only_reply_to_embed_fix_post_is_blocked(content, flags):
+def test_ping_only_reply_to_embed_fix_post_is_blocked(content, embeds):
     router = _router()
-    message = _reply(content, flags=flags)
+    message = _reply(content, embeds=embeds)
     assert router._should_process_message(message) is False
     assert router.pop_gate_denied_reason(message.id) == GATE_REASON_EMBED_FIX_REPLY
     router._try_ambient_reply.assert_not_called()
@@ -110,19 +109,24 @@ def test_is_proxy_link_reply(content, expected):
     assert is_proxy_link_reply(content) is expected
 
 
-def test_is_embed_fix_post_handles_none_and_silent():
+def test_is_embed_fix_post():
     assert is_embed_fix_post(None) is False
-    assert is_embed_fix_post(SimpleNamespace(content="", flags=SILENT)) is True
-    assert is_embed_fix_post(SimpleNamespace(content="hello", flags=LOUD)) is False
+    assert is_embed_fix_post(SimpleNamespace(content="", embeds=CARD)) is True
+    assert is_embed_fix_post(SimpleNamespace(content="hello", embeds=CARD)) is False
+    # bot answer with a normal link card is not an embed-fix post
+    assert is_embed_fix_post(SimpleNamespace(content="", embeds=[SimpleNamespace(url="https://example.com")])) is False
 
 
-async def test_embed_fix_reply_is_sent_silent(monkeypatch):
-    """The persistent marker the gate relies on must be set on every embed-fix post."""
+def test_ping_reply_to_bot_answer_mentioning_a_proxy_link_is_processed():
+    assert _router()._should_process_message(_reply("here: https://vxtwitter.com/a/status/1 is the tweet")) is True
+
+
+async def test_embed_fix_reply_is_not_silent(monkeypatch):
     reply = AsyncMock()
     monkeypatch.setattr(embed_handler, "safe_reply", reply)
     fix = embed_handler.find_fixes("https://x.com/a/status/1")[0]
     await embed_handler._send_fixes(MagicMock(id=1), [fix])
-    assert reply.await_args.kwargs["silent"] is True
+    assert "silent" not in reply.await_args.kwargs
 
 
 @pytest.mark.parametrize("raw, expected", [(None, True), ("false", False), ("true", True)])

@@ -293,7 +293,7 @@ def proxy_hosts(overrides: Mapping[str, str] | None = None) -> frozenset[str]:
 def is_proxy_link_reply(content: str, overrides: Mapping[str, str] | None = None) -> bool:
     """True when *content* is nothing but embed-fix proxy links (one or more).
 
-    Recognises embed-fix replies sent before they carried the silent flag.
+    Regex test the gate uses to recognise embed-fix text posts.
     """
     tokens = (content or "").split()
     if not tokens:
@@ -307,14 +307,17 @@ def is_proxy_link_reply(content: str, overrides: Mapping[str, str] | None = None
 
 
 def is_embed_fix_post(message: object, overrides: str | Mapping[str, str] | None = None) -> bool:
-    """True when *message* is one of the bot's embed-fix replies.
+    """True when *message* (a bot post) is an embed-fix reply, by regex alone.
 
-    New ones carry the silent flag; older ones are recognised by content made
-    only of proxy links. Caller checks the author is the bot.
+    Text posts: content is only proxy links (vxtwitter.com, oginstagram, ...).
+    Card posts (no text): a card links to a proxy host or a fixable source URL
+    (ppv page, instagram post). Caller checks the author is the bot.
     """
     if message is None:
         return False
-    flags = getattr(message, "flags", None)
-    if getattr(flags, "suppress_notifications", False):
-        return True
-    return is_proxy_link_reply(getattr(message, "content", "") or "", parse_domain_overrides(overrides))
+    parsed = parse_domain_overrides(overrides)
+    content = getattr(message, "content", "") or ""
+    if content.strip():
+        return is_proxy_link_reply(content, parsed)
+    urls = [getattr(embed, "url", None) or "" for embed in getattr(message, "embeds", None) or []]
+    return any(is_proxy_link_reply(url, parsed) or find_fixes(url, limit=1) for url in urls if url)
