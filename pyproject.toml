@@ -59,7 +59,7 @@ dependencies = [
     "tqdm==4.67.1",
     "trafilatura==2.0.0",
     "urllib3==2.5.0",
-    "yt-dlp>=2026",
+    "yt-dlp[default]>=2026.08.19",
 ]
 
 [dependency-groups]
