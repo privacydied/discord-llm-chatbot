@@ -726,6 +726,16 @@ class LLMBot(commands.Bot):
                         "Context mode used when building an ambient-reply prompt",
                         labels=["mode"],
                     )
+                    self.metrics.define_counter(
+                        "ambient_react_total",
+                        "Ambient emoji reaction attempts by outcome",
+                        labels=["outcome"],
+                    )
+                    self.metrics.define_counter(
+                        "ambient_react_suppressed_total",
+                        "Ambient reaction gate evaluated but suppressed",
+                        labels=["reason"],
+                    )
                     self.logger.debug(
                         "📈 Registered gate counters",
                         extra={
