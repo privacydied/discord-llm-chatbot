@@ -11,6 +11,7 @@ import aiohttp
 
 # Import bot modules
 from .config import load_config
+from .config.prompts import render_prompt_vars
 from .exceptions import APIError as OllamaAPIError
 from .memory import get_profile, get_server_profile
 from .utils.logging import get_logger
@@ -414,7 +415,7 @@ async def generate_response(
         # Determine the system prompt to use
         final_system_prompt = ""
         if system_prompt:
-            final_system_prompt = system_prompt
+            final_system_prompt = render_prompt_vars(system_prompt)
             # If there's also context, add it separately for clarity
             if context:
                 final_system_prompt += f"\n\nPREVIOUS_CONVERSATION_HISTORY:\n{context}"
@@ -434,7 +435,7 @@ async def generate_response(
                 msg = f"Error reading prompt file {prompt_file_path}: {e}"
                 raise OllamaAPIError(msg) from e
 
-            final_system_prompt = f"""{base_system_prompt}\n\nContext: {context}\n\nServer Context: {server_context}"""
+            final_system_prompt = f"""{render_prompt_vars(base_system_prompt)}\n\nContext: {context}\n\nServer Context: {server_context}"""
 
         # The Ollama /api/generate endpoint takes the user prompt and system prompt separately.
         # We pass the user's message as the main prompt and the constructed prompt as the system instruction.

@@ -32,6 +32,7 @@ else:
 import contextlib
 
 from bot.config import get_vl_model_ladder, load_config
+from bot.config.prompts import render_prompt_vars
 from bot.enhanced_retry import get_retry_manager, is_dead_model_error
 from bot.exceptions import APIError
 from bot.memory import get_profile, get_server_profile
@@ -567,7 +568,7 @@ async def generate_openai_response(
 
         # If a specific system_prompt is provided, use it.
         if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "system", "content": render_prompt_vars(system_prompt)})
         # Otherwise, construct the default system prompt.
         else:
             prompt_file_path = config.get("PROMPT_FILE")
@@ -584,7 +585,7 @@ async def generate_openai_response(
                 raise APIError(msg) from e
 
             # Combine base prompt, server context, and conversation history
-            full_system_prompt = f"""{base_system_prompt}
+            full_system_prompt = f"""{render_prompt_vars(base_system_prompt)}
 
 Server Context: {server_context}"""
             messages.append({"role": "system", "content": full_system_prompt})
