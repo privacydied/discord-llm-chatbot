@@ -7,7 +7,7 @@ import re
 from .action import BotAction
 from .ai_backend import generate_response, is_handled_provider_failure
 from .config._base import _parse_bool_str
-from .core.text_case import lowercase_outside_protected
+from .core.text_case import collapse_line_breaks_outside_code, lowercase_outside_protected
 from .enhanced_retry import is_dead_model_error
 from .exceptions import InferenceError
 from .utils.logging import get_logger
@@ -19,6 +19,11 @@ logger = get_logger(__name__)
 def _force_lowercase_enabled() -> bool:
     """Read per call so .env hot-reload applies at once [CMV]."""
     return _parse_bool_str(os.getenv("FORCE_LOWERCASE_REPLIES"), True)
+
+
+def _collapse_line_breaks_enabled() -> bool:
+    """Read per call so .env hot-reload applies at once [CMV]."""
+    return _parse_bool_str(os.getenv("COLLAPSE_REPLY_LINE_BREAKS"), True)
 
 
 async def brain_infer(prompt: str, context: str = "", system_prompt: str | None = None) -> BotAction:
@@ -40,6 +45,8 @@ async def brain_infer(prompt: str, context: str = "", system_prompt: str | None 
             if safe_text and safe_text.strip():
                 if _force_lowercase_enabled():
                     safe_text = lowercase_outside_protected(safe_text)
+                if _collapse_line_breaks_enabled():
+                    safe_text = collapse_line_breaks_outside_code(safe_text)
                 logger.info(f"✅ Brain inference completed: {len(safe_text)} characters")
                 return BotAction(content=safe_text.strip())
 

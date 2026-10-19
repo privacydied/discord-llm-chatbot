@@ -1,4 +1,4 @@
-"""Persona casing: force replies to lowercase without corrupting case-sensitive spans."""
+"""Persona text shaping: lowercase and line-break collapsing that leave code, URLs and Discord tokens intact."""
 
 import re
 
@@ -25,3 +25,34 @@ def lowercase_outside_protected(text: str) -> str:
         last = match.end()
     parts.append(text[last:].lower())
     return "".join(parts)
+
+
+_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+# A line that starts a list item or numbered step keeps its own line. [IV]
+_LIST_LINE_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
+_NEWLINES_RE = re.compile(r"[ \t]*\n[\s]*")
+
+
+def _collapse_prose(chunk: str) -> str:
+    """Join lines with a space, except before a list item, which keeps one newline."""
+
+    def join(match: re.Match[str]) -> str:
+        rest = chunk[match.end() :]
+        return "\n" if _LIST_LINE_RE.match(rest) else " "
+
+    return _NEWLINES_RE.sub(join, chunk)
+
+
+def collapse_line_breaks_outside_code(text: str) -> str:
+    """Make a reply one chat paragraph: line breaks become spaces outside fenced code; lists keep their lines."""
+    if not text or "\n" not in text:
+        return text
+    segments: list[str] = []
+    last = 0
+    for match in _FENCE_RE.finditer(text):
+        segments.append(_collapse_prose(text[last : match.start()]).strip())
+        segments.append(match.group(0))
+        last = match.end()
+    segments.append(_collapse_prose(text[last:]).strip())
+    # A code block sits on its own lines; prose around it joins with one newline.
+    return "\n".join(seg for seg in segments if seg)
