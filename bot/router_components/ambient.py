@@ -172,19 +172,39 @@ def _ambient_gate(
     if len(content) < cfg("MIN_CHARS"):
         return False, REASON_TOO_SHORT
     channel_id: int = getattr(getattr(message, "channel", None), "id", 0) or 0
-    allowlist = _parse_channel_allowlist(cfg("CHANNELS") or "")
-    if allowlist is not None and channel_id not in allowlist:
-        return False, REASON_CHANNEL_NOT_ALLOWED
-    if _in_quiet_hours(now, cfg("QUIET_HOURS") or ""):
-        return False, REASON_QUIET_HOURS
-    if cooldowns.global_elapsed(now) < cfg("GLOBAL_COOLDOWN_S"):
-        return False, REASON_GLOBAL_COOLDOWN
-    if cooldowns.channel_elapsed(channel_id, now) < cfg("CHANNEL_COOLDOWN_S"):
-        return False, REASON_CHANNEL_COOLDOWN
-    if rng.random() >= cfg("PROBABILITY"):
-        return False, REASON_PROBABILITY
+    reason = _channel_gate(config, cooldowns, prefix, channel_id, now, rng)
+    if reason is not None:
+        return False, reason
     cooldowns.record(channel_id, now)
     return True, "fired"
+
+
+def _channel_gate(
+    config: dict[str, Any],
+    cooldowns: AmbientCooldowns,
+    prefix: str,
+    channel_id: int,
+    now: float,
+    rng: _Rng,
+) -> str | None:
+    """Allowlist, quiet hours, cooldowns, probability. Returns a reason, or None to pass. Does not record."""
+    defaults = _GATE_DEFAULTS[prefix]
+
+    def cfg(key: str) -> Any:
+        return config.get(f"{prefix}_{key}", defaults.get(key))
+
+    allowlist = _parse_channel_allowlist(cfg("CHANNELS") or "")
+    if allowlist is not None and channel_id not in allowlist:
+        return REASON_CHANNEL_NOT_ALLOWED
+    if _in_quiet_hours(now, cfg("QUIET_HOURS") or ""):
+        return REASON_QUIET_HOURS
+    if cooldowns.global_elapsed(now) < cfg("GLOBAL_COOLDOWN_S"):
+        return REASON_GLOBAL_COOLDOWN
+    if cooldowns.channel_elapsed(channel_id, now) < cfg("CHANNEL_COOLDOWN_S"):
+        return REASON_CHANNEL_COOLDOWN
+    if rng.random() >= cfg("PROBABILITY"):
+        return REASON_PROBABILITY
+    return None
 
 
 def should_ambient_reply(
@@ -229,3 +249,24 @@ def should_ambient_react(
         time.monotonic() if now is None else now,
         rng or random,
     )
+
+
+def should_ambient_pileon(
+    config: dict[str, Any],
+    cooldowns: AmbientCooldowns,
+    guild_feature_enabled: bool,
+    channel_id: int,
+    now: float | None = None,
+    rng: _Rng | None = None,
+) -> tuple[bool, str]:
+    """Return (fire, reason) for joining an existing reaction. AMBIENT_REACT_* keys, no length check.
+
+    Does not record the cooldown: the caller records only after it confirms the
+    reaction is worth joining, so a failed check never burns the cooldown.
+    """
+    if not config.get(f"{REACT_PREFIX}_ENABLED", False):
+        return False, REASON_DISABLED
+    if not guild_feature_enabled:
+        return False, REASON_GUILD_FEATURE_OFF
+    reason = _channel_gate(config, cooldowns, REACT_PREFIX, channel_id, time.monotonic() if now is None else now, rng or random)
+    return (False, reason) if reason is not None else (True, "fired")

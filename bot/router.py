@@ -3165,6 +3165,10 @@ class Router:
         """
         if isinstance(message.channel, DMChannel):
             return
+        from bot.router_components.ambient_pileon import MODE_PICK, react_mode
+
+        if react_mode(self.config) != MODE_PICK:
+            return  # pile-on mode reacts from on_raw_reaction_add instead
         try:
             from bot.router_components.ambient import should_ambient_react
             from bot.router_components.ambient_react import can_react
@@ -3188,6 +3192,65 @@ class Router:
             task.add_done_callback(self._ambient_react_tasks.discard)
         except Exception as err:  # noqa: BLE001
             self.logger.debug("ambient react gate error (suppressed): %s", err)
+
+    def handle_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
+        """Maybe join a reaction other people put on a message (pile-on mode). Never raises. [REH]"""
+        try:
+            from bot.router_components.ambient import should_ambient_pileon
+            from bot.router_components.ambient_pileon import MODE_PILEON, react_mode
+            from bot.server_features import is_server_feature_enabled
+
+            bot_user_id = getattr(getattr(self.bot, "user", None), "id", None)
+            if payload.guild_id is None or payload.user_id == bot_user_id or react_mode(self.config) != MODE_PILEON:
+                return
+            if getattr(payload.member, "bot", False):
+                return
+            fired, reason = should_ambient_pileon(
+                self.config,
+                self._ambient_react_cooldowns,
+                is_server_feature_enabled(payload.guild_id, "ambient_react"),
+                payload.channel_id,
+            )
+            if not fired:
+                self._metric_inc("ambient_react_suppressed_total", {"reason": reason})
+                return
+            task = asyncio.create_task(self._run_pileon(payload), name=f"ambient_pileon_{payload.message_id}")
+            self._ambient_react_tasks.add(task)
+            task.add_done_callback(self._ambient_react_tasks.discard)
+        except Exception as err:  # noqa: BLE001
+            self.logger.debug("ambient pile-on gate error (suppressed): %s", err)
+
+    async def _run_pileon(self, payload: discord.RawReactionActionEvent) -> None:
+        """Check the reaction is landing (count, not ours, usable), then copy it. [REH]"""
+        from bot.router_components.ambient_pileon import DEFAULT_MIN_COUNT, pileon_block_reason, resolve_message
+
+        message = await resolve_message(self.bot, payload)
+        min_count = int(self.config.get("AMBIENT_REACT_MIN_COUNT", DEFAULT_MIN_COUNT))
+        reason = pileon_block_reason(message, payload.emoji, self.bot, min_count)
+        if reason is not None:
+            self._metric_inc("ambient_react_suppressed_total", {"reason": reason})
+            return
+        self._ambient_react_cooldowns.record(payload.channel_id, time.monotonic())
+        try:
+            await message.add_reaction(payload.emoji)
+            outcome = "pileon"
+        except discord.HTTPException as exc:
+            self.logger.debug("ambient pile-on add_reaction failed: %s", exc)
+            outcome = "error"
+        self.logger.info(
+            "ambient.react.%s | msg_id=%s emoji=%s",
+            outcome,
+            payload.message_id,
+            payload.emoji,
+            extra={
+                "event": f"ambient.react.{outcome}",
+                "subsys": "ambient",
+                "msg_id": payload.message_id,
+                "guild_id": payload.guild_id,
+                "detail": {"emoji": str(payload.emoji)},
+            },
+        )
+        self._metric_inc("ambient_react_total", {"outcome": outcome})
 
     async def _run_ambient_react(self, message: Message) -> None:
         """Pick and apply the reaction; log the outcome once. [REH]"""

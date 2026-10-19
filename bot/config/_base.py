@@ -285,6 +285,8 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "AMBIENT_REACT_CHANNELS": _clean_env_value(env_getter("AMBIENT_REACT_CHANNELS", "")) or "",
         "AMBIENT_REACT_QUIET_HOURS": _clean_env_value(env_getter("AMBIENT_REACT_QUIET_HOURS", "")) or "",
         "AMBIENT_REACT_TIMEOUT_S": float(env_getter("AMBIENT_REACT_TIMEOUT_S", "45")),
+        "AMBIENT_REACT_MODE": (_clean_env_value(env_getter("AMBIENT_REACT_MODE", "pileon")) or "pileon").lower(),
+        "AMBIENT_REACT_MIN_COUNT": _safe_int(env_getter("AMBIENT_REACT_MIN_COUNT", None), "2", "AMBIENT_REACT_MIN_COUNT"),
         # EMBED FIX — SaucyBot-style link rewrites (x.com -> vxtwitter.com, ...)
         "EMBED_FIX_ENABLED": _parse_bool_str(_clean_env_value(env_getter("EMBED_FIX_ENABLED", None)), True),
         "EMBED_FIX_DISABLED_SITES": _clean_env_value(env_getter("EMBED_FIX_DISABLED_SITES", "")) or "",

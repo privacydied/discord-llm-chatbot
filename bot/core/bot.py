@@ -949,6 +949,11 @@ class LLMBot(commands.Bot):
         """Gateway websocket established (pre-READY). Feeds the reconnect watchdog."""
         self._last_gateway_ok = time.monotonic()
 
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
+        """Hand reaction events to the router for ambient pile-on reactions."""
+        if self.router is not None:
+            self.router.handle_reaction_add(payload)
+
     async def on_resumed(self) -> None:
         """Gateway session resumed after a drop. Feeds the reconnect watchdog."""
         self._last_gateway_ok = time.monotonic()

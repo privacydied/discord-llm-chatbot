@@ -180,14 +180,16 @@ def run_pre_flight_checks(config: dict) -> None:
 def create_bot_intents() -> discord.Intents:
     """Create Discord intents with minimal permissions required for operation.
 
-    Uses Intents.none() and enables only guilds, messages, and message_content.
-    Excludes members, presences, voice_states, reactions, emojis, and typing
-    to reduce memory footprint and gateway subscription overhead.
+    Uses Intents.none() and enables only guilds, messages, message_content and
+    guild_reactions (ambient pile-on reactions). Excludes members, presences,
+    voice_states, emojis, and typing to reduce memory footprint and gateway
+    subscription overhead.
     """
     intents = discord.Intents.none()
     intents.guilds = True
     intents.messages = True
     intents.message_content = True
+    intents.guild_reactions = True
     return intents
 
 
