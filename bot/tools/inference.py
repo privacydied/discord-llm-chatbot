@@ -92,6 +92,9 @@ TOOL_OUTPUT_DIRECTIVE = (
     "contradict your memory (release dates, whether a console or game exists yet), the search results are right "
     "and your memory is wrong; answer from the results. Never say a console, game, product or event doesn't exist "
     "or hasn't happened yet unless you searched for that exact thing and found nothing.\n"
+    "Searching is for checking things that change. Don't search for general knowledge you already know well "
+    "(science, history, how-tos, food safety) -- just answer. If a search finds nothing useful, don't give up: "
+    "answer from your own knowledge. Never reply that you couldn't find something when you know the answer.\n"
     "When your answer relies on a search, add the single best source link at the end in angle brackets, "
     "like <https://example.com>.\n"
     "Give only the final answer. Do not narrate your reasoning, do not restate the question, "
@@ -108,7 +111,10 @@ def _tool_directive(now: datetime | None = None) -> str:
 # Sent when the model deliberated without producing an answer. Forcing a
 # tool-free turn stops it re-entering the same loop of indecision. [REH]
 FORCE_ANSWER_DIRECTIVE = (
-    "Stop deliberating and answer now, using only the information already gathered above. Reply with the final answer only, in at most three sentences. If the information is insufficient, say so plainly in one sentence."
+    "Stop deliberating and answer now. Use the information gathered above where it helps; where it is missing "
+    "or the searches found nothing, answer from your own knowledge instead -- do not say you couldn't find it. "
+    "If something could have changed since your training, you may note that it's from memory. "
+    "Reply with the final answer only. Say you don't know only if you genuinely don't."
 )
 
 

@@ -89,3 +89,11 @@ def test_tool_directive_tells_model_to_search_before_disagreeing():
     assert "Today is Monday 19 October 2026" in text
     assert "never argue against a user from memory" in text
     assert "ALREADY happened" in text and "search results are right" in text
+
+
+def test_directives_fall_back_to_own_knowledge():
+    from bot.tools.inference import FORCE_ANSWER_DIRECTIVE, _tool_directive
+
+    assert "answer from your own knowledge" in _tool_directive()
+    assert "answer from your own knowledge" in FORCE_ANSWER_DIRECTIVE
+    assert "do not say you couldn't find it" in FORCE_ANSWER_DIRECTIVE
