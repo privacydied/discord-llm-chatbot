@@ -81,7 +81,11 @@ async def test_read_webpage_reports_fetch_failure(monkeypatch):
 
 
 def test_tool_directive_tells_model_to_search_before_disagreeing():
-    from bot.tools.inference import TOOL_OUTPUT_DIRECTIVE
+    from datetime import UTC, datetime
 
-    assert "out of date" in TOOL_OUTPUT_DIRECTIVE
-    assert "never argue against a user from memory" in TOOL_OUTPUT_DIRECTIVE
+    from bot.tools.inference import _tool_directive
+
+    text = _tool_directive(datetime(2026, 10, 19, tzinfo=UTC))
+    assert "Today is Monday 19 October 2026" in text
+    assert "never argue against a user from memory" in text
+    assert "ALREADY happened" in text and "search results are right" in text

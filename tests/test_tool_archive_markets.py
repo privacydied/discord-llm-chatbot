@@ -58,6 +58,14 @@ async def test_chat_history_hides_channels_the_asker_cannot_read(monkeypatch):
     assert search.await_args.kwargs["author_name"] == "dre"
 
 
+async def test_chat_history_author_mention_becomes_author_id(monkeypatch):
+    search = AsyncMock(return_value=[_result("1", "10")])
+    monkeypatch.setattr("bot.server_archive.search_archive", search)
+    await execute_tool("search_chat_history", {"query": "arsenal", "author": "<@161959731450085378>"}, _archive_ctx({10}))
+    assert search.await_args.kwargs["author_id"] == "161959731450085378"
+    assert search.await_args.kwargs["author_name"] is None
+
+
 async def test_chat_history_sanitises_mentions(monkeypatch):
     monkeypatch.setattr("bot.server_archive.search_archive", AsyncMock(return_value=[_result("1", "10", "yo <@123> and @everyone")]))
     result = await execute_tool("search_chat_history", {"query": "yo"}, _archive_ctx({10}))

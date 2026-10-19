@@ -158,7 +158,18 @@ async def test_iteration_cap_enforced(monkeypatch):
     cfg = {**CFG, "TOOLS_MAX_ITERATIONS": 3}
     out = await inference.run_tool_conversation(prompt="x", ctx=ToolContext(), cfg=cfg)
     assert out is None
-    assert len(client.chat.completions.calls) == 3
+    # 3 tool rounds, then one tool-free forced answer; never more. [REH]
+    assert len(client.chat.completions.calls) == 4
+    assert "tools" not in client.chat.completions.calls[-1]
+
+
+async def test_iteration_cap_answers_from_gathered_results(monkeypatch):
+    """Hitting the cap must not throw away the research: force a final answer from it."""
+    responses = [_response(tool_calls=[_call("get_current_time", "{}")]) for _ in range(2)]
+    responses.append(_response(content="it came out oct 2 2025"))
+    _install(monkeypatch, responses)
+    cfg = {**CFG, "TOOLS_MAX_ITERATIONS": 2}
+    assert await inference.run_tool_conversation(prompt="x", ctx=ToolContext(), cfg=cfg) == "it came out oct 2 2025"
 
 
 async def test_api_failure_returns_none_for_fallback(monkeypatch):

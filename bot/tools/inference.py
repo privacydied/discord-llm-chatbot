@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -35,8 +36,9 @@ DEFAULT_MAX_ITERATIONS = 3
 # Whole-loop wall clock. [CMV]
 DEFAULT_TIMEOUT_S = 90.0
 
-# Tool results are appended to the conversation; stop growing it past this. [PA]
-MAX_TRANSCRIPT_CHARS = 24000
+# Budget for tool output appended during one turn (the persona prompt and
+# history are excluded: the persona alone is ~16k chars). [PA]
+MAX_TOOL_OUTPUT_CHARS = 16000
 
 
 def _client_for(cfg: dict[str, Any], timeout_s: float) -> tuple[Any, str]:
@@ -82,15 +84,26 @@ def _default_system_prompt(cfg: dict[str, Any]) -> str | None:
 # below, because a prompt directive alone cannot be relied upon. [REH][CMV]
 TOOL_OUTPUT_DIRECTIVE = (
     "You have tools available. Call them when they help, then reply to the user directly.\n"
-    "Your training data is out of date. Things have been released, announced and changed since then. "
-    "If the answer could depend on anything recent (releases, ports, news, prices, scores, who holds a role), "
-    "or a user tells you something you don't recognise or believe is wrong, search before answering -- "
-    "never argue against a user from memory alone. If a search contradicts your memory, the search wins.\n"
+    "Today is {today}. Your training data is out of date: games, consoles, ports, news and prices have come out "
+    "or changed since then. Anything a search result dates before today has ALREADY happened -- say it came out "
+    "or happened, never that it is upcoming.\n"
+    "If the answer could depend on anything recent, or a user tells you something you don't recognise or believe "
+    "is wrong, search before answering -- never argue against a user from memory alone. When search results "
+    "contradict your memory (release dates, whether a console or game exists yet), the search results are right "
+    "and your memory is wrong; answer from the results. Never say a console, game, product or event doesn't exist "
+    "or hasn't happened yet unless you searched for that exact thing and found nothing.\n"
     "When your answer relies on a search, add the single best source link at the end in angle brackets, "
     "like <https://example.com>.\n"
     "Give only the final answer. Do not narrate your reasoning, do not restate the question, "
     "do not describe which tools you called or quote their parameters, and do not think out loud."
 )
+
+
+def _tool_directive(now: datetime | None = None) -> str:
+    """The directive with today's date filled in, so search dates are read against now. [IV]"""
+    now = now or datetime.now(UTC)
+    return TOOL_OUTPUT_DIRECTIVE.format(today=now.strftime("%A %d %B %Y"))
+
 
 # Sent when the model deliberated without producing an answer. Forcing a
 # tool-free turn stops it re-entering the same loop of indecision. [REH]
@@ -103,7 +116,7 @@ def _build_messages(prompt: str, system_prompt: str | None, context: str | None)
     messages: list[dict[str, Any]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "system", "content": TOOL_OUTPUT_DIRECTIVE})
+    messages.append({"role": "system", "content": _tool_directive()})
     if context:
         messages.append({"role": "system", "content": f"PREVIOUS_CONVERSATION_HISTORY:\n{context}"})
     messages.append({"role": "user", "content": prompt})
@@ -315,6 +328,7 @@ async def run_tool_conversation(
         return None
 
     messages = _build_messages(prompt, system_prompt or _default_system_prompt(config), context)
+    base_size = _transcript_size(messages)
     schemas = get_registry().schemas()
     max_tokens = config.get("MAX_RESPONSE_TOKENS", 1000)
     extra_body = _reasoning_extra_body(config)
@@ -358,9 +372,10 @@ async def run_tool_conversation(
         messages.append(_assistant_turn(tool_calls))
         messages.extend(await _run_tool_calls(tool_calls, ctx))
 
-        if _transcript_size(messages) > MAX_TRANSCRIPT_CHARS:
-            logger.warning("tools.transcript_too_large iteration=%d", iteration)
-            return None
+        if _transcript_size(messages) - base_size > MAX_TOOL_OUTPUT_CHARS:
+            # Enough gathered; answer from it rather than dropping the research. [REH]
+            logger.info("tools.tool_output_budget_reached iteration=%d", iteration)
+            return await _force_answer(client, model, messages, max_tokens, extra_body)
 
-    logger.warning("tools.max_iterations_reached max=%d", max_iterations)
-    return None
+    logger.info("tools.max_iterations_reached max=%d; forcing an answer", max_iterations)
+    return await _force_answer(client, model, messages, max_tokens, extra_body)

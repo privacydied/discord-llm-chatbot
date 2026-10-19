@@ -12,6 +12,7 @@ scroll to themselves. Results are mention-sanitised and wrapped as untrusted.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from bot.utils.logging import get_logger
@@ -27,6 +28,7 @@ MAX_RESULTS = 8
 FETCH_LIMIT = 10
 MAX_QUERY_CHARS = 200
 MAX_AUTHOR_CHARS = 64
+_USER_ID_RE = re.compile(r"<@!?(\d{15,21})>|(\d{15,21})")
 
 DESCRIPTION = (
     "Search this Discord server's past messages by keywords, optionally only from one person. "
@@ -81,6 +83,9 @@ async def search_chat_history(ctx: ToolContext, arguments: dict[str, Any]) -> To
     if not query:
         return ToolResult.failure("query is required")
     author = " ".join(str(arguments.get("author") or "").split())[:MAX_AUTHOR_CHARS] or None
+    # The model often passes a ping (<@123>) or bare ID instead of a name. [IV]
+    mention = _USER_ID_RE.fullmatch(author or "")
+    author_id = (mention.group(1) or mention.group(2)) if mention else None
     try:
         limit = max(1, min(MAX_RESULTS, int(arguments.get("max_results") or DEFAULT_RESULTS)))
     except (TypeError, ValueError):
@@ -88,12 +93,18 @@ async def search_chat_history(ctx: ToolContext, arguments: dict[str, Any]) -> To
 
     from bot.server_archive import search_archive
 
-    found = await search_archive(query, guild_id=str(guild.id), author_name=author, limit=FETCH_LIMIT)
+    found = await search_archive(
+        query,
+        guild_id=str(guild.id),
+        author_id=author_id,
+        author_name=None if author_id else author,
+        limit=FETCH_LIMIT,
+    )
     own_id = str(getattr(message, "id", ""))
     visible = [r for r in found if r.message_id != own_id and _visible_to(guild, member, r)][:limit]
     logger.info("tool.search_chat_history query=%s author=%s found=%d visible=%d", query[:60], author, len(found), len(visible))
     if not visible:
-        who = f" from {author}" if author else ""
+        who = " from that person" if author_id else (f" from {author}" if author else "")
         return ToolResult.success(f'No messages{who} matching "{query}". Try fewer or different keywords.')
 
     from bot.url_safety import wrap_untrusted_content
