@@ -472,6 +472,15 @@ class LLMBot(commands.Bot):
         except (ImportError, AttributeError, RuntimeError) as e:
             self.logger.debug(f"torch compat shim not available (fail-open): {e}")
 
+        # Load openai's lazy resource modules off the event loop now, before the
+        # gateway connects, so the first LLM call can't stall the heartbeat. [PA]
+        try:
+            from bot.openai_backend import warm_openai_imports
+
+            await asyncio.to_thread(warm_openai_imports)
+        except Exception as e:  # noqa: BLE001 — warm-up is best effort
+            self.logger.debug(f"openai import warm-up skipped: {e}")
+
         # Prevent duplicate initialization [DRY][REH]
         if self._boot_completed:
             self.logger.debug("🔄 Setup hook called but boot already completed, skipping")

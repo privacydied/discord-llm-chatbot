@@ -30,6 +30,7 @@ else:
     openai = _openai
 
 import contextlib
+import importlib
 
 from bot.config import get_vl_model_ladder, load_config
 from bot.config.prompts import render_prompt_vars
@@ -43,6 +44,20 @@ from bot.retry_utils import (
 from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def warm_openai_imports() -> None:
+    """Import openai's lazily loaded resource modules ahead of the first request.
+
+    ``AsyncOpenAI.chat`` imports ``openai.resources`` (hundreds of files) on
+    first access. On the NAS with a cold page cache that took >10 s on the
+    event loop and blocked the Discord heartbeat. Call this off-loop at
+    startup (``asyncio.to_thread``). [PA][REH]
+    """
+    if _openai is None:
+        return
+    importlib.import_module("openai.resources")
+
 
 # --- Shared TLS context + client reuse (Fix 5) [PA][RM] ---
 # Building the SSL context parses the full certifi CA bundle from disk; do it
