@@ -35,7 +35,7 @@ from bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-_CODE_RE = re.compile(r"instagram\.com/(?:p|reels?|tv)/(?P<code>[A-Za-z0-9_-]+)", re.IGNORECASE)
+_CODE_RE = re.compile(r"instagram\.com/(?:[A-Za-z0-9._]{1,30}/)?(?:p|reels?|tv)/(?P<code>[A-Za-z0-9_-]+)", re.IGNORECASE)
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9._]{1,30}$")
 # og:title is "Display Name (@username)".
 _OG_TITLE_RE = re.compile(r"^(?P<name>.*?)\s*\(@(?P<user>[A-Za-z0-9._]{1,30})\)\s*$")

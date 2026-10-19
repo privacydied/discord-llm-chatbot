@@ -147,7 +147,8 @@ SITES: tuple[EmbedSite, ...] = (
     ),
     EmbedSite(
         identifier="instagram",
-        pattern=_compile(r"https?://(?:www\.|m\.)?instagram\.com/(?P<kind>p|reels?|tv)/(?P<code>[A-Za-z0-9_-]+)"),
+        # Share links can carry the poster's username: instagram.com/<user>/p/<code>/.
+        pattern=_compile(r"https?://(?:www\.|m\.)?instagram\.com/(?:[A-Za-z0-9._]{1,30}/)?(?P<kind>p|reels?|tv)/(?P<code>[A-Za-z0-9_-]+)"),
         # oginstagram serves a real og: page (video/photo, author, caption) that
         # Discord unfurls; kkinstagram only 302s to the file and no longer embeds.
         default_domain="www.oginstagram.com",
