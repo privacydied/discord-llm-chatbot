@@ -32,7 +32,7 @@ OG_REEL_HTML = """<html><head>
 
 @pytest.mark.parametrize(
     ("url", "code"),
-    [(REEL, "DTZPUbgkSzn"), ("https://instagram.com/p/Ab-_1", "Ab-_1"), ("https://m.instagram.com/tv/X", "X"), ("https://x.com/a", None)],
+    [(REEL, "DTZPUbgkSzn"), ("https://instagram.com/p/Ab-_1", "Ab-_1"), ("https://m.instagram.com/tv/X", "X"), ("https://www.instagram.com/some.user/p/Q1/", "Q1"), ("https://x.com/a", None)],
 )
 def test_shortcode(url, code):
     assert ig.shortcode(url) == code

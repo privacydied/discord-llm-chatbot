@@ -27,6 +27,9 @@ from bot.embed_fix.sites import SITE_IDS, find_fixes, page_slug, is_ignored, par
         ("https://instagram.com/reel/C0de_-x/?igsh=xyz", "https://www.oginstagram.com/reel/C0de_-x/"),
         ("https://m.instagram.com/reels/XYZ", "https://www.oginstagram.com/reels/XYZ/"),
         ("https://www.instagram.com/reel/DFeXBh7xtkI/?igsh=abc", "https://www.oginstagram.com/reel/DFeXBh7xtkI/"),
+        # Username-prefixed share links (seen live; previously ignored)
+        ("https://www.instagram.com/twinklemommyyyy/p/DRbeQJ_DVnR/", "https://www.oginstagram.com/p/DRbeQJ_DVnR/"),
+        ("https://www.instagram.com/waffles.weekly/reel/CzW4fBzvTMO/", "https://www.oginstagram.com/reel/CzW4fBzvTMO/"),
         # Bluesky (VixBluesky host)
         ("https://bsky.app/profile/bsky.app/post/3l6oveex3ii2l", "https://bskx.app/profile/bsky.app/post/3l6oveex3ii2l"),
         # FurAffinity (XFurAffinity)
@@ -60,6 +63,8 @@ def test_rewrites(url, expected):
         "https://x.com/jack",  # profile, not a post
         "https://x.com/jack/likes",
         "https://www.instagram.com/someuser/",
+        "https://www.instagram.com/someuser/tagged/",
+        "https://www.kkinstagram.com/someuser/p/ABC/",
         "https://www.kkinstagram.com/p/ABC/",  # already fixed
         "https://kkinstagram.com/reel/ABC/",
         "https://www.oginstagram.com/reel/ABC/",
