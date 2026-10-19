@@ -67,9 +67,10 @@ def _default_system_prompt(cfg: dict[str, Any]) -> str | None:
     if not path:
         return None
     try:
+        from bot.config.prompts import render_prompt_vars
         from bot.openai_backend import _load_prompt_cached
 
-        return _load_prompt_cached(path)
+        return render_prompt_vars(_load_prompt_cached(path))
     except Exception as exc:  # [REH] a missing persona must not block the loop  # noqa: BLE001
         logger.debug("tools.prompt_file_unavailable error=%s", exc)
         return None
@@ -81,6 +82,12 @@ def _default_system_prompt(cfg: dict[str, Any]) -> str | None:
 # below, because a prompt directive alone cannot be relied upon. [REH][CMV]
 TOOL_OUTPUT_DIRECTIVE = (
     "You have tools available. Call them when they help, then reply to the user directly.\n"
+    "Your training data is out of date. Things have been released, announced and changed since then. "
+    "If the answer could depend on anything recent (releases, ports, news, prices, scores, who holds a role), "
+    "or a user tells you something you don't recognise or believe is wrong, search before answering -- "
+    "never argue against a user from memory alone. If a search contradicts your memory, the search wins.\n"
+    "When your answer relies on a search, add the single best source link at the end in angle brackets, "
+    "like <https://example.com>.\n"
     "Give only the final answer. Do not narrate your reasoning, do not restate the question, "
     "do not describe which tools you called or quote their parameters, and do not think out loud."
 )

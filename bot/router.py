@@ -6262,6 +6262,9 @@ class Router:
         if not answer:
             return None
 
+        from bot.core.text_case import shape_reply
+
+        answer = shape_reply(answer)
         self.logger.info(
             f"tools.answered chars={len(answer)}",
             extra={"subsys": "tools", "event": "tools.answered", "detail": {"chars": len(answer)}},

@@ -1,5 +1,6 @@
 """Persona text shaping: lowercase and line-break collapsing that leave code, URLs and Discord tokens intact."""
 
+import os
 import re
 
 # Spans whose case carries meaning and must survive untouched [IV]:
@@ -56,3 +57,26 @@ def collapse_line_breaks_outside_code(text: str) -> str:
     segments.append(_collapse_prose(text[last:]).strip())
     # A code block sits on its own lines; prose around it joins with one newline.
     return "\n".join(seg for seg in segments if seg)
+
+
+def _flag(name: str) -> bool:
+    """Env flag read per call so .env hot-reload applies at once. Default on. [CMV]"""
+    from bot.config._base import _parse_bool_str
+
+    return _parse_bool_str(os.getenv(name), True)
+
+
+def shape_reply(text: str) -> str:
+    """Apply the persona text rules to a model reply: lowercase, then one paragraph.
+
+    Every path that sends model text to users goes through this (brain_infer and
+    the tool loop), so the rules can't be skipped by a different code path.
+    Controlled by FORCE_LOWERCASE_REPLIES and COLLAPSE_REPLY_LINE_BREAKS.
+    """
+    if not text:
+        return text
+    if _flag("FORCE_LOWERCASE_REPLIES"):
+        text = lowercase_outside_protected(text)
+    if _flag("COLLAPSE_REPLY_LINE_BREAKS"):
+        text = collapse_line_breaks_outside_code(text)
+    return text

@@ -35,6 +35,10 @@ ALLOWED_TOOL_NAMES: frozenset[str] = frozenset(
         "read_channel_history",
         "get_current_time",
         "view_image",
+        # Read-only network lookups; page fetches are SSRF-checked in bot.web. [SFT]
+        "web_search",
+        "search_news",
+        "read_webpage",
     }
 )
 

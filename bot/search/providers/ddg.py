@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import logging
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -26,6 +27,15 @@ from ..types import (
 )
 
 logger = get_logger(__name__)
+
+
+def _element_text(element: Any) -> str:
+    """Element text with a space between inline tags.
+
+    DDG wraps matched words in <b>; ``get_text(strip=True)`` glued them to their
+    neighbours ("inSuperMarioGalaxy"), which the model then had to decipher. [IV]
+    """
+    return " ".join(element.get_text(" ", strip=True).split())
 
 
 class DDGSearchProvider:
@@ -347,7 +357,7 @@ class DDGSearchProvider:
             anchors = soup.find_all("a", class_="result__a")
             logger.debug(f"DDG HTML parsed anchors: {len(anchors)}")
             for a in anchors:
-                title = a.get_text(strip=True)
+                title = _element_text(a)
                 href = a.get("href")
                 if not href:
                     continue
@@ -356,7 +366,7 @@ class DDGSearchProvider:
                 if parent:
                     sn = parent.find("a", class_="result__snippet") or parent.find("div", class_="result__snippet")
                     if sn:
-                        snippet = sn.get_text(strip=True)
+                        snippet = _element_text(sn)
                 norm_url, _ = self._normalize_url(href)
                 results.append(
                     SearchResult(

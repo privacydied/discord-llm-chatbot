@@ -13,13 +13,21 @@ from typing import TYPE_CHECKING
 from .clock import SPEC as CLOCK_SPEC
 from .history import SPEC as HISTORY_SPEC
 from .vision import SPEC as VISION_SPEC
+from .web import NEWS_SPEC, READ_SPEC, WEB_SEARCH_SPEC
 
 if TYPE_CHECKING:
     from ..registry import ToolRegistry
     from ..types import ToolSpec
 
 # The literal, hand-maintained tool list. [SFT][CMV]
-BUILTIN_SPECS: tuple[ToolSpec, ...] = (HISTORY_SPEC, CLOCK_SPEC, VISION_SPEC)
+BUILTIN_SPECS: tuple[ToolSpec, ...] = (
+    HISTORY_SPEC,
+    CLOCK_SPEC,
+    VISION_SPEC,
+    WEB_SEARCH_SPEC,
+    NEWS_SPEC,
+    READ_SPEC,
+)
 
 
 def register_builtin_tools(registry: ToolRegistry) -> None:
