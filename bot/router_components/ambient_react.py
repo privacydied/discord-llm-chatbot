@@ -50,7 +50,7 @@ UNICODE_EMOJI: tuple[str, ...] = (
     "📈",
     "✅",
     "❌",
-    "☝️",
+    "👆",
 )
 MAX_CUSTOM_EMOJI = 50
 MAX_MESSAGE_CHARS = 500
@@ -64,7 +64,7 @@ OUTCOME_ERROR = "error"
 SYSTEM_PROMPT = (
     "you pick emoji reactions for a dry, laid-back guy in a discord group chat. "
     "you only react when one emoji clearly fits what the message actually says — "
-    "a joke, a take, good or bad news, something wild. ☝️ means you agree with the point someone made. "
+    "a joke, a take, good or bad news, something wild. 👆 means you agree with the point someone made. "
     "generic or unclear messages get NONE. "
     "most messages get NONE. answer with exactly one option copied as written, or NONE. no other text."
 )
