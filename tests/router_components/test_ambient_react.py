@@ -170,3 +170,9 @@ async def test_react_discord_error_is_swallowed():
     msg.add_reaction.side_effect = RuntimeError("Forbidden")
     result = await react_to_message(msg, AsyncMock(return_value={"text": "💀"}), timeout_s=5)
     assert result.outcome == OUTCOME_ERROR
+
+
+def test_point_up_agree_emoji_is_an_option():
+    options = build_candidates(SimpleNamespace(emojis=[]))
+    assert parse_choice("☝️", options) == (OUTCOME_FIRED, "☝️")
+    assert parse_choice("☝", options) == (OUTCOME_FIRED, "☝️")
