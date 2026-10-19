@@ -28,6 +28,9 @@ FEATURE_ALIASES = {
     "knowledge": "rag",
     "ambient": "ambient_reply",
     "ambient_reply": "ambient_reply",
+    "ambient_react": "ambient_react",
+    "react": "ambient_react",
+    "reactions": "ambient_react",
     "embed_fix": "embed_fix",
     "embedfix": "embed_fix",
     "embeds": "embed_fix",
@@ -47,6 +50,7 @@ FEATURE_DEFAULTS: dict[str, bool] = {
     "x_twitter_extraction": True,
     "rag": True,
     "ambient_reply": True,
+    "ambient_react": True,
     "embed_fix": True,
 }
 

@@ -71,11 +71,11 @@ def _parse_quiet_hours(spec: str) -> tuple[int, int] | None:
         return None
     m = re.fullmatch(r"(\d{1,2})-(\d{1,2})", spec)
     if not m:
-        logger.warning("AMBIENT_REPLY_QUIET_HOURS invalid format %r (expected HH-HH); ignoring", spec)
+        logger.warning("ambient QUIET_HOURS invalid format %r (expected HH-HH); ignoring", spec)
         return None
     start, end = int(m.group(1)), int(m.group(2))
     if not (0 <= start <= 23 and 0 <= end <= 23):
-        logger.warning("AMBIENT_REPLY_QUIET_HOURS out of range %r; ignoring", spec)
+        logger.warning("ambient QUIET_HOURS out of range %r; ignoring", spec)
         return None
     return start, end
 
@@ -105,8 +105,86 @@ def _parse_channel_allowlist(spec: str) -> set[int] | None:
         if tok.isdigit():
             ids.add(int(tok))
         elif tok:
-            logger.warning("AMBIENT_REPLY_CHANNELS bad token %r; skipping", tok)
+            logger.warning("ambient CHANNELS bad token %r; skipping", tok)
     return ids or None
+
+
+# Per-kind config defaults. Keys are suffixes of "<PREFIX>_<KEY>". [CMV]
+REPLY_PREFIX = "AMBIENT_REPLY"
+REACT_PREFIX = "AMBIENT_REACT"
+_GATE_DEFAULTS: dict[str, dict[str, Any]] = {
+    REPLY_PREFIX: {
+        "PROBABILITY": 0.002,
+        "MIN_CHARS": 12,
+        "CHANNEL_COOLDOWN_S": 1800,
+        "GLOBAL_COOLDOWN_S": 600,
+    },
+    REACT_PREFIX: {
+        "PROBABILITY": 0.03,
+        "MIN_CHARS": 12,
+        "CHANNEL_COOLDOWN_S": 300,
+        "GLOBAL_COOLDOWN_S": 60,
+    },
+}
+
+
+def _author_gate(message: Any, config: dict[str, Any]) -> str | None:
+    """Return a suppression reason for ineligible authors/content, else None."""
+    author = getattr(message, "author", None)
+    if author is None or getattr(author, "bot", False):
+        return REASON_BOT_AUTHOR
+    msg_type = getattr(message, "type", None)
+    # discord.MessageType.default == 0; anything else = system message
+    if msg_type is not None and getattr(msg_type, "value", msg_type) != 0:
+        return REASON_SYSTEM_MESSAGE
+    content: str = (getattr(message, "content", "") or "").strip()
+    if content.startswith(config.get("COMMAND_PREFIX", "!")):
+        return REASON_COMMAND
+    # Bot mentions route normally via the main gate.
+    if any(getattr(u, "bot", False) for u in (getattr(message, "mentions", []) or [])):
+        return REASON_MENTION
+    return None
+
+
+def _ambient_gate(
+    message: Any,
+    config: dict[str, Any],
+    cooldowns: AmbientCooldowns,
+    guild_feature_enabled: bool,
+    prefix: str,
+    now: float,
+    rng: _Rng,
+) -> tuple[bool, str]:
+    """Shared ambient gate; ``prefix`` selects the AMBIENT_REPLY_* or AMBIENT_REACT_* keys."""
+    defaults = _GATE_DEFAULTS[prefix]
+
+    def cfg(key: str) -> Any:
+        return config.get(f"{prefix}_{key}", defaults.get(key))
+
+    if not config.get(f"{prefix}_ENABLED", False):
+        return False, REASON_DISABLED
+    if not guild_feature_enabled:
+        return False, REASON_GUILD_FEATURE_OFF
+    reason = _author_gate(message, config)
+    if reason is not None:
+        return False, reason
+    content: str = (getattr(message, "content", "") or "").strip()
+    if len(content) < cfg("MIN_CHARS"):
+        return False, REASON_TOO_SHORT
+    channel_id: int = getattr(getattr(message, "channel", None), "id", 0) or 0
+    allowlist = _parse_channel_allowlist(cfg("CHANNELS") or "")
+    if allowlist is not None and channel_id not in allowlist:
+        return False, REASON_CHANNEL_NOT_ALLOWED
+    if _in_quiet_hours(now, cfg("QUIET_HOURS") or ""):
+        return False, REASON_QUIET_HOURS
+    if cooldowns.global_elapsed(now) < cfg("GLOBAL_COOLDOWN_S"):
+        return False, REASON_GLOBAL_COOLDOWN
+    if cooldowns.channel_elapsed(channel_id, now) < cfg("CHANNEL_COOLDOWN_S"):
+        return False, REASON_CHANNEL_COOLDOWN
+    if rng.random() >= cfg("PROBABILITY"):
+        return False, REASON_PROBABILITY
+    cooldowns.record(channel_id, now)
+    return True, "fired"
 
 
 def should_ambient_reply(
@@ -117,78 +195,37 @@ def should_ambient_reply(
     now: float | None = None,
     rng: _Rng | None = None,
 ) -> tuple[bool, str]:
-    """Return (fire, reason).
+    """Return (fire, reason) for an unprompted ambient reply.
 
-    ``fire=True`` means the ambient gate passes and the bot should reply.
     ``reason`` is a short string used for logging/metrics regardless of outcome.
-
-    All checks are O(1) and allocation-free after the first call.
+    All checks are O(1) and I/O-free.
     """
-    if now is None:
-        now = time.monotonic()
-    if rng is None:
-        rng = random
+    return _ambient_gate(
+        message,
+        config,
+        cooldowns,
+        guild_feature_enabled,
+        REPLY_PREFIX,
+        time.monotonic() if now is None else now,
+        rng or random,
+    )
 
-    # 1. Global feature flag
-    if not config.get("AMBIENT_REPLY_ENABLED", False):
-        return False, REASON_DISABLED
 
-    # 2. Per-guild toggle
-    if not guild_feature_enabled:
-        return False, REASON_GUILD_FEATURE_OFF
-
-    # 3. Author eligibility
-    author = getattr(message, "author", None)
-    if author is None or getattr(author, "bot", False):
-        return False, REASON_BOT_AUTHOR
-
-    msg_type = getattr(message, "type", None)
-    # discord.MessageType.default == 0; anything else = system message
-    if msg_type is not None and getattr(msg_type, "value", msg_type) != 0:
-        return False, REASON_SYSTEM_MESSAGE
-
-    # 4. Not a command
-    content: str = (getattr(message, "content", "") or "").strip()
-    prefix: str = config.get("COMMAND_PREFIX", "!")
-    if content.startswith(prefix):
-        return False, REASON_COMMAND
-
-    # 5. Not a bot mention (those route normally via the main gate)
-    if any(getattr(u, "bot", False) for u in (getattr(message, "mentions", []) or [])):
-        return False, REASON_MENTION
-
-    # 6. Minimum length
-    min_chars: int = config.get("AMBIENT_REPLY_MIN_CHARS", 12)
-    if len(content) < min_chars:
-        return False, REASON_TOO_SHORT
-
-    # 7. Channel allowlist
-    channel_id: int = getattr(getattr(message, "channel", None), "id", 0) or 0
-    allow_channels_spec: str = config.get("AMBIENT_REPLY_CHANNELS", "") or ""
-    allowlist = _parse_channel_allowlist(allow_channels_spec)
-    if allowlist is not None and channel_id not in allowlist:
-        return False, REASON_CHANNEL_NOT_ALLOWED
-
-    # 8. Quiet hours (UTC)
-    quiet_spec: str = config.get("AMBIENT_REPLY_QUIET_HOURS", "") or ""
-    if _in_quiet_hours(now, quiet_spec):
-        return False, REASON_QUIET_HOURS
-
-    # 9. Global cooldown
-    global_cd: int = config.get("AMBIENT_REPLY_GLOBAL_COOLDOWN_S", 600)
-    if cooldowns.global_elapsed(now) < global_cd:
-        return False, REASON_GLOBAL_COOLDOWN
-
-    # 10. Per-channel cooldown
-    channel_cd: int = config.get("AMBIENT_REPLY_CHANNEL_COOLDOWN_S", 1800)
-    if cooldowns.channel_elapsed(channel_id, now) < channel_cd:
-        return False, REASON_CHANNEL_COOLDOWN
-
-    # 11. Probability roll
-    prob: float = config.get("AMBIENT_REPLY_PROBABILITY", 0.002)
-    if rng.random() >= prob:
-        return False, REASON_PROBABILITY
-
-    # All gates passed — record and fire
-    cooldowns.record(channel_id, now)
-    return True, "fired"
+def should_ambient_react(
+    message: Any,
+    config: dict[str, Any],
+    cooldowns: AmbientCooldowns,
+    guild_feature_enabled: bool,
+    now: float | None = None,
+    rng: _Rng | None = None,
+) -> tuple[bool, str]:
+    """Return (fire, reason) for an ambient emoji reaction. Same gate, AMBIENT_REACT_* keys."""
+    return _ambient_gate(
+        message,
+        config,
+        cooldowns,
+        guild_feature_enabled,
+        REACT_PREFIX,
+        time.monotonic() if now is None else now,
+        rng or random,
+    )

@@ -501,6 +501,9 @@ class Router:
 
         self._ambient_cooldowns = AmbientCooldowns()
         self._ambient_message_ids: set[int] = set()
+        # Ambient reactions: own cooldowns; tasks held so they aren't GC'd mid-flight [RM]
+        self._ambient_react_cooldowns = AmbientCooldowns()
+        self._ambient_react_tasks: set[asyncio.Task] = set()
 
         # Vision generation system [CA][SFT]
         self._vision_intent_router: VisionIntentRouter | None = None
@@ -2894,6 +2897,7 @@ class Router:
             # code whenever REQUIRE_MENTION_IN_GUILDS is true (the default).
             if self._try_ambient_reply(message, context):
                 return True
+            self._try_ambient_react(message)
 
             self._gate_denied[message.id] = "mention_required"
             self.logger.info(
@@ -3021,6 +3025,7 @@ class Router:
         # Ambient reply: last chance before silence. Only in guilds, not DMs.
         if self._try_ambient_reply(message, context):
             return True
+        self._try_ambient_react(message)
 
         self._gate_denied[message.id] = "not_addressed"
         self.logger.info(
@@ -3151,6 +3156,60 @@ class Router:
         except Exception as _ambient_err:  # noqa: BLE001
             self.logger.debug("ambient gate error (suppressed): %s", _ambient_err)
             return False
+
+    def _try_ambient_react(self, message: Message) -> None:
+        """Maybe react to an unaddressed message with one relevant emoji, in the background.
+
+        Only reached when no ambient reply fired, so reply wins over reaction.
+        Never blocks or raises into the gate. [REH][PA]
+        """
+        if isinstance(message.channel, DMChannel):
+            return
+        try:
+            from bot.router_components.ambient import should_ambient_react
+            from bot.router_components.ambient_react import can_react
+            from bot.server_features import is_server_feature_enabled
+
+            guild_id = getattr(message.guild, "id", None)
+            fired, reason = should_ambient_react(
+                message,
+                self.config,
+                self._ambient_react_cooldowns,
+                is_server_feature_enabled(guild_id, "ambient_react"),
+                now=time.monotonic(),
+            )
+            if fired and not can_react(message):
+                fired, reason = False, "no_permission"
+            if not fired:
+                self._metric_inc("ambient_react_suppressed_total", {"reason": reason})
+                return
+            task = asyncio.create_task(self._run_ambient_react(message), name=f"ambient_react_{message.id}")
+            self._ambient_react_tasks.add(task)
+            task.add_done_callback(self._ambient_react_tasks.discard)
+        except Exception as err:  # noqa: BLE001
+            self.logger.debug("ambient react gate error (suppressed): %s", err)
+
+    async def _run_ambient_react(self, message: Message) -> None:
+        """Pick and apply the reaction; log the outcome once. [REH]"""
+        from bot.ai_backend import generate_response
+        from bot.router_components.ambient_react import react_to_message
+
+        timeout_s = float(self.config.get("AMBIENT_REACT_TIMEOUT_S", 45))
+        result = await react_to_message(message, generate_response, timeout_s)
+        self.logger.info(
+            "ambient.react.%s | msg_id=%s emoji=%s",
+            result.outcome,
+            message.id,
+            result.emoji,
+            extra={
+                "event": f"ambient.react.{result.outcome}",
+                "subsys": "ambient",
+                "msg_id": message.id,
+                "guild_id": getattr(message.guild, "id", None),
+                "detail": {"emoji": str(result.emoji) if result.emoji else None, "raw": result.raw[:80]},
+            },
+        )
+        self._metric_inc("ambient_react_total", {"outcome": result.outcome})
 
     def _ambient_context_depth(self) -> int:
         """Resolve the background-history depth for ambient context.
