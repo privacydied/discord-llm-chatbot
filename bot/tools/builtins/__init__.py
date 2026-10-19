@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .archive import SPEC as ARCHIVE_SPEC
 from .clock import SPEC as CLOCK_SPEC
 from .history import SPEC as HISTORY_SPEC
+from .markets import CONVERT_SPEC, PRICE_SPEC
 from .vision import SPEC as VISION_SPEC
 from .web import NEWS_SPEC, READ_SPEC, WEB_SEARCH_SPEC
 
@@ -27,6 +29,9 @@ BUILTIN_SPECS: tuple[ToolSpec, ...] = (
     WEB_SEARCH_SPEC,
     NEWS_SPEC,
     READ_SPEC,
+    ARCHIVE_SPEC,
+    CONVERT_SPEC,
+    PRICE_SPEC,
 )
 
 

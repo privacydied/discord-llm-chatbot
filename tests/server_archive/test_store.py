@@ -237,3 +237,23 @@ async def test_permission_errors_are_logged_and_skipped(tmp_path) -> None:
     guild = SimpleNamespace(id=1, text_channels=[PermissionErrorHistory()], threads=[])
     result = await __import__("bot.server_archive.sync", fromlist=["sync_guild_archive"]).sync_guild_archive(store, guild)
     assert result == 0
+
+
+@pytest.mark.asyncio
+async def test_search_filters_by_author_name(tmp_path, bundle_factory) -> None:
+    store = ServerArchiveStore(tmp_path / "archive.sqlite3")
+    await store.initialize()
+    await store.upsert_bundle(bundle_factory("300", "knicks trade talk"))
+    other = bundle_factory("301", "knicks trade rumours", author_id="21")
+    other = ArchiveMessageBundle(
+        guild=other.guild,
+        channel=other.channel,
+        author=ArchiveUser(user_id="21", username="dre_bk", display_name="Dre"),
+        message=other.message,
+        attachments=other.attachments,
+        mentions=other.mentions,
+    )
+    await store.upsert_bundle(other)
+    results = await store.search("knicks trade", guild_id="1", limit=5, author_name="dre")
+    assert [r.message_id for r in results] == ["301"]
+    assert len(await store.search("knicks trade", guild_id="1", limit=5)) == 2

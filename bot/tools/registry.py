@@ -39,6 +39,11 @@ ALLOWED_TOOL_NAMES: frozenset[str] = frozenset(
         "web_search",
         "search_news",
         "read_webpage",
+        # Server archive search, filtered to channels the asker can read. [SFT]
+        "search_chat_history",
+        # Fixed-host market data lookups. [SFT]
+        "convert_currency",
+        "get_price",
     }
 )
 

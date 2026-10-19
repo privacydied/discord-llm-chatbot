@@ -162,6 +162,7 @@ class ServerArchiveService:
         channel_id: str | None = None,
         author_id: str | None = None,
         limit: int | None = None,
+        author_name: str | None = None,
     ) -> list[ArchiveSearchResult]:
         if not self.enabled:
             return []
@@ -171,6 +172,7 @@ class ServerArchiveService:
             channel_id=channel_id,
             author_id=author_id,
             limit=limit or self.search_limit,
+            author_name=author_name,
         )
 
     async def get_message_by_id(
@@ -340,6 +342,7 @@ async def search_archive(
     channel_id: str | None = None,
     author_id: str | None = None,
     limit: int | None = None,
+    author_name: str | None = None,
 ) -> list[ArchiveSearchResult]:
     service = await get_server_archive_service()
     return await service.search(
@@ -348,6 +351,7 @@ async def search_archive(
         channel_id=channel_id,
         author_id=author_id,
         limit=limit,
+        author_name=author_name,
     )
 
 

@@ -32,6 +32,10 @@ async def _to_thread(func, *args):
     return await asyncio.to_thread(func, *args)
 
 
+# Case-insensitive (ASCII) partial match on any of a user's names. [IV]
+_AUTHOR_NAME_SQL = " AND (u.display_name LIKE ? OR u.username LIKE ? OR u.global_name LIKE ?)"
+
+
 class ServerArchiveStore:
     def __init__(self, sqlite_path: str | Path) -> None:
         self.sqlite_path = Path(sqlite_path)
@@ -1044,9 +1048,10 @@ class ServerArchiveStore:
         channel_id: str | None = None,
         author_id: str | None = None,
         limit: int = 5,
+        author_name: str | None = None,
     ) -> list[ArchiveSearchResult]:
         await self.initialize()
-        return await _to_thread(self._search_sync, query, guild_id, channel_id, author_id, limit)
+        return await _to_thread(self._search_sync, query, guild_id, channel_id, author_id, limit, author_name)
 
     def _search_sync(
         self,
@@ -1055,6 +1060,7 @@ class ServerArchiveStore:
         channel_id: str | None,
         author_id: str | None,
         limit: int,
+        author_name: str | None = None,
     ) -> list[ArchiveSearchResult]:
         normalized = normalize_query(query)
         if not normalized:
@@ -1095,6 +1101,9 @@ class ServerArchiveStore:
                     if author_id is not None:
                         sql += " AND m.author_id = ?"
                         params.append(author_id)
+                    if author_name:
+                        sql += _AUTHOR_NAME_SQL
+                        params.extend([f"%{author_name}%"] * 3)
                     sql += " ORDER BY score ASC, m.created_at DESC LIMIT ?"
                     params.append(limit)
                     rows = conn.execute(sql, params).fetchall()
@@ -1129,6 +1138,9 @@ class ServerArchiveStore:
                     if author_id is not None:
                         sql += " AND m.author_id = ?"
                         params.append(author_id)
+                    if author_name:
+                        sql += _AUTHOR_NAME_SQL
+                        params.extend([f"%{author_name}%"] * 3)
                     sql += " ORDER BY m.created_at DESC LIMIT ?"
                     params.append(limit)
                     rows = conn.execute(sql, params).fetchall()
