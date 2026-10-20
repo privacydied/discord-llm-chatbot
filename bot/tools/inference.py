@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import time
+from types import SimpleNamespace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,7 +25,8 @@ import httpx
 
 from bot.utils.logging import get_logger
 
-from .registry import execute_tool, get_registry
+from .registry import ALLOWED_TOOL_NAMES, execute_tool, get_registry
+from .textual_calls import TextualCall, find_textual_calls, strip_textual_calls
 from .types import ToolContext
 
 logger = get_logger(__name__)
@@ -61,6 +63,56 @@ def _client_for(cfg: dict[str, Any], timeout_s: float) -> tuple[Any, str]:
         max_retries=0,
     )
     return client, model
+
+
+# Cap on models tried when the tool-capable model errors (404, 429, ...). [CMV]
+MAX_MODEL_FALLBACKS = 3
+
+
+def _model_candidates(cfg: dict[str, Any], primary: str) -> list[str]:
+    """Primary model, then fallbacks on the same provider. [REH]
+
+    TOOLS_FALLBACK_MODELS (comma list) wins; otherwise the same-provider entries
+    of TEXT_FALLBACK_MODELS ("provider|model,..."), since the tool client talks
+    to one endpoint only.
+    """
+    base = str(cfg.get("OPENAI_API_BASE") or "").lower()
+    provider = "openrouter" if "openrouter" in base else ("nvidia" if "nvidia.com" in base else "openai")
+    explicit = str(cfg.get("TOOLS_FALLBACK_MODELS") or "").strip()
+    if explicit:
+        extras = [m.strip() for m in explicit.split(",")]
+    else:
+        extras = []
+        for entry in str(cfg.get("TEXT_FALLBACK_MODELS") or "").strip().strip('"').split(","):
+            prov, sep, model = entry.strip().partition("|")
+            if sep and prov.strip().lower() == provider:
+                extras.append(model.strip())
+    ordered: list[str] = []
+    for model in [primary, *extras]:
+        if model and model not in ordered:
+            ordered.append(model)
+    return ordered[: MAX_MODEL_FALLBACKS + 1]
+
+
+def _synthetic_calls(calls: list[TextualCall], iteration: int) -> list[Any]:
+    """Tool calls the model wrote as text, shaped like SDK tool calls. [REH]"""
+    return [
+        SimpleNamespace(
+            id=f"textcall_{iteration}_{i}",
+            function=SimpleNamespace(name=call.name, arguments=json.dumps(call.arguments)),
+        )
+        for i, call in enumerate(calls)
+    ]
+
+
+async def run_textual_calls(calls: list[TextualCall], ctx: ToolContext) -> str:
+    """Run text-written tool calls; return their results as one context block."""
+    blocks = []
+    for call in calls:
+        logger.info("tool.call.textual name=%s args=%s", call.name, str(call.arguments)[:200])
+        result = await execute_tool(call.name, call.arguments, ctx)
+        blocks.append(f"[{call.name} result]\n{result.to_message_content()}")
+    return "\n\n".join(blocks)
 
 
 def _default_system_prompt(cfg: dict[str, Any]) -> str | None:
@@ -294,6 +346,7 @@ async def _force_answer(
         return None
 
     content, reasoning = _extract(response)
+    content = strip_textual_calls(content)
     if content and not _is_reasoning_leak(content, reasoning):
         logger.info("tools.force_answer_ok chars=%d", len(content))
         return content
@@ -339,29 +392,43 @@ async def run_tool_conversation(
     max_tokens = config.get("MAX_RESPONSE_TOKENS", 1000)
     extra_body = _reasoning_extra_body(config)
 
+    models = _model_candidates(config, model)
     for iteration in range(max_iterations):
         if time.monotonic() >= deadline:
             logger.warning("tools.deadline_exceeded iteration=%d", iteration)
             return None
-        try:
-            create_kwargs: dict[str, Any] = {
-                "model": model,
-                "messages": messages,
-                "tools": schemas,
-                "tool_choice": "auto",
-                "max_tokens": max_tokens,
-                "stream": False,
-            }
-            if extra_body:
-                create_kwargs["extra_body"] = extra_body
-            response = await client.chat.completions.create(**create_kwargs)
-        except Exception as exc:  # [REH] model may not support tools at all  # noqa: BLE001
-            logger.warning("tools.completion_failed iteration=%d error=%s", iteration, exc)
-            return None
+        response = None
+        while response is None:
+            model = models[0]
+            try:
+                create_kwargs: dict[str, Any] = {
+                    "model": model,
+                    "messages": messages,
+                    "tools": schemas,
+                    "tool_choice": "auto",
+                    "max_tokens": max_tokens,
+                    "stream": False,
+                }
+                if extra_body:
+                    create_kwargs["extra_body"] = extra_body
+                response = await client.chat.completions.create(**create_kwargs)
+            except Exception as exc:  # [REH] provider 404/429, or no tool support  # noqa: BLE001
+                logger.warning("tools.completion_failed iteration=%d model=%s error=%s", iteration, model, exc)
+                models.pop(0)
+                if not models or time.monotonic() >= deadline:
+                    return None
+                logger.info("tools.model_fallback next=%s", models[0])
 
         tool_calls = _tool_calls_of(response)
         if not tool_calls:
             content, reasoning = _extract(response)
+            written = find_textual_calls(content, ALLOWED_TOOL_NAMES)
+            if written:
+                # Model wrote the call as text instead of using the API. Run it. [REH]
+                logger.info("tools.textual_calls iteration=%d names=%s", iteration, [c.name for c in written])
+                tool_calls = _synthetic_calls(written, iteration)
+        if not tool_calls:
+            content = strip_textual_calls(content)
             if content and not _is_reasoning_leak(content, reasoning):
                 logger.info("tools.answered iterations=%d", iteration)
                 return content

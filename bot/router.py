@@ -5390,6 +5390,7 @@ class Router:
                 return tool_action
 
             response_action = await self._invoke_text_flow(original_text, message, context_str)
+            response_action = await self._resolve_textual_tool_calls(response_action, original_text, message, context_str)
             if response_action and response_action.has_payload:
                 self.logger.info(f"✅ Text-only response generated successfully (msg_id: {message.id})")
                 return response_action
@@ -6270,6 +6271,47 @@ class Router:
             extra={"subsys": "tools", "event": "tools.answered", "detail": {"chars": len(answer)}},
         )
         return BotAction(content=answer)
+
+    async def _resolve_textual_tool_calls(self, action: BotAction | None, text: str, message: Message | None, context_str: str) -> BotAction | None:
+        """Never send a tool call the model wrote as text. [REH][IV]
+
+        The plain text path has no tools, but the persona tells the model to
+        look things up, so it sometimes replies with
+        ``<function=web_search>...``. Run those calls, put the results in the
+        context and regenerate once; any markup left is stripped.
+        """
+        from bot.tools.textual_calls import find_textual_calls, has_textual_call_markup, strip_textual_calls
+
+        content = getattr(action, "content", None) or ""
+        if not has_textual_call_markup(content):
+            return action
+        cfg = self.config or {}
+        from bot.tools.registry import ALLOWED_TOOL_NAMES
+
+        calls = find_textual_calls(content, ALLOWED_TOOL_NAMES)
+        self.logger.info(
+            f"tools.textual_calls_in_reply count={len(calls)}",
+            extra={"subsys": "tools", "event": "tools.textual_calls_in_reply"},
+        )
+        if calls and cfg.get("TOOLS_ENABLED", False):
+            from bot.tools import ToolContext
+            from bot.tools.inference import run_textual_calls
+
+            try:
+                results = await run_textual_calls(calls, ToolContext(message=message, bot=self.bot, config=cfg))
+                retry = await self._invoke_text_flow(text, message, f"{context_str}\n\n{results}".strip())
+            except Exception as exc:  # noqa: BLE001 - fall through to stripping [REH]
+                self.logger.warning(f"tools.textual_calls_failed error={exc}")
+                retry = None
+            retry_text = strip_textual_calls(getattr(retry, "content", None) or "")
+            if retry_text:
+                retry.content = retry_text
+                return retry
+        stripped = strip_textual_calls(content)
+        if not stripped:
+            return None
+        action.content = stripped
+        return action
 
     async def _maybe_add_news_digest(self, text: str, message: Message | None, context_str: str) -> str:
         """Append current headlines to the context when the user asks for news.
