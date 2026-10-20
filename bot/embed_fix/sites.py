@@ -101,8 +101,10 @@ def _build_deviantart(m: re.Match[str], domain: str) -> str:
 
 
 def _build_tiktok(m: re.Match[str], domain: str) -> str:
-    if m["short"]:
-        return f"https://{m['short_host'].lower()}.{domain}/{m['short']}/"
+    # vm./vt. links and tiktok.com/t/ share one code space; /t/<code>/ resolves all. [IV]
+    short = m["short"] or m["vshort"]
+    if short:
+        return f"https://{domain}/t/{short}/"
     return f"https://{domain}/{m['path']}"
 
 
@@ -189,10 +191,11 @@ SITES: tuple[EmbedSite, ...] = (
     EmbedSite(
         identifier="tiktok",
         pattern=_compile(
-            r"https?://(?:(?:www\.|m\.)?tiktok\.com/(?P<path>@[\w.-]+/video/\d+)"
-            r"|(?P<short_host>vm|vt)\.tiktok\.com/(?P<short>[A-Za-z0-9]+))"
+            r"https?://(?:(?:www\.|m\.)?tiktok\.com/(?:(?P<path>@[\w.-]+/video/\d+)|t/(?P<short>[A-Za-z0-9]+))"
+            r"|(?:vm|vt)\.tiktok\.com/(?P<vshort>[A-Za-z0-9]+))"
         ),
-        default_domain="vxtiktok.com",
+        # fxTikTok. vxtiktok.com shut down ("due to a legal request").
+        default_domain="tnktok.com",
         build=_build_tiktok,
     ),
     EmbedSite(
