@@ -15,7 +15,7 @@ from .clock import SPEC as CLOCK_SPEC
 from .history import SPEC as HISTORY_SPEC
 from .markets import CONVERT_SPEC, PRICE_SPEC
 from .vision import SPEC as VISION_SPEC
-from .web import NEWS_SPEC, READ_SPEC, WEB_SEARCH_SPEC
+from .web import NEWS_SPEC, READ_SPEC, WEB_SEARCH_SPEC, WIKI_SPEC
 
 if TYPE_CHECKING:
     from ..registry import ToolRegistry
@@ -29,6 +29,7 @@ BUILTIN_SPECS: tuple[ToolSpec, ...] = (
     WEB_SEARCH_SPEC,
     NEWS_SPEC,
     READ_SPEC,
+    WIKI_SPEC,
     ARCHIVE_SPEC,
     CONVERT_SPEC,
     PRICE_SPEC,

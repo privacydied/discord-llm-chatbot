@@ -28,7 +28,7 @@ async def test_web_search_formats_results_as_untrusted(monkeypatch):
     assert result.ok
     assert "1. Super Mario Galaxy 2 on Switch -- https://nintendo.com/x" in result.content
     assert "out now" in result.content
-    assert "web search: mario galaxy 2 switch" in result.content
+    assert "web search (duckduckgo): mario galaxy 2 switch" in result.content
     params = provider.search.await_args.args[0]
     assert params.query == "mario galaxy 2 switch"
     assert params.max_results == web.MAX_RESULTS
@@ -40,13 +40,20 @@ async def test_web_search_requires_query():
 
 
 async def test_web_search_no_results_is_not_an_error(monkeypatch):
+    from bot.tools.builtins import web_sources
+
     monkeypatch.setattr("bot.search.factory.get_search_provider", lambda: _provider([]))
+    monkeypatch.setattr(web, "_news_results", AsyncMock(return_value=[]))
+    monkeypatch.setattr(web_sources, "wikipedia_search", AsyncMock(return_value=[]))
     result = await execute_tool("web_search", {"query": "nothing"}, _ctx())
     assert result.ok and "No results" in result.content
 
 
-async def test_search_news_uses_guardian(monkeypatch):
+async def test_search_news_falls_back_to_guardian(monkeypatch):
     from bot.news.headlines import Headline
+    from bot.tools.builtins import web_sources
+
+    monkeypatch.setattr(web_sources, "google_news", AsyncMock(return_value=[]))
 
     fetch = AsyncMock(return_value=[Headline(title="Big story", url="https://g.com/a", published="2026-10-18T10:00Z")])
     monkeypatch.setattr("bot.news.headlines.fetch_headlines", fetch)
@@ -56,6 +63,9 @@ async def test_search_news_uses_guardian(monkeypatch):
 
 
 async def test_search_news_empty(monkeypatch):
+    from bot.tools.builtins import web_sources
+
+    monkeypatch.setattr(web_sources, "google_news", AsyncMock(return_value=[]))
     monkeypatch.setattr("bot.news.headlines.fetch_headlines", AsyncMock(return_value=[]))
     result = await execute_tool("search_news", {}, _ctx())
     assert result.ok and "web_search" in result.content

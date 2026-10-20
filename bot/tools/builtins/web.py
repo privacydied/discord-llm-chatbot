@@ -81,33 +81,69 @@ def format_search_results(results: list[Any]) -> str:
     return "\n".join(lines)
 
 
-async def web_search(ctx: ToolContext, arguments: dict[str, Any]) -> ToolResult:
-    """DuckDuckGo search via the configured provider. Never raises."""
+async def _ddg(ctx: ToolContext, query: str, limit: int) -> list[Any]:
     from bot.search.factory import get_search_provider
     from bot.search.types import SafeSearch, SearchQueryParams
 
-    query = _clean_query(arguments, "query")
-    if not query:
-        return ToolResult.failure("query is required")
-    limit = _clamp_int(arguments.get("max_results"), DEFAULT_RESULTS, 1, MAX_RESULTS)
     try:
         safe = SafeSearch(str(ctx.config.get("SEARCH_SAFE", "moderate")).lower())
     except ValueError:
         safe = SafeSearch.MODERATE
     params = SearchQueryParams(query=query, max_results=limit, safesearch=safe, timeout_ms=SEARCH_TIMEOUT_MS)
-    results = await get_search_provider().search(params)
-    logger.info("tool.web_search query=%s results=%d", query[:80], len(results))
+    try:
+        return await get_search_provider().search(params)
+    except Exception as exc:  # noqa: BLE001 — fall through to the next source [REH]
+        logger.info("tool.web_search.ddg_failed error=%s", exc)
+        return []
+
+
+async def _search_chain(ctx: ToolContext, query: str, limit: int) -> tuple[str, list[Any]]:
+    """First source with results: DDG, Google via camofox, Google News, Wikipedia. [REH]
+
+    DDG answers bots with HTTP 202 and nothing when it rate-limits, so an empty
+    result moves on rather than reaching the model.
+    """
+    from . import web_sources as src
+
+    attempts = (
+        ("duckduckgo", lambda: _ddg(ctx, query, limit)),
+        ("google", lambda: src.camofox_google(query, limit, ctx.config)),
+        ("google news", lambda: _news_results(query, limit)),
+        ("wikipedia", lambda: src.wikipedia_search(query, limit)),
+    )
+    for name, run in attempts:
+        results = await run()
+        logger.info("tool.web_search.source source=%s results=%d", name, len(results))
+        if results:
+            return name, results
+    return "", []
+
+
+async def _news_results(query: str, limit: int) -> list[Any]:
+    from . import web_sources as src
+
+    return src.news_as_results(await src.google_news(query, limit))
+
+
+async def web_search(ctx: ToolContext, arguments: dict[str, Any]) -> ToolResult:
+    """Search with automatic fallback across keyless sources. Never raises."""
+    query = _clean_query(arguments, "query")
+    if not query:
+        return ToolResult.failure("query is required")
+    limit = _clamp_int(arguments.get("max_results"), DEFAULT_RESULTS, 1, MAX_RESULTS)
+    source, results = await _search_chain(ctx, query, limit)
+    logger.info("tool.web_search query=%s source=%s results=%d", query[:80], source or "none", len(results))
     if not results:
-        return ToolResult.success(f'No results for "{query}". Try different wording, or say you couldn\'t verify it.')
-    return ToolResult.success(_wrap(format_search_results(results), f"web search: {query}"))
+        return ToolResult.success(f'No results for "{query}" from any search source. Try shorter wording, lookup_wikipedia for facts, or answer from your own knowledge.')
+    return ToolResult.success(_wrap(format_search_results(results), f"web search ({source}): {query}"))
 
 
 # ── search_news ──────────────────────────────────────────────────────────────
 
 NEWS_DESCRIPTION = (
-    "Recent news articles from the Guardian, with publish dates. Use for breaking news and current events "
-    "(politics, world, business, science, sport). Leave topic empty for today's top stories. "
-    "For niche topics like games or gadgets, web_search usually finds more."
+    "Recent news articles with publish dates (Google News, Guardian as backup). Use for breaking news, "
+    "current events, and checking whether something has already released or happened: games, consoles, "
+    "films, politics, sport, business. Leave topic empty for today's top stories."
 )
 
 NEWS_PARAMETERS: dict[str, Any] = {
@@ -127,16 +163,55 @@ NEWS_PARAMETERS: dict[str, Any] = {
 
 
 async def search_news(ctx: ToolContext, arguments: dict[str, Any]) -> ToolResult:
-    """Guardian headlines for a topic. Never raises."""
+    """Dated news: Google News RSS first, Guardian if that is empty. Never raises."""
     from bot.news.headlines import fetch_headlines, render_digest
+
+    from . import web_sources as src
 
     topic = _clean_query(arguments, "topic") or None
     days = _clamp_int(arguments.get("days"), DEFAULT_NEWS_DAYS, 1, MAX_NEWS_DAYS)
+    items = await src.google_news(topic, NEWS_LIMIT, days=days if topic else None)
+    if not items and topic:
+        # Nothing that recent; dated older coverage still answers "has it come out". [REH]
+        items = await src.google_news(topic, NEWS_LIMIT)
+    logger.info("tool.search_news source=google_news topic=%s days=%d results=%d", (topic or "")[:80], days, len(items))
+    if items:
+        return ToolResult.success(_wrap(src.render_news(items), f"Google News: {topic or 'top stories'}"))
     headlines = await fetch_headlines(topic, cfg=ctx.config, days=days, limit=NEWS_LIMIT)
     logger.info("tool.search_news topic=%s days=%d results=%d", (topic or "")[:80], days, len(headlines))
     if not headlines:
         return ToolResult.success("No news articles found. Try web_search instead.")
     return ToolResult.success(_wrap(render_digest(headlines, topic, days), "Guardian news search"))
+
+
+# ── lookup_wikipedia ─────────────────────────────────────────────────────────
+
+WIKI_DESCRIPTION = (
+    "Wikipedia article summary for a topic: people, places, countries, games, films, events, science, history. Use for factual questions and stats instead of a web search. Set full=true for more of the article."
+)
+
+WIKI_PARAMETERS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "topic": {"type": "string", "description": "Article or subject, e.g. 'Super Mario Galaxy 2' or 'crime in Poland'."},
+        "full": {"type": "boolean", "default": False, "description": "Return more of the article, not just the intro."},
+    },
+    "required": ["topic"],
+}
+
+
+async def lookup_wikipedia(ctx: ToolContext, arguments: dict[str, Any]) -> ToolResult:
+    """Best-matching English Wikipedia article. Never raises."""
+    from . import web_sources as src
+
+    topic = _clean_query(arguments, "topic")
+    if not topic:
+        return ToolResult.failure("topic is required")
+    article = await src.wikipedia_article(topic, full=bool(arguments.get("full")))
+    logger.info("tool.lookup_wikipedia topic=%s found=%s", topic[:80], article.title if article else None)
+    if article is None:
+        return ToolResult.success(f'No Wikipedia article found for "{topic}". Try web_search.')
+    return ToolResult.success(_wrap(f"{article.title}\n{article.text}", article.url))
 
 
 # ── read_webpage ─────────────────────────────────────────────────────────────
@@ -172,13 +247,21 @@ WEB_SEARCH_SPEC = ToolSpec(
     description=WEB_SEARCH_DESCRIPTION,
     parameters=WEB_SEARCH_PARAMETERS,
     handler=web_search,
-    timeout_s=15.0,
+    # Worst case walks every source: DDG, camofox Google, Google News, Wikipedia. [CMV]
+    timeout_s=60.0,
 )
 NEWS_SPEC = ToolSpec(
     name="search_news",
     description=NEWS_DESCRIPTION,
     parameters=NEWS_PARAMETERS,
     handler=search_news,
+    timeout_s=15.0,
+)
+WIKI_SPEC = ToolSpec(
+    name="lookup_wikipedia",
+    description=WIKI_DESCRIPTION,
+    parameters=WIKI_PARAMETERS,
+    handler=lookup_wikipedia,
     timeout_s=15.0,
 )
 READ_SPEC = ToolSpec(

@@ -39,6 +39,8 @@ ALLOWED_TOOL_NAMES: frozenset[str] = frozenset(
         "web_search",
         "search_news",
         "read_webpage",
+        # Wikipedia API article summaries (fixed host). [SFT]
+        "lookup_wikipedia",
         # Server archive search, filtered to channels the asker can read. [SFT]
         "search_chat_history",
         # Fixed-host market data lookups. [SFT]

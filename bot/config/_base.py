@@ -554,6 +554,10 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         # in bot/tools/registry.ALLOWED_TOOL_NAMES (all read-only).
         "TOOLS_ENABLED": _parse_bool_str(_clean_env_value(env_getter("TOOLS_ENABLED", None)), False),
         "TOOLS_MODEL": _clean_env_value(env_getter("TOOLS_MODEL", None)),
+        # Self-hosted camofox browser: Google results when DDG is rate-limited. [REH]
+        "CAMOFOX_URL": _clean_env_value(env_getter("CAMOFOX_URL", None)) or "http://127.0.0.1:9377",
+        # Raw value: a key may legitimately contain "#". [IV]
+        "CAMOFOX_ACCESS_KEY": (env_getter("CAMOFOX_ACCESS_KEY", None) or "").strip().strip('"'),
         "TOOLS_MAX_ITERATIONS": _safe_int(env_getter("TOOLS_MAX_ITERATIONS", None), "3", "TOOLS_MAX_ITERATIONS"),
         "TOOLS_TIMEOUT_S": _safe_float(env_getter("TOOLS_TIMEOUT_S", None), "90.0", "TOOLS_TIMEOUT_S"),
         # How long a vision description of an image stays reusable. An image's
