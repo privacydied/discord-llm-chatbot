@@ -42,8 +42,10 @@ from bot.embed_fix.sites import SITE_IDS, find_fixes, page_slug, is_ignored, par
         ("https://pixiv.net/artworks/12345", "https://phixiv.net/artworks/12345"),
         ("https://www.deviantart.com/someone/art/Cool-Thing-123", "https://fixdeviantart.com/someone/art/Cool-Thing-123"),
         # Additions beyond SaucyBot
-        ("https://www.tiktok.com/@user.name/video/7300000000000000000", "https://vxtiktok.com/@user.name/video/7300000000000000000"),
-        ("https://vm.tiktok.com/ZMabc123/", "https://vm.vxtiktok.com/ZMabc123/"),
+        ("https://www.tiktok.com/@user.name/video/7300000000000000000", "https://tnktok.com/@user.name/video/7300000000000000000"),
+        ("https://vm.tiktok.com/ZMabc123/", "https://tnktok.com/t/ZMabc123/"),
+        ("https://vt.tiktok.com/ZSxyz/", "https://tnktok.com/t/ZSxyz/"),
+        ("https://www.tiktok.com/t/ZTfM6GsWt/", "https://tnktok.com/t/ZTfM6GsWt/"),  # share links (most common)
         ("https://old.reddit.com/r/videos/comments/abc12/title_here/", "https://vxreddit.com/r/videos/comments/abc12/title_here"),
     ],
 )
@@ -73,6 +75,9 @@ def test_rewrites(url, expected):
         "https://www.reddit.com/media?url=javascript%3Aalert(1)",
         "https://www.reddit.com/r/videos/",
         "https://www.tiktok.com/@user",
+        "https://tnktok.com/t/ZTfM6GsWt/",  # already fixed
+        "https://www.kktiktok.com/t/ZTyc2cv8q/",
+        "https://vxtiktok.com/@a/video/1",
         "https://notx.com/jack/status/20",
     ],
 )

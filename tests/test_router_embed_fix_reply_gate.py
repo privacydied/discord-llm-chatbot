@@ -55,7 +55,7 @@ def _reply(target_content: str | None, *, embeds=(), ping: bool = True, typed_me
     [
         ("https://vxtwitter.com/a/status/1", ()),
         ("https://www.oginstagram.com/reel/AB", ()),
-        ("https://vxreddit.com/r/x/comments/1\nhttps://vxtiktok.com/@a/video/2", ()),
+        ("https://vxreddit.com/r/x/comments/1\nhttps://tnktok.com/@a/video/2", ()),
         (None, CARD),  # ppv card post, no text
         ("", [SimpleNamespace(url="https://www.instagram.com/p/AB/")]),  # upload card
     ],
