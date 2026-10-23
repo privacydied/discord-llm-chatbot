@@ -1,7 +1,8 @@
 """Replies to allowlisted bots, with a loop guard.
 [SFT][REH][CMV].
 
-Bots are ignored by default. A bot whose user ID is in BOT_REPLY_ALLOWLIST
+With BOT_REPLY_ALLOWLIST_ENABLED (default) only bots whose user ID is in
+BOT_REPLY_ALLOWLIST are answered; with it off, any bot is. Either way a bot
 gets a reply only when it addresses this bot (@mention or reply to one of our
 messages) -- never ambient replies or reacts. Two bots that ping each other
 would otherwise loop forever, so each channel allows at most
@@ -59,13 +60,26 @@ def _int(value: Any, default: int) -> int:
         return default
 
 
+def bot_may_talk(user_id: Any, cfg: dict[str, Any]) -> bool:
+    """Whether another bot is allowed to talk to us at all."""
+    if not _flag(cfg.get("BOT_REPLY_ALLOWLIST_ENABLED", True)):
+        return True
+    return user_id in parse_allowlist(cfg.get("BOT_REPLY_ALLOWLIST"))
+
+
+def _flag(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() not in ("0", "false", "no", "off", "")
+
+
 def is_addressed_peer_bot(message: Any, cfg: dict[str, Any], own_id: int | None) -> bool:
-    """Allowlisted other bot that @mentions or replies to us. No budget change."""
+    """Permitted other bot that @mentions or replies to us. No budget change."""
     author = getattr(message, "author", None)
     author_id = getattr(author, "id", None)
     if author_id is None or own_id is None or author_id == own_id:
         return False
-    if author_id not in parse_allowlist(cfg.get("BOT_REPLY_ALLOWLIST")):
+    if not bot_may_talk(author_id, cfg):
         return False
     return bool(mentions_bot(message, own_id) or is_reply_to_bot(message, own_id))
 
@@ -74,7 +88,7 @@ def accept_peer_bot_message(message: Any, cfg: dict[str, Any], own_id: int | Non
     """True if a message from another bot should be answered. Consumes budget."""
     author_id = getattr(getattr(message, "author", None), "id", None)
     if not is_addressed_peer_bot(message, cfg, own_id):
-        if author_id in parse_allowlist(cfg.get("BOT_REPLY_ALLOWLIST")):
+        if author_id is not None and author_id != own_id and bot_may_talk(author_id, cfg):
             logger.info(f"peer_bot.skip reason=not_addressed author={author_id} msg_id={getattr(message, 'id', None)}")
         return False
     channel_id = getattr(getattr(message, "channel", None), "id", 0) or 0

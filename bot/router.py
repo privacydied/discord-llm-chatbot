@@ -504,6 +504,8 @@ class Router:
         # Ambient reactions: own cooldowns; tasks held so they aren't GC'd mid-flight [RM]
         self._ambient_react_cooldowns = AmbientCooldowns()
         self._ambient_react_tasks: set[asyncio.Task] = set()
+        # Strong refs for background image-generation monitors. [RM]
+        self._image_gen_tasks: set[asyncio.Task] = set()
 
         # Vision generation system [CA][SFT]
         self._vision_intent_router: VisionIntentRouter | None = None
@@ -9726,6 +9728,49 @@ class Router:
                 content="❌ **Generation Failed**\nAn error occurred during vision generation. Please check your parameters and try again.",
                 error=True,
             )
+
+    async def start_image_generation(self, prompt: str, message: Message, *, width: int = 1024, height: int = 1024) -> tuple[bool, str]:
+        """Submit a text-to-image job and finish it in the background. [CA][REH]
+
+        Used by the ``generate_image`` tool so ordinary chat ("draw yourself",
+        "make me a pic of...") can create images. Returns (started, detail)
+        quickly; the progress card, upload and failure messages are posted by
+        the existing job monitor.
+        """
+        guild_id = getattr(getattr(message, "guild", None), "id", None)
+        if guild_id is not None and not is_server_feature_enabled(guild_id, "image_generation"):
+            return False, "image generation is turned off on this server"
+        if self._vision_orchestrator and not getattr(self._vision_orchestrator, "_started", False):
+            with suppress(Exception):
+                await self._vision_orchestrator.ensure_started()
+        if not self._vision_available():
+            return False, "image generation is unavailable right now"
+
+        from .vision.types import VisionRequest, VisionTask
+
+        request = VisionRequest(
+            task=VisionTask.TEXT_TO_IMAGE,
+            prompt=prompt,
+            user_id=str(message.author.id),
+            guild_id=str(guild_id) if guild_id is not None else None,
+            channel_id=str(message.channel.id),
+            negative_prompt="",
+            width=width,
+            height=height,
+        )
+        try:
+            job = await self._vision_orchestrator.submit_job(request)
+        except Exception as exc:  # noqa: BLE001 — reported back to the model as text [REH]
+            self.logger.warning(f"image_gen.submit_failed msg_id={message.id} error={exc}")
+            return False, f"the image service refused the job: {str(exc)[:160]}"
+
+        embed = self._build_vision_status_embed(state="REQUESTED", job=job, user=message.author, prompt=prompt)
+        progress_msg = await safe_send(message.channel, embed=embed)
+        task = asyncio.create_task(self._monitor_vision_job(job, progress_msg, message), name=f"image_gen_{job.job_id[:8]}")
+        self._image_gen_tasks.add(task)
+        task.add_done_callback(self._image_gen_tasks.discard)
+        self.logger.info(f"image_gen.started job={job.job_id[:8]} msg_id={message.id} prompt={prompt[:80]!r}")
+        return True, job.job_id[:8]
 
     async def _monitor_vision_job(self, job, progress_msg, original_msg: Message) -> BotAction:
         """Monitor Vision job progress and update Discord message with results [REH][PA].

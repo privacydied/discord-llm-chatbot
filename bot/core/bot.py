@@ -2390,9 +2390,9 @@ class LLMBot(commands.Bot):
         """A bot we never ping or address; allowlisted peer bots count as people. [SFT]"""
         if not getattr(user, "bot", False):
             return False
-        from .peer_bots import parse_allowlist
+        from .peer_bots import bot_may_talk
 
-        return getattr(user, "id", None) not in parse_allowlist((self.config or {}).get("BOT_REPLY_ALLOWLIST"))
+        return not bot_may_talk(getattr(user, "id", None), self.config or {})
 
     async def on_message(self, message: discord.Message) -> None:
         """Delegate early filtering to MessageProcessor, then handle

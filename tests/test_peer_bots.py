@@ -82,3 +82,21 @@ def test_send_path_treats_peer_bots_as_people():
     assert bot._is_ignored_bot(SimpleNamespace(id=OTHER_BOT, bot=True)) is True
     assert bot._is_ignored_bot(SimpleNamespace(id=PEER, bot=True)) is False
     assert bot._is_ignored_bot(SimpleNamespace(id=1, bot=False)) is False
+
+
+def test_allowlist_off_answers_any_addressing_bot():
+    cfg = {**CFG, "BOT_REPLY_ALLOWLIST_ENABLED": False}
+    assert is_addressed_peer_bot(_msg(OTHER_BOT, mention=True), cfg, OWN)
+    assert not is_addressed_peer_bot(_msg(OTHER_BOT), cfg, OWN)  # still must address us
+    assert not is_addressed_peer_bot(_msg(OWN, mention=True), cfg, OWN)
+    assert accept_peer_bot_message(_msg(OTHER_BOT, mention=True), cfg, OWN)
+    assert accept_peer_bot_message(_msg(OTHER_BOT, mention=True), cfg, OWN)
+    assert not accept_peer_bot_message(_msg(OTHER_BOT, mention=True), cfg, OWN)  # loop guard
+
+
+def test_send_path_with_allowlist_off_pings_any_bot():
+    from bot.core.bot import LLMBot
+
+    bot = LLMBot.__new__(LLMBot)
+    bot.config = {"BOT_REPLY_ALLOWLIST_ENABLED": "false"}
+    assert bot._is_ignored_bot(SimpleNamespace(id=OTHER_BOT, bot=True)) is False

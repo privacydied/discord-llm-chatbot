@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from .archive import SPEC as ARCHIVE_SPEC
 from .clock import SPEC as CLOCK_SPEC
 from .history import SPEC as HISTORY_SPEC
+from .image_gen import SPEC as IMAGE_GEN_SPEC
 from .markets import CONVERT_SPEC, PRICE_SPEC
 from .vision import SPEC as VISION_SPEC
 from .web import NEWS_SPEC, READ_SPEC, WEB_SEARCH_SPEC, WIKI_SPEC
@@ -33,6 +34,7 @@ BUILTIN_SPECS: tuple[ToolSpec, ...] = (
     ARCHIVE_SPEC,
     CONVERT_SPEC,
     PRICE_SPEC,
+    IMAGE_GEN_SPEC,
 )
 
 

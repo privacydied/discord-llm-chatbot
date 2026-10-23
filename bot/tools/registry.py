@@ -46,6 +46,8 @@ ALLOWED_TOOL_NAMES: frozenset[str] = frozenset(
         # Fixed-host market data lookups. [SFT]
         "convert_currency",
         "get_price",
+        # Starts a job on the existing vision orchestrator (policy/budget enforced there). [SFT]
+        "generate_image",
     }
 )
 

@@ -267,6 +267,8 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         # False: a reply to the bot only triggers it when the reply ping is on
         # (Discord adds the bot to message.mentions). Ping off = no response.
         # Other bots allowed to talk to this one (comma-separated user IDs). [SFT]
+        # false = answer any bot (still only when addressed, still loop-guarded).
+        "BOT_REPLY_ALLOWLIST_ENABLED": _parse_bool_str(_clean_env_value(env_getter("BOT_REPLY_ALLOWLIST_ENABLED", None)), True),
         "BOT_REPLY_ALLOWLIST": _clean_env_value(env_getter("BOT_REPLY_ALLOWLIST", "")) or "",
         "BOT_REPLY_MAX_PER_WINDOW": _safe_int(env_getter("BOT_REPLY_MAX_PER_WINDOW", None), "3", "BOT_REPLY_MAX_PER_WINDOW"),
         "BOT_REPLY_WINDOW_S": _safe_int(env_getter("BOT_REPLY_WINDOW_S", None), "300", "BOT_REPLY_WINDOW_S"),
