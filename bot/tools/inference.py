@@ -26,6 +26,8 @@ import httpx
 from bot.utils.logging import get_logger
 
 from .registry import ALLOWED_TOOL_NAMES, execute_tool, get_registry
+from bot.core.refusals import is_refusal
+
 from .textual_calls import TextualCall, find_textual_calls, strip_textual_calls
 from .types import ToolContext
 
@@ -393,6 +395,7 @@ async def run_tool_conversation(
     extra_body = _reasoning_extra_body(config)
 
     models = _model_candidates(config, model)
+    refusal_retried = False
     for iteration in range(max_iterations):
         if time.monotonic() >= deadline:
             logger.warning("tools.deadline_exceeded iteration=%d", iteration)
@@ -430,11 +433,26 @@ async def run_tool_conversation(
         if not tool_calls:
             content = strip_textual_calls(content)
             if content and not _is_reasoning_leak(content, reasoning):
+                if is_refusal(content) and len(models) > 1 and not refusal_retried and time.monotonic() < deadline:
+                    # Free models disagree on what to refuse; give the next one a go
+                    # before posting a canned/over-cautious decline. One retry only. [REH]
+                    refusal_retried = True
+                    logger.info("tools.refusal_retry model=%s next=%s reply=%r", model, models[1], content[:80])
+                    models.pop(0)
+                    response = None
+                    continue
                 logger.info("tools.answered iterations=%d", iteration)
                 return content
             # Either empty, or the provider echoed the chain of thought as the
-            # answer. Both mean "deliberated, never concluded" -- ask once more
-            # with tools withheld so it must commit. [REH]
+            # answer. Both mean "deliberated, never concluded". An empty reply is
+            # often a silent refusal (nemotron-3.5-lightning does this on edgy
+            # banter), so a different model gets the first go. [REH]
+            if not content and len(models) > 1 and not refusal_retried and time.monotonic() < deadline:
+                refusal_retried = True
+                logger.info("tools.empty_retry model=%s next=%s", model, models[1])
+                models.pop(0)
+                continue
+            # Otherwise ask once more with tools withheld so it must commit. [REH]
             logger.info(
                 "tools.no_conclusion iteration=%d leak=%s",
                 iteration,

@@ -89,6 +89,9 @@ _PREFERRED_SUBSTRINGS: tuple[str, ...] = (
 )
 
 _ENV_ENABLED = "TEXT_AUTO_DISCOVERY"
+# Comma list of id substrings to keep out of the ladder (e.g. a model that
+# answers banter with a canned refusal). Applied on refresh and on cache read. [CMV]
+_ENV_EXCLUDE = "TEXT_DISCOVERY_EXCLUDE"
 _ENV_CACHE_PATH = "TEXT_DISCOVERY_CACHE_PATH"
 _ENV_TTL = "TEXT_DISCOVERY_TTL_S"
 _ENV_INTERVAL = "TEXT_DISCOVERY_REFRESH_S"
@@ -102,6 +105,16 @@ _fetch_lock = asyncio.Lock()
 
 
 # --- Env helpers -----------------------------------------------------------
+
+
+def _operator_excludes() -> tuple[str, ...]:
+    raw = os.getenv(_ENV_EXCLUDE, "").strip().strip(chr(34))
+    return tuple(x.strip().lower() for x in raw.split(",") if x.strip())
+
+
+def is_excluded(model_id: str) -> bool:
+    lowered = (model_id or "").lower()
+    return any(bad in lowered for bad in (*_EXCLUDE_SUBSTRINGS, *_operator_excludes()))
 
 
 def is_enabled() -> bool:
@@ -159,8 +172,7 @@ def _is_usable_text_model(entry: dict[str, Any]) -> bool:
     model_id = str(entry.get("id") or "").strip()
     if not model_id:
         return False
-    lowered = model_id.lower()
-    if any(bad in lowered for bad in _EXCLUDE_SUBSTRINGS):
+    if is_excluded(model_id):
         return False
 
     arch = entry.get("architecture") or {}
@@ -250,11 +262,11 @@ def get_cached_free_text_models() -> list[str]:
     if not is_enabled():
         return []
     if _memory_cache is not None:
-        return list(_memory_cache[0])
+        return [m for m in _memory_cache[0] if not is_excluded(m)]
     models, fetched_at = _read_cache_file()
     if models:
         _memory_cache = (models, fetched_at)
-    return list(models)
+    return [m for m in models if not is_excluded(m)]
 
 
 def cache_is_fresh() -> bool:
