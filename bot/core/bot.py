@@ -1500,6 +1500,7 @@ class LLMBot(commands.Bot):
                 )
                 action.content = "I tried to respond with voice, but the TTS service is not working."
             else:
+                spoken_text = action.content
                 try:
                     action = await self.tts_manager.process(action)
                 except SynthesisError as exc:
@@ -1522,7 +1523,9 @@ class LLMBot(commands.Bot):
                     action.audio_path = None
                     action.meta["tts_error"] = reason
                     action.meta["tts_failed"] = True
-                    action.content = "I tried to respond with voice, but the TTS service is not working."
+                    # Voice failed: still deliver the reply, as text. [REH]
+                    action.content = spoken_text or "I tried to respond with voice, but the TTS service is not working."
+                    action.meta["requires_tts"] = False
 
         # If action has an audio path after processing, prepare it for sending.
         if action.audio_path:
@@ -1547,7 +1550,9 @@ class LLMBot(commands.Bot):
                 "tts:no_audio",
                 extra={**base_extra, "event": "tts.audio.not_generated"},
             )
-            action.content = "I tried to send a voice message, but the audio file was missing."
+            if not (action.content or "").strip():
+                action.content = "I tried to send a voice message, but the audio file was missing."
+            action.meta["requires_tts"] = False
 
         # Attempt Discord native voice message flow if enabled and audio is present.
         # Discord voice messages cannot include embeds or content; enforce constraints. [CA][REH][IV]

@@ -35,6 +35,13 @@ logger = get_logger(__name__)
 _URL_RE = re.compile(r"https?://\S+")
 _MARKDOWN_RE = re.compile(r"[`*_>#~]|\[(.*?)\]\((.*?)\)")
 _WHITESPACE_RE = re.compile(r"\s+")
+# Stretched words ("Nnnnnnniiiii", "hahahahaha") have no split point: Pocket's
+# ~50-token chunker turned one into a 391-token chunk and the model churned
+# until the timeout. Collapse runs and cap word length before synthesis. [REH]
+_CHAR_RUN_RE = re.compile(r"([^\W\d_])\1{2,}", re.IGNORECASE)  # letters only: "2000" stays
+_PATTERN_RUN_RE = re.compile(r"((?:[^\W\d_]){2,4}?)\1{2,}", re.IGNORECASE)
+_LONG_WORD_RE = re.compile(r"\S{41,}")
+MAX_TTS_WORD_CHARS = 40
 
 
 def _default_cache_dir() -> Path:
@@ -244,6 +251,9 @@ class TTSManager:
     def _clean_text(self, text: str) -> str:
         text = _URL_RE.sub("", text or "")
         text = _MARKDOWN_RE.sub(" ", text)
+        text = _CHAR_RUN_RE.sub(lambda m: m.group(0)[:2], text)
+        text = _PATTERN_RUN_RE.sub(lambda m: m.group(1) * 2, text)
+        text = _LONG_WORD_RE.sub(lambda m: m.group(0)[:MAX_TTS_WORD_CHARS], text)
         return _WHITESPACE_RE.sub(" ", text).strip()
 
     async def synthesize(self, text: str, timeout: float | None = None) -> bytes:
