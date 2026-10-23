@@ -147,12 +147,16 @@ class _InlineResultPlugin(ProviderPlugin):
 
 
 class CloudflareWorkersAIPlugin(_InlineResultPlugin):
-    """Cloudflare Workers AI FLUX.2 klein image edit (multipart ``input_image_0``)."""
+    """Cloudflare Workers AI FLUX.2 klein: image edits (``input_image_0``) and generation.
+
+    Both tasks share the model ladder, the daily-exhaustion skip and the one
+    10k-neuron daily pool.
+    """
 
     def __init__(self, name: str, config: dict[str, Any], api_key: str) -> None:
         super().__init__(name, config, api_key)
         self.base_url = str(config.get("base_url") or CLOUDFLARE_API_BASE).rstrip("/")
-        self.model_map = {VisionTask.IMAGE_TO_IMAGE: self.model}
+        self.model_map = {VisionTask.IMAGE_TO_IMAGE: self.model, VisionTask.TEXT_TO_IMAGE: self.model}
         # model -> UTC day its daily allocation ran out (skip it until the reset)
         self._exhausted_on: dict[str, str] = {}
 
@@ -171,9 +175,12 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
     def _utc_day() -> str:
         return time.strftime("%Y-%m-%d", time.gmtime())
 
-    def _available_models(self) -> list[str]:
+    def _available_models(self, preferred: str | None = None) -> list[str]:
+        """Ladder minus models exhausted today. A ``@cf/`` preferred model (one rung
+        of VISION_IMAGE_FALLBACK_MODELS) narrows it to that single model."""
         today = self._utc_day()
-        return [m for m in self.models if self._exhausted_on.get(m) != today]
+        ladder = [preferred] if preferred and preferred.startswith("@cf/") else self.models
+        return [m for m in ladder if self._exhausted_on.get(m) != today]
 
     @property
     def account_id(self) -> str:
@@ -181,7 +188,7 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
 
     def capabilities(self) -> dict[str, Any]:
         return {
-            "modes": [VisionTask.IMAGE_TO_IMAGE],
+            "modes": [VisionTask.IMAGE_TO_IMAGE, VisionTask.TEXT_TO_IMAGE],
             "max_size": (CLOUDFLARE_MAX_SIDE, CLOUDFLARE_MAX_SIDE),
             "max_steps": 4,
             "supports_negative_prompt": False,
@@ -189,13 +196,17 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
             "nsfw_policy": "filtered",
         }
 
-    def _form(self, request: NormalizedRequest, png: bytes, orig_w: int, orig_h: int):
+    def _form(self, request: NormalizedRequest, png: bytes | None, orig_w: int, orig_h: int):
         import aiohttp
 
-        width, height = output_dims(orig_w, orig_h)
+        if png is None:  # generation: honour the requested size within Cloudflare's range
+            width, height = output_dims(orig_w, orig_h, long_side=min(CLOUDFLARE_MAX_SIDE, max(CLOUDFLARE_MIN_SIDE, orig_w, orig_h)))
+        else:
+            width, height = output_dims(orig_w, orig_h)
         form = aiohttp.FormData()  # same fields for klein-4b/9b and flux-2-dev
         form.add_field("prompt", request.prompt)
-        form.add_field("input_image_0", png, filename="input.jpg", content_type="image/jpeg")
+        if png is not None:
+            form.add_field("input_image_0", png, filename="input.jpg", content_type="image/jpeg")
         form.add_field("width", str(width))
         form.add_field("height", str(height))
         if request.seed is not None:
@@ -203,7 +214,7 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
         return form
 
     async def submit(self, request: NormalizedRequest) -> str:
-        if request.task != VisionTask.IMAGE_TO_IMAGE:
+        if request.task not in (VisionTask.IMAGE_TO_IMAGE, VisionTask.TEXT_TO_IMAGE):
             raise self._unsupported(request)
         if not self.account_id or not self.api_key:
             raise VisionError(
@@ -211,9 +222,12 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
                 error_type=VisionErrorType.AUTHENTICATION_ERROR,
                 user_message="Cloudflare image editing is not configured.",
             )
-        png, orig_w, orig_h = await prepare_input_image(request, CLOUDFLARE_INPUT_MAX_SIDE)
+        if request.task == VisionTask.IMAGE_TO_IMAGE:
+            png, orig_w, orig_h = await prepare_input_image(request, CLOUDFLARE_INPUT_MAX_SIDE)
+        else:
+            png, orig_w, orig_h = None, int(request.width or 1024), int(request.height or 1024)
         await self.startup()
-        models = self._available_models()
+        models = self._available_models(request.preferred_model)
         if not models:
             raise VisionError(
                 message="cloudflare: every model's daily allocation is used", error_type=VisionErrorType.QUOTA_EXCEEDED, user_message="Today's free Cloudflare image allowance is used up (resets 00:00 UTC)."
@@ -233,7 +247,7 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
             return self._store([_data_url(image)], model)
         raise last_error  # type: ignore[misc] - loop ran at least once
 
-    async def _run_model(self, model: str, request: NormalizedRequest, png: bytes, orig_w: int, orig_h: int) -> str:
+    async def _run_model(self, model: str, request: NormalizedRequest, png: bytes | None, orig_w: int, orig_h: int) -> str:
         url = f"{self.base_url}/accounts/{self.account_id}/ai/run/{model}"
         try:
             async with self.session.post(url, data=self._form(request, png, orig_w, orig_h), headers={"Authorization": f"Bearer {self.api_key}"}) as response:

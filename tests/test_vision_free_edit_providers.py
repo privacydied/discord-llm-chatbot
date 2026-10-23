@@ -139,7 +139,7 @@ async def test_cloudflare_error_mapping(status, text, kind):
 async def test_cloudflare_rejects_non_edit_and_bad_image():
     plugin = _cf(_Session([]))
     with pytest.raises(VisionError) as err:
-        await plugin.submit(_request(task=VisionTask.TEXT_TO_IMAGE))
+        await plugin.submit(_request(task=VisionTask.VIDEO_GENERATION))
     assert err.value.error_type == VisionErrorType.UNSUPPORTED_TASK
     with pytest.raises(VisionError) as err:
         await plugin.submit(_request(input_image_data=b"not an image"))
@@ -229,7 +229,7 @@ def test_adapter_edit_coverage_and_order():
     order, _ = adapter._filter_provider_order(["cloudflare", "hfspace", "novita"])
     assert order == ["cloudflare", "hfspace", "novita"]
     assert adapter.providers["cloudflare"].account_id == "acct123"
-    assert adapter.audit_task_coverage()["text_to_image"] == ["novita"]  # free edit providers do not take generation
+    assert adapter.audit_task_coverage()["text_to_image"] == ["cloudflare", "novita"]  # hfspace is edit-only
 
 
 def test_adapter_without_cloudflare_keys_still_has_hfspace():
@@ -352,3 +352,61 @@ async def test_9b_outage_falls_through_but_auth_and_filter_do_not():
         with pytest.raises(VisionError) as err:
             await _cf(session, _LADDER).submit(_request())
         assert err.value.error_type == kind and len(session.calls) == 1
+
+
+# -- cloudflare text-to-image (same ladder as edits) ---------------------------------
+
+
+async def test_cloudflare_generation_has_no_input_image_and_keeps_size():
+    session = _Session([_Resp(200, _OK)])
+    job = await _cf(session, _LADDER).submit(_request(task=VisionTask.TEXT_TO_IMAGE, input_image_data=None, width=1344, height=768))
+    fields = _form_fields(session.calls[0][2]["data"])
+    assert "input_image_0" not in fields and fields["prompt"] == "make it blue"
+    assert (fields["width"], fields["height"]) == ("1344", "768")
+    assert session.calls[0][1].endswith("flux-2-klein-9b") and job
+
+
+async def test_cloudflare_generation_clamps_size():
+    session = _Session([_Resp(200, _OK)])
+    await _cf(session).submit(_request(task=VisionTask.TEXT_TO_IMAGE, input_image_data=None, width=4096, height=4096))
+    fields = _form_fields(session.calls[0][2]["data"])
+    assert (fields["width"], fields["height"]) == ("1920", "1920")
+
+
+async def test_ladder_rung_preferred_model_narrows_to_that_model():
+    session = _Session([_Resp(429, _QUOTA)])
+    plugin = _cf(session, _LADDER)
+    with pytest.raises(VisionError) as err:  # one rung = one model; the adapter ladder moves on
+        await plugin.submit(_request(task=VisionTask.TEXT_TO_IMAGE, input_image_data=None, preferred_model="@cf/black-forest-labs/flux-2-klein-9b"))
+    assert err.value.error_type == VisionErrorType.QUOTA_EXCEEDED and len(session.calls) == 1
+    session.responses.append(_Resp(200, _OK))
+    await plugin.submit(_request(task=VisionTask.TEXT_TO_IMAGE, input_image_data=None, preferred_model="black-forest-labs/flux.1-dev"))
+    assert session.calls[1][1].endswith("flux-2-klein-4b")  # non-@cf model ignored; 9b skipped for the day
+
+
+async def test_adapter_t2i_ladder_cloudflare_then_nvidia(monkeypatch):
+    from bot.vision.types import VisionRequest
+
+    ladder = "cloudflare|@cf/black-forest-labs/flux-2-klein-9b,cloudflare|@cf/black-forest-labs/flux-2-klein-4b,nvidia|black-forest-labs/flux.1-dev"
+    adapter = _adapter(
+        CLOUDFLARE_ACCOUNT_ID="acct123",
+        CLOUDFLARE_API_TOKEN="cf-token-abcdefghij",
+        VISION_ALLOWED_PROVIDERS="cloudflare,nvidia",
+        NVIDIA_NIM_API_KEY="nvapi-1234567890abc",
+        VISION_IMAGE_FALLBACK_MODELS=ladder,
+    )
+    tried = []
+
+    async def cf_out(request):
+        tried.append(("cloudflare", request.preferred_model))
+        raise VisionError(message="4006", error_type=VisionErrorType.QUOTA_EXCEEDED, user_message="used up")
+
+    async def nim_ok(request):
+        tried.append(("nvidia", request.preferred_model))
+        return "nim_1"
+
+    monkeypatch.setattr(adapter.providers["cloudflare"], "submit", cf_out)
+    monkeypatch.setattr(adapter.providers["nvidia"], "submit", nim_ok)
+    response = await adapter.submit(VisionRequest(task=VisionTask.TEXT_TO_IMAGE, prompt="a cat", user_id="1"))
+    assert response.job_id == "nvidia:nim_1"
+    assert [p for p, _ in tried] == ["cloudflare", "cloudflare", "nvidia"]
