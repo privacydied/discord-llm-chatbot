@@ -46,6 +46,7 @@ from bot.public_output import (
 from bot.embed_fix import maybe_fix_embeds, might_have_fixable_link
 from bot.server_archive import start_server_archive_service, stop_server_archive_service
 from bot.tts.errors import SynthesisError
+from bot.tts.state import apply_tts_preference
 from bot.utils.logging import get_logger
 from bot.voice import VoiceMessagePublisher
 
@@ -1105,6 +1106,12 @@ class LLMBot(commands.Bot):
                                         )
                             await self.process_commands(message)
                         elif action.has_payload:
+                            # Voice replies for every route (tool loop, URL, multimodal...), not
+                            # just the router text flow that used to be the only one checking. [CA]
+                            try:
+                                apply_tts_preference(action, message)
+                            except Exception as e:  # noqa: BLE001 - never block a reply on TTS prefs
+                                self.logger.debug(f"tts.preference_failed | {e}")
                             # Stop streaming and mark as ready before sending the final response
                             target_msg = None
                             if stream_ctx and stream_ctx.get("task"):

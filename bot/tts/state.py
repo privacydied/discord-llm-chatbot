@@ -99,3 +99,33 @@ class TTSState:
 
 # Global state instance
 tts_state = TTSState()
+
+
+def apply_tts_preference(action, message, state: TTSState | None = None) -> bool:
+    """Mark ``action`` as a voice reply when the author's TTS preference says so.
+
+    The single rule for every reply path (router text flow, tool loop, bot.py send):
+    one-time "!speak" flag, then per-user choice, then the global default. Only
+    text replies without files/audio are voiced, and the per-server "tts" feature
+    switch is respected. Returns True when the action is (now) a voice reply. [CA]
+    """
+    meta = getattr(action, "meta", None)
+    if meta is None:
+        return False
+    if meta.get("requires_tts"):
+        return True
+    if not (getattr(action, "content", "") or "").strip() or getattr(action, "files", None) or getattr(action, "audio_path", None):
+        return False
+    guild_id = getattr(getattr(message, "guild", None), "id", None)
+    if guild_id is not None:
+        from bot.server_features import is_server_feature_enabled
+
+        if not is_server_feature_enabled(guild_id, "tts"):
+            return False
+    user_id = getattr(getattr(message, "author", None), "id", None)
+    st = state or tts_state
+    if user_id is None or not (st.get_and_clear_one_time_tts(user_id) or st.is_user_tts_enabled(user_id)):
+        return False
+    meta["requires_tts"] = True
+    meta["include_transcript"] = os.getenv("TTS_INCLUDE_TRANSCRIPT", "true").lower() in _TRUE
+    return True

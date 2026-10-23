@@ -165,7 +165,7 @@ from .search.types import SafeSearch, SearchCategory, SearchQueryParams, SearchR
 from .see import see_infer
 from .server_features import is_server_feature_enabled
 from .threads.x_thread_unroll import unroll_author_thread
-from .tts.state import tts_state
+from .tts.state import apply_tts_preference
 from .types import Command, ParsedCommand
 from .utils.attachment_text import read_attachment_text
 from .utils.file_utils import download_file
@@ -8272,16 +8272,7 @@ class Router:
             if action and action.has_payload:
                 # Respect TTS state: one-time flag first, then per-user/global preference [CA][REH]
                 try:
-                    user_id = getattr(message.author, "id", None)
-                    require_tts = False
-                    if user_id is not None and (tts_state.get_and_clear_one_time_tts(user_id) or tts_state.is_user_tts_enabled(user_id)):
-                        require_tts = True
-
-                    if require_tts:
-                        action.meta["requires_tts"] = True
-                        # Include transcript captions unless disabled via env/config [IV][CMV]
-                        include_transcript = os.getenv("TTS_INCLUDE_TRANSCRIPT", "true").lower() in ("1", "true", "yes", "on")
-                        action.meta["include_transcript"] = include_transcript
+                    apply_tts_preference(action, message)
                 except Exception as e:  # noqa: BLE001
                     # Never break dispatch on TTS flag evaluation
                     self.logger.debug(f"tts.flag_eval_failed | {e}")
