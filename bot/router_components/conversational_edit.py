@@ -87,6 +87,25 @@ _ANALYSIS_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 
+# Imperative edit requests: the requester's text STARTS with an edit verb, after
+# optional filler ("can you", "pls", "yo", "now"). Only consulted when the bot was
+# addressed AND an image is attached/replied to, so a leading verb is a strong
+# signal: "make the sky purple", "turn him into a frog", "put sunglasses on him",
+# "can you make it green?" (a request, not a question). [CA][IV]
+_EDIT_LEAD_VERBS = (
+    "make|turn|change|add|put|give|remove|replace|swap|edit|fix|erase|delete|"
+    "recolou?r|colou?r|paint|dye|draw|convert|transform|restyle|stylize|stylise|"
+    "photoshop|crop|zoom|blur|sharpen|brighten|darken|flip|mirror|rotate|"
+    "dress|place|insert|age|de-?age"
+)
+_LEAD_FILLER = r"(?:(?:can|could|would|will)\s+(?:you|u)|pls|plz|please|yo|ok(?:ay)?|now|bro|ronin|and|also|then|just)\b[\s,]*"
+_IMPERATIVE_EDIT_RE = re.compile(rf"^\s*(?:{_LEAD_FILLER})*({_EDIT_LEAD_VERBS})\b", re.IGNORECASE)
+_REQUEST_QUESTION_RE = re.compile(r"^\s*(?:can|could|would|will)\s+(?:you|u)\b", re.IGNORECASE)
+# Leading-verb idioms that are chat, not edits.
+_NOT_EDIT_IDIOMS = re.compile(r"^\s*(?:make|makes)\s+(?:sense|me\s+laugh)\b|^\s*change\s+of\b", re.IGNORECASE)
+_STYLE_RE = re.compile(r"\b(?:in|into|as)\s+(?:an?\s+|the\s+)?[\w\s-]{1,30}?\bstyle\b|\bin the style of\b", re.IGNORECASE)
+
+
 @lru_cache(maxsize=4)
 def _load_policy_trigger_phrases(policy_path: str) -> tuple[str, ...]:
     """Load `intent_patterns.image_editing.trigger_phrases` from vision policy [REH]."""
@@ -352,15 +371,24 @@ def classify_edit_intent(
         return EditIntentResult(False)
 
     lowered = text.lower().strip()
+    if _NOT_EDIT_IDIOMS.match(lowered):
+        return EditIntentResult(False)
+
+    # Phrases arrive longest-first: "make it look like" is reported over "make it".
+    phrase = next((p for p in _edit_trigger_phrases(policy_path, extra_keywords) if _phrase_pattern(p).search(lowered)), None)
+
+    imperative = _IMPERATIVE_EDIT_RE.match(lowered)
+    # "can you make it green?" is a request; the trailing "?" must not demote it.
+    if imperative and (_REQUEST_QUESTION_RE.match(lowered) or not lowered.endswith("?")):
+        return EditIntentResult(True, phrase or imperative.group(1))
 
     if any(pattern.search(lowered) for pattern in _ANALYSIS_PATTERNS):
         return EditIntentResult(False)
 
-    # Phrases arrive longest-first: "make it look like" is reported over "make it".
-    for phrase in _edit_trigger_phrases(policy_path, extra_keywords):
-        if _phrase_pattern(phrase).search(lowered):
-            return EditIntentResult(True, phrase)
-
+    if phrase:
+        return EditIntentResult(True, phrase)
+    if _STYLE_RE.search(lowered):
+        return EditIntentResult(True, "style")
     return EditIntentResult(False)
 
 

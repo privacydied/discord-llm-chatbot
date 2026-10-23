@@ -287,3 +287,54 @@ def test_attach_check_passes_when_allowed_or_unknown():
     assert Router._edit_upload_denied_action(router, _perm_message(True)) is None
     assert Router._edit_upload_denied_action(router, SimpleNamespace(guild=None, channel=None)) is None  # DM
     assert Router._edit_upload_denied_action(router, MagicMock()) is None  # mocks never refuse
+
+
+# -- natural "@bot <instruction>" replies to an image ---------------------------------
+
+from bot.router_components.conversational_edit import classify_edit_intent  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "make this green",
+        "change the hair green",
+        "make the sky purple",
+        "turn him into a frog",
+        "put sunglasses on him",
+        "add sunglasses",
+        "recolor the car red",
+        "paint the wall blue",
+        "dye her hair pink",
+        "draw a moustache on him",
+        "convert this to pixel art",
+        "can you make it green?",
+        "could u put him in a suit",
+        "pls give him a hat",
+        "yo make her blonde",
+        "now in anime style",
+        "do it in the style of van gogh",
+        "zoom out",
+    ],
+)
+def test_natural_edit_requests_route_to_edit(text):
+    assert classify_edit_intent(text).is_edit, text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "what is this",
+        "who made this",
+        "is this real",
+        "describe this",
+        "lol nice",
+        "this is so green lmao",
+        "make sense?",
+        "change of plans, nvm",
+        "why is he green?",
+        "does this make sense",
+    ],
+)
+def test_questions_and_chat_stay_analysis(text):
+    assert not classify_edit_intent(text).is_edit, text
