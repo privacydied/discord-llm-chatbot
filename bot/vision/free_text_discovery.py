@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 
 from bot.utils.logging import get_logger
-from bot.vision.model_ranking import param_tier
+from bot.vision.model_ranking import size_sort_key
 
 logger = get_logger(__name__)
 
@@ -100,6 +100,9 @@ _ENV_TIMEOUT = "TEXT_DISCOVERY_TIMEOUT_S"
 
 # In-process cache: (models, fetched_at)
 _memory_cache: tuple[list[str], float] | None = None
+# Discovered models whose catalogue entry lists "tools" in supported_parameters.
+# None = unknown (old cache without the field): treat every model as tool-capable.
+_memory_tools: set[str] | None = None
 _refresh_task: asyncio.Task | None = None
 _fetch_lock = asyncio.Lock()
 
@@ -195,10 +198,11 @@ def _is_usable_text_model(entry: dict[str, Any]) -> bool:
     return True
 
 
-def _rank_key(entry: dict[str, Any]) -> tuple[int, int, int, int]:
-    """Sort: bigger parameter count first, then preferred families, then bigger context, then newer."""
+def _rank_key(entry: dict[str, Any]) -> tuple[int, float, int, int, int]:
+    """Sort: largest parameter count first (exact within a tier), then preferred families,
+    then bigger context, then newer."""
     lowered = str(entry.get("id", "")).lower()
-    size_tier = param_tier(lowered)
+    size_tier, neg_billions = size_sort_key(lowered)
     family_tier = next((i for i, kw in enumerate(_PREFERRED_SUBSTRINGS) if kw in lowered), len(_PREFERRED_SUBSTRINGS))
     try:
         context = int(entry.get("context_length") or 0)
@@ -208,7 +212,11 @@ def _rank_key(entry: dict[str, Any]) -> tuple[int, int, int, int]:
         created = int(entry.get("created") or 0)
     except (ValueError, TypeError):
         created = 0
-    return (size_tier, family_tier, -context, -created)
+    return (size_tier, neg_billions, family_tier, -context, -created)
+
+
+def _tool_capable_ids(payload: dict[str, Any]) -> set[str]:
+    return {str(e.get("id") or "").strip() for e in (payload.get("data") or []) if isinstance(e, dict) and "tools" in (e.get("supported_parameters") or [])}
 
 
 def _select_models(payload: dict[str, Any], limit: int) -> list[str]:
@@ -245,10 +253,12 @@ def _read_cache_file() -> tuple[list[str], float]:
     return models, fetched_at
 
 
-async def _write_cache_file(models: list[str]) -> None:
+async def _write_cache_file(models: list[str], tools: set[str] | None = None) -> None:
     from bot.atomic_json import write_json_atomic
 
-    payload = {"models": models, "fetched_at": time.time(), "source": OPENROUTER_MODELS_URL}
+    payload: dict[str, Any] = {"models": models, "fetched_at": time.time(), "source": OPENROUTER_MODELS_URL}
+    if tools is not None:
+        payload["tools"] = sorted(m for m in tools if m in models)
     try:
         await write_json_atomic(cache_path(), payload)
     except (OSError, ValueError) as exc:
@@ -335,13 +345,15 @@ async def _verify_candidates(candidates: list[str], limit: int) -> list[str]:
         return candidates[:limit]
 
 
-async def _commit(models: list[str]) -> list[str]:
+async def _commit(models: list[str], tools: set[str] | None = None) -> list[str]:
     """Persist the verified ladder to memory + disk and log what changed."""
-    global _memory_cache
+    global _memory_cache, _memory_tools
 
     previous = get_cached_free_text_models()
     _memory_cache = (models, time.time())
-    await _write_cache_file(models)
+    if tools is not None:
+        _memory_tools = set(tools)
+    await _write_cache_file(models, tools)
     if models != previous:
         logger.info("text.discovery.updated models=%s previous=%s", models, previous)
     else:
@@ -376,7 +388,7 @@ async def discover_free_text_models(*, force: bool = False) -> list[str]:
             logger.warning("text.discovery.no_live_models (keeping previous ladder)")
             return get_cached_free_text_models()
 
-        return await _commit(models)
+        return await _commit(models, _tool_capable_ids(payload))
 
 
 async def refresh_and_apply(*, force: bool = False) -> list[str]:
@@ -438,3 +450,38 @@ def _reset_for_tests() -> None:
     global _memory_cache, _refresh_task
     _memory_cache = None
     _refresh_task = None
+
+
+def _load_cached_tools() -> set[str] | None:
+    global _memory_tools
+    if _memory_tools is None:
+        try:
+            raw = json.loads(cache_path().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if isinstance(raw.get("tools"), list):
+            _memory_tools = {str(m) for m in raw["tools"]}
+    return _memory_tools
+
+
+def get_cached_free_tool_models() -> list[str]:
+    """Discovered ladder (largest first) limited to models that support tool calls.
+
+    Reasoning-flavoured models sink to the back, as in the text ladder. [REH]
+    """
+    models = get_cached_free_text_models()
+    tools = _load_cached_tools()
+    capable = [m for m in models if tools is None or m in tools]
+    return [m for m in capable if "reasoning" not in m.lower()] + [m for m in capable if "reasoning" in m.lower()]
+
+
+AUTO_MODEL = "auto"
+
+
+def resolve_auto_model(value: str | None, *, tools: bool = False) -> str:
+    """``auto``/empty -> the largest live free model (tool-capable when asked); else ``value``."""
+    chosen = (value or "").strip()
+    if chosen and chosen.lower() != AUTO_MODEL:
+        return chosen
+    ladder = get_cached_free_tool_models() if tools else get_cached_free_text_models()
+    return ladder[0] if ladder else ""

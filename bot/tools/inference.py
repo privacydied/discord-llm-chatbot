@@ -58,6 +58,9 @@ def _client_for(cfg: dict[str, Any], timeout_s: float) -> tuple[Any, str]:
     api_key, base_url, _ = _resolve_openai_compatible_endpoint(provider, cfg)
 
     model = (cfg.get("TOOLS_MODEL") or "").strip() or cfg.get("OPENAI_TEXT_MODEL") or ""
+    if _is_auto(cfg):
+        discovered = _discovered_tool_models()
+        model = discovered[0] if discovered else ""
     client = _make_openai_async_client(
         api_key=api_key,
         base_url=base_url,
@@ -69,6 +72,25 @@ def _client_for(cfg: dict[str, Any], timeout_s: float) -> tuple[Any, str]:
 
 # Cap on models tried when the tool-capable model errors (404, 429, ...). [CMV]
 MAX_MODEL_FALLBACKS = 3
+
+
+def _is_auto(cfg: dict[str, Any]) -> bool:
+    """TOOLS_MODEL=auto (or unset with OPENAI_TEXT_MODEL=auto): follow discovery. [CMV]"""
+    explicit = str(cfg.get("TOOLS_MODEL") or "").strip().lower()
+    if explicit:
+        return explicit == "auto"
+    return str(cfg.get("OPENAI_TEXT_MODEL") or "").strip().lower() == "auto"
+
+
+def _discovered_tool_models() -> list[str]:
+    """Largest-first live free models that support tool calls (OpenRouter discovery)."""
+    try:
+        from bot.vision.free_text_discovery import get_cached_free_tool_models
+
+        return get_cached_free_tool_models()
+    except Exception as exc:  # noqa: BLE001 - discovery is optional; fall back to config
+        logger.debug("tools.discovery_unavailable error=%s", exc)
+        return []
 
 
 def _model_candidates(cfg: dict[str, Any], primary: str) -> list[str]:
@@ -89,8 +111,11 @@ def _model_candidates(cfg: dict[str, Any], primary: str) -> list[str]:
             prov, sep, model = entry.strip().partition("|")
             if sep and prov.strip().lower() == provider:
                 extras.append(model.strip())
+    # Auto mode: the discovered ladder (largest live tool-capable model first)
+    # leads, so a delisted/404 model never needs a manual .env edit. [REH]
+    discovered = _discovered_tool_models() if _is_auto(cfg) else []
     ordered: list[str] = []
-    for model in [primary, *extras]:
+    for model in [primary, *discovered, *extras]:
         if model and model not in ordered:
             ordered.append(model)
     return ordered[: MAX_MODEL_FALLBACKS + 1]

@@ -23,6 +23,9 @@ import re
 # last "/", lower-cased, ":free"/tag suffix stripped).
 _MOE_RE = re.compile(r"(\d+)x(\d+(?:\.\d+)?)b\b")
 _PLAIN_RE = re.compile(r"(\d+(?:\.\d+)?)b(?=[-_]|$)")
+# Slugs without a size that say they are a small variant ("inkling-small",
+# "laguna-xs", "north-mini-code") rank with the confirmed-small models. [CMV]
+_SMALL_HINT_RE = re.compile(r"(?:^|[-_.])(?:small|mini|xs|tiny|nano|lite|flash|micro)(?:[-_.]|$)")
 
 # Tier boundaries in billions of parameters, largest tier first. [CMV]
 _TIER_THRESHOLDS_B: tuple[float, ...] = (100.0, 40.0, 15.0)
@@ -61,8 +64,15 @@ def param_tier(model_id: str) -> int:
     """
     billions = extract_param_billions(model_id)
     if billions is None:
-        return UNKNOWN_TIER
+        leaf = (model_id or "").strip().lower().split("/")[-1].split(":", 1)[0]
+        return SMALLEST_TIER if _SMALL_HINT_RE.search(leaf) else UNKNOWN_TIER
     for tier, threshold in enumerate(_TIER_THRESHOLDS_B):
         if billions >= threshold:
             return tier
     return SMALLEST_TIER
+
+
+def size_sort_key(model_id: str) -> tuple[int, float]:
+    """Largest first: size tier, then the exact parameter count inside the tier."""
+    billions = extract_param_billions(model_id)
+    return (param_tier(model_id), -(billions or 0.0))

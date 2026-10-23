@@ -540,6 +540,14 @@ async def generate_openai_response(
             api_key = config.get("OPENAI_API_KEY")
             api_base = config.get("OPENAI_API_BASE", "https://api.openai.com/v1")
             configured_model = config.get("OPENAI_TEXT_MODEL", "gpt-4")
+            if str(configured_model).strip().lower() in ("", "auto"):
+                # Largest live free model from OpenRouter discovery. [REH]
+                from bot.vision.free_text_discovery import resolve_auto_model
+
+                # Never "openrouter/auto": that router bills. Last resort is the first
+                # TEXT_FALLBACK_MODELS rung.
+                first_rung = str(config.get("TEXT_FALLBACK_MODELS") or "").strip().strip('"').split(",")[0]
+                configured_model = resolve_auto_model(configured_model) or first_rung.split("|", 1)[-1].strip()
 
         # Prefer TEXTGEN_TIMEOUT_SECONDS; fall back to TEXT_REQUEST_TIMEOUT; default 45s
         try:
