@@ -2534,6 +2534,14 @@ class LLMBot(commands.Bot):
             else:
                 self.logger.info("Server archive disabled — skipping ingest workers")
 
+            # --- RSS feeds -> Discord (Zapier replacement; idle without RSS_FEEDS_FILE) ---
+            if bool(self.config.get("RSS_FEEDS_ENABLED", True)):
+                from bot.rss.poller import start_rss_poller
+
+                rss_task = asyncio.create_task(start_rss_poller(self), name="rss_poller")
+                registry.register(rss_task, name="rss_poller", feature="rss")
+                self._track_background_task(rss_task)
+
             # --- Dashboard server ---
             self._track_background_task(asyncio.create_task(self._start_dashboard(), name="dashboard_start"))
         except Exception as e:

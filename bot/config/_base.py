@@ -555,6 +555,13 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         # When generic extraction returns a subscription stub, re-resolve the
         # article through publisher-sanctioned channels (content APIs, feeds).
         "NEWS_FALLBACK_ENABLED": _parse_bool_str(_clean_env_value(env_getter("NEWS_FALLBACK_ENABLED", None)), True),
+        # RSS/Atom feeds posted to channels (bot/rss). Feed list lives in a gitignored
+        # JSON file because private feed URLs carry auth tokens. [CA]
+        "RSS_FEEDS_ENABLED": _parse_bool_str(_clean_env_value(env_getter("RSS_FEEDS_ENABLED", None)), True),
+        "RSS_FEEDS_FILE": (env_getter("RSS_FEEDS_FILE", "") or "").strip() or "data/rss_feeds.json",
+        "RSS_STATE_FILE": (env_getter("RSS_STATE_FILE", "") or "").strip() or "data/rss_state.json",
+        "RSS_POLL_INTERVAL_S": _safe_float(env_getter("RSS_POLL_INTERVAL_S", None), "600", "RSS_POLL_INTERVAL_S"),
+        "RSS_MAX_POSTS_PER_POLL": _safe_int(env_getter("RSS_MAX_POSTS_PER_POLL", None), "5", "RSS_MAX_POSTS_PER_POLL"),
         "NEWS_RSS_ENABLED": _parse_bool_str(_clean_env_value(env_getter("NEWS_RSS_ENABLED", None)), True),
         "NEWS_MIN_ARTICLE_CHARS": _safe_int(env_getter("NEWS_MIN_ARTICLE_CHARS", None), "800", "NEWS_MIN_ARTICLE_CHARS"),
         "NEWS_MAX_BODY_CHARS": _safe_int(env_getter("NEWS_MAX_BODY_CHARS", None), "6000", "NEWS_MAX_BODY_CHARS"),
