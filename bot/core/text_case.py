@@ -67,7 +67,7 @@ def _flag(name: str) -> bool:
 
 
 def shape_reply(text: str) -> str:
-    """Apply the persona text rules to a model reply: lowercase, then one paragraph.
+    """Apply the persona text rules to a model reply: no prompt leaks, lowercase, one paragraph.
 
     Every path that sends model text to users goes through this (brain_infer and
     the tool loop), so the rules can't be skipped by a different code path.
@@ -75,6 +75,9 @@ def shape_reply(text: str) -> str:
     """
     if not text:
         return text
+    from bot.core.prompt_leak import guard_prompt_leak
+
+    text = guard_prompt_leak(text)
     if _flag("FORCE_LOWERCASE_REPLIES"):
         text = lowercase_outside_protected(text)
     if _flag("COLLAPSE_REPLY_LINE_BREAKS"):
