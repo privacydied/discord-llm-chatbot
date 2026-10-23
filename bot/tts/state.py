@@ -1,12 +1,17 @@
 """TTS state management for per-user and global preferences."""
 
 import logging
+import os
+
+_TRUE = {"1", "true", "yes", "on"}
 
 
 class TTSState:
     def __init__(self) -> None:
-        # Global TTS toggle (admin-controlled)
-        self.global_enabled: bool = False
+        # Global TTS toggle. None = follow TTS_GLOBAL_DEFAULT in the environment
+        # (read per check, so .env hot-reload applies and import order doesn't
+        # matter); "!tts all on|off" sets an in-memory override until restart.
+        self._global_override: bool | None = None
 
         # Per-user TTS preferences {user_id: enabled}
         self.user_preferences: dict[int, bool] = {}
@@ -21,9 +26,25 @@ class TTSState:
         self.total_requests: int = 0
         self.cache_hits: int = 0
 
+    @property
+    def global_enabled(self) -> bool:
+        """Every reply is spoken unless the user opted out (TTS_GLOBAL_DEFAULT / !tts all)."""
+        if self._global_override is not None:
+            return self._global_override
+        return (os.getenv("TTS_GLOBAL_DEFAULT", "") or "").strip().strip('"').lower() in _TRUE
+
+    @global_enabled.setter
+    def global_enabled(self, enabled: bool) -> None:
+        self._global_override = bool(enabled)
+
     def is_user_tts_enabled(self, user_id: int) -> bool:
-        """Check if TTS is enabled for a specific user."""
-        return self.user_preferences.get(user_id, False) or self.global_enabled
+        """Check if TTS is enabled for a specific user.
+
+        An explicit per-user choice wins, so "!tts off" opts out of global voice.
+        """
+        if user_id in self.user_preferences:
+            return self.user_preferences[user_id]
+        return self.global_enabled
 
     def set_user_tts(self, user_id: int, enabled: bool) -> None:
         """Set TTS preference for a specific user."""

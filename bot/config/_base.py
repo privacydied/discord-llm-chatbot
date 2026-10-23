@@ -531,6 +531,8 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         ),
         # OPTIONAL SETTINGS
         "TTS_PREFS_FILE": env_getter("TTS_PREFS_FILE", None),
+        # Every reply spoken by default (read live by bot/tts/state.py) [CMV]
+        "TTS_GLOBAL_DEFAULT": env_getter("TTS_GLOBAL_DEFAULT", "false"),
         "DEBUG": _parse_bool_str(_clean_env_value(env_getter("DEBUG", None)), False),
         "MAX_CONVERSATION_LOG_SIZE": _safe_int(env_getter("MAX_CONVERSATION_LOG_SIZE", None), "1000", "MAX_CONVERSATION_LOG_SIZE"),
         # LEGACY COMPATIBILITY

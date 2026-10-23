@@ -14,7 +14,8 @@ class TestTTSManager:
         return TTSManager()
 
     @pytest.fixture
-    def tts_state(self):
+    def tts_state(self, monkeypatch):
+        monkeypatch.delenv("TTS_GLOBAL_DEFAULT", raising=False)  # independent of the live .env
         return TTSState()
 
     def test_text_cleaning(self, tts_manager) -> None:

@@ -36,8 +36,9 @@ def mock_ctx():
 
 
 @pytest.fixture(autouse=True)
-def reset_tts_state() -> None:
+def reset_tts_state(monkeypatch) -> None:
     """Reset the tts_state before each test to ensure isolation."""
+    monkeypatch.delenv("TTS_GLOBAL_DEFAULT", raising=False)
     tts_state.user_preferences.clear()
     tts_state.global_enabled = False
     tts_state.one_time_tts.clear()
