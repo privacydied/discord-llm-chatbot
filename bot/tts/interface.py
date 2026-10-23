@@ -103,12 +103,14 @@ class TTSManager:
                 logger.error("Failed to initialize TTS backend: %s", exc, exc_info=True)
 
         # Start warm-up in background after backend is loaded (only if event loop is running).
-        # Pocket starts its server on first use instead: warming at boot would pin
-        # ~1.2 GB for a feature that is used occasionally.
-        if self.is_available() and self.backend != "pocket":
+        # Pocket starts its server on first use unless POCKET_TTS_KEEP_WARM is set
+        # (every-reply-is-voice setups): then it loads at boot and never idles out.
+        warm_pocket = self.backend == "pocket" and getattr(self._engine, "keep_warm", False)
+        if self.is_available() and (self.backend != "pocket" or warm_pocket):
             try:
                 loop = asyncio.get_running_loop()
-                self._warmup_task = loop.create_task(self._warm_up(), name="tts-warmup")
+                warmer = self.warm() if warm_pocket else self._warm_up()
+                self._warmup_task = loop.create_task(warmer, name="tts-warmup")
             except RuntimeError:
                 # No running event loop (e.g. during tests or synchronous init).
                 # Warm-up will happen lazily on first synthesize() call.
@@ -430,6 +432,18 @@ class TTSManager:
         with contextlib.suppress(Exception):
             action.audio_path = str(audio_path)
         return action
+
+    async def warm(self) -> bool:
+        """Preload the engine when it is configured to stay warm. Best effort. [PA]"""
+        engine = self._engine
+        if engine is None or not getattr(engine, "keep_warm", False) or not callable(getattr(engine, "warm", None)):
+            return False
+        try:
+            await engine.warm()
+            return True
+        except Exception as exc:  # noqa: BLE001 - a failed warm-up retries on first use
+            logger.warning("tts:warm_failed %s", exc)
+            return False
 
     async def close(self) -> None:
         for task in list(self._current_jobs.values()):

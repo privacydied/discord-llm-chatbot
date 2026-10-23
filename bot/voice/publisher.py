@@ -318,7 +318,7 @@ class VoiceMessagePublisher:
                 ogg_p = audio_p
                 ogg_bytes = ogg_p.read_bytes()
                 # Compute waveform from OGG (compute_waveform_b64 handles both formats)
-                waveform_b64 = compute_waveform_b64(ogg_p)
+                waveform_b64 = await asyncio.to_thread(compute_waveform_b64, ogg_p)
                 self.logger.debug("voice.native.input_already_ogg path=%s", audio_p)
             else:
                 # WAV input - compute duration from header and transcode
@@ -331,13 +331,17 @@ class VoiceMessagePublisher:
                 bitrate = str(cfg.get("VOICE_PUBLISHER_OPUS_BITRATE", "64k") or "64k")
                 vbr = str(cfg.get("VOICE_PUBLISHER_OPUS_VBR", "on") or "on")
                 comp = int(cfg.get("VOICE_PUBLISHER_OPUS_COMP_LEVEL", 10) or 10)
-                ogg_p = await transcode_to_ogg_opus(audio_p, bitrate=bitrate, vbr=vbr, compression_level=comp)
+                # Waveform (CPU) runs off the event loop, alongside the transcode. [PA]
+                ogg_p, waveform_b64 = await asyncio.gather(
+                    transcode_to_ogg_opus(audio_p, bitrate=bitrate, vbr=vbr, compression_level=comp),
+                    asyncio.to_thread(compute_waveform_b64, audio_p),
+                )
                 ogg_bytes = ogg_p.read_bytes()
-                waveform_b64 = compute_waveform_b64(audio_p)
-            # Prefer probing duration from OGG (matches reference behavior)
-            probed = await self._probe_duration(ogg_p)
-            if probed is not None:
-                duration = probed
+            # The WAV header already gives an exact duration; probe only when it didn't. [PA]
+            if duration <= 0:
+                probed = await self._probe_duration(ogg_p)
+                if probed is not None:
+                    duration = probed
         except Exception as e:
             self.logger.error(f"voice.native.audio_prep_failed | {e}", exc_info=True)
             return VoicePublishResult(message=None, ogg_path=None, ok=False)

@@ -489,6 +489,8 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "POCKET_TTS_PYTHON": env_getter("POCKET_TTS_PYTHON", ""),
         "POCKET_TTS_HF_HOME": env_getter("POCKET_TTS_HF_HOME", ""),
         "POCKET_TTS_THREADS": env_getter("POCKET_TTS_THREADS", "2"),
+        "POCKET_TTS_QUANTIZE": env_getter("POCKET_TTS_QUANTIZE", "false"),
+        "POCKET_TTS_KEEP_WARM": env_getter("POCKET_TTS_KEEP_WARM", "false"),
         "POCKET_TTS_START_TIMEOUT_S": env_getter("POCKET_TTS_START_TIMEOUT_S", "180"),
         # Timeouts for TTS synthesis [CMV][IV]
         "TTS_TIMEOUT_S": _safe_float(env_getter("TTS_TIMEOUT_S", None), "25.0", "TTS_TIMEOUT_S"),

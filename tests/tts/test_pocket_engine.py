@@ -35,6 +35,13 @@ def _streamed_wav(samples: int = 2400, rate: int = 24000) -> bytes:
     return bytes(data)
 
 
+@pytest.fixture(autouse=True)
+def _independent_of_live_env(monkeypatch):
+    """The NAS .env turns these on; tests state what they need explicitly."""
+    for key in ("POCKET_TTS_QUANTIZE", "POCKET_TTS_KEEP_WARM"):
+        monkeypatch.delenv(key, raising=False)
+
+
 @pytest.fixture
 async def pocket_server(unused_tcp_port):
     calls: list[dict] = []
@@ -157,3 +164,25 @@ async def test_manager_generates_ogg_via_pocket_and_widens_short_timeouts(pocket
     assert manager.unload_if_idle(0) is False  # server not bot-owned: never stopped
     await manager.close()
     await asyncio.sleep(0)
+
+
+def test_quantize_flag_and_keep_warm_disable_idle_stop():
+    engine = PocketTTSEngine({"POCKET_TTS_URL": "http://127.0.0.1:8767", "POCKET_TTS_QUANTIZE": "true", "POCKET_TTS_KEEP_WARM": "true", "POCKET_TTS_PYTHON": sys.executable}, voice="jean")
+    assert engine._serve_command()[-1] == "--quantize"
+    assert "--quantize" not in PocketTTSEngine({"POCKET_TTS_URL": "http://127.0.0.1:8767"})._serve_command()
+
+    class _Alive:
+        returncode = None
+
+    engine._proc = _Alive()
+    engine._last_used = 0.0
+    assert engine.idle_stop_due(1.0) is False  # keep-warm never idles out
+    engine.keep_warm = False
+    assert engine.idle_stop_due(1.0) is True
+
+
+async def test_warm_confirms_running_server(pocket_server):
+    url, calls = pocket_server
+    engine = PocketTTSEngine({"POCKET_TTS_URL": url, "POCKET_TTS_AUTOSTART": "false", "POCKET_TTS_KEEP_WARM": "true"})
+    await engine.warm()  # healthy server: no spawn, no synthesis
+    assert calls == []

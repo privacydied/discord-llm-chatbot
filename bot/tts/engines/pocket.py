@@ -89,6 +89,11 @@ class PocketTTSEngine(BaseEngine):
         self.python = _cfg(cfg, "POCKET_TTS_PYTHON", "")
         self.hf_home = _cfg(cfg, "POCKET_TTS_HF_HOME", "")
         self.threads = int(_cfg(cfg, "POCKET_TTS_THREADS", "2"))
+        # int8 weights: ~1.45x faster and ~400 MB smaller on the NAS CPU (measured). [PA]
+        self.quantize = _cfg_bool(cfg, "POCKET_TTS_QUANTIZE", False)
+        # Keep the server loaded (no idle stop) and start it with the bot, so no
+        # reply ever pays the cold model load. [PA]
+        self.keep_warm = _cfg_bool(cfg, "POCKET_TTS_KEEP_WARM", False)
         self.start_timeout_s = float(_cfg(cfg, "POCKET_TTS_START_TIMEOUT_S", "180"))
         self.log_path = Path(_cfg(cfg, "POCKET_TTS_LOG", "logs/pocket_tts.log"))
         self._proc: asyncio.subprocess.Process | None = None
@@ -116,7 +121,10 @@ class PocketTTSEngine(BaseEngine):
     def _serve_command(self) -> list[str]:
         host_port = self.url.split("://", 1)[-1]
         host, _, port = host_port.partition(":")
-        return [self.python, "-m", "pocket_tts", "serve", "--host", host or "127.0.0.1", "--port", port or "8767", "--language", self.language, "--default-voice", self.voice]
+        cmd = [self.python, "-m", "pocket_tts", "serve", "--host", host or "127.0.0.1", "--port", port or "8767", "--language", self.language, "--default-voice", self.voice]
+        if self.quantize:
+            cmd.append("--quantize")
+        return cmd
 
     def _log_tail(self) -> str:
         with contextlib.suppress(OSError):
@@ -137,7 +145,7 @@ class PocketTTSEngine(BaseEngine):
         with self.log_path.open("ab") as log:
             # Fixed argv from operator config (POCKET_TTS_PYTHON), no shell.
             self._proc = await asyncio.create_subprocess_exec(*self._serve_command(), stdout=log, stderr=log, env=env)
-        logger.info(f"tts.pocket.spawned pid={self._proc.pid} language={self.language} voice={self.voice}")
+        logger.info(f"tts.pocket.spawned pid={self._proc.pid} language={self.language} voice={self.voice} quantize={self.quantize}")
 
     async def _ensure_server(self, session: aiohttp.ClientSession) -> None:
         if await self._healthy(session):
@@ -176,9 +184,15 @@ class PocketTTSEngine(BaseEngine):
 
     def idle_stop_due(self, ttl_s: float) -> bool:
         """True when a bot-owned server has been idle for ``ttl_s`` (sync check)."""
-        if self._proc is None or self._proc.returncode is not None or self._busy:
+        if self.keep_warm or self._proc is None or self._proc.returncode is not None or self._busy:
             return False
         return time.monotonic() - self._last_used >= ttl_s
+
+    async def warm(self) -> None:
+        """Start (or confirm) the server ahead of the first reply."""
+        async with aiohttp.ClientSession() as session:
+            await self._ensure_server(session)
+        self._last_used = time.monotonic()
 
     async def close(self) -> None:
         await self._stop()
