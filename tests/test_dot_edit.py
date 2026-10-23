@@ -205,3 +205,48 @@ async def test_dispatch_message_hands_dot_edit_to_handler():
     message.attachments = []
     assert await router.dispatch_message(message) is expected
     assert router._handle_dot_edit.await_args.args[1] == ".edit make her hair green"
+
+
+# -- bounded Discord reads (a silent discord.py wait once stalled .edit 3m25s) ----------
+
+
+async def test_reply_uses_cached_reference_without_api_call(monkeypatch):
+    import discord
+
+    replied = MagicMock(spec=discord.Message)
+    monkeypatch.setattr(ce, "collect_image_urls_from_message", lambda m: ["ref"] if m is replied else [])
+    monkeypatch.setattr(ce, "_download_ref", AsyncMock(return_value=ResolvedEditImage(data=b"x", content_type="image/png", source="reply")))
+    channel = SimpleNamespace(fetch_message=AsyncMock())
+    message = SimpleNamespace(content=".edit x", channel=channel, reference=SimpleNamespace(message_id=5, resolved=replied, cached_message=None))
+    assert (await resolve_edit_source_image(message, 25)).source == "reply"
+    channel.fetch_message.assert_not_awaited()
+
+
+async def test_hung_reference_fetch_is_bounded(monkeypatch):
+    import asyncio
+
+    monkeypatch.setattr(ce, "DISCORD_READ_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(ce, "collect_image_urls_from_message", lambda m: [])
+
+    async def hang(_id):
+        await asyncio.sleep(30)
+
+    message = SimpleNamespace(content=".edit x", channel=SimpleNamespace(fetch_message=hang), reference=SimpleNamespace(message_id=5, resolved=None, cached_message=None))
+    assert await asyncio.wait_for(resolve_edit_source_image(message, 25), timeout=2) is None
+
+
+async def test_hung_channel_history_is_bounded(monkeypatch):
+    import asyncio
+
+    monkeypatch.setattr(ce, "DISCORD_READ_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(ce, "collect_image_urls_from_message", lambda m: [])
+
+    def history(limit, before):
+        async def gen():
+            await asyncio.sleep(30)
+            yield None
+
+        return gen()
+
+    message = SimpleNamespace(content=".edit x", reference=None, channel=SimpleNamespace(history=history))
+    assert await asyncio.wait_for(resolve_edit_source_image(message, 25, channel_lookback=5), timeout=2) is None

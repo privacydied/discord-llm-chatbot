@@ -19,10 +19,12 @@ signature or the router wiring that calls it.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import shlex
 import tempfile
+import time
 from contextlib import suppress
 from dataclasses import dataclass
 from functools import lru_cache
@@ -375,6 +377,7 @@ async def _download_ref(ref: ImageRef, source: str, max_size_mb: int) -> Resolve
     """Download an ImageRef to bytes, enforcing MAX_ATTACHMENT_SIZE_MB. [RM][IV]"""
     with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as tmp:
         tmp_path = tmp.name
+    started = time.monotonic()
     try:
         ok = await download_robust_image(ref, tmp_path, max_size_mb=max_size_mb)
         if not ok:
@@ -384,8 +387,50 @@ async def _download_ref(ref: ImageRef, source: str, max_size_mb: int) -> Resolve
             return None
         return ResolvedEditImage(data=data, content_type=ref.content_type, source=source)
     finally:
+        _warn_if_slow(f"download_{source}", started)
         with suppress(OSError):
             Path(tmp_path).unlink()
+
+
+# discord.py HTTP calls have no overall timeout: a dead pooled connection or an
+# exhausted rate-limit bucket waits silently (seen: a 3m25s stall on ".edit"
+# before any provider ran). Every Discord read on this path is bounded. [REH]
+DISCORD_READ_TIMEOUT_S = 8.0
+SLOW_STEP_WARN_S = 3.0
+
+
+def _cached_reference(message: Message):
+    """The replied-to message Discord already sent with the event (no API call)."""
+    import discord
+
+    reference = getattr(message, "reference", None)
+    for candidate in (getattr(reference, "resolved", None), getattr(reference, "cached_message", None)):
+        if isinstance(candidate, discord.Message):  # not DeletedReferencedMessage / mocks
+            return candidate
+    return None
+
+
+async def _fetch_reference(message: Message):
+    """Replied-to message: cached copy first, else one bounded fetch."""
+    cached = _cached_reference(message)
+    if cached is not None:
+        return cached
+    started = time.monotonic()
+    try:
+        return await asyncio.wait_for(message.channel.fetch_message(message.reference.message_id), timeout=DISCORD_READ_TIMEOUT_S)
+    except TimeoutError:
+        logger.warning(f"edit_route: fetch reference message timed out after {DISCORD_READ_TIMEOUT_S:.0f}s")
+    except Exception as exc:  # noqa: BLE001 - gateway fetch on duck-typed message; logged, None continues
+        logger.debug(f"edit_route: fetch reference message failed: {exc}")
+    finally:
+        _warn_if_slow("fetch_reference", started)
+    return None
+
+
+def _warn_if_slow(step: str, started: float) -> None:
+    elapsed = time.monotonic() - started
+    if elapsed > SLOW_STEP_WARN_S:
+        logger.warning(f"edit_route.slow_step step={step} secs={elapsed:.1f}")
 
 
 async def resolve_edit_source_image(message: Message, max_size_mb: int, channel_lookback: int = 0) -> ResolvedEditImage | None:
@@ -403,12 +448,7 @@ async def resolve_edit_source_image(message: Message, max_size_mb: int, channel_
         if resolved:
             return resolved
 
-    ref_message = None
-    if getattr(message, "reference", None):
-        try:
-            ref_message = await message.channel.fetch_message(message.reference.message_id)
-        except Exception as exc:  # noqa: BLE001 - gateway fetch on duck-typed message; logged, None continues
-            logger.debug(f"edit_route: fetch reference message failed: {exc}")
+    ref_message = await _fetch_reference(message) if getattr(message, "reference", None) else None
 
     if ref_message:
         ref_refs = collect_image_urls_from_message(ref_message) or []
@@ -435,11 +475,23 @@ async def _resolve_recent_channel_image(message: Message, max_size_mb: int, look
     history = getattr(getattr(message, "channel", None), "history", None)
     if history is None:
         return None
+    started = time.monotonic()
     try:
-        async for previous in history(limit=lookback, before=message):
-            refs = collect_image_urls_from_message(previous) or []
-            if refs:
-                return await _download_ref(refs[0], "channel", max_size_mb)
+        ref = await asyncio.wait_for(_first_channel_image(history, message, lookback), timeout=DISCORD_READ_TIMEOUT_S)
+    except TimeoutError:
+        logger.warning(f"edit_route: channel history scan timed out after {DISCORD_READ_TIMEOUT_S:.0f}s")
+        return None
     except Exception as exc:  # noqa: BLE001 - history needs read perms; logged, None continues
         logger.debug(f"edit_route: channel history scan failed: {exc}")
+        return None
+    finally:
+        _warn_if_slow("channel_history", started)
+    return await _download_ref(ref, "channel", max_size_mb) if ref else None
+
+
+async def _first_channel_image(history, message: Message, lookback: int) -> ImageRef | None:
+    async for previous in history(limit=lookback, before=message):
+        refs = collect_image_urls_from_message(previous) or []
+        if refs:
+            return refs[0]
     return None
