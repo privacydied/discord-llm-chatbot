@@ -343,3 +343,16 @@ def test_random_daily_config_validation(tmp_path):
     )
     (feed,) = load_feed_configs(path)
     assert feed.mode == "random_daily" and feed.post_at == "09:30" and feed.timezone == "Europe/London"
+
+
+@pytest.mark.parametrize("desc", ["", "   \n  "])
+def test_render_drops_empty_description_block(desc):
+    item = FeedItem("Ep 1", "Thu, 22 Oct 2026", desc, "https://a/1.mp3", "", "1")
+    assert render(DEFAULT_TEMPLATE, item) == "**Ep 1**\u2014Thu, 22 Oct 2026\n\nhttps://a/1.mp3"
+    multiline = "{title}\n\n```\n{description}\n```\n\n{link}"
+    assert render(multiline, FeedItem("Ep 1", "", desc, "", "https://a/1", "1")) == "Ep 1\n\nhttps://a/1"
+
+
+def test_render_keeps_block_when_description_present():
+    item = FeedItem("Ep 1", "d", "text", "u", "", "1")
+    assert "```text```" in render(DEFAULT_TEMPLATE, item)

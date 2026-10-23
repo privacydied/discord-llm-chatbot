@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+
 # Remote feed XML: expat never resolves external entities; the poller caps the size.
 import xml.etree.ElementTree as ET  # nosec B405
 from dataclasses import dataclass
@@ -128,8 +129,16 @@ def _defuse(text: str) -> str:
     return text.replace("@everyone", "@\u200beveryone").replace("@here", "@\u200bhere")
 
 
+_DESCRIPTION_BLOCK = re.compile(r"`{3}[ \t]*\n?[ \t]*\{description\}[ \t]*\n?[ \t]*`{3}")
+
+
 def render(template: str, item: FeedItem, feed_title: str = "", limit: int = DISCORD_MESSAGE_LIMIT) -> str:
-    """Fill the template; shorten the description so the post fits one message."""
+    """Fill the template; shorten the description so the post fits one message.
+
+    No description: its code block is dropped instead of rendering an empty one.
+    """
+    if not item.description.strip():
+        template = re.sub(r"\n{3,}", "\n\n", _DESCRIPTION_BLOCK.sub("", template))
     values: dict[str, Any] = {
         "title": _defuse(item.title),
         "pubDate": item.pub_date,
