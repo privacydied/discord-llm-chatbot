@@ -56,6 +56,7 @@ def test_resolve_ffmpeg_raises_when_missing(monkeypatch) -> None:
     monkeypatch.delenv("FFMPEG_BIN", raising=False)
     monkeypatch.delenv("FFMPEG_BINARY", raising=False)
     monkeypatch.setattr(hear.shutil, "which", lambda _name: None)
+    monkeypatch.setattr("bot.stt_pipeline.ffmpeg_runtime.SYNOLOGY_FFMPEG7", "/nonexistent/ffmpeg7")
 
     with pytest.raises(InferenceError, match="ffmpeg executable not found"):
         hear._resolve_ffmpeg_bin()

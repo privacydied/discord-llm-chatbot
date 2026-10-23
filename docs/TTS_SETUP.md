@@ -1,182 +1,85 @@
 # Text-to-Speech Setup Guide
 
-This document provides instructions for setting up and troubleshooting the Text-to-Speech (TTS) functionality in the Discord bot.
+The bot speaks with [Kyutai Pocket TTS](https://github.com/kyutai-labs/pocket-tts)
+(MIT, ~100M parameters, real-time on CPU, built-in voices and voice cloning).
+It replaced the old Kokoro ONNX stack (custom G2P/IPA pipeline), which ran at
+3–4x slower than real time and 2.5 GB RSS on the NAS.
 
-## Overview
+## How it is wired
 
-The bot uses an engine-based TTS architecture with KokoroEngine as the default engine. This enables four canonical flows:
+- `bot/tts/interface.py` — `TTSManager`: text cleaning, cache, WAV/OGG output,
+  timeouts. Used by `!tts`/`!say`, voice-reply actions and voice messages.
+- `bot/tts/engines/pocket.py` — `PocketTTSEngine`: HTTP client for a Pocket
+  server (`POST /tts`, `GET /health`).
+- `bot/tts/engines/stub.py` — beep engine for tests (`TTS_ENGINE=stub`).
 
-1. TEXT→TEXT: Standard text responses
-2. TEXT→TTS: Text responses converted to voice notes
-3. IMAGE/DOC→TEXT: Vision/document processing with text responses
-4. IMAGE/DOC→TTS: Vision/document processing with voice note responses
+Pocket runs as its **own server process in its own venv**, so torch never loads
+into the bot and the bot's venv is untouched. With `POCKET_TTS_AUTOSTART=true`
+the bot launches the server on the first TTS request, waits for `/health`, and
+stops it again after `MODEL_IDLE_UNLOAD_SECONDS` without use (frees ~1.2 GB).
+A server already running on `POCKET_TTS_URL` is used as-is and never stopped.
 
-## Requirements
-
-- Python 3.11
-- Virtual environment with `uv` for dependency management
-- Internet connection for initial model downloads
-
-## Environment Setup
-
-1. Ensure your `.env` file contains the necessary TTS configuration:
-
-```
-# TTS voice ID to use for speech synthesis (must exist in voices-v1.0.bin)
-TTS_VOICE=en-US-GuyNeural
-
-# TTS language code for phoneme generation
-TTS_LANGUAGE=en-US
-
-# TTS backend to use (currently only kokoro-onnx is supported)
-TTS_BACKEND=kokoro-onnx
-
-# Directory for TTS cache files
-TTS_CACHE_DIR=cache/tts
-
-# Paths for TTS model and voice assets
-TTS_ASSET_DIR=tts/assets
-TTS_MODEL_PATH=tts/onnx
-TTS_VOICES_PATH=tts/voices
-
-# URLs for downloading TTS model files
-TTS_VOICE_BIN_URL=https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
-TTS_MODEL_URL=https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/onnx/model.onnx?download=true
-
-# SHA256 checksums for TTS model files
-TTS_MODEL_SHA256=c5b230b4529e5c15b6d810f64424e9e7e5b54f2c6214f8f5c9a9813d8f7ad3f2
-TTS_VOICE_BIN_SHA256=7c6c5a3ab28b21c6f3afa9563f9ea6d3c4d5d9e1c8f7a6b5c4d3e2f1a0b9c8d7
-```
-
-2. Install dependencies:
+## One-time install (on the host that runs the bot)
 
 ```bash
-source .venv/bin/activate
-uv pip install -r requirements.txt
+mkdir -p /volume1/py/pocket-tts && cd /volume1/py/pocket-tts
+export TMPDIR=$PWD/tmp && mkdir -p tmp   # Synology mounts /tmp noexec
+uv venv --python 3.11 venv
+VIRTUAL_ENV=venv uv pip install --extra-index-url https://download.pytorch.org/whl/cpu torch pocket-tts
 ```
 
-3. For better English TTS quality, install one of these phonetic tokenizers:
+Model weights download on first start into `POCKET_TTS_HF_HOME`.
 
-```bash
-# Option 1: Install phonemizer (Python package)
-source .venv/bin/activate
-uv pip install phonemizer
+## Configuration (.env)
 
-# Option 2: Install espeak-ng (system package)
-sudo pacman -Sy espeak-ng  # For Arch Linux
-# OR
-sudo apt install espeak-ng  # For Debian/Ubuntu
-
-# Option 3: Install g2p_en (Python package, English only)
-source .venv/bin/activate
-uv pip install g2p_en
+```
+TTS_ENGINE=pocket                          # pocket | stub
+TTS_VOICE=alba
+POCKET_TTS_LANGUAGE=english               # english (100M) | english_18m_2026-10 (2x faster)
+POCKET_TTS_URL=http://127.0.0.1:8767      # 8765 is taken on the NAS
+POCKET_TTS_AUTOSTART=true
+POCKET_TTS_PYTHON=/volume1/py/pocket-tts/venv/bin/python
+POCKET_TTS_HF_HOME=/volume1/py/pocket-tts/hf
+POCKET_TTS_THREADS=2
+POCKET_TTS_START_TIMEOUT_S=180
 ```
 
-Without a phonetic tokenizer, the TTS quality may be reduced as it will fall back to grapheme tokenization.
+Built-in voices: `alba`, `anna`, `azelma`, `bill_boerst`, `caro_davy`,
+`charles`, `cosette`, `eponine`, `eve`, `fantine`, `george`, `jane`, `javert`,
+`jean`, `marius`, `mary`, `michael`, `paul`, `peter_yearsley`, `stuart_bell`,
+`vera` (English) plus `daan`, `estelle`, `giovanni`, `juergen`, `lola`,
+`rafael`. Samples: https://huggingface.co/kyutai/tts-voices.
+`TTS_VOICE` also accepts an `hf://` or `https://` URL to a short reference clip
+(voice cloning — only with the speaker's consent).
 
-## Automatic Asset Management
+## Measured on the NAS (AMD Ryzen R1600, 2 threads)
 
-The bot includes an automatic asset management system that:
+| model | real-time factor | RAM |
+|---|---|---|
+| `english` (100M) | 0.88–0.91 | 1.2 GB |
+| `english_18m_2026-10` | 0.39–0.46 | 655 MB |
 
-1. Checks for required TTS model files on startup
-2. Downloads missing files automatically
-3. Verifies file integrity using SHA256 checksums
-4. Implements retry logic with exponential backoff
-5. Validates voice bin format and structure
+Request timeouts scale with text length (10 s + 0.12 s/char, plus the start
+timeout while the server is cold), so long replies are not cut off.
 
-To manually trigger asset verification and download:
+## TTS commands
 
-```bash
-python -m bot.tts_utils_enhanced
-```
-
-## TTS Commands
-
-The bot supports the following TTS commands:
-
-1. `@bot !tts on` - Enable TTS responses for the user
-2. `@bot !tts off` - Disable TTS responses for the user
-3. `@bot !tts-all on` - (Admin only) Enable TTS responses for all users
-4. `@bot !tts-all off` - (Admin only) Disable TTS responses for all users
-5. `!speak <message>` - Generate a one-time TTS response
-6. `!say <text>` - Speak the exact text as a voice note
+1. `!tts on` / `!tts off` — voice replies for you
+2. `!tts all on` / `!tts all off` — (admin) voice replies for everyone
+3. `!speak <message>` — one-time spoken reply
+4. `!say <text>` — speak the exact text as a voice note
 
 ## Troubleshooting
 
-### TTS Not Working
-
-1. Check logs for TTS-related errors:
-   - Look for messages from `TTSManager`, `KokoroEngine`, or `tts_utils_enhanced`
-   - Debug logs will show engine loading, TTS generation, and file operations
-
-2. Verify model files:
-   - Ensure `tts/onnx/model.onnx` exists and has the correct checksum
-   - Ensure `tts/voices/voices-v1.0.bin` exists and has the correct checksum
-   - Run `python -m bot.tts_utils_enhanced` to verify and download files
-
-3. Check environment variables:
-   - Ensure `TTS_VOICE` is set to a voice that exists in the voice bin
-   - Ensure `TTS_LANGUAGE` is set correctly (e.g., `en-US`)
-
-4. Check permissions:
-   - Ensure the bot has write permissions to the TTS directories
-   - Ensure the bot has permissions to send voice messages in Discord
-
-### Common Issues
-
-1. **Same word repeated in TTS output**:
-   - Check if the style vector is being loaded correctly
-   - Verify the voice bin file integrity
-   - Try a different voice ID
-
-2. **No audio output**:
-   - Check if the audio file was generated successfully
-   - Verify Discord permissions for sending voice messages
-   - Check if the audio duration is too short (Discord has minimum length requirements)
-
-3. **Slow TTS generation**:
-   - TTS generation is CPU-intensive and may be slow on low-end hardware
-   - Consider enabling the TTS cache to avoid regenerating the same text
+- Server log: `logs/pocket_tts.log`. Bot log events: `tts.pocket.spawned`,
+  `tts.pocket.ready`, `tts.pocket.synth`, `tts.pocket.stopped`.
+- By hand: `curl -s http://127.0.0.1:8767/health` → `{"status":"healthy"}`.
+- `POCKET_TTS_PYTHON is not a valid interpreter` → the venv path is wrong.
+- `Pocket TTS server exited (...)` → last line of `logs/pocket_tts.log` is in
+  the error; usually a bad `POCKET_TTS_LANGUAGE` or voice name.
 
 ## Testing
 
-Run the TTS tests to verify functionality:
-
 ```bash
-python -m pytest tests/test_tts_assets.py tests/tts/engines/test_kokoro.py -v
+uv run -m pytest tests/tts -q
 ```
-
-This will test:
-- Asset downloading and verification
-- Environment validation
-- Voice bin structure validation
-- TTS synthesis
-- KokoroEngine functionality
-
-## Advanced Configuration
-
-### Custom Voice Styles
-
-The default voice bin includes several voices. To use a different voice:
-
-1. Set `TTS_VOICE` to one of the available voice IDs (e.g., `en-US-JennyNeural`)
-2. Restart the bot
-
-### Custom Model
-
-To use a custom ONNX model:
-
-1. Place your model file at the path specified by `KOKORO_MODEL_PATH`
-2. Update the `KOKORO_MODEL_SHA256` checksum in your `.env` file
-3. Restart the bot
-
-## Monitoring
-
-The bot includes extensive logging for TTS operations:
-
-- Debug logs for voice loading and selection
-- Info logs for TTS generation and caching
-- Warning logs for retries and fallbacks
-- Error logs for failures
-
-Monitor these logs to diagnose any issues with TTS functionality.

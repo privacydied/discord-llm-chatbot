@@ -359,10 +359,8 @@ class Janitor:
     def _load_policies_from_config(self) -> None:
         """Load directory policies from existing config paths. [CA]."""
         from .config import load_config
-        from .tts.eng_g2p_local import get_kokoro_tempdir
 
         config = load_config()
-        kokoro_tmpdir = get_kokoro_tempdir()
 
         # Build policies from config
         self._policies = {
@@ -400,11 +398,6 @@ class Janitor:
                 path=Path("cache/screenshots"),  # HTTP/download cache
                 age_ttl_hours=24,
                 size_cap_mb=512,
-            ),
-            "tts_temp": DirectoryPolicy(
-                path=kokoro_tmpdir,
-                age_ttl_hours=6,
-                size_cap_mb=1024,
             ),
             "temp": DirectoryPolicy(
                 path=config.get("TEMP_DIR", Path("temp")),

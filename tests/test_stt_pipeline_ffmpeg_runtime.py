@@ -99,6 +99,7 @@ def test_resolve_ffmpeg_bin_raises_when_missing(monkeypatch) -> None:
         "bot.stt_pipeline.ffmpeg_runtime.shutil.which",
         lambda _name: None,
     )
+    monkeypatch.setattr("bot.stt_pipeline.ffmpeg_runtime.SYNOLOGY_FFMPEG7", "/nonexistent/ffmpeg7")
 
     try:
         resolve_ffmpeg_bin()

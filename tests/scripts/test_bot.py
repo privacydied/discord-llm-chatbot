@@ -11,8 +11,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 # Add the project root to the Python path
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -187,12 +185,17 @@ class TestTTS(unittest.IsolatedAsyncioTestCase):
         """Set up test environment."""
         self.test_dir = tempfile.TemporaryDirectory()
         os.environ["TEMP_DIR"] = self.test_dir.name
+        self._prev_engine = os.environ.get("TTS_ENGINE")
+        os.environ["TTS_ENGINE"] = "stub"  # hermetic: no Pocket server
 
     def tearDown(self) -> None:
         """Clean up test environment."""
         self.test_dir.cleanup()
+        if self._prev_engine is None:
+            os.environ.pop("TTS_ENGINE", None)
+        else:
+            os.environ["TTS_ENGINE"] = self._prev_engine
 
-    @pytest.mark.needs_kokoro_assets
     @patch("subprocess.run")
     async def test_generate_tts(self, mock_run) -> None:
         """Test TTS generation with mock subprocess."""

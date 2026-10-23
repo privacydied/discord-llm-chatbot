@@ -21,7 +21,7 @@ async def test_tts_returns_path() -> None:
     config = load_config()
 
     # Initialize TTSManager
-    tts_manager = TTSManager(config)
+    tts_manager = TTSManager({**config, "TTS_ENGINE": "stub"})  # hermetic: no Pocket server
     # TTSManager is initialized in the constructor, no need for explicit initialize() call
 
     if not tts_manager.is_available():

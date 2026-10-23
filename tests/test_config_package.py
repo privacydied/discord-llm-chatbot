@@ -357,7 +357,6 @@ class TestBackwardCompatibilityImports:
         "get_vl_model_ladder",
         "invalidate_config_cache",
         "ConfigurationError",
-        "KOKORO_FORCE_IPA_EN",
     ]
 
     @pytest.mark.parametrize("name", PUBLIC_NAMES)

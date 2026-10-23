@@ -3,7 +3,7 @@ SentenceTransformer embeddings. [PA]
 
 Rationale: sentence-transformers drags the full torch runtime (~300-500 MB RSS)
 into the process to run a ~90 MB MiniLM model. fastembed executes the same
-model through onnxruntime, which this bot already ships for Kokoro TTS, so the
+model through onnxruntime, which this bot already ships, so the
 marginal memory cost is just the model weights themselves.
 
 Vectors are dimensionally identical (384 for all-MiniLM-L6-v2) and
@@ -29,7 +29,7 @@ _load_lock = asyncio.Lock()
 _DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 _CACHE_DIR_ENV = "FASTEMBED_CACHE_DIR"
 
-# Live instances for idle-TTL unload (mirrors the whisper/kokoro pattern). [PA]
+# Live instances for idle-TTL unload (mirrors the whisper/TTS pattern). [PA]
 _instances: weakref.WeakSet = weakref.WeakSet()
 
 

@@ -12,6 +12,8 @@ from typing import Any
 
 _FFMPEG_BIN_CACHE: str | None = None
 _FFMPEG_BIN_HAS_AAC: bool | None = None
+# Synology ffmpeg7 package; absolute because non-login shells lack /usr/local/bin on PATH.
+SYNOLOGY_FFMPEG7 = "/usr/local/bin/ffmpeg7"
 
 
 def ffmpeg_candidates_from_env() -> list[str]:
@@ -22,7 +24,8 @@ def ffmpeg_candidates_from_env() -> list[str]:
         if value:
             candidates.append(value)
     # Prefer Synology ffmpeg7 package when present; fallback to default ffmpeg.
-    candidates.extend(["ffmpeg7", "ffmpeg"])
+    # Synology's /usr/bin/ffmpeg 4.1 has no AAC decoder and no libopus encoder. [REH]
+    candidates.extend(["ffmpeg7", SYNOLOGY_FFMPEG7, "ffmpeg"])
     # Preserve order while de-duplicating.
     seen = set()
     ordered: list[str] = []

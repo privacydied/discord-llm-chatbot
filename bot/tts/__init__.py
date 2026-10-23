@@ -41,7 +41,7 @@ async def generate_tts(text: str, user_id: str) -> Path:
     except SynthesisError:
         raise
     except Exception:
-        if (os.getenv("TTS_ENGINE", "").strip().lower() or "kokoro-onnx") == "stub":
+        if os.getenv("TTS_ENGINE", "").strip().lower() == "stub":
             # Robust fallback when stub explicitly configured
             generate_stub_wav(str(out_path))
             return out_path

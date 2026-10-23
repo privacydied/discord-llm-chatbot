@@ -9,7 +9,6 @@ from bot.tts.interface import TTSManager
 
 
 @pytest.mark.asyncio
-@pytest.mark.needs_kokoro_assets
 async def test_generate_tts_dynamic_timeout(monkeypatch, tmp_path) -> None:
     # Set env timeouts: base 25, cold 5.5, warm 1.1
     os.environ["TTS_TIMEOUT_S"] = "25.0"

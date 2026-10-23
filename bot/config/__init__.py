@@ -19,7 +19,6 @@ Public API (from bot.config import ...):
     validate_prompt_files
     check_venv_activation
     ConfigurationError  (re-exported from bot.exceptions)
-    KOKORO_FORCE_IPA_EN
 """
 
 from __future__ import annotations
@@ -34,7 +33,6 @@ from ._base import (
     # Context trimming limits
     CONTEXT_MAX_MESSAGES,
     CONTEXT_MAX_TOTAL_CHARS,
-    KOKORO_FORCE_IPA_EN,
     _low_resource_bool,  # noqa: F401
     _low_resource_float,  # noqa: F401
     # LOW_RESOURCE helpers [Phase 17-23]
@@ -63,7 +61,6 @@ __all__ = [
     # Context trimming limits
     "CONTEXT_MAX_MESSAGES",
     "CONTEXT_MAX_TOTAL_CHARS",
-    "KOKORO_FORCE_IPA_EN",
     "ConfigurationError",
     "audit_env_file",
     "check_venv_activation",

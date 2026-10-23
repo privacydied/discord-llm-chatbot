@@ -480,8 +480,16 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "TEMP_DIR": Path(env_getter("TEMP_DIR", "temp")),
         "LOGS_DIR": Path(env_getter("LOGS_DIR", "logs")),
         # TTS SETTINGS
-        "TTS_BACKEND": env_getter("TTS_BACKEND", "kokoro-onnx"),
-        "TTS_VOICE": env_getter("TTS_VOICE", "af"),
+        "TTS_BACKEND": env_getter("TTS_BACKEND", "pocket"),
+        "TTS_VOICE": env_getter("TTS_VOICE", "alba"),
+        # Kyutai Pocket TTS server (bot/tts/engines/pocket.py) [CA]
+        "POCKET_TTS_URL": env_getter("POCKET_TTS_URL", "http://127.0.0.1:8767"),
+        "POCKET_TTS_LANGUAGE": env_getter("POCKET_TTS_LANGUAGE", "english"),
+        "POCKET_TTS_AUTOSTART": env_getter("POCKET_TTS_AUTOSTART", "true"),
+        "POCKET_TTS_PYTHON": env_getter("POCKET_TTS_PYTHON", ""),
+        "POCKET_TTS_HF_HOME": env_getter("POCKET_TTS_HF_HOME", ""),
+        "POCKET_TTS_THREADS": env_getter("POCKET_TTS_THREADS", "2"),
+        "POCKET_TTS_START_TIMEOUT_S": env_getter("POCKET_TTS_START_TIMEOUT_S", "180"),
         # Timeouts for TTS synthesis [CMV][IV]
         "TTS_TIMEOUT_S": _safe_float(env_getter("TTS_TIMEOUT_S", None), "25.0", "TTS_TIMEOUT_S"),
         "TTS_TIMEOUT_COLD_S": _safe_float(
@@ -1065,10 +1073,6 @@ def get_config_cache() -> dict[str, Any] | None:
 def get_cache_timestamp() -> float:
     """Get the cache timestamp (for test introspection)."""
     return _cache_timestamp
-
-
-# Force English IPA route (bypass tokenizer env and disable autodiscovery)
-KOKORO_FORCE_IPA_EN = True
 
 
 # ---------------------------------------------------------------------------

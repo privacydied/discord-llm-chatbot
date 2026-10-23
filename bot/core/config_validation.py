@@ -320,7 +320,6 @@ class ConfigValidator:
         self._validate_timeout_ladder_mismatch()
 
         # TTS V8 experimental backend — warn unless explicitly opted in [item 12]
-        self._validate_tts_v8_experimental()
 
         # TEXT_FALLBACK ladder — warn on duplicate entries
         self._validate_text_fallback_ladder()
@@ -395,19 +394,6 @@ class ConfigValidator:
                 )
         except (AttributeError, TypeError, ValueError) as e:
             self.logger.debug(f"Failed to validate timeout ladder mismatch: {e}")
-
-    def _validate_tts_v8_experimental(self) -> None:
-        """Warn if TTS_BACKEND=kokoro-v8 without explicit experimental opt-in."""
-        try:
-            backend = os.getenv("TTS_BACKEND", "")
-            if backend == "kokoro-v8":
-                allow_experimental = os.getenv("TTS_ALLOW_EXPERIMENTAL", "false").lower() in ("true", "1", "yes")
-                if not allow_experimental:
-                    self.logger.warning(
-                        "config:tts_backend_experimental TTS_BACKEND=kokoro-v8 is experimental and not production-ready. Set TTS_ALLOW_EXPERIMENTAL=true to acknowledge this, or use TTS_BACKEND=kokoro-onnx (recommended).",
-                    )
-        except (AttributeError, TypeError, ValueError) as e:
-            self.logger.debug(f"Failed to validate tts v8 experimental: {e}")
 
 
 class HealthMonitor:

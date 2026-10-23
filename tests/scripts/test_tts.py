@@ -1,6 +1,6 @@
 """Test suite for TTS functionality."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch  # noqa: F401
 
 import pytest
 
@@ -74,21 +74,10 @@ class TestTTSManager:
         assert "cache_dir" in stats
 
 
-# Integration test
-@pytest.mark.needs_kokoro_assets
+# Manager -> engine path, hermetic (stub engine; Pocket itself: tests/tts/test_pocket_engine.py)
 @pytest.mark.asyncio
 async def test_tts_integration() -> None:
     """Integration test for TTS synthesis."""
-    tts_manager = TTSManager()
-
-    # Mock the TTS model for testing
-    with patch("bot.tts.TTS") as mock_tts:
-        mock_instance = Mock()
-        mock_instance.tts.return_value = b"fake_wav_data"
-        mock_tts.return_value = mock_instance
-
-        # Test synthesis
-        result = await tts_manager.synthesize("Hello world")
-        # In a real test, this would check for successful file creation
-        # For now, just verify the method completes without error
-        assert result is not None
+    tts_manager = TTSManager(config={"TTS_ENGINE": "stub"})
+    result = await tts_manager.synthesize("Hello world")
+    assert result[:4] == b"RIFF"

@@ -114,54 +114,6 @@ class TestCleanText:
         assert clean_text("hello\n\nworld") == "hello world"
 
 
-class TestNumberToWords:
-    """Tests for number_to_words function."""
-
-    @pytest.fixture
-    def number_to_words(self):
-        from bot.tts.eng_g2p_local import number_to_words
-
-        return number_to_words
-
-    def test_small_numbers(self, number_to_words) -> None:
-        """Small numbers should be converted."""
-        assert number_to_words("0") == "zero"
-        assert number_to_words("5") == "five"
-        assert number_to_words("13") == "thirteen"
-        assert number_to_words("25") == "twenty five"
-
-    def test_years(self, number_to_words) -> None:
-        """Years should be spoken naturally."""
-        assert "twenty" in number_to_words("2024")
-        assert "nineteen" in number_to_words("1984")
-        assert "two thousand" in number_to_words("2000")
-        assert "two thousand five" in number_to_words("2005")
-
-    def test_large_numbers(self, number_to_words) -> None:
-        """Hundreds and thousands should work."""
-        assert "hundred" in number_to_words("500")
-        assert "thousand" in number_to_words("1000")
-        assert "thousand" in number_to_words("5,000")
-
-    def test_ordinals(self, number_to_words) -> None:
-        """Ordinals should be converted."""
-        assert number_to_words("1st") == "first"
-        assert number_to_words("2nd") == "second"
-        assert number_to_words("3rd") == "third"
-        assert number_to_words("10th") == "tenth"
-
-    def test_punctuation_preserved(self, number_to_words) -> None:
-        """Trailing punctuation should be preserved."""
-        assert number_to_words("2024.") == "twenty twenty four."
-        assert number_to_words("100?") == "one hundred?"
-
-    def test_mixed_text(self, number_to_words) -> None:
-        """Numbers in text context should work."""
-        result = number_to_words("I have 3 cats")
-        assert "three" in result
-        assert "cats" in result
-
-
 class TestSentenceChunking:
     """Tests for _split_into_sentences function."""
 
@@ -265,51 +217,3 @@ class TestSentenceChunking:
         result = split_sentences("Hello world! How are you?")
         combined = " ".join(result)
         assert "!" in combined or "?" in combined
-
-
-class TestNormalizeText:
-    """Tests for normalize_text function."""
-
-    @pytest.fixture
-    def normalize_text(self):
-        from bot.tts.eng_g2p_local import normalize_text
-
-        return normalize_text
-
-    def test_colon_to_comma(self, normalize_text) -> None:
-        """Colons should become commas for phrase boundary."""
-        result = normalize_text("Note: this is important")
-        assert ":" not in result
-        assert "," in result
-
-    def test_semicolon_to_comma(self, normalize_text) -> None:
-        """Semicolons should become commas."""
-        result = normalize_text("First; second")
-        assert ";" not in result
-        assert "," in result
-
-    def test_preserves_period(self, normalize_text) -> None:
-        """Periods should be preserved."""
-        result = normalize_text("Hello. World.")
-        assert "." in result
-
-    def test_preserves_question(self, normalize_text) -> None:
-        """Question marks should be preserved."""
-        result = normalize_text("How are you?")
-        assert "?" in result
-
-    def test_preserves_exclamation(self, normalize_text) -> None:
-        """Exclamation marks should be preserved."""
-        result = normalize_text("Wow!")
-        assert "!" in result
-
-    def test_removes_brackets(self, normalize_text) -> None:
-        """Brackets should be removed."""
-        result = normalize_text("Hello (world)")
-        assert "(" not in result
-        assert ")" not in result
-        assert "world" in result
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

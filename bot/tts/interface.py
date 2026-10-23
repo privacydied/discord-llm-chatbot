@@ -16,15 +16,16 @@ from bot.tts.errors import SynthesisError
 from bot.utils.logging import get_logger
 from utils.opus import transcode_to_ogg_opus
 
-from .engines.kokoro import KokoroONNXEngine
-from .engines.kokoro_v8 import KokoroV8Engine
+from .engines.pocket import DEFAULT_VOICE, PocketTTSEngine
 from .engines.stub import StubEngine
 
 ENGINES = {
     "stub": StubEngine,
-    "kokoro-onnx": KokoroONNXEngine,
-    "kokoro": KokoroV8Engine,
+    "pocket": PocketTTSEngine,
 }
+DEFAULT_BACKEND = "pocket"
+# Kokoro was removed; old .env values select its replacement instead of failing.
+LEGACY_BACKENDS = {"kokoro", "kokoro-onnx", "kokoro-v8"}
 
 
 logger = get_logger(__name__)
@@ -68,16 +69,12 @@ class TTSManager:
                 self.config = dict(bot.config)
 
         self.enabled = bool(self.config.get("TTS_ENABLE", True))
-        env_engine = (self.config.get("TTS_ENGINE") or os.getenv("TTS_ENGINE") or "").strip().lower()
-        model_hint = self.config.get("TTS_MODEL_PATH") or os.getenv("TTS_MODEL_PATH")
-        voices_hint = self.config.get("TTS_VOICES_PATH") or os.getenv("TTS_VOICES_PATH")
-        has_local_assets = bool(model_hint and voices_hint)
-        if not env_engine:
-            default_model = Path("tts/kokoro-v1.0.onnx")
-            default_voices = Path("tts/voices-v1.0.bin")
-            has_local_assets = has_local_assets or (default_model.exists() and default_voices.exists())
-        self.backend = env_engine or ("kokoro-onnx" if has_local_assets else "stub")
-        self.voice = str(self.config.get("TTS_VOICE") or os.getenv("TTS_VOICE") or "af_heart")
+        env_engine = (self.config.get("TTS_ENGINE") or os.getenv("TTS_ENGINE") or self.config.get("TTS_BACKEND") or "").strip().lower()
+        if env_engine in LEGACY_BACKENDS:
+            logger.warning("tts:legacy_backend %s removed; using %s", env_engine, DEFAULT_BACKEND)
+            env_engine = DEFAULT_BACKEND
+        self.backend = env_engine or DEFAULT_BACKEND
+        self.voice = str(self.config.get("TTS_VOICE") or os.getenv("TTS_VOICE") or DEFAULT_VOICE)
         self.voices: list[str] = []
         self.available = False
         self.degraded = False
@@ -105,8 +102,10 @@ class TTSManager:
                 self.available = False
                 logger.error("Failed to initialize TTS backend: %s", exc, exc_info=True)
 
-        # Start warm-up in background after backend is loaded (only if event loop is running)
-        if self.is_available():
+        # Start warm-up in background after backend is loaded (only if event loop is running).
+        # Pocket starts its server on first use instead: warming at boot would pin
+        # ~1.2 GB for a feature that is used occasionally.
+        if self.is_available() and self.backend != "pocket":
             try:
                 loop = asyncio.get_running_loop()
                 self._warmup_task = loop.create_task(self._warm_up(), name="tts-warmup")
@@ -210,29 +209,20 @@ class TTSManager:
             self.available = True
             return
 
-        if self.backend in {"kokoro", "kokoro-v8"}:
-            self._engine = engine_cls(voice=self.voice)
-            self.available = True
-            return
-
-        # Default to kokoro-onnx.
-        model_path = self.config.get("TTS_MODEL_PATH") or os.getenv("TTS_MODEL_PATH")
-        voices_path = self.config.get("TTS_VOICES_PATH") or os.getenv("TTS_VOICES_PATH")
-        if not model_path or not voices_path:
-            msg = "kokoro assets missing"
-            raise RuntimeError(msg)
-        try:
-            self._engine = engine_cls(
-                model_path=str(model_path),
-                voices_path=str(voices_path),
-                voice=self.voice,
-            )
-        except TypeError:
-            self._engine = engine_cls(
-                model_path=str(model_path),
-                voices_path=str(voices_path),
-            )
+        self._engine = engine_cls(self.config, voice=self.voice)
         self.available = True
+
+    def unload_if_idle(self, ttl_s: float) -> bool:
+        """Idle-TTL hook (bot/tasks.py): stop a bot-owned Pocket server. [PA]"""
+        engine = self._engine
+        due = getattr(engine, "idle_stop_due", None)
+        if engine is None or due is None or not due(ttl_s):
+            return False
+        try:
+            asyncio.get_running_loop().create_task(engine.close(), name="tts-idle-stop")
+        except RuntimeError:
+            return False
+        return True
 
     async def _ensure_engine(self) -> None:
         if self._engine is not None and self.available:
@@ -287,6 +277,12 @@ class TTSManager:
         ran the synthesis inline first, so the offload was a no-op). ``timeout``, when
         set, bounds the whole operation via ``asyncio.wait_for``. [PA][REH]
         """
+        # Engines that know their own cost (Pocket: cold start + text length) widen
+        # short warm/cold defaults so a long reply is not cut off mid-synthesis.
+        budget = getattr(engine, "timeout_budget", None)
+        if timeout is not None and budget is not None:
+            timeout = max(timeout, float(budget(cleaned)))
+
         if inspect.iscoroutinefunction(engine.synthesize):
             awaitable = engine.synthesize(cleaned)
         else:

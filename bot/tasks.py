@@ -104,7 +104,7 @@ def _unload_idle_models(bot: commands.Bot, cfg: dict[str, Any]) -> None:
     Complements `_reclaim_memory` (which only fires above the RSS warning
     threshold and spares the default whisper model): after
     MODEL_IDLE_UNLOAD_SECONDS with no STT/TTS use, ALL whisper models and the
-    Kokoro ONNX session are released — several hundred MB while the bot idles.
+    bot-managed Pocket TTS server are released — several hundred MB while the bot idles.
     Both reload lazily on next use. Never raises.
     """
     ttl = float(cfg.get("MODEL_IDLE_UNLOAD_SECONDS", 900))
