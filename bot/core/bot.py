@@ -47,6 +47,7 @@ from bot.embed_fix import maybe_fix_embeds, might_have_fixable_link
 from bot.server_archive import start_server_archive_service, stop_server_archive_service
 from bot.tts.errors import SynthesisError
 from bot.tts.state import apply_tts_preference
+from bot.voice import transcripts as voice_transcripts
 from bot.utils.logging import get_logger
 from bot.voice import VoiceMessagePublisher
 
@@ -1582,7 +1583,14 @@ class LLMBot(commands.Bot):
                     if target_message:
                         with suppress(Exception):
                             await target_message.delete()
+                    # A voice note has no text: remember what it said so replies use the
+                    # transcript (history, reply chain) and never STT our own audio. [CA]
+                    voice_id = getattr(res, "message_id", None) or getattr(res.message, "id", None)
+                    with suppress(Exception):
+                        await asyncio.to_thread(voice_transcripts.remember, voice_id, _orig_content)
                     if self.enhanced_context_manager and res.message:
+                        with suppress(Exception):
+                            res.message.content = _orig_content or ""
                         await self.enhanced_context_manager.append_message(res.message, role="bot")
                     self.logger.info(
                         "voice:native.ok",

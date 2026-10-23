@@ -3,6 +3,7 @@
 This module provides commands to control TTS settings and behavior.
 """
 
+import asyncio
 import inspect
 import io
 import logging
@@ -326,6 +327,13 @@ class TTSCommands(commands.Cog):
                         transcript_text=None,
                     )
                     if getattr(pub_res, "ok", False):
+                        from bot.voice import transcripts as voice_transcripts
+
+                        voice_id = getattr(pub_res, "message_id", None) or getattr(getattr(pub_res, "message", None), "id", None)
+                        try:
+                            await asyncio.to_thread(voice_transcripts.remember, voice_id, text)
+                        except Exception:  # noqa: BLE001 - transcript memory is best-effort
+                            pass
                         logging.debug(
                             "✅ Native voice message published",
                             extra={

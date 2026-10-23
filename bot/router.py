@@ -166,6 +166,7 @@ from .see import see_infer
 from .server_features import is_server_feature_enabled
 from .threads.x_thread_unroll import unroll_author_thread
 from .tts.state import apply_tts_preference
+from .voice import transcripts as voice_transcripts
 from .types import Command, ParsedCommand
 from .utils.attachment_text import read_attachment_text
 from .utils.file_utils import download_file
@@ -4939,8 +4940,14 @@ class Router:
                         self.logger.debug(f"reply link harvest failed: {exc}")
 
                     # 2) Harvest non-image attachments from referenced message (e.g., video, pdf)
+                    # Never our own voice notes: the reply context already carries the
+                    # text we spoke, so STT-ing our TTS audio would be a lossy loop. [CA]
+                    bot_user_id = getattr(getattr(self.bot, "user", None), "id", None)
+                    own_voice = voice_transcripts.is_own_voice_note(ref_message, bot_user_id)
+                    if own_voice:
+                        self.logger.info(f"🔊 Reply to own voice note | msg={ref_message.id} using transcript, skipping STT")
                     try:
-                        ref_atts = getattr(ref_message, "attachments", None) or []
+                        ref_atts = [] if own_voice else (getattr(ref_message, "attachments", None) or [])
                         added_atts = 0
                         for att in ref_atts:
                             ctype = (getattr(att, "content_type", "") or "").lower()

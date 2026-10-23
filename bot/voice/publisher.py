@@ -31,6 +31,7 @@ class VoicePublishResult:
     message: discord.Message | None
     ogg_path: Path | None
     ok: bool
+    message_id: int | None = None  # set on success even when the fetch-back failed
 
 
 class VoiceMessagePublisher:
@@ -380,7 +381,7 @@ class VoiceMessagePublisher:
                         "channel_id": channel_id,
                     },
                 )
-                return VoicePublishResult(message=created_msg, ogg_path=ogg_p, ok=True)
+                return VoicePublishResult(message=created_msg, ogg_path=ogg_p, ok=True, message_id=created_id)
             except Exception as exc:  # noqa: BLE001
                 # If we cannot fetch, still consider it success if we got a valid JSON back
                 self.logger.debug(f"native voice fetch failed: {exc}")
@@ -392,7 +393,8 @@ class VoiceMessagePublisher:
                         "channel_id": channel_id,
                     },
                 )
-                return VoicePublishResult(message=None, ogg_path=ogg_p, ok=True)
+                created = msg_json.get("id") if isinstance(msg_json, dict) else None
+                return VoicePublishResult(message=None, ogg_path=ogg_p, ok=True, message_id=int(created) if created else None)
 
         except Exception as e:
             # Detect Discord code 50173 and block channel for a while [REH]

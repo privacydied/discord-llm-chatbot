@@ -13,6 +13,8 @@ from typing import Any
 
 import discord
 
+from bot.voice.transcripts import message_text
+
 from ..utils.logging import get_logger
 from .turn_notes import enrich_items_with_media_notes
 
@@ -260,7 +262,7 @@ async def _collect_thread_context(
                     pass
                 else:
                     continue
-            txt = m.content or ""
+            txt = message_text(m)
             if len(collected) + 1 > max_msgs or (total_chars + len(txt)) > max_chars:
                 truncated = True
                 break
@@ -359,7 +361,7 @@ async def _walk_reply_chain(
                 break  # end of chain, unresolvable, or a reference cycle
             if not _admit_to_chain(parent, anchor_id=anchor_id, bot_user_id=bot_user_id, max_age_min=max_age_min, now=now):
                 break
-            txt = parent.content or ""
+            txt = message_text(parent)
             if len(chain) + 1 > max_msgs or total_chars + len(txt) > max_chars:
                 truncated = True
                 break
@@ -424,7 +426,7 @@ def _package(
             "display_name",
             getattr(m.author, "name", f"User({getattr(m.author, 'id', 'unknown')})"),
         )
-        txt = _sanitize_mentions(m.content or "", guild)
+        txt = _sanitize_mentions(message_text(m), guild)
         it = PackagedItem(
             idx=i,
             id=str(getattr(m, "id", "")),
@@ -670,7 +672,7 @@ async def build_mention_context(
     items: list[PackagedItem] = []
     for m in collected:
         author_name = m.author.display_name if m.author else "Unknown"
-        text = m.content or ""
+        text = message_text(m)
         ts = m.created_at.isoformat() if m.created_at else ""
         items.append(PackagedItem(author_name=author_name, text_plain=text, created_at_iso=ts))
 
