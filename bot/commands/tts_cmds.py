@@ -45,8 +45,12 @@ class TTSCommands(commands.Cog):
             await ctx.send("❌ TTS is disabled on this server.")
             return
         if text:
-            # If there's text after !tts, treat it as a one-off TTS request
-            await self.speak(ctx, text)
+            # "!tts <text>" reads the text out verbatim (same as !say).
+            target = getattr(self, "say", None)
+            if isinstance(target, commands.Command):
+                await target.callback(self, ctx, text=text)
+            elif target is not None:
+                await target(ctx, text=text)
         else:
             # Otherwise, show help
             await ctx.send("Please specify 'on', 'off', or text to speak.")
@@ -78,10 +82,28 @@ class TTSCommands(commands.Cog):
         else:
             await ctx.send("❌ Invalid setting. Use 'on' or 'off'.")
 
+    async def _answer_spoken(self, ctx: commands.Context, prompt: str) -> None:
+        """Run ``prompt`` through the normal reply pipeline and send the answer as speech.
+
+        ``Router.dispatch_prompt`` answers the bare prompt with the same context, tools
+        and persona as an @mention. Text answers are forced to TTS; image/file answers
+        are sent as they are. [CA][REH]
+        """
+        message = ctx.message
+        async with ctx.typing():
+            action = await self.router.dispatch_prompt(message, prompt)
+        if not isinstance(action, BotAction) or not action.has_payload:
+            await ctx.send("❌ I couldn't come up with an answer to that.")
+            return
+        if (action.content or "").strip() and not action.files:
+            action.meta["requires_tts"] = True
+            action.meta.setdefault("include_transcript", True)
+        await self.bot._execute_action(message, action)
+
     @commands.command(name="speak")
     @commands.cooldown(3, 60, type=commands.BucketType.user)
     async def speak(self, ctx: commands.Context, *, text: str | None = None, pcm16: bool = False) -> None:
-        """Make the next response TTS or speak the given text."""
+        """'!speak <prompt>': answer the prompt in speech. '!speak': speak your next reply."""
         # Don't set one_time_tts when providing text directly - use voice_only instead
         # This prevents duplicate responses by avoiding double TTS triggering
 
@@ -94,24 +116,8 @@ class TTSCommands(commands.Cog):
             return
 
         if text:
-            # If text is provided, delegate to the 'say' command's logic for direct synthesis.
-            logging.debug(
-                f"🔊 Delegating !speak with text to !say handler: '{text[:30]}...'",
-                extra={
-                    "subsys": "tts_cmds",
-                    "event": "speak.with_text",
-                    "user_id": user_id,
-                    "channel_id": channel_id,
-                },
-            )
-            # Support both unit-test monkeypatched function (AsyncMock) and Command object
-            target = getattr(self, "say", None)
-            if target is None:
-                return
-            if isinstance(target, commands.Command):
-                await target.callback(self, ctx, text=text)
-            else:
-                await target(ctx, text=text)
+            # "!speak <prompt>": answer the prompt like an @mention, reply as voice. [CA]
+            await self._answer_spoken(ctx, text)
         else:
             # Only set the flag when no text is provided (for next response)
             logging.debug(

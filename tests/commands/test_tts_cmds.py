@@ -107,14 +107,38 @@ async def test_speak_command_no_text(tts_cog, mock_ctx) -> None:
 
 
 @pytest.mark.asyncio
-async def test_speak_command_with_text(tts_cog, mock_ctx) -> None:
-    """Verify that '!speak <text>' delegates to the 'say' command."""
+async def test_speak_command_with_prompt_answers_in_speech(tts_cog, mock_ctx, mock_bot) -> None:
+    """'!speak <prompt>' answers the prompt through the router and forces a voice reply."""
+    from bot.action import BotAction
+
     tts_cog.say = AsyncMock()
-    text_to_speak = "Hello world"
+    mock_bot.router.dispatch_prompt = AsyncMock(return_value=BotAction(content="paris, obviously"))
+    mock_bot._execute_action = AsyncMock()
 
-    await tts_cog.speak.callback(tts_cog, mock_ctx, text=text_to_speak)
+    await tts_cog.speak.callback(tts_cog, mock_ctx, text="what's the capital of france")
 
-    tts_cog.say.assert_called_once_with(mock_ctx, text=text_to_speak)
+    mock_bot.router.dispatch_prompt.assert_awaited_once_with(mock_ctx.message, "what's the capital of france")
+    sent_message, action = mock_bot._execute_action.await_args.args
+    assert sent_message is mock_ctx.message
+    assert action.meta["requires_tts"] is True and action.content == "paris, obviously"
+    tts_cog.say.assert_not_called()  # not read out verbatim
+
+
+@pytest.mark.asyncio
+async def test_speak_with_prompt_keeps_image_answers_and_reports_empty(tts_cog, mock_ctx, mock_bot) -> None:
+    from bot.action import BotAction
+
+    mock_bot._execute_action = AsyncMock()
+    image_answer = BotAction(content="here", files=[object()])
+    mock_bot.router.dispatch_prompt = AsyncMock(return_value=image_answer)
+    await tts_cog.speak.callback(tts_cog, mock_ctx, text="draw a cat")
+    assert "requires_tts" not in mock_bot._execute_action.await_args.args[1].meta
+
+    mock_bot._execute_action.reset_mock()
+    mock_bot.router.dispatch_prompt = AsyncMock(return_value=None)
+    await tts_cog.speak.callback(tts_cog, mock_ctx, text="???")
+    mock_bot._execute_action.assert_not_called()
+    mock_ctx.send.assert_awaited_with("❌ I couldn't come up with an answer to that.")
 
 
 @pytest.mark.asyncio
@@ -184,13 +208,13 @@ async def test_say_command_with_attachment(tts_cog, mock_ctx, mock_bot) -> None:
 
 @pytest.mark.asyncio
 async def test_tts_group_with_text(tts_cog, mock_ctx) -> None:
-    """Verify that '!tts <text>' delegates to the 'speak' command."""
-    tts_cog.speak = AsyncMock()
+    """Verify that '!tts <text>' reads the text out verbatim (the 'say' command)."""
+    tts_cog.say = AsyncMock()
     text_to_speak = "Speak this"
 
     await tts_cog.tts_group.callback(tts_cog, mock_ctx, text=text_to_speak)
 
-    tts_cog.speak.assert_called_once_with(mock_ctx, text_to_speak)
+    tts_cog.say.assert_called_once_with(mock_ctx, text=text_to_speak)
 
 
 @pytest.mark.asyncio

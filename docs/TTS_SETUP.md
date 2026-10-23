@@ -66,8 +66,10 @@ timeout while the server is cold), so long replies are not cut off.
 
 1. `!tts on` / `!tts off` — voice replies for you
 2. `!tts all on` / `!tts all off` — (admin) voice replies for everyone
-3. `!speak <message>` — one-time spoken reply
-4. `!say <text>` — speak the exact text as a voice note
+3. `!speak <prompt>` — the bot answers the prompt (same context, tools and
+   persona as an @mention) and replies as a voice note; `!speak` alone makes
+   your next reply spoken
+4. `!say <text>` / `!tts <text>` — speak the exact text as a voice note
 
 ## Troubleshooting
 

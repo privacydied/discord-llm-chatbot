@@ -3728,6 +3728,26 @@ class Router:
                 with suppress(Exception):
                     await ctx.__aexit__(None, None, None)
 
+    async def dispatch_prompt(self, message: Message, prompt: str) -> BotAction | None:
+        """Answer ``prompt`` as if ``message`` had been an @mention carrying it.
+
+        For commands that wrap a question (``!speak <prompt>``): bot.py already ran
+        this message through dispatch_message (the router returned None for the
+        command), so its dedupe entry is cleared first, and the command text is
+        swapped for the bare prompt for the duration of the dispatch. [CA][REH]
+        """
+        msg_id = getattr(message, "id", None)
+        self._processed_recent_ts.pop(msg_id, None)
+        # The command addresses the bot explicitly; without this the mention-less
+        # prompt hits REQUIRE_MENTION_IN_GUILDS and is blocked as not_addressed.
+        self.record_gate_hint(msg_id, True)
+        original = message.content
+        try:
+            message.content = prompt
+            return await self.dispatch_message(message)
+        finally:
+            message.content = original
+
     async def dispatch_message(self, message: Message) -> BotAction | None:
         """Process a message and ensure exactly one response is generated (1 IN > 1 OUT rule)."""
         # Demoted from .info() -- pure tracing breadcrumb on the every-message hot
