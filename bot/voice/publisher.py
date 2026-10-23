@@ -4,7 +4,6 @@ import asyncio
 import contextlib
 import json
 import logging
-import shutil
 import time
 import wave
 from dataclasses import dataclass
@@ -56,8 +55,16 @@ class VoiceMessagePublisher:
         if self._tools_checked:
             return self._tools_ok
         self._tools_checked = True
-        ffmpeg_path = shutil.which("ffmpeg")
-        ffprobe_path = shutil.which("ffprobe")
+        # Same binaries as the transcode/STT path: on Synology only the ffmpeg7
+        # package has libopus, and it ships "ffprobe7" (no plain "ffprobe" on PATH),
+        # which used to disable native voice on every run. [REH]
+        from bot.stt_pipeline.ffmpeg_runtime import resolve_ffmpeg_bin, resolve_ffprobe_bin
+
+        try:
+            ffmpeg_path = resolve_ffmpeg_bin()
+        except RuntimeError:
+            ffmpeg_path = None
+        ffprobe_path = resolve_ffprobe_bin()
         self._tools_ok = bool(ffmpeg_path) and bool(ffprobe_path)
         if not self._tools_ok:
             self.logger.warning("voice.native.tools_missing | ffmpeg/ffprobe not found; disabling native voice for this run")
@@ -387,8 +394,13 @@ class VoiceMessagePublisher:
     async def _probe_duration(self, path: Path) -> float | None:
         """Probe audio duration using ffprobe; return seconds (rounded to 0 decimals per reference) or None."""
         try:
+            from bot.stt_pipeline.ffmpeg_runtime import resolve_ffprobe_bin
+
+            ffprobe = resolve_ffprobe_bin()
+            if not ffprobe:
+                return None
             proc = await asyncio.create_subprocess_exec(
-                "ffprobe",
+                ffprobe,
                 "-v",
                 "error",
                 "-hide_banner",
@@ -407,6 +419,6 @@ class VoiceMessagePublisher:
                 return None
             data = json.loads(stdout.decode("utf-8", errors="ignore"))
             dur = float(data.get("format", {}).get("duration", 0.0))
-            return float(round(dur))
+            return round(dur, 2)  # whole-second rounding made short clips report 0s
         except Exception:  # noqa: BLE001
             return None

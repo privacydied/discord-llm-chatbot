@@ -109,3 +109,22 @@ def resolve_ffmpeg_bin(*, logger: Any | None = None) -> str:
 
     msg = "ffmpeg executable not found; set STT_FFMPEG_BIN to an installed ffmpeg binary"
     raise RuntimeError(msg)
+
+
+# ffprobe: Synology's base system has none; the ffmpeg7 package ships ffprobe7.
+SYNOLOGY_FFPROBE7 = "/usr/local/bin/ffprobe7"
+_FFPROBE_BIN_CACHE: str | None = None
+
+
+def resolve_ffprobe_bin() -> str | None:
+    """Resolve (and cache) an ffprobe binary; None when none is installed. [REH]"""
+    global _FFPROBE_BIN_CACHE
+    if _FFPROBE_BIN_CACHE:
+        return _FFPROBE_BIN_CACHE
+    candidates = [(os.getenv(k) or "").strip() for k in ("FFPROBE_BIN", "FFPROBE_BINARY")]
+    for candidate in [c for c in candidates if c] + ["ffprobe7", SYNOLOGY_FFPROBE7, "ffprobe"]:
+        found = str(Path(candidate)) if os.path.sep in candidate and Path(candidate).exists() else shutil.which(candidate)
+        if found:
+            _FFPROBE_BIN_CACHE = found
+            return found
+    return None
