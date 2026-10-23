@@ -791,12 +791,16 @@ class LLMBot(commands.Bot):
                                     changed_keys.add(str(k))
                             upper = {k.upper() for k in changed_keys}
                             # Hot-reload TTS
-                            if any(k.startswith("TTS_") for k in upper):
-                                try:
-                                    if getattr(self, "tts_manager", None) and getattr(self.tts_manager, "_executor", None):
-                                        self.tts_manager._executor.shutdown(wait=False)
-                                except (AttributeError, TypeError, OSError) as e:
-                                    self.logger.debug(f"TTS executor shutdown failed: {e}")
+                            if any(k.startswith(("TTS_", "POCKET_TTS_")) for k in upper):
+                                # Close the old manager: it may own a running Pocket server,
+                                # which would otherwise be orphaned (reused by the new engine
+                                # but never idle-stopped). [RM]
+                                old_tts = getattr(self, "tts_manager", None)
+                                if old_tts is not None:
+                                    try:
+                                        await asyncio.wait_for(old_tts.close(), timeout=10.0)
+                                    except Exception as e:  # noqa: BLE001
+                                        self.logger.warning(f"TTS manager close on reload failed: {e}")
                                 try:
                                     from bot.tts.interface import TTSManager
 

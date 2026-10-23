@@ -105,6 +105,7 @@ async def test_autostart_spawns_server_waits_for_health_and_idle_stops(tmp_path,
         "web.run_app(app, host='127.0.0.1', port=port, print=None)\n",
     )
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))  # the child inherits os.environ
+    monkeypatch.delenv("TTS_VOICE", raising=False)  # default voice, independent of the live .env
     engine = PocketTTSEngine(
         {
             "POCKET_TTS_URL": f"http://127.0.0.1:{unused_tcp_port}",
@@ -137,6 +138,7 @@ async def test_autostart_without_interpreter_fails_clearly(unused_tcp_port):
 @pytest.mark.parametrize("legacy", ["kokoro-onnx", "kokoro", "kokoro-v8", ""])
 def test_manager_maps_legacy_and_default_backends_to_pocket(tmp_path, legacy, monkeypatch):
     monkeypatch.delenv("TTS_ENGINE", raising=False)
+    monkeypatch.delenv("TTS_VOICE", raising=False)
     manager = TTSManager(config={"TTS_ENGINE": legacy, "TTS_CACHE_DIR": str(tmp_path)})
     assert manager.backend == "pocket"
     assert isinstance(manager._engine, PocketTTSEngine)
