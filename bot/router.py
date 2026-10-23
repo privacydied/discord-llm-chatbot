@@ -10678,7 +10678,10 @@ class Router:
                     self.logger.warning(f"Permission check failed, attempting upload anyway: {perm_e}")
                     await original_msg.channel.send(files=files_to_upload)
 
-            return BotAction(content="Vision generation completed successfully")
+            # The image (or the upload-failure note) is already posted above and the
+            # progress card shows the result; a follow-up status line was just noise.
+            # No payload -> the sender posts nothing. [CA]
+            return BotAction()
 
         except Exception as e:
             self.logger.error(f"❌ Vision success handling failed: {e}", exc_info=True)
