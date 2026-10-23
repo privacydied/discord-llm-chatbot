@@ -75,8 +75,8 @@ class _Session:
         return self._next("GET", url, kw)
 
 
-def _cf(session) -> CloudflareWorkersAIPlugin:
-    plugin = CloudflareWorkersAIPlugin("cloudflare", {"account_id": "acct123"}, "cf-token-abcdefghij")
+def _cf(session, models="@cf/black-forest-labs/flux-2-klein-4b") -> CloudflareWorkersAIPlugin:
+    plugin = CloudflareWorkersAIPlugin("cloudflare", {"account_id": "acct123", "model": models}, "cf-token-abcdefghij")
     plugin.session = session
     return plugin
 
@@ -301,3 +301,54 @@ def test_ledger_fsync_is_opt_in(monkeypatch, tmp_path):
     manager._append_jsonl(tmp_path / "a.jsonl", {"x": 2})
     assert len(calls) == 1
     assert _os.path.getsize(tmp_path / "a.jsonl") > 0
+
+
+# -- cloudflare model ladder: klein-9b first, klein-4b after -------------------------
+
+_LADDER = "@cf/black-forest-labs/flux-2-klein-9b,@cf/black-forest-labs/flux-2-klein-4b"
+_QUOTA = '{"errors":[{"code":4006,"message":"you have used up your daily free allocation of 10,000 neurons"}]}'
+_OK = json.dumps({"result": {"image": "QUJD"}})
+
+
+def test_default_ladder_is_9b_then_4b():
+    plugin = CloudflareWorkersAIPlugin("cloudflare", {"account_id": "a"}, "t")
+    assert plugin.models == ["@cf/black-forest-labs/flux-2-klein-9b", "@cf/black-forest-labs/flux-2-klein-4b"]
+
+
+async def test_9b_used_first():
+    session = _Session([_Resp(200, _OK)])
+    job = await _cf(session, _LADDER).submit(_request())
+    assert session.calls[0][1].endswith("flux-2-klein-9b")
+    assert len(session.calls) == 1 and job
+
+
+async def test_9b_quota_falls_to_4b_and_skips_9b_rest_of_day():
+    session = _Session([_Resp(429, _QUOTA), _Resp(200, _OK), _Resp(200, _OK)])
+    plugin = _cf(session, _LADDER)
+    job = await plugin.submit(_request())
+    assert [c[1].rsplit("/", 1)[-1] for c in session.calls] == ["flux-2-klein-9b", "flux-2-klein-4b"]
+    assert (await plugin.fetch_result(job)).metadata["model"].endswith("klein-4b")
+    await plugin.submit(_request())
+    assert session.calls[2][1].endswith("flux-2-klein-4b")  # 9b skipped until 00:00 UTC
+    plugin._utc_day = lambda: "2099-01-01"
+    assert plugin._available_models()[0].endswith("klein-9b")  # back after the reset
+
+
+async def test_all_models_out_raises_quota():
+    plugin = _cf(_Session([_Resp(429, _QUOTA), _Resp(429, _QUOTA)]), _LADDER)
+    with pytest.raises(VisionError) as err:
+        await plugin.submit(_request())
+    assert err.value.error_type == VisionErrorType.QUOTA_EXCEEDED
+    with pytest.raises(VisionError) as err:  # no calls at all once both are exhausted
+        await plugin.submit(_request())
+    assert err.value.error_type == VisionErrorType.QUOTA_EXCEEDED
+
+
+async def test_9b_outage_falls_through_but_auth_and_filter_do_not():
+    session = _Session([_Resp(503, "down"), _Resp(200, _OK)])
+    assert await _cf(session, _LADDER).submit(_request())
+    for status, text, kind in ((401, "bad", VisionErrorType.AUTHENTICATION_ERROR), (400, "flagged nsfw", VisionErrorType.CONTENT_FILTERED)):
+        session = _Session([_Resp(status, text)])
+        with pytest.raises(VisionError) as err:
+            await _cf(session, _LADDER).submit(_request())
+        assert err.value.error_type == kind and len(session.calls) == 1

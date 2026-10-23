@@ -700,7 +700,8 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         # Free image-edit providers (bot/vision/free_edit_providers.py). Keys read raw. [CA]
         "CLOUDFLARE_ACCOUNT_ID": (env_getter("CLOUDFLARE_ACCOUNT_ID", "") or "").strip().strip('"'),
         "CLOUDFLARE_API_TOKEN": (env_getter("CLOUDFLARE_API_TOKEN", "") or "").strip().strip('"'),
-        "CLOUDFLARE_IMAGE_EDIT_MODEL": (env_getter("CLOUDFLARE_IMAGE_EDIT_MODEL", "") or "").strip() or "@cf/black-forest-labs/flux-2-klein-4b",
+        # Ordered, comma-separated: tried in turn (quota/outage falls to the next). [PA]
+        "CLOUDFLARE_IMAGE_EDIT_MODEL": (env_getter("CLOUDFLARE_IMAGE_EDIT_MODEL", "") or "").strip() or "@cf/black-forest-labs/flux-2-klein-9b,@cf/black-forest-labs/flux-2-klein-4b",
         "HF_SPACE_EDIT_ENABLED": _parse_bool_str(_clean_env_value(env_getter("HF_SPACE_EDIT_ENABLED", None)), True),
         "HF_SPACE_EDIT_SPACE": (env_getter("HF_SPACE_EDIT_SPACE", "") or "").strip() or "black-forest-labs/FLUX.1-Kontext-dev",
         "HF_SPACE_EDIT_TIMEOUT_S": _safe_float(env_getter("HF_SPACE_EDIT_TIMEOUT_S", None), "120", "HF_SPACE_EDIT_TIMEOUT_S"),

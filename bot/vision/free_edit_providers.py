@@ -31,7 +31,19 @@ from .unified_adapter import NormalizedRequest, ProviderPlugin, UnifiedJobStatus
 logger = get_logger(__name__)
 
 CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4"
-CLOUDFLARE_DEFAULT_MODEL = "@cf/black-forest-labs/flux-2-klein-4b"
+CLOUDFLARE_DEFAULT_MODELS = ("@cf/black-forest-labs/flux-2-klein-9b", "@cf/black-forest-labs/flux-2-klein-4b")
+# Live A/B (2026-10-23, same photo + prompt): klein-9b cleanest and fastest (2.9s)
+# but ~1,400 neurons/edit (~7/day free); klein-4b ~125 (~80/day) with flatter
+# colour edits. All models share one daily pool, so 9b first, 4b after. [PA]
+_CF_FALLTHROUGH_ERRORS = frozenset(
+    {
+        VisionErrorType.QUOTA_EXCEEDED,
+        VisionErrorType.RATE_LIMITED,
+        VisionErrorType.SERVER_ERROR,
+        VisionErrorType.CONNECTION_ERROR,
+        VisionErrorType.PROVIDER_ERROR,
+    }
+)
 CLOUDFLARE_INPUT_MAX_SIDE = 511  # docs: "All input images must be smaller than 512x512"
 CLOUDFLARE_MIN_SIDE, CLOUDFLARE_MAX_SIDE = 256, 1920
 OUTPUT_LONG_SIDE = 1024
@@ -141,10 +153,27 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
         super().__init__(name, config, api_key)
         self.base_url = str(config.get("base_url") or CLOUDFLARE_API_BASE).rstrip("/")
         self.model_map = {VisionTask.IMAGE_TO_IMAGE: self.model}
+        # model -> UTC day its daily allocation ran out (skip it until the reset)
+        self._exhausted_on: dict[str, str] = {}
+
+    @property
+    def models(self) -> list[str]:
+        """Ordered model ladder (CLOUDFLARE_IMAGE_EDIT_MODEL, comma-separated)."""
+        raw = self.config.get("model") or ",".join(CLOUDFLARE_DEFAULT_MODELS)
+        parts = raw if isinstance(raw, (list, tuple)) else str(raw).split(",")
+        return [m.strip() for m in parts if str(m).strip()] or list(CLOUDFLARE_DEFAULT_MODELS)
 
     @property
     def model(self) -> str:
-        return str(self.config.get("model") or CLOUDFLARE_DEFAULT_MODEL)
+        return self.models[0]
+
+    @staticmethod
+    def _utc_day() -> str:
+        return time.strftime("%Y-%m-%d", time.gmtime())
+
+    def _available_models(self) -> list[str]:
+        today = self._utc_day()
+        return [m for m in self.models if self._exhausted_on.get(m) != today]
 
     @property
     def account_id(self) -> str:
@@ -164,7 +193,7 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
         import aiohttp
 
         width, height = output_dims(orig_w, orig_h)
-        form = aiohttp.FormData()
+        form = aiohttp.FormData()  # same fields for klein-4b/9b and flux-2-dev
         form.add_field("prompt", request.prompt)
         form.add_field("input_image_0", png, filename="input.jpg", content_type="image/jpeg")
         form.add_field("width", str(width))
@@ -184,7 +213,28 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
             )
         png, orig_w, orig_h = await prepare_input_image(request, CLOUDFLARE_INPUT_MAX_SIDE)
         await self.startup()
-        url = f"{self.base_url}/accounts/{self.account_id}/ai/run/{self.model}"
+        models = self._available_models()
+        if not models:
+            raise VisionError(
+                message="cloudflare: every model's daily allocation is used", error_type=VisionErrorType.QUOTA_EXCEEDED, user_message="Today's free Cloudflare image allowance is used up (resets 00:00 UTC)."
+            )
+        last_error: VisionError | None = None
+        for model in models:
+            try:
+                image = await self._run_model(model, request, png, orig_w, orig_h)
+            except VisionError as exc:
+                if exc.error_type not in _CF_FALLTHROUGH_ERRORS:
+                    raise
+                if exc.error_type == VisionErrorType.QUOTA_EXCEEDED:
+                    self._exhausted_on[model] = self._utc_day()
+                logger.warning(f"cloudflare.model_failed model={model} error_type={exc.error_type.value} trying_next={model != models[-1]}")
+                last_error = exc
+                continue
+            return self._store([_data_url(image)], model)
+        raise last_error  # type: ignore[misc] - loop ran at least once
+
+    async def _run_model(self, model: str, request: NormalizedRequest, png: bytes, orig_w: int, orig_h: int) -> str:
+        url = f"{self.base_url}/accounts/{self.account_id}/ai/run/{model}"
         try:
             async with self.session.post(url, data=self._form(request, png, orig_w, orig_h), headers={"Authorization": f"Bearer {self.api_key}"}) as response:
                 text = await response.text()
@@ -197,7 +247,7 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
                 error_type=VisionErrorType.CONNECTION_ERROR,
                 user_message="Couldn't reach Cloudflare. Please try again.",
             ) from exc
-        return self._store([_data_url(self._extract_image(text))], self.model)
+        return self._extract_image(text)
 
     @staticmethod
     def _extract_image(text: str) -> str:
