@@ -31,6 +31,7 @@ from .money import Money
 from .pricing_loader import get_pricing_table
 from .safety_filter import VisionSafetyFilter
 from .types import (
+    EXPECTED_VISION_ERRORS,
     VisionError,
     VisionErrorType,
     VisionJob,
@@ -490,7 +491,11 @@ class VisionOrchestrator:
 
             await self.budget_manager.release_reservation(job.request.user_id, self._ensure_money(job.request.estimated_cost))
 
-            self.logger.exception(f"Job failed with VisionError - job_id: {job_id[:8]}, error_type: {e.error_type.value}, message: {e.message}")
+            summary = f"Job failed with VisionError - job_id: {job_id[:8]}, error_type: {e.error_type.value}, message: {e.message}"
+            if e.error_type in EXPECTED_VISION_ERRORS:
+                self.logger.warning(summary)
+            else:
+                self.logger.exception(summary)
 
         except Exception as e:
             # Handle unexpected errors

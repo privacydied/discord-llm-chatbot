@@ -95,6 +95,21 @@ class VisionErrorType(Enum):
     UNKNOWN_ERROR = "unknown_error"
 
 
+# Outcomes the provider reported cleanly (empty account, blocked prompt, rate
+# limit, bad input). Already handled and shown to the user, so they are logged
+# as one-line warnings, not ERROR + traceback. [REH]
+EXPECTED_VISION_ERRORS: frozenset[VisionErrorType] = frozenset(
+    {
+        VisionErrorType.QUOTA_EXCEEDED,
+        VisionErrorType.CONTENT_FILTERED,
+        VisionErrorType.RATE_LIMITED,
+        VisionErrorType.VALIDATION_ERROR,
+        VisionErrorType.INVALID_REQUEST,
+        VisionErrorType.UNSUPPORTED_TASK,
+    }
+)
+
+
 @dataclass
 class VisionError(Exception):
     """Structured error with categorization and user-friendly messaging."""

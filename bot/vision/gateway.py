@@ -25,6 +25,7 @@ from bot.utils.logging import get_logger
 from .money import Money
 from .pricing_loader import get_pricing_table
 from .types import (
+    EXPECTED_VISION_ERRORS,
     VisionError,
     VisionErrorType,
     VisionProvider,
@@ -265,7 +266,8 @@ class VisionGateway:
             # job that could never succeed (e.g. the provider account is out of
             # credit) and erased the error_type downstream handlers key off. [REH]
             if isinstance(e, VisionError):
-                self.logger.error(
+                log = self.logger.warning if e.error_type in EXPECTED_VISION_ERRORS else self.logger.error
+                log(
                     "vision.gateway.failed job=%s error_type=%s provider=%s message=%s",
                     job_id,
                     getattr(e.error_type, "value", e.error_type),
