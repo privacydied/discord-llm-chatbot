@@ -190,3 +190,55 @@ async def test_publish_blocks_on_50173(monkeypatch, tmp_path: Path) -> None:
     assert res2.ok is False
     # Ensure upload flow didn't fire again
     assert attachments_mock.call_count == 1
+
+
+# -- 50173 / Send Voice Messages permission ------------------------------------------
+
+
+class _RefusingSession:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def post(self, url, headers=None, json=None, timeout=None):
+        self.calls += 1
+        resp = _FakeResp(status=400, payload={"message": "Cannot send voice messages in this channel", "code": 50173})
+        resp.request_info = MagicMock(real_url="https://discord.com/api/v10/channels/1/messages")
+        resp.history = ()
+        resp.headers = {}
+        return resp
+
+
+@pytest.mark.asyncio
+async def test_50173_is_not_retried() -> None:
+    import aiohttp
+
+    pub = VoiceMessagePublisher()
+    session = _RefusingSession()
+    with pytest.raises(aiohttp.ClientResponseError) as exc:
+        await pub._post_voice_message(session=session, channel_id=1, token="X", uploaded_filename="u", duration_secs=1.0, waveform_b64="AA==", reply_to_id=None)
+    assert session.calls == 1
+    assert exc.value.retryable is False
+
+
+def _guild_msg(send_voice):
+    from types import SimpleNamespace
+
+    perms = SimpleNamespace(send_voice_messages=send_voice)
+    return SimpleNamespace(id=5, guild=SimpleNamespace(me=object()), channel=SimpleNamespace(id=1392318624508678154, permissions_for=lambda me: perms))
+
+
+@pytest.mark.asyncio
+async def test_missing_send_voice_messages_skips_upload(monkeypatch, tmp_path) -> None:
+    from types import SimpleNamespace
+
+    import bot.voice.publisher as mod
+
+    monkeypatch.setattr(mod, "load_config", lambda: {"VOICE_ENABLE_NATIVE": True, "DISCORD_TOKEN": "X"})
+    pub = VoiceMessagePublisher()
+    pub._attachments_create = AsyncMock()
+    res = await pub.publish(message=_guild_msg(False), wav_path=tmp_path / "x.wav")
+    assert res.ok is False
+    pub._attachments_create.assert_not_awaited()
+    assert VoiceMessagePublisher._lacks_voice_permission(_guild_msg(True)) is False
+    assert VoiceMessagePublisher._lacks_voice_permission(SimpleNamespace(guild=None, channel=SimpleNamespace(id=1))) is False  # DM
+    assert VoiceMessagePublisher._lacks_voice_permission(MagicMock()) is False  # mocks never refuse

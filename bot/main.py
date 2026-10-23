@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import os
 import sys
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import aiohttp
 import discord
@@ -119,34 +119,65 @@ async def main(bot_ref: dict[str, LLMBot] | None = None) -> NoReturn:
     await spawn_background_tasks(bot)
     await start_file_watcher()
 
-    max_retries = 3
-    base_delay = 5  # seconds
-    for attempt in range(max_retries):
+    exit_code = await connect_with_retries(bot, config["DISCORD_TOKEN"], logger)
+    shutdown_logging_and_exit(exit_code)
+
+
+CONNECT_MAX_ATTEMPTS = 6
+CONNECT_BASE_DELAY_S = 5.0
+CONNECT_MAX_DELAY_S = 60.0
+
+
+def _is_transient_connect_error(exc: BaseException) -> bool:
+    """True when ``exc`` (or what it was raised while handling) is a network/5xx blip.
+
+    A gateway 503 on the initial websocket handshake surfaces as discord.py's own
+    ``AttributeError: 'NoneType' object has no attribute 'sequence'`` (it tries to
+    resume a websocket that never opened) raised while handling the
+    ``WSServerHandshakeError``, so the whole chain is checked. [REH]
+    """
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        seen.add(id(cur))
+        if isinstance(cur, discord.LoginFailure):
+            return False
+        if isinstance(cur, discord.HTTPException):
+            return int(getattr(cur, "status", 0) or 0) >= 500 or getattr(cur, "status", None) == 429
+        if isinstance(cur, (aiohttp.ClientError, discord.GatewayNotFound, discord.ConnectionClosed, OSError, TimeoutError)):
+            return True
+        cur = cur.__cause__ or cur.__context__
+    return False
+
+
+async def connect_with_retries(bot: Any, token: str, logger: Any, sleep: Any = asyncio.sleep) -> int:
+    """Log in once, then connect; retry transient failures with capped backoff.
+
+    Only ``connect`` is retried: ``login`` runs ``setup_hook`` (cogs, tasks), so
+    calling ``bot.start`` again would set everything up twice. Returns the exit code.
+    """
+    logged_in = False
+    for attempt in range(1, CONNECT_MAX_ATTEMPTS + 1):
         try:
-            logger.info(f"Connecting to Discord... (Attempt {attempt + 1}/{max_retries})")
+            logger.info(f"Connecting to Discord... (Attempt {attempt}/{CONNECT_MAX_ATTEMPTS})")
+            if not logged_in:
+                await bot.login(token)
+                logged_in = True
             logger.info("🚀 Bot is ready and operational!")
-
-            # This call blocks until bot disconnects
-            await bot.start(config["DISCORD_TOKEN"])
-
-            # If we reach here, bot disconnected gracefully
+            await bot.connect(reconnect=True)  # blocks until the bot disconnects
             logger.info("Bot disconnected gracefully")
-            shutdown_logging_and_exit(0)
-
-        except (discord.HTTPException, aiohttp.ClientConnectorError):
-            if attempt == max_retries - 1:
-                logger.exception("Failed to log in. Please check your Discord token.")
-                shutdown_logging_and_exit(1)
-            delay = base_delay * (2**attempt)
-            logger.warning(f"Connection failed, retrying in {delay}s...")
-            await asyncio.sleep(delay)
+            return 0
+        except discord.LoginFailure:
+            logger.critical("Discord rejected the token (LoginFailure). Check DISCORD_TOKEN.")
+            return 1
         except Exception as e:
-            logger.critical(f"Unexpected error during bot execution: {e}", exc_info=True)
-            shutdown_logging_and_exit(1)
-
-    # If all retries failed
-    logger.critical("All connection attempts failed")
-    shutdown_logging_and_exit(1)
+            if not _is_transient_connect_error(e) or attempt == CONNECT_MAX_ATTEMPTS:
+                logger.critical(f"Unexpected error during bot execution: {e}", exc_info=True)
+                return 1
+            delay = min(CONNECT_BASE_DELAY_S * (2 ** (attempt - 1)), CONNECT_MAX_DELAY_S)
+            logger.warning(f"Discord connection failed ({type(e).__name__}: {e}); retrying in {delay:.0f}s")
+            await sleep(delay)
+    return 1
 
 
 def run_bot() -> None:

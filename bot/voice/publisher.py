@@ -72,6 +72,18 @@ class VoiceMessagePublisher:
             self.logger.debug(f"voice.native.tools_ok | ffmpeg={ffmpeg_path} ffprobe={ffprobe_path}")
         return self._tools_ok
 
+    @staticmethod
+    def _lacks_voice_permission(message: discord.Message) -> bool:
+        """True only when the guild channel definitely denies the bot Send Voice Messages."""
+        permissions_for = getattr(getattr(message, "channel", None), "permissions_for", None)
+        me = getattr(getattr(message, "guild", None), "me", None)
+        if not callable(permissions_for) or me is None:
+            return False  # DMs or unknown: let Discord decide
+        try:
+            return getattr(permissions_for(me), "send_voice_messages", None) is False
+        except Exception:  # noqa: BLE001 - permission probe must never break sending
+            return False
+
     def _is_blocked(self, channel_id: int) -> bool:
         now = time.monotonic()
         exp = self._blocked_channels.get(channel_id)
@@ -112,6 +124,9 @@ class VoiceMessagePublisher:
                         status=resp.status,
                         message=text,
                     )
+                    # Only 429/5xx are worth retrying; a 4xx such as 50173 ("Cannot send
+                    # voice messages in this channel") is permanent. [REH]
+                    err.retryable = resp.status == 429 or resp.status >= 500
                     # Respect Retry-After if provided by Discord [REH]
                     try:
                         ra = resp.headers.get("Retry-After")
@@ -149,6 +164,9 @@ class VoiceMessagePublisher:
                         status=resp.status,
                         message=text,
                     )
+                    # Only 429/5xx are worth retrying; a 4xx such as 50173 ("Cannot send
+                    # voice messages in this channel") is permanent. [REH]
+                    err.retryable = resp.status == 429 or resp.status >= 500
                     try:
                         ra = resp.headers.get("Retry-After")
                         if ra is not None:
@@ -202,6 +220,9 @@ class VoiceMessagePublisher:
                         status=resp.status,
                         message=text,
                     )
+                    # Only 429/5xx are worth retrying; a 4xx such as 50173 ("Cannot send
+                    # voice messages in this channel") is permanent. [REH]
+                    err.retryable = resp.status == 429 or resp.status >= 500
                     try:
                         ra = resp.headers.get("Retry-After")
                         if ra is not None:
@@ -256,6 +277,13 @@ class VoiceMessagePublisher:
         channel_id = getattr(message.channel, "id", None)
         if not channel_id:
             self.logger.error("voice.native.missing_channel_id")
+            return VoicePublishResult(message=None, ogg_path=None, ok=False)
+
+        # Pre-check SEND_VOICE_MESSAGES: Discord refuses with 50173 otherwise, and the
+        # normal audio-file send is the right path straight away. Strict "is False" so
+        # mocks/unknown permission objects never refuse. [REH]
+        if self._lacks_voice_permission(message):
+            self.logger.info(f"voice.native.no_permission | channel_id={channel_id} (role needs Send Voice Messages)")
             return VoicePublishResult(message=None, ogg_path=None, ok=False)
 
         # Skip early if we recently observed 50173 for this channel [REH]
