@@ -18,13 +18,19 @@ Behaviour:
   without Manage Webhooks it falls back to a normal bot message.
 - At most ``RSS_MAX_POSTS_PER_POLL`` items per feed per cycle (oldest first);
   an item is marked seen only after its post succeeds, so failures retry.
+- ``"mode": "random_daily"`` instead posts ONE random episode per day once
+  ``post_at`` (HH:MM, default 12:00) has passed in ``timezone`` (default
+  Europe/London). Episodes are drawn without repeats until every one has
+  been posted, then the draw starts over. The feed is fetched only when due.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import secrets
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -39,9 +45,16 @@ WEBHOOK_NAME = "ronin feeds"
 USER_AGENT = "Mozilla/5.0 (compatible; ronin-rss/1.0)"
 FETCH_TIMEOUT_S = 30.0
 DISCORD_TIMEOUT_S = 15.0
-MAX_FEED_BYTES = 10 * 1024 * 1024
+# Big back catalogues are real: Tin Foil Hat 13.7MB, Modern Wisdom 10.8MB (2026-10).
+# Conditional GET means the full body only downloads when the feed changed.
+MAX_FEED_BYTES = 32 * 1024 * 1024
 MIN_INTERVAL_S = 120.0
 SEEN_KEYS_CAP = 5000
+MODE_NEW = "new_items"
+MODE_RANDOM_DAILY = "random_daily"
+MODES = (MODE_NEW, MODE_RANDOM_DAILY)
+DEFAULT_TIMEZONE = "Europe/London"
+DEFAULT_POST_AT = "12:00"
 
 
 @dataclass(frozen=True)
@@ -54,6 +67,9 @@ class FeedConfig:
     template: str = DEFAULT_TEMPLATE
     trigger: str = TRIGGER_NEW
     enabled: bool = True
+    mode: str = MODE_NEW
+    post_at: str = DEFAULT_POST_AT
+    timezone: str = DEFAULT_TIMEZONE
 
     @property
     def state_id(self) -> str:
@@ -88,7 +104,15 @@ def _feed_from_entry(entry: Any, index: int) -> FeedConfig | None:
             template=str(entry.get("template") or DEFAULT_TEMPLATE),
             trigger=str(entry.get("trigger") or TRIGGER_NEW),
             enabled=bool(entry.get("enabled", True)),
+            mode=str(entry.get("mode") or MODE_NEW),
+            post_at=str(entry.get("post_at") or DEFAULT_POST_AT),
+            timezone=str(entry.get("timezone") or DEFAULT_TIMEZONE),
         )
+        if feed.mode not in MODES:
+            raise ValueError(f"mode must be one of {MODES}")
+        if feed.mode == MODE_RANDOM_DAILY:
+            _post_minute(feed.post_at)
+            _zone(feed.timezone)
         if feed.trigger not in TRIGGERS:
             raise ValueError(f"trigger must be one of {TRIGGERS}")
         unknown = validate_template(feed.template)
@@ -100,12 +124,31 @@ def _feed_from_entry(entry: Any, index: int) -> FeedConfig | None:
         return None
 
 
+def _post_minute(post_at: str) -> int:
+    """'HH:MM' -> minutes after midnight (ValueError when malformed)."""
+    hours, minutes = (int(part) for part in post_at.split(":"))
+    if not (0 <= hours < 24 and 0 <= minutes < 60):
+        raise ValueError(f"post_at out of range: {post_at}")
+    return hours * 60 + minutes
+
+
+def _zone(name: str):
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError(f"unknown timezone {name!r}") from exc
+
+
 @dataclass
 class FeedState:
     seen: list[str] = field(default_factory=list)
     initialized: bool = False
     etag: str = ""
     last_modified: str = ""
+    last_random_date: str = ""  # random_daily: local date of the last post
+    random_used: list[str] = field(default_factory=list)  # keys drawn this round
 
     @classmethod
     def from_dict(cls, data: Any) -> FeedState:
@@ -116,6 +159,8 @@ class FeedState:
             initialized=bool(data.get("initialized")),
             etag=str(data.get("etag") or ""),
             last_modified=str(data.get("last_modified") or ""),
+            last_random_date=str(data.get("last_random_date") or ""),
+            random_used=[str(k) for k in data.get("random_used") or []],
         )
 
     def remember(self, key: str) -> None:
@@ -168,6 +213,8 @@ class RssPoller:
         return posted
 
     async def _poll_feed(self, session: Any, feed: FeedConfig, state: FeedState) -> int:
+        if feed.mode == MODE_RANDOM_DAILY:
+            return await self._random_daily(session, feed, state)
         fetched = await self._fetch(session, feed, state)
         if fetched is None:
             return 0
@@ -191,6 +238,35 @@ class RssPoller:
             state.remember(item_key(item, feed.trigger))
             posted += 1
         return posted
+
+    @staticmethod
+    def _random_due(feed: FeedConfig, state: FeedState, now: datetime | None = None) -> str | None:
+        """Today's local date when a random_daily post is due, else None."""
+        local = (now or datetime.now(tz=_zone(feed.timezone))).astimezone(_zone(feed.timezone))
+        today = local.date().isoformat()
+        if state.last_random_date == today or local.hour * 60 + local.minute < _post_minute(feed.post_at):
+            return None
+        return today
+
+    async def _random_daily(self, session: Any, feed: FeedConfig, state: FeedState, now: datetime | None = None) -> int:
+        """Post one random, not-yet-drawn episode once a day. [CA]"""
+        today = self._random_due(feed, state, now)
+        if today is None:
+            return 0
+        fetched = await self._fetch(session, feed, FeedState())  # no conditional GET: we need the items
+        if fetched is None or not fetched[1]:
+            return 0
+        feed_title, items = fetched
+        used = set(state.random_used)
+        pool = [item for item in items if item_key(item) not in used]
+        if not pool:  # every episode drawn: start a new round
+            state.random_used, pool = [], list(items)
+        item = secrets.choice(pool)
+        await self._post(feed, item, feed_title)
+        state.random_used.append(item_key(item))
+        state.last_random_date = today
+        logger.info(f"rss.random_daily feed={feed.name!r} drawn={len(state.random_used)}/{len(items)}")
+        return 1
 
     async def _fetch(self, session: Any, feed: FeedConfig, state: FeedState) -> tuple[str, list[FeedItem]] | None:
         headers = {}

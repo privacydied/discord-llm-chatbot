@@ -276,3 +276,70 @@ async def test_oversized_feed_rejected(tmp_path, monkeypatch):
     monkeypatch.setattr(poller_mod, "MAX_FEED_BYTES", 100)
     with pytest.raises(RuntimeError, match="larger than"):
         await poller_mod._read_capped(_Resp(200, b"x" * 500))
+
+
+# -- random_daily --------------------------------------------------------------------
+
+from datetime import datetime as _dt  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
+
+_RANDOM = FeedConfig(name="CumTown", url="https://c/rss", channel_id=5, mode="random_daily", post_at="12:00", timezone="Europe/London")
+_LONDON = ZoneInfo("Europe/London")
+
+
+def _at(hour, minute=0, day=23):
+    return _dt(2026, 10, day, hour, minute, tzinfo=_LONDON)
+
+
+async def test_random_daily_waits_for_post_time_then_posts_once_per_day(tmp_path):
+    poller = _poller(tmp_path)
+    poller._post = AsyncMock()
+    state = FeedState()
+    feed_xml = _rss(("3", "Ep 3"), ("2", "Ep 2"), ("1", "Ep 1"))
+    assert await poller._random_daily(_Session([]), _RANDOM, state, now=_at(11, 59)) == 0  # not yet, no fetch
+    assert await poller._random_daily(_Session([_Resp(200, feed_xml)]), _RANDOM, state, now=_at(12, 0)) == 1
+    assert state.last_random_date == "2026-10-23" and len(state.random_used) == 1
+    assert await poller._random_daily(_Session([]), _RANDOM, state, now=_at(18, 0)) == 0  # once a day
+    assert await poller._random_daily(_Session([_Resp(200, feed_xml)]), _RANDOM, state, now=_at(12, 5, day=24)) == 1
+
+
+async def test_random_daily_no_repeats_until_all_drawn_then_restarts(tmp_path):
+    poller = _poller(tmp_path)
+    poller._post = AsyncMock()
+    state = FeedState()
+    feed_xml = _rss(("3", "Ep 3"), ("2", "Ep 2"), ("1", "Ep 1"))
+    for day in (1, 2, 3):
+        await poller._random_daily(_Session([_Resp(200, feed_xml)]), _RANDOM, state, now=_at(13, day=day))
+    titles = [c.args[1].title for c in poller._post.await_args_list]
+    assert sorted(titles) == ["Ep 1", "Ep 2", "Ep 3"]  # each exactly once
+    await poller._random_daily(_Session([_Resp(200, feed_xml)]), _RANDOM, state, now=_at(13, day=4))
+    assert len(state.random_used) == 1  # new round
+
+
+async def test_random_daily_ignores_etag_and_failed_post_retries(tmp_path):
+    poller = _poller(tmp_path)
+    poller._post = AsyncMock(side_effect=RuntimeError("discord down"))
+    state = FeedState(etag='"abc"')
+    session = _Session([_Resp(200, _rss(("1", "Ep 1")))])
+    with pytest.raises(RuntimeError):
+        await poller._random_daily(session, _RANDOM, state, now=_at(12, 30))
+    assert "If-None-Match" not in session.requests[0]
+    assert state.last_random_date == "" and state.random_used == []  # retried next poll
+
+
+def test_random_daily_config_validation(tmp_path):
+    path = tmp_path / "feeds.json"
+    path.write_text(
+        json.dumps(
+            {
+                "feeds": [
+                    {"url": "https://ok/rss", "channel_id": 1, "mode": "random_daily", "post_at": "09:30"},
+                    {"url": "https://a/rss", "channel_id": 1, "mode": "random_daily", "post_at": "25:00"},
+                    {"url": "https://b/rss", "channel_id": 1, "mode": "random_daily", "timezone": "Mars/Base"},
+                    {"url": "https://c/rss", "channel_id": 1, "mode": "weekly"},
+                ],
+            },
+        ),
+    )
+    (feed,) = load_feed_configs(path)
+    assert feed.mode == "random_daily" and feed.post_at == "09:30" and feed.timezone == "Europe/London"
