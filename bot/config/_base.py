@@ -697,6 +697,17 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "VL_NOTES_MAX_CHARS": _safe_int(env_getter("VL_NOTES_MAX_CHARS", None), "600", "VL_NOTES_MAX_CHARS"),
         "TEXT_FINAL_MAX_CHARS": _safe_int(env_getter("TEXT_FINAL_MAX_CHARS", None), "420", "TEXT_FINAL_MAX_CHARS"),
         "VISION_API_KEY": _clean_env_value(env_getter("VISION_API_KEY", None)),
+        # Free image-edit providers (bot/vision/free_edit_providers.py). Keys read raw. [CA]
+        "CLOUDFLARE_ACCOUNT_ID": (env_getter("CLOUDFLARE_ACCOUNT_ID", "") or "").strip().strip('"'),
+        "CLOUDFLARE_API_TOKEN": (env_getter("CLOUDFLARE_API_TOKEN", "") or "").strip().strip('"'),
+        "CLOUDFLARE_IMAGE_EDIT_MODEL": (env_getter("CLOUDFLARE_IMAGE_EDIT_MODEL", "") or "").strip() or "@cf/black-forest-labs/flux-2-klein-4b",
+        "HF_SPACE_EDIT_ENABLED": _parse_bool_str(_clean_env_value(env_getter("HF_SPACE_EDIT_ENABLED", None)), True),
+        "HF_SPACE_EDIT_SPACE": (env_getter("HF_SPACE_EDIT_SPACE", "") or "").strip() or "black-forest-labs/FLUX.1-Kontext-dev",
+        "HF_SPACE_EDIT_TIMEOUT_S": _safe_float(env_getter("HF_SPACE_EDIT_TIMEOUT_S", None), "120", "HF_SPACE_EDIT_TIMEOUT_S"),
+        "HF_TOKEN": (env_getter("HF_TOKEN", "") or "").strip().strip('"'),
+        "NOTSOBOT_API_TOKEN": (env_getter("NOTSOBOT_API_TOKEN", "") or "").strip().strip('"'),
+        # Bench after an out-of-credit reply; an empty balance does not refill by itself. [REH]
+        "VISION_PROVIDER_QUOTA_COOLDOWN_S": _safe_float(env_getter("VISION_PROVIDER_QUOTA_COOLDOWN_S", None), "900", "VISION_PROVIDER_QUOTA_COOLDOWN_S"),
         "VISION_ALLOWED_PROVIDERS": [s.strip() for s in env_getter("VISION_ALLOWED_PROVIDERS", "together,novita").split(",") if s.strip()],
         "VISION_DEFAULT_PROVIDER": env_getter("VISION_DEFAULT_PROVIDER", "together"),
         "VISION_MODEL": _clean_env_value(env_getter("VISION_MODEL", None)) or "",

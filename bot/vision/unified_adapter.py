@@ -133,6 +133,10 @@ NOVITA_IMAGE_TO_IMAGE_ENDPOINT = "txt2img"
 # total timeout: a model that hangs (NVIDIA's flux.1-schnell answers nothing at all)
 # held a job for five minutes instead of failing over. [CMV][REH][PA]
 DEFAULT_PROVIDER_TIMEOUT_S = 300.0
+# Placeholder key for the keyless Hugging Face Space provider (never sent: only hf_* tokens are).
+HFSPACE_ANONYMOUS_KEY = "anonymous-public-space"
+# Providers whose key must never fall back to VISION_API_KEY on hot reload. [SFT]
+_OWN_KEY_PROVIDERS = frozenset({"notsobot", "cloudflare", "hfspace"})
 MIN_PROVIDER_TIMEOUT_S = 10.0
 
 
@@ -1778,15 +1782,11 @@ class UnifiedVisionAdapter:
             if provider is None:
                 continue
             provider.config = provider_config
-            if name == "openrouter":
-                # Same special-case as _initialize_providers() -- otherwise a
-                # hot-reload silently resets openrouter's key back to
-                # VISION_API_KEY (Together/Novita's key) right after
-                # _initialize_providers() resolved it correctly. [SFT][REH]
-                provider.api_key = _resolve_openrouter_api_key(config) or fallback_key
-            else:
-                key_env = provider_config.get("api_key_env", "VISION_API_KEY")
-                provider.api_key = str(config.get(key_env) or fallback_key or "")
+            # Same resolver as _initialize_providers(): a hot reload used to reset
+            # every provider without its own key to VISION_API_KEY (the
+            # Together/Novita key), sending it to NotSoBot/Hugging Face. [SFT][REH]
+            resolved = self._provider_key(name, provider_config)
+            provider.api_key = resolved if name in _OWN_KEY_PROVIDERS else str(resolved or fallback_key or "")
             if hasattr(provider, "base_url"):
                 provider.base_url = provider_config.get("base_url", provider.base_url)
             if hasattr(provider, "genai_base_url"):
@@ -1829,7 +1829,11 @@ class UnifiedVisionAdapter:
                     # live catalogue (2026-08-27) that no free model can serve
                     # IMAGE_TO_IMAGE (every image-output-capable model is paid).
                     # See OpenRouterPlugin.capabilities() for the full note.
+                    # cloudflare/hfspace are free and edit-only (IMAGE_TO_IMAGE), so
+                    # they only change the order for edits. [CA][PA]
                     "provider_order": [
+                        "cloudflare",
+                        "hfspace",
                         "novita:qwen-image",
                         "novita:txt2img",
                         "together",
@@ -1841,6 +1845,23 @@ class UnifiedVisionAdapter:
                     "max_retries_per_provider": 2,
                 },
                 "providers": [
+                    {
+                        "name": "cloudflare",
+                        "base_url": "https://api.cloudflare.com/client/v4",
+                        "api_key_env": "CLOUDFLARE_API_TOKEN",
+                        "enabled": True,
+                        "priority": 0,
+                        "price": {"image_base": 0.0, "image_per_px": 0.0},
+                        "limits": {"max_size": "1920x1920", "max_steps": 4},
+                    },
+                    {
+                        "name": "hfspace",
+                        "api_key_env": "HF_TOKEN",
+                        "enabled": True,
+                        "priority": 0,
+                        "price": {"image_base": 0.0, "image_per_px": 0.0},
+                        "limits": {"max_size": "2048x2048", "max_steps": 28},
+                    },
                     {
                         "name": "notsobot",
                         "base_url": "https://notsobot.com",
@@ -1938,8 +1959,6 @@ class UnifiedVisionAdapter:
 
     def _initialize_providers(self) -> None:
         """Initialize provider plugins [CA]."""
-        api_key = self.config.get("VISION_API_KEY", "")
-
         for provider_config in self.provider_config["vision"]["providers"]:
             if not provider_config.get("enabled", True):
                 continue
@@ -1954,16 +1973,8 @@ class UnifiedVisionAdapter:
             # points at openrouter.ai (the text-backend setup), not a dedicated
             # OPENROUTER_API_KEY or the Together/Novita-flavored VISION_API_KEY.
             # [SFT][REH]
-            if name == "openrouter":
-                provider_key = _resolve_openrouter_api_key(self.config)
-            elif name == "notsobot":
-                # NotSoBot uses its own dedicated token (NOTSOBOT_API_TOKEN).
-                # Never fall back to VISION_API_KEY — that's a Together/Novita
-                # key and would just produce a confusing 401 from NotSoBot. [SFT]
-                provider_key = str(self.config.get("NOTSOBOT_API_TOKEN") or os.getenv("NOTSOBOT_API_TOKEN") or "").strip()
-            else:
-                key_env = provider_config.get("api_key_env", "VISION_API_KEY")
-                provider_key = self.config.get(key_env, api_key)
+            provider_key = self._provider_key(name, provider_config)
+            self._apply_free_edit_settings(name, provider_config)
 
             # Plugins only ever see their own provider_config, so the global
             # per-request timeout has to be handed down explicitly. [CMV]
@@ -1996,6 +2007,11 @@ class UnifiedVisionAdapter:
                     plugin = NvidiaPlugin(name, provider_config, provider_key)
                 elif name == "notsobot":
                     plugin = NotSoBotPlugin(name, provider_config, provider_key)
+                elif name in ("cloudflare", "hfspace"):
+                    from .free_edit_providers import CloudflareWorkersAIPlugin, HuggingFaceSpacePlugin
+
+                    plugin_cls = CloudflareWorkersAIPlugin if name == "cloudflare" else HuggingFaceSpacePlugin
+                    plugin = plugin_cls(name, provider_config, provider_key)
                 else:
                     self.logger.warning(f"Unknown provider: {name}")
                     continue
@@ -2005,6 +2021,31 @@ class UnifiedVisionAdapter:
 
             except Exception as e:
                 self.logger.exception(f"Failed to initialize provider {name}: {e}")
+
+    def _provider_key(self, name: str, provider_config: dict[str, Any]) -> str:
+        """API key for one provider; providers with their own key never get VISION_API_KEY. [SFT]"""
+        if name == "openrouter":
+            return _resolve_openrouter_api_key(self.config)
+        if name == "notsobot":
+            return str(self.config.get("NOTSOBOT_API_TOKEN") or os.getenv("NOTSOBOT_API_TOKEN") or "").strip()
+        if name == "cloudflare":
+            return str(self.config.get("CLOUDFLARE_API_TOKEN") or "").strip()
+        if name == "hfspace":
+            # Keyless: a non-empty sentinel keeps the "no API key" skip from dropping it.
+            if not self.config.get("HF_SPACE_EDIT_ENABLED", True):
+                return ""
+            return str(self.config.get("HF_TOKEN") or "").strip() or HFSPACE_ANONYMOUS_KEY
+        key_env = provider_config.get("api_key_env", "VISION_API_KEY")
+        return self.config.get(key_env, self.config.get("VISION_API_KEY", ""))
+
+    def _apply_free_edit_settings(self, name: str, provider_config: dict[str, Any]) -> None:
+        """Copy cloudflare/hfspace settings into their provider_config (plugins only see that)."""
+        if name == "cloudflare":
+            provider_config["account_id"] = str(self.config.get("CLOUDFLARE_ACCOUNT_ID") or "").strip()
+            provider_config["model"] = self.config.get("CLOUDFLARE_IMAGE_EDIT_MODEL") or None
+        elif name == "hfspace":
+            provider_config["space"] = self.config.get("HF_SPACE_EDIT_SPACE") or None
+            provider_config["timeout_s"] = self.config.get("HF_SPACE_EDIT_TIMEOUT_S") or None
 
     def _has_valid_credentials(self, provider_name: str) -> bool:
         """Best-effort credential presence check per provider [SFT].
@@ -2027,6 +2068,13 @@ class UnifiedVisionAdapter:
                 key = self.config.get("NVIDIA_NIM_API_KEY") or self.config.get("OPENAI_API_KEY") or self.config.get("VISION_API_KEY") or ""
             elif name == "notsobot":
                 key = self.config.get("NOTSOBOT_API_TOKEN") or ""
+            elif name == "cloudflare":
+                if not str(self.config.get("CLOUDFLARE_ACCOUNT_ID") or "").strip():
+                    return False
+                key = self.config.get("CLOUDFLARE_API_TOKEN") or ""
+            elif name == "hfspace":
+                # Public Space: no key needed (HF_TOKEN only raises the GPU quota).
+                return bool(self.config.get("HF_SPACE_EDIT_ENABLED", True))
             else:
                 key = self.config.get("VISION_API_KEY", "")
             return isinstance(key, str) and len(key.strip()) > 10

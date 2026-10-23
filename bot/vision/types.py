@@ -60,6 +60,8 @@ class VisionProvider(Enum):
     OPENROUTER = "openrouter"
     NVIDIA = "nvidia"
     NOTSOBOT = "notsobot"
+    CLOUDFLARE = "cloudflare"
+    HFSPACE = "hfspace"
 
 
 class VisionJobState(Enum):
