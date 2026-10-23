@@ -54,6 +54,17 @@ class MessageProcessor:
 
         self._typing_suppressed_until: dict[int, float] = {}
 
+    def _accept_peer_bot(self, message: discord.Message) -> bool:
+        """Allowlisted bots that address us get a reply (loop-guarded). [SFT]"""
+        from .peer_bots import accept_peer_bot_message
+
+        try:
+            own_id = getattr(getattr(self.bot, "user", None), "id", None)
+            return accept_peer_bot_message(message, getattr(self.bot, "config", None) or {}, own_id)
+        except Exception as exc:  # noqa: BLE001 — unknown bot traffic is dropped, never crashes
+            self.logger.debug(f"peer_bot.check_failed | {exc}")
+            return False
+
     # ------------------------------------------------------------------
     # Public entry point – called from LLMBot.on_message
     # ------------------------------------------------------------------
@@ -69,7 +80,9 @@ class MessageProcessor:
             author_is_self = bool(author and getattr(author, "id", None) == getattr(getattr(self.bot, "user", None), "id", None))
         except (AttributeError, TypeError):
             author_is_self = False
-        if author_is_bot or author_is_self:
+        if author_is_self:
+            return None
+        if author_is_bot and not self._accept_peer_bot(message):
             return None
 
         # Dedup guard under lock

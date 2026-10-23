@@ -3747,6 +3747,12 @@ class Router:
                     is_self = bool(hasattr(self.bot, "user") and author and getattr(author, "id", None) == getattr(self.bot.user, "id", None))
                 except Exception:  # noqa: BLE001
                     is_self = False
+                if author_is_bot and not is_self:
+                    from bot.core.peer_bots import is_addressed_peer_bot
+
+                    own_id = getattr(getattr(self.bot, "user", None), "id", None)
+                    if is_addressed_peer_bot(message, self.config or {}, own_id):
+                        author_is_bot = False  # allowlisted peer bot; budget checked upstream [SFT]
                 if author_is_bot or is_self:
                     self.logger.info(
                         "gate.skip",

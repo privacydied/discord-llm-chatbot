@@ -266,6 +266,10 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "REQUIRE_MENTION_IN_GUILDS": _parse_bool_str(_clean_env_value(env_getter("REQUIRE_MENTION_IN_GUILDS", None)), True),
         # False: a reply to the bot only triggers it when the reply ping is on
         # (Discord adds the bot to message.mentions). Ping off = no response.
+        # Other bots allowed to talk to this one (comma-separated user IDs). [SFT]
+        "BOT_REPLY_ALLOWLIST": _clean_env_value(env_getter("BOT_REPLY_ALLOWLIST", "")) or "",
+        "BOT_REPLY_MAX_PER_WINDOW": _safe_int(env_getter("BOT_REPLY_MAX_PER_WINDOW", None), "3", "BOT_REPLY_MAX_PER_WINDOW"),
+        "BOT_REPLY_WINDOW_S": _safe_int(env_getter("BOT_REPLY_WINDOW_S", None), "300", "BOT_REPLY_WINDOW_S"),
         "ALLOW_REPLY_TO_BOT_WITHOUT_MENTION": _parse_bool_str(_clean_env_value(env_getter("ALLOW_REPLY_TO_BOT_WITHOUT_MENTION", None)), False),
         "DM_REQUIRE_MENTION": _parse_bool_str(_clean_env_value(env_getter("DM_REQUIRE_MENTION", None)), False),
         "REPLY_TRIGGERS": [s.strip() for s in env_getter("REPLY_TRIGGERS", "dm,mention,reply,bot_threads,owner,command_prefix").split(",") if s.strip()],

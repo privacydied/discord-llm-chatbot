@@ -1771,9 +1771,9 @@ class LLMBot(commands.Bot):
                             recipient = getattr(reply_target, "author", None)
                             recipient_reason = "target_author"
                         # Avoid self-mention (bot) and any bot authors
-                        if recipient is not None and (getattr(recipient, "bot", False) or getattr(recipient, "id", None) == getattr(self.user, "id", None)):
+                        if recipient is not None and (self._is_ignored_bot(recipient) or getattr(recipient, "id", None) == getattr(self.user, "id", None)):
                             # Fallback: latest human speaker in-scope; minimally choose triggering human author
-                            recipient = message.author if not getattr(message.author, "bot", False) else None
+                            recipient = message.author if not self._is_ignored_bot(message.author) else None
                             recipient_reason = "fallback_human" if recipient else "no_human"
                     except (AttributeError, TypeError):
                         recipient = None
@@ -1785,7 +1785,7 @@ class LLMBot(commands.Bot):
                     try:
                         if recipient is not None:
                             # Preferred: rely on reply ping when the target author is the human recipient
-                            if reply_target is not None and getattr(reply_target, "author", None) is recipient and not getattr(recipient, "bot", False):
+                            if reply_target is not None and getattr(reply_target, "author", None) is recipient and not self._is_ignored_bot(recipient):
                                 ping_mode = "reply_ping"
                             else:
                                 # Use explicit mention when target author is a bot or different; avoid double-ping
@@ -2069,8 +2069,8 @@ class LLMBot(commands.Bot):
             if reply_target is not None and hasattr(reply_target, "author"):
                 recipient = getattr(reply_target, "author", None)
                 recipient_reason = "target_author"
-            if recipient is not None and (getattr(recipient, "bot", False) or getattr(recipient, "id", None) == getattr(self.user, "id", None)):
-                recipient = message.author if not getattr(message.author, "bot", False) else None
+            if recipient is not None and (self._is_ignored_bot(recipient) or getattr(recipient, "id", None) == getattr(self.user, "id", None)):
+                recipient = message.author if not self._is_ignored_bot(message.author) else None
                 recipient_reason = "fallback_human" if recipient else "no_human"
         except (AttributeError, TypeError):
             recipient = None
@@ -2080,7 +2080,7 @@ class LLMBot(commands.Bot):
         explicit_mention = False
         try:
             if recipient is not None:
-                if reply_target is not None and getattr(reply_target, "author", None) is recipient and not getattr(recipient, "bot", False):
+                if reply_target is not None and getattr(reply_target, "author", None) is recipient and not self._is_ignored_bot(recipient):
                     ping_mode = "reply_ping"
                 else:
                     ping_mode = "explicit_mention"
@@ -2385,6 +2385,14 @@ class LLMBot(commands.Bot):
                 )
             except (discord.HTTPException, discord.NotFound, discord.Forbidden) as exc:
                 self.logger.debug(f"Error reply failed: {exc}")
+
+    def _is_ignored_bot(self, user: object) -> bool:
+        """A bot we never ping or address; allowlisted peer bots count as people. [SFT]"""
+        if not getattr(user, "bot", False):
+            return False
+        from .peer_bots import parse_allowlist
+
+        return getattr(user, "id", None) not in parse_allowlist((self.config or {}).get("BOT_REPLY_ALLOWLIST"))
 
     async def on_message(self, message: discord.Message) -> None:
         """Delegate early filtering to MessageProcessor, then handle
