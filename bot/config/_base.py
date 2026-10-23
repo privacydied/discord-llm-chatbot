@@ -272,6 +272,11 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "BOT_REPLY_ALLOWLIST": _clean_env_value(env_getter("BOT_REPLY_ALLOWLIST", "")) or "",
         "BOT_REPLY_MAX_PER_WINDOW": _safe_int(env_getter("BOT_REPLY_MAX_PER_WINDOW", None), "3", "BOT_REPLY_MAX_PER_WINDOW"),
         "BOT_REPLY_WINDOW_S": _safe_int(env_getter("BOT_REPLY_WINDOW_S", None), "300", "BOT_REPLY_WINDOW_S"),
+        # NotSoBot-style ".edit <prompt>" (no mention needed). Change the prefix if
+        # NotSoBot is in the same server, or both bots answer. [CA]
+        "DOT_EDIT_ENABLED": _parse_bool_str(_clean_env_value(env_getter("DOT_EDIT_ENABLED", None)), True),
+        "DOT_EDIT_PREFIX": (env_getter("DOT_EDIT_PREFIX", ".") or ".").strip() or ".",
+        "DOT_EDIT_LOOKBACK": _safe_int(env_getter("DOT_EDIT_LOOKBACK", None), "25", "DOT_EDIT_LOOKBACK"),
         "ALLOW_REPLY_TO_BOT_WITHOUT_MENTION": _parse_bool_str(_clean_env_value(env_getter("ALLOW_REPLY_TO_BOT_WITHOUT_MENTION", None)), False),
         "DM_REQUIRE_MENTION": _parse_bool_str(_clean_env_value(env_getter("DM_REQUIRE_MENTION", None)), False),
         "REPLY_TRIGGERS": [s.strip() for s in env_getter("REPLY_TRIGGERS", "dm,mention,reply,bot_threads,owner,command_prefix").split(",") if s.strip()],

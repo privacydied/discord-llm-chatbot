@@ -128,6 +128,7 @@ from .router_components import (
     has_meaningful_text,
     has_visual_facts_section,
     is_direct_image_url,
+    is_dot_edit_command,
     is_reply_to_bot,
     is_text_attachment,
     is_tweet_media_url,
@@ -138,6 +139,7 @@ from .router_components import (
     load_router_runtime_compat,
     mentions_bot,
     normalize_x_url,
+    parse_dot_edit_command,
     parse_edit_flags,
     parse_explicit_edit_trigger,
     parse_twitter_status_id,
@@ -2816,6 +2818,14 @@ class Router:
             self._metric_inc("gate.allowed", {"reason": "dm"})
             return True
 
+        if self._is_dot_edit(clean_content):
+            # NotSoBot-style ".edit <prompt>": an explicit command, so it needs no
+            # mention and overrides the ping-off / mention-required rules below. [CA]
+            self._update_dispatch_metadata(message, context=context, mention_detected=mention_detected, reply_to_bot=is_reply)
+            self.logger.debug(f"gate.allow | reason=dot_edit msg_id={message.id}")
+            self._metric_inc("gate.allowed", {"reason": "dot_edit"})
+            return True
+
         # Discord "reply with ping off": a reply to the bot that does not ping it
         # is the author opting out of a response. Honour it before every other
         # guild allowance (vision trigger, ambient, legacy reply/thread triggers).
@@ -3813,6 +3823,11 @@ class Router:
                         "channel_id": getattr(getattr(message, "channel", None), "id", None),
                     },
                 )
+
+            # 1a. NotSoBot-style ".edit <prompt>" -> img2img on the conversational-edit path. [CA]
+            dot_edit_text = strip_leading_bot_mention(content, getattr(getattr(self.bot, "user", None), "id", None))
+            if self._is_dot_edit(dot_edit_text):
+                return await self._handle_dot_edit(message, dot_edit_text)
 
             # 1b. Compatibility fast-path for legacy tests: attachments + empty content
             # Run this BEFORE gating and typing() to avoid mock issues in tests
@@ -9860,6 +9875,46 @@ class Router:
             content="I can't edit images right now — no image-editing provider is available. (I can still describe the image if you ask.)",
             error=True,
         )
+
+    def _is_dot_edit(self, text: str | None) -> bool:
+        cfg = self.config or {}
+        if not cfg.get("DOT_EDIT_ENABLED", True):
+            return False
+        return is_dot_edit_command(text, str(cfg.get("DOT_EDIT_PREFIX") or "."))
+
+    async def _handle_dot_edit(self, message: Message, text: str) -> BotAction:
+        """``.edit <prompt>``: edit an attached/replied/linked/recent image. [CA][REH]
+
+        Same job path, flags, safety and budget gates as ``@bot edit:``; adds
+        NotSoBot's fallback to the newest image in the channel.
+        """
+        prefix = str(self.config.get("DOT_EDIT_PREFIX") or ".")
+        usage = f"usage: `{prefix}edit <what to change>` with an image attached, as a reply to one, or after one in this channel. `{prefix}edit -h` for options."
+        if not self._conversational_edit_enabled(message) or not self._vision_orchestrator:
+            self._metric_inc("vision.route.conversational_edit", {"outcome": "dot_disabled"})
+            return BotAction(content="Image editing is disabled on this server.", error=True)
+        invocation = parse_dot_edit_command(text, prefix)
+        if invocation is None or not invocation.prompt:
+            return BotAction(content=usage)
+        flags = parse_edit_flags(invocation.prompt)
+        if flags.help_requested:
+            return BotAction(content=EDIT_FLAGS_HELP_TEXT)
+        if flags.errors:
+            return BotAction(content="\n".join(flags.errors), error=True)
+        if not (flags.prompt or "").strip():
+            return BotAction(content=usage)
+        unavailable = self._image_edit_unavailable_action()
+        if unavailable is not None:
+            return unavailable
+        max_mb = int(self.config.get("MAX_ATTACHMENT_SIZE_MB", 25) or 25)
+        lookback = max(0, min(100, int(self.config.get("DOT_EDIT_LOOKBACK", 25) or 0)))
+        resolved = await resolve_edit_source_image(message, max_mb, channel_lookback=lookback)
+        if resolved is None:
+            self._metric_inc("vision.route.conversational_edit", {"outcome": "dot_no_image"})
+            return BotAction(content=f"no image found. {usage}", error=True)
+        self._metric_inc("vision.route.conversational_edit", {"outcome": "dot_fired"})
+        self._log_edit_route_fired(message, resolved, EditIntentResult(is_edit=True, matched_phrase=f"{prefix}edit"), invocation_type="dot_edit")
+        return await self._run_conversational_edit_job(message, flags.prompt, resolved, flags)
 
     async def _maybe_route_conversational_edit(self, message: Message, original_text: str) -> BotAction | None:
         """Route an addressed image+edit-instruction message to img2img.

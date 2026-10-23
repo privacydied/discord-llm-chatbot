@@ -15,6 +15,8 @@ from .conversational_edit import (
     ResolvedEditImage,
     classify_edit_intent,
     parse_edit_flags,
+    is_dot_edit_command,
+    parse_dot_edit_command,
     parse_explicit_edit_trigger,
     resolve_edit_source_image,
 )
@@ -946,6 +948,8 @@ __all__ = [
     "normalize_x_url",
     "normalized_article_header_text",
     "parse_edit_flags",
+    "is_dot_edit_command",
+    "parse_dot_edit_command",
     "parse_explicit_edit_trigger",
     "parse_image_host",
     "parse_twitter_status_id",

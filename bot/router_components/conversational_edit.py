@@ -151,6 +151,32 @@ def parse_explicit_edit_trigger(text: str) -> ExplicitEditInvocation | None:
     return ExplicitEditInvocation(prompt=prompt)
 
 
+# --- NotSoBot-style ".edit <prompt>" command ---------------------------------
+#
+# Works without @mentioning the bot (the gate allows it like a "!" command).
+# The prefix is configurable (DOT_EDIT_PREFIX) because NotSoBot itself uses "."
+# -- in a server with both bots, both would answer. [CA][CMV]
+
+
+def _dot_edit_re(prefix: str) -> re.Pattern[str]:
+    return re.compile(rf"^\s*{re.escape(prefix)}edit(?::|\s+|$)\s*(.*)$", re.IGNORECASE | re.DOTALL)
+
+
+def is_dot_edit_command(text: str | None, prefix: str = ".") -> bool:
+    """True for ``.edit``, ``.edit <prompt>`` and ``.edit: <prompt>`` (not ``.editor``)."""
+    return bool(text and prefix and _dot_edit_re(prefix).match(text))
+
+
+def parse_dot_edit_command(text: str | None, prefix: str = ".") -> ExplicitEditInvocation | None:
+    """Prompt after ``.edit``; ``prompt=""`` means bare ``.edit`` (show help). None if not the command."""
+    if not text or not prefix:
+        return None
+    match = _dot_edit_re(prefix).match(text)
+    if not match:
+        return None
+    return ExplicitEditInvocation(prompt=match.group(1).strip())
+
+
 # --- Flag parsing for the explicit "edit:" trigger -------------------------
 #
 # Mirrors /imgedit's option set (bot/commands/vision_commands.py:216-222) so
@@ -342,7 +368,7 @@ class ResolvedEditImage:
 
     data: bytes
     content_type: str | None
-    source: str  # "current" | "reply" | "url"
+    source: str  # "current" | "reply" | "url" | "channel"
 
 
 async def _download_ref(ref: ImageRef, source: str, max_size_mb: int) -> ResolvedEditImage | None:
@@ -362,12 +388,14 @@ async def _download_ref(ref: ImageRef, source: str, max_size_mb: int) -> Resolve
             Path(tmp_path).unlink()
 
 
-async def resolve_edit_source_image(message: Message, max_size_mb: int) -> ResolvedEditImage | None:
+async def resolve_edit_source_image(message: Message, max_size_mb: int, channel_lookback: int = 0) -> ResolvedEditImage | None:
     """Resolve the source image for a conversational edit, in priority order:
 
     1. an attachment/image-embed on the triggering message
     2. an attachment/image-URL on the message being REPLIED TO
     3. a bare image URL typed in the triggering message's text
+    4. (``channel_lookback`` > 0 only) the newest image among the previous
+       ``channel_lookback`` messages in the channel -- NotSoBot's fallback
     """
     cur_refs = collect_image_urls_from_message(message) or []
     if cur_refs:
@@ -397,4 +425,21 @@ async def resolve_edit_source_image(message: Message, max_size_mb: int) -> Resol
             if resolved:
                 return resolved
 
+    if channel_lookback > 0:
+        return await _resolve_recent_channel_image(message, max_size_mb, channel_lookback)
+    return None
+
+
+async def _resolve_recent_channel_image(message: Message, max_size_mb: int, lookback: int) -> ResolvedEditImage | None:
+    """Newest image posted in the last ``lookback`` messages before ``message``. [PA]"""
+    history = getattr(getattr(message, "channel", None), "history", None)
+    if history is None:
+        return None
+    try:
+        async for previous in history(limit=lookback, before=message):
+            refs = collect_image_urls_from_message(previous) or []
+            if refs:
+                return await _download_ref(refs[0], "channel", max_size_mb)
+    except Exception as exc:  # noqa: BLE001 - history needs read perms; logged, None continues
+        logger.debug(f"edit_route: channel history scan failed: {exc}")
     return None
