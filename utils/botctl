@@ -1,100 +1,138 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
+# Bot process control for the Synology. The running process is found by scanning
+# processes (args "-m bot.main" + cwd == repo), not by trusting bot.pid: the
+# pidfile is only written for convenience, so a stale or missing one can no longer
+# hide a live bot. (The old script lost the PID whenever uv took >1s to spawn
+# python: `ps --ppid` exited 1 under `set -e` and killed the script before it
+# wrote bot.pid; and `stop` called `exit 0`, so `restart` never reached `start`.)
+set -Euo pipefail
 
-cd /volume1/py/discord-llm-chatbot
+REPO=/volume1/py/discord-llm-chatbot
+cd "$REPO"
 
 PIDFILE="bot.pid"
 LOGFILE="bot.log"
+START_WAIT_S=180   # uv run may sync/build the project before python starts
+STOP_WAIT_S=45     # graceful Discord/TTS/archive shutdown before SIGKILL
 
-is_running() {
-  [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+# PIDs of processes whose cwd is the repo and whose args match $1 (ERE).
+repo_pids() {
+  local pattern="$1" pid args
+  while read -r pid args; do
+    [[ "$args" =~ $pattern ]] || continue
+    [[ "$(readlink "/proc/$pid/cwd" 2>/dev/null)" == "$REPO" ]] || continue
+    echo "$pid"
+  done < <(ps -eo pid=,args= 2>/dev/null)
 }
+
+bot_python_pid() { repo_pids '(^|/)python[0-9.]* -m bot\.main' | head -n1; }   # the bot itself
+bot_all_pids()   { repo_pids ' -m bot\.main'; }                                # bot + uv wrapper
+pocket_pids()    { repo_pids ' -m pocket_tts serve'; }                         # TTS server child
+
+is_running() { [[ -n "$(bot_all_pids)" ]]; }
 
 clean() {
   echo "Cleaning caches …"
-
   # 1) Python bytecode & common tooling caches in repo
-  # Remove __pycache__ dirs fast and safe
   find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-  # Remove loose .pyc/.pyo just in case
   find . -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete 2>/dev/null || true
-  # Common tool caches
   rm -rf .pytest_cache .mypy_cache .ruff_cache .ipynb_checkpoints .cache 2>/dev/null || true
-  # Build metadata
   find . -maxdepth 3 -type d -name '*.egg-info' -exec rm -rf {} + 2>/dev/null || true
-
-  # 2) uv resolver/wheel/http caches (best-effort)
+  # 2) uv / pip caches (best-effort)
   if command -v uv >/dev/null 2>&1; then
     uv cache prune >/dev/null 2>&1 || uv cache clean >/dev/null 2>&1 || true
   fi
-  rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/uv" 2>/dev/null || true
-
-  # 3) pip cache (sometimes uv interoperates with pip; harmless to nuke)
-  rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/pip" 2>/dev/null || true
-
+  rm -rf "${XDG_CACHE_HOME:-$HOME/.cache}/uv" "${XDG_CACHE_HOME:-$HOME/.cache}/pip" 2>/dev/null || true
   echo "Caches cleaned."
 }
 
 start() {
   if is_running; then
-    echo "Already running as PID $(cat "$PIDFILE")"
-    exit 0
+    echo "Already running: $(bot_all_pids | tr '\n' ' ')"
+    return 0
   fi
 
-  LAUNCH='exec uv run python -m bot.main'
-
-  # Detach, ignore HUP, and ensure $! is the final process where possible
-  nohup bash -lc "$LAUNCH" >> "$LOGFILE" 2>&1 &
-  P=$!
-
-  # Resolve child if uv spawned one
-  sleep 1
-  CHILD="$(ps -o pid= --ppid "$P" | awk 'NR==1{print $1}')"
-  echo "${CHILD:-$P}" > "$PIDFILE"
-
+  # Login shell keeps the interactive PATH (uv, deno for yt-dlp, ffmpeg7).
+  # setsid detaches from this terminal so closing ssh doesn't HUP the bot.
+  setsid nohup bash -lc 'exec uv run python -m bot.main' >> "$LOGFILE" 2>&1 < /dev/null &
   disown || true
-  echo "Started: PID $(cat "$PIDFILE") (log: $LOGFILE)"
+
+  local pid="" waited=0
+  while (( waited < START_WAIT_S )); do
+    pid="$(bot_python_pid)"
+    [[ -n "$pid" ]] && break
+    if [[ -z "$(bot_all_pids)" ]] && (( waited >= 3 )); then
+      echo "Bot exited during startup. Last log lines:"
+      tail -n 20 "$LOGFILE"
+      return 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [[ -z "$pid" ]]; then
+    echo "uv still has not started python after ${START_WAIT_S}s (check $LOGFILE)."
+    return 1
+  fi
+  echo "$pid" > "$PIDFILE"
+  echo "Started: PID $pid after ${waited}s (log: $LOGFILE)"
 }
 
 fg() {
   if is_running; then
-    echo "Already running as PID $(cat "$PIDFILE"). Stop it first: $0 stop"
+    echo "Already running: $(bot_all_pids | tr '\n' ' '). Stop it first: $0 stop"
     exit 1
   fi
-
   # Foreground launch keeps TTY attached so Rich colors render live.
   uv run python -m bot.main
 }
 
 stop() {
-  if ! is_running; then
+  local pids main i
+  pids="$(bot_all_pids)"
+  if [[ -z "$pids" ]]; then
     echo "Not running."
-    rm -f "$PIDFILE"
-    exit 0
+  else
+    # SIGTERM the python process (graceful shutdown); the uv wrapper exits with it.
+    main="$(bot_python_pid)"
+    [[ -z "$main" ]] && main="$pids"
+    echo "Stopping PID $(echo $main) …"
+    kill -TERM $main 2>/dev/null || true
+    for (( i = 0; i < STOP_WAIT_S * 5; i++ )); do
+      [[ -z "$(bot_all_pids)" ]] && break
+      sleep 0.2
+    done
+    pids="$(bot_all_pids)"
+    if [[ -n "$pids" ]]; then
+      echo "Still alive after ${STOP_WAIT_S}s, sending SIGKILL to: $(echo $pids)"
+      kill -KILL $pids 2>/dev/null || true
+      sleep 0.5
+    fi
+    echo "Stopped."
   fi
-
-  PID="$(cat "$PIDFILE")"
-  echo "Stopping PID $PID …"
-  kill "$PID" 2>/dev/null || true
-
-  # wait up to ~4s for graceful shutdown
-  for i in {1..20}; do
-    kill -0 "$PID" 2>/dev/null || { rm -f "$PIDFILE"; echo "Stopped."; return; }
-    sleep 0.2
-  done
-
-  echo "Still alive, sending SIGKILL."
-  kill -9 "$PID" 2>/dev/null || true
   rm -f "$PIDFILE"
-  echo "Stopped."
+
+  # A killed bot can leave its Pocket TTS server running (it would then be reused
+  # but never idle-stopped). Stop any left in the repo.
+  pids="$(pocket_pids)"
+  if [[ -n "$pids" ]]; then
+    echo "Stopping leftover Pocket TTS server: $(echo $pids)"
+    kill -TERM $pids 2>/dev/null || true
+  fi
 }
 
 status() {
-  if is_running; then
-    echo "Running (PID $(cat "$PIDFILE"))."
+  local pid pocket
+  pid="$(bot_python_pid)"
+  pocket="$(pocket_pids)"
+  if [[ -n "$pid" ]]; then
+    echo "Running (PID $pid, up $(ps -o etime= -p "$pid" | tr -d ' '))."
+  elif is_running; then
+    echo "Starting (uv wrapper $(bot_all_pids | tr '\n' ' '), python not up yet)."
   else
     echo "Stopped."
   fi
+  [[ -n "$pocket" ]] && echo "Pocket TTS server: $(echo $pocket)"
+  return 0
 }
 
 case "${1:-}" in
@@ -105,8 +143,9 @@ case "${1:-}" in
   restart)      stop; start ;;
   clean)        clean ;;
   status)       status ;;
+  logs)         tail -n "${2:-100}" -f "$LOGFILE" ;;
   *)
-    echo "Usage: $0 {start|start-clean|fg|stop|restart|status|clean}"
+    echo "Usage: $0 {start|start-clean|fg|stop|restart|status|clean|logs [N]}"
     exit 1
     ;;
 esac
