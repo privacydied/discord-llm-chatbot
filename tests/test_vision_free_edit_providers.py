@@ -114,6 +114,7 @@ async def test_cloudflare_edit_sends_small_input_and_returns_data_url():
     assert fields["prompt"] == "make it blue" and fields["width"] == "1024" and fields["height"] == "768" and fields["seed"] == "7"
     with Image.open(io.BytesIO(fields["input_image_0"])) as sent:
         assert max(sent.size) < 512  # Cloudflare: inputs must be smaller than 512x512
+        assert sent.format == "JPEG"
     assert (await plugin.poll(job)).status == UnifiedStatus.COMPLETED
     assert (await plugin.fetch_result(job)).assets == ["data:image/png;base64,QUJD"]
 
@@ -273,3 +274,30 @@ def test_quota_cooldown_reaches_config():
 
     assert "VISION_PROVIDER_QUOTA_COOLDOWN_S" in load_config()
     assert fep.CLOUDFLARE_INPUT_MAX_SIDE < 512
+
+
+def test_free_edits_cost_nothing():
+    from bot.vision.pricing_loader import get_pricing_table
+    from bot.vision.types import VisionProvider
+
+    table = get_pricing_table()
+    for provider in (VisionProvider.CLOUDFLARE, VisionProvider.HFSPACE):
+        assert table.estimate_cost(provider=provider, task=VisionTask.IMAGE_TO_IMAGE).to_float() == 0.0
+
+
+def test_ledger_fsync_is_opt_in(monkeypatch, tmp_path):
+    import os as _os
+
+    from bot.vision import budget_manager_v2 as bm
+
+    calls = []
+    monkeypatch.setattr(bm.os, "fsync", lambda fd: calls.append(fd))
+    monkeypatch.delenv("VISION_LEDGER_FSYNC", raising=False)
+    manager = bm.VisionBudgetManager.__new__(bm.VisionBudgetManager)
+    manager._append_jsonl(tmp_path / "a.jsonl", {"x": 1})
+    manager._atomic_write_json(tmp_path / "b.json", {"x": 1})
+    assert calls == [] and (tmp_path / "b.json").exists()
+    monkeypatch.setenv("VISION_LEDGER_FSYNC", "true")
+    manager._append_jsonl(tmp_path / "a.jsonl", {"x": 2})
+    assert len(calls) == 1
+    assert _os.path.getsize(tmp_path / "a.jsonl") > 0

@@ -250,3 +250,40 @@ async def test_hung_channel_history_is_bounded(monkeypatch):
 
     message = SimpleNamespace(content=".edit x", reference=None, channel=SimpleNamespace(history=history))
     assert await asyncio.wait_for(resolve_edit_source_image(message, 25, channel_lookback=5), timeout=2) is None
+
+
+# -- upload permission is checked before the edit runs ----------------------------
+
+
+def _perm_message(attach):
+    perms = SimpleNamespace(attach_files=attach)
+    return SimpleNamespace(
+        id=1,
+        guild=SimpleNamespace(id=2, me=object()),
+        author=SimpleNamespace(id=3),
+        channel=SimpleNamespace(id=4, permissions_for=lambda me: perms),
+    )
+
+
+async def test_edit_refused_without_attach_files_before_any_job():
+    from bot.router import Router
+
+    router = Router.__new__(Router)
+    router.logger = MagicMock()
+    router._metric_inc = MagicMock()
+    router._vision_orchestrator = SimpleNamespace(submit_job=AsyncMock())
+    resolved = ResolvedEditImage(data=b"x", content_type="image/png", source="reply")
+    action = await Router._run_conversational_edit_job(router, _perm_message(False), "make it green", resolved)
+    assert action.error and "Attach Files" in action.content
+    router._vision_orchestrator.submit_job.assert_not_awaited()
+
+
+def test_attach_check_passes_when_allowed_or_unknown():
+    from bot.router import Router
+
+    router = Router.__new__(Router)
+    router.logger = MagicMock()
+    router._metric_inc = MagicMock()
+    assert Router._edit_upload_denied_action(router, _perm_message(True)) is None
+    assert Router._edit_upload_denied_action(router, SimpleNamespace(guild=None, channel=None)) is None  # DM
+    assert Router._edit_upload_denied_action(router, MagicMock()) is None  # mocks never refuse

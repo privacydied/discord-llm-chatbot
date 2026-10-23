@@ -9876,6 +9876,28 @@ class Router:
             error=True,
         )
 
+    def _edit_upload_denied_action(self, message: Message) -> BotAction | None:
+        """Refuse BEFORE running the edit when the bot cannot upload the result here.
+
+        Without Attach Files the finished image hit 403 50013 at send time: the
+        provider call was wasted and the user got no reply at all. [REH][PA]
+        """
+        guild = getattr(message, "guild", None)
+        me = getattr(guild, "me", None) if guild else None
+        permissions_for = getattr(getattr(message, "channel", None), "permissions_for", None)
+        if me is None or not callable(permissions_for):
+            return None
+        try:
+            can_attach = permissions_for(me).attach_files
+        except Exception as exc:  # noqa: BLE001 - permission lookup is best-effort
+            self.logger.debug(f"edit attach permission check failed: {exc}")
+            return None
+        if can_attach is not False:
+            return None
+        self.logger.warning(f"vision.route.conversational_edit.no_attach_permission channel={getattr(message.channel, 'id', None)}")
+        self._metric_inc("vision.route.conversational_edit", {"outcome": "no_attach_permission"})
+        return BotAction(content="i can't post images in this channel. my role needs the **Attach Files** permission here.", error=True)
+
     def _is_dot_edit(self, text: str | None) -> bool:
         cfg = self.config or {}
         if not cfg.get("DOT_EDIT_ENABLED", True):
@@ -10025,6 +10047,10 @@ class Router:
         """
         from .vision.types import VisionRequest, VisionTask
 
+        denied = self._edit_upload_denied_action(message)
+        if denied is not None:
+            return denied
+
         request = VisionRequest(
             task=VisionTask.IMAGE_TO_IMAGE,
             prompt=(edit_prompt or "").strip() or "Edit this image as instructed.",
@@ -10081,7 +10107,7 @@ class Router:
     async def _await_conversational_edit_job(self, job_id: str, user_id: str):
         """Bounded poll for job completion - no unbounded waits. [REH]"""
         timeout_s = float(self.config.get("VISION_CONVERSATIONAL_EDIT_TIMEOUT_S", 90.0) or 90.0)
-        poll_interval = float(self.config.get("VISION_CONVERSATIONAL_EDIT_POLL_INTERVAL_S", 2.0) or 2.0)
+        poll_interval = float(self.config.get("VISION_CONVERSATIONAL_EDIT_POLL_INTERVAL_S", 0.5) or 0.5)
         elapsed = 0.0
         while elapsed < timeout_s:
             job = await self._vision_orchestrator.get_job_status(job_id)

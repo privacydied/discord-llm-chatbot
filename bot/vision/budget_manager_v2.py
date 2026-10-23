@@ -26,6 +26,18 @@ from bot.vision.types import VisionProvider, VisionRequest
 logger = get_logger(__name__)
 
 
+def ledger_fsync_enabled() -> bool:
+    """fsync budget/job ledgers? Default off. [PA]
+
+    Each fsync cost ~1s on the NAS HDDs, ran synchronously on the event loop,
+    and an image edit did ~8 of them (~6-8s of a 3s Cloudflare edit, with the
+    whole bot frozen meanwhile). Writes stay temp-file + rename atomic, so a
+    process crash loses nothing; only a power cut can drop the last seconds
+    of spend accounting. VISION_LEDGER_FSYNC=true restores it.
+    """
+    return os.getenv("VISION_LEDGER_FSYNC", "false").strip().lower() in ("1", "true", "yes", "on")
+
+
 @dataclass
 class UserBudget:
     """User budget tracking with Money type [CA]."""
@@ -243,6 +255,10 @@ class VisionBudgetManager:
         except (OSError, ValueError, TypeError, AttributeError) as exc:
             logger.warning(f"Legacy budgets.json migration failed (will retry next start): {exc}")
 
+    @staticmethod
+    def _fsync_enabled() -> bool:
+        return ledger_fsync_enabled()
+
     def _atomic_write_json(self, file_path: Path, data: Any) -> None:
         """Atomic JSON write with temp file + fsync + rename [RM][REH].
 
@@ -256,7 +272,8 @@ class VisionBudgetManager:
             with os.fdopen(temp_fd, "w") as f:
                 json.dump(data, f, indent=2, default=str)
                 f.flush()
-                os.fsync(f.fileno())  # Force write to disk
+                if self._fsync_enabled():
+                    os.fsync(f.fileno())  # opt-in: ~1s per call on the NAS HDDs
 
             # Atomic rename (on same filesystem)
             os.replace(temp_path, file_path)
@@ -296,7 +313,8 @@ class VisionBudgetManager:
             json.dump(data, f, default=str)
             f.write("\n")
             f.flush()
-            os.fsync(f.fileno())
+            if self._fsync_enabled():
+                os.fsync(f.fileno())
 
     async def _load_user_budget(self, user_id: str) -> UserBudget:
         """Load or create this user's budget from its own file [REH][PA].

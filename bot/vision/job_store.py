@@ -364,8 +364,10 @@ class VisionJobStore:
                 await f.write(line)
                 await f.flush()
 
-                # Force sync to disk for data integrity
-                if hasattr(f, "fileno"):
+                # Opt-in fsync (VISION_LEDGER_FSYNC): ~1s per call on the NAS, on the loop. [PA]
+                from .budget_manager_v2 import ledger_fsync_enabled
+
+                if ledger_fsync_enabled() and hasattr(f, "fileno"):
                     try:
                         fd = f.fileno()  # type: ignore[attr-defined]
                         os.fsync(fd)

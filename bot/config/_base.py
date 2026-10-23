@@ -782,7 +782,7 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         ),
         "VISION_CONVERSATIONAL_EDIT_POLL_INTERVAL_S": _safe_float(
             env_getter("VISION_CONVERSATIONAL_EDIT_POLL_INTERVAL_S", None),
-            "2.0",
+            "0.5",
             "VISION_CONVERSATIONAL_EDIT_POLL_INTERVAL_S",
         ),
         # Extra comma-separated edit-intent trigger phrases, merged with the
