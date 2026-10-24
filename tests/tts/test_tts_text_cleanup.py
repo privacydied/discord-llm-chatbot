@@ -2,7 +2,7 @@
 
 import pytest
 
-from bot.tts.interface import MAX_TTS_WORD_CHARS, TTSManager
+from bot.tts.interface import MAX_TTS_WORD_CHARS, MAX_WORDS_PER_SENTENCE, TTSManager
 
 
 @pytest.fixture
@@ -27,3 +27,20 @@ def test_collapses_stretched_words_only(clean, raw, spoken):
 def test_caps_unsplittable_tokens(clean):
     out = clean("ok " + "x1y2" * 30)
     assert max(len(w) for w in out.split()) <= MAX_TTS_WORD_CHARS
+
+
+def test_drops_scripts_pocket_cannot_speak(clean):
+    # 2026-10-24: Heart Sutra in Chinese -> one 815-token chunk -> timeout -> text reply
+    assert clean("觀自在菩薩 行深般若波羅蜜多時 照見五蘊皆空") == ""
+    assert clean("here you go: 觀自在菩薩 行深般若") == "here you go:"
+    assert clean("café naïve résumé — ok") == "café naïve résumé — ok"  # Latin accents stay
+
+
+def test_breaks_unpunctuated_runs(clean):
+    # pinyin with no full stops was one 867-token chunk
+    pinyin = " ".join(["guān zì zài pú sà xíng shēn bō rě"] * 12)
+    out = clean(pinyin)
+    for sentence in out.split(". "):
+        assert len(sentence.split()) <= MAX_WORDS_PER_SENTENCE
+    assert out.replace(". ", " ").split() == pinyin.split()  # no words lost
+    assert clean("short one. another short one!") == "short one. another short one!"

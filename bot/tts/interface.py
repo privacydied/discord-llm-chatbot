@@ -42,6 +42,13 @@ _CHAR_RUN_RE = re.compile(r"([^\W\d_])\1{2,}", re.IGNORECASE)  # letters only: "
 _PATTERN_RUN_RE = re.compile(r"((?:[^\W\d_]){2,4}?)\1{2,}", re.IGNORECASE)
 _LONG_WORD_RE = re.compile(r"\S{41,}")
 MAX_TTS_WORD_CHARS = 40
+# Pocket's English model cannot say CJK/Cyrillic/Arabic/etc., and a run with no
+# sentence punctuation becomes one huge chunk (2026-10-24: the Heart Sutra in
+# Chinese = 815 tokens, pinyin = 867, max 50) that churns until the timeout, so
+# the reply fell back to text. Drop unspeakable scripts; break long runs. [REH]
+_UNSPEAKABLE_RE = re.compile(r"[^\x00-\u024f\u1e00-\u1eff\u2000-\u206f\u20a0-\u20cf\s]+")
+_SENTENCE_END_RE = re.compile(r"(?<=[.!?;:])\s+")
+MAX_WORDS_PER_SENTENCE = 25
 
 
 def _default_cache_dir() -> Path:
@@ -54,6 +61,16 @@ def _default_cache_dir() -> Path:
     Set TTS_CACHE_DIR explicitly to opt back into a persistent, disk-backed cache.
     """
     return Path(os.getenv("TEMP_DIR") or tempfile.gettempdir()) / "discord-llm-chatbot-tts"
+
+
+def _break_long_runs(text: str) -> str:
+    """Add a full stop every MAX_WORDS_PER_SENTENCE words inside unpunctuated runs."""
+    out = []
+    for sentence in _SENTENCE_END_RE.split(text):
+        words = sentence.split(" ")
+        parts = [" ".join(words[i : i + MAX_WORDS_PER_SENTENCE]) for i in range(0, len(words), MAX_WORDS_PER_SENTENCE)]
+        out.append(". ".join(p.rstrip(",") for p in parts))
+    return " ".join(out)
 
 
 class TTSManager:
@@ -254,7 +271,11 @@ class TTSManager:
         text = _CHAR_RUN_RE.sub(lambda m: m.group(0)[:2], text)
         text = _PATTERN_RUN_RE.sub(lambda m: m.group(1) * 2, text)
         text = _LONG_WORD_RE.sub(lambda m: m.group(0)[:MAX_TTS_WORD_CHARS], text)
-        return _WHITESPACE_RE.sub(" ", text).strip()
+        text = _UNSPEAKABLE_RE.sub(" ", text)
+        text = _WHITESPACE_RE.sub(" ", text).strip()
+        if not any(ch.isalnum() for ch in text):
+            return ""
+        return _break_long_runs(text)
 
     async def synthesize(self, text: str, timeout: float | None = None) -> bytes:
         await self._ensure_engine()
