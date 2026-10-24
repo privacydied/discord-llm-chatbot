@@ -105,7 +105,9 @@ async def test_attachment_scored_when_no_link(fake_apis):
     assert result.ok and "97%" in result.content
 
 
-async def test_not_configured_and_nothing_to_check(fake_apis):
+async def test_not_configured_and_nothing_to_check(fake_apis, monkeypatch):
+    for key in ("SIGHTENGINE_API_USER", "SIGHTENGINE_API_SECRET"):
+        monkeypatch.delenv(key, raising=False)  # independent of the live .env
     result = await check_ai_generated(ToolContext(message=_msg("is this ai?"), config={}), {})
     assert not result.ok and "isn't set up" in result.error
     result = await check_ai_generated(ToolContext(message=_msg("is this ai?"), config=CREDS), {})
