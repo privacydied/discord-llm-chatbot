@@ -69,3 +69,31 @@ async def test_server_with_voice_off_falls_through(monkeypatch):
     monkeypatch.setattr("bot.router.is_server_feature_enabled", lambda gid, name: False)
     msg = SimpleNamespace(id=1, content="say: hi", guild=SimpleNamespace(id=5), reference=None)
     assert await _router()._maybe_say_verbatim(msg, "say: hi") is None
+
+
+# live misses, 2026-10-24
+@pytest.mark.parametrize(
+    ("text", "spoken"),
+    [
+        ('say ||"Fuhhh I\'m over here stroking"||', "Fuhhh I'm over here stroking"),
+        ('Says "wuuuu"', "wuuuu"),
+        ('say this word by word: ||"I\'m over here"||', "I'm over here"),
+        ("say exactly: hello there", "hello there"),
+    ],
+)
+def test_say_spoiler_says_wordbyword(text, spoken):
+    assert parse_say_command(text) == (True, spoken)
+
+
+@pytest.mark.parametrize(("text", "spoken"), [("say nigger", "nigger"), ("say free palestine", "free palestine")])
+def test_bare_say_on_reply(text, spoken):
+    assert parse_say_command(text, is_reply=True) == (True, spoken)
+    assert parse_say_command(text)[0] is False  # not on a fresh message
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Say type shit", "say less", "say a swear word in russian", "say hi to mike", "say hello in french", "say something funny", "say what happened", "say " + "word " * 12],
+)
+def test_bare_say_chat_stays_chat_on_reply(text):
+    assert parse_say_command(text, is_reply=True)[0] is False

@@ -9934,7 +9934,7 @@ class Router:
     async def _maybe_say_verbatim(self, message: Message, content: str) -> BotAction | None:
         """Natural-language !say: speak the given (or replied-to) text verbatim. [CA]"""
         text = strip_leading_bot_mention(content or "", getattr(getattr(self.bot, "user", None), "id", None))
-        is_say, spoken = parse_say_command(text)
+        is_say, spoken = parse_say_command(text, is_reply=getattr(message, "reference", None) is not None)
         if not is_say:
             return None
         guild_id = getattr(getattr(message, "guild", None), "id", None)
