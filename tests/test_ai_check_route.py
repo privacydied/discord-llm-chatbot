@@ -26,6 +26,12 @@ from bot.tools.types import ToolResult
         "this looks ai generated 💀",
         "is this a deepfake",
         "is this AI? https://x.com/a/status/2113707791609184428",
+        # natural sentences (loose rule), live 2026-10-24
+        "nigga im askinf if the https://vxtwitter.com/siebenball/status/2113707791609184428 images in this tweet are ai or real not the text",
+        "are the images in this tweet ai or real",
+        "is the girl in this pic ai",
+        "check if these images are ai",
+        "is this person real or ai",
     ],
 )
 def test_ai_check_questions(text):
@@ -34,7 +40,19 @@ def test_ai_check_questions(text):
 
 @pytest.mark.parametrize(
     "text",
-    ["is this real?", "is this true", "what is ai", "is ai gonna take our jobs", "ai is mid", "fake", "is chatgpt better than gemini", "who made this"],
+    [
+        "is this real?",
+        "is this true",
+        "what is ai",
+        "is ai gonna take our jobs",
+        "ai is mid",
+        "fake",
+        "is chatgpt better than gemini",
+        "who made this",
+        "that movie about ai was mid",
+        "he works in ai",
+        "i think ai art is trash",
+    ],
 )
 def test_not_ai_check_questions(text):
     assert not is_ai_check_question(text)

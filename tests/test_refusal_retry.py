@@ -98,3 +98,12 @@ async def test_empty_reply_tries_next_model_first(monkeypatch):
     completions = _install(monkeypatch, [_response(""), _response("🍆 obviously")])
     assert await inference.run_tool_conversation(prompt="rank emojis", ctx=ToolContext(), cfg=CFG) == "🍆 obviously"
     assert [c["model"] for c in completions.calls] == ["primary", "backup-a"]
+
+
+async def test_sanitised_leak_placeholder_is_not_an_answer(monkeypatch):
+    """sanitize_model_output turns a leaked deliberation into SAFE_FALLBACK_MESSAGE; never post it."""
+    from bot.public_output import SAFE_FALLBACK_MESSAGE
+
+    completions = _install(monkeypatch, [_response(SAFE_FALLBACK_MESSAGE), _response("detector says 99% ai, that's slop")])
+    assert await inference.run_tool_conversation(prompt="is this ai", ctx=ToolContext(), cfg=CFG) == "detector says 99% ai, that's slop"
+    assert [c["model"] for c in completions.calls] == ["primary", "backup-a"]

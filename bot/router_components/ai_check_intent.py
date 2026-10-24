@@ -27,6 +27,18 @@ _REAL_OR_FAKE_RE = re.compile(
     re.IGNORECASE,
 )
 _LOOKS_AI_RE = re.compile(rf"^\s*{_LEAD}{_SUBJ}(?:{_NOUN}\s+)?(?:look|looks|lookin|looking)\s+(?:like\s+)?{_AI}{_END}", re.IGNORECASE)
+# Looser second rule for natural sentences ("are the images in this tweet ai or
+# real", "is the girl in this pic ai"): an AI word + a pointer at the media + a
+# question cue. A false hit is cheap -- with no link/image the caller falls
+# back to ordinary chat.
+_AI_WORD_RE = re.compile(rf"\b{_AI}\b", re.IGNORECASE)
+_POINTER_RE = re.compile(
+    r"\b(?:this|that|these|those|it|pics?|pictures?|images?|imgs?|photos?|videos?|vids?|clips?|tweets?|posts?|"
+    r"person|girl|guy|woman|man|her|him|she|he)\b",
+    re.IGNORECASE,
+)
+_QUESTION_RE = re.compile(r"\?|^\s*(?:\w+\s+){0,4}?(?:is|are|check|tell\s+me|if|whether)\b|\breal\s+or\b|\bor\s+real\b", re.IGNORECASE)
+LOOSE_MAX_CHARS = 160
 _MENTION_RE = re.compile(r"<@[!&]?\d+>")
 _URL_RE = re.compile(r"https?://\S+")
 
@@ -35,6 +47,8 @@ def is_ai_check_question(text: str | None) -> bool:
     """True when the message (mentions and links removed) is only an AI-check question."""
     body = _URL_RE.sub(" ", _MENTION_RE.sub(" ", text or ""))
     body = " ".join(body.split())
-    if not body or len(body) > 80:
+    if not body:
         return False
-    return any(p.match(body) for p in (_AI_RE, _PIC_FAKE_RE, _REAL_OR_FAKE_RE, _LOOKS_AI_RE))
+    if len(body) <= 80 and any(p.match(body) for p in (_AI_RE, _PIC_FAKE_RE, _REAL_OR_FAKE_RE, _LOOKS_AI_RE)):
+        return True
+    return len(body) <= LOOSE_MAX_CHARS and bool(_AI_WORD_RE.search(body) and _POINTER_RE.search(body) and _QUESTION_RE.search(body))

@@ -27,6 +27,7 @@ from bot.utils.logging import get_logger
 
 from .registry import ALLOWED_TOOL_NAMES, execute_tool, get_registry
 from bot.core.refusals import is_refusal
+from bot.public_output import SAFE_FALLBACK_MESSAGE
 
 from .textual_calls import TextualCall, find_textual_calls, strip_textual_calls
 from .types import ToolContext
@@ -275,6 +276,11 @@ _LEAK_PREFIX_CHARS = 200
 _MIN_LEAK_CHARS = 200
 
 
+def _is_unusable(content: str | None) -> bool:
+    """The output sanitiser's stand-in for a leaked deliberation is not an answer. [REH]"""
+    return (content or "").strip() == SAFE_FALLBACK_MESSAGE
+
+
 def _is_reasoning_leak(content: str, reasoning: str) -> bool:
     """True when `content` is the model's deliberation rather than its answer.
 
@@ -374,7 +380,7 @@ async def _force_answer(
 
     content, reasoning = _extract(response)
     content = strip_textual_calls(content)
-    if content and not _is_reasoning_leak(content, reasoning):
+    if content and not _is_unusable(content) and not _is_reasoning_leak(content, reasoning):
         logger.info("tools.force_answer_ok chars=%d", len(content))
         return content
     logger.warning("tools.force_answer_still_deliberating")
@@ -457,6 +463,8 @@ async def run_tool_conversation(
                 tool_calls = _synthetic_calls(written, iteration)
         if not tool_calls:
             content = strip_textual_calls(content)
+            if _is_unusable(content):
+                content = ""  # sanitiser replaced a leaked deliberation: treat as no answer
             if content and not _is_reasoning_leak(content, reasoning):
                 if is_refusal(content) and len(models) > 1 and not refusal_retried and time.monotonic() < deadline:
                     # Free models disagree on what to refuse; give the next one a go
