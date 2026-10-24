@@ -166,6 +166,7 @@ from .see import see_infer
 from .server_features import is_server_feature_enabled
 from .threads.x_thread_unroll import unroll_author_thread
 from .tts.state import apply_tts_preference
+from .router_components.ai_check_intent import is_ai_check_question
 from .router_components.say_command import parse_say_command
 from .router_components.say_command import referenced_text as say_referenced_text
 from .voice import transcripts as voice_transcripts
@@ -4006,6 +4007,12 @@ class Router:
             say_action = await self._maybe_say_verbatim(message, content)
             if say_action is not None:
                 return say_action
+
+            # 3c. "is this AI?" with a link/image -> run the detector in code, before
+            # the X/URL routes can swallow the link (they ignore quote-tweet media). [CA]
+            ai_action = await self._maybe_ai_check(message, content)
+            if ai_action is not None:
+                return ai_action
 
             # --- Start of processing for DMs, Mentions, and Replies ---
             async with self._optional_typing(message.channel):
@@ -9947,6 +9954,29 @@ class Router:
             return None  # "say this" with nothing to say: normal chat flow
         self.logger.info(f"say.verbatim | msg_id={message.id} chars={len(spoken)}")
         return BotAction(content=spoken, meta={"requires_tts": True, "include_transcript": False, "say_verbatim": True})
+
+    async def _maybe_ai_check(self, message: Message, content: str) -> BotAction | None:
+        """Explicit "is this AI?" -> check_ai_generated, then a persona reply from the scores."""
+        if not is_ai_check_question(content):
+            return None
+        from bot.tools import ToolContext
+        from bot.tools.builtins.ai_check import check_ai_generated
+        from bot.tools.inference import answer_from_context
+
+        cfg = self.config or {}
+        async with self._optional_typing(message.channel):
+            result = await check_ai_generated(ToolContext(message=message, bot=self.bot, config=cfg), {})
+            if not result.ok and (result.error or "").startswith("nothing to check"):
+                return None  # no link/image anywhere: ordinary chat answers
+            findings = result.content if result.ok else f"The AI-image check failed: {result.error}. Say so plainly."
+            question = strip_leading_bot_mention(content or "", getattr(getattr(self.bot, "user", None), "id", None))
+            self.logger.info(f"ai_check.routed | msg_id={message.id} ok={result.ok}")
+            answer = await answer_from_context(prompt=question or "is this AI?", context=f"[check_ai_generated result]\n{findings}", cfg=cfg)
+        if not answer:
+            answer = findings.split("\n\n", 1)[0] if result.ok else f"couldn't run the ai check: {result.error}"
+        from bot.core.text_case import shape_reply
+
+        return BotAction(content=shape_reply(answer))
 
     def _is_dot_edit(self, text: str | None) -> bool:
         cfg = self.config or {}

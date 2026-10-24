@@ -495,3 +495,30 @@ async def run_tool_conversation(
 
     logger.info("tools.max_iterations_reached max=%d; forcing an answer", max_iterations)
     return await _force_answer(client, model, messages, max_tokens, extra_body)
+
+
+async def answer_from_context(*, prompt: str, context: str, cfg: dict[str, Any] | None = None) -> str | None:
+    """Persona reply to ``prompt`` from ``context`` with tools withheld. [CA][REH]
+
+    For results the bot already gathered in code (e.g. the AI-image detector):
+    the model only phrases them, and cannot call the tool again (which would cost
+    another detector run). Tries the tool-loop model list in order; None when
+    every model fails, so the caller can fall back to a plain message.
+    """
+    from bot.config import load_config
+
+    config = cfg if cfg is not None else load_config()
+    timeout_s = float(config.get("TOOLS_TIMEOUT_S", DEFAULT_TIMEOUT_S))
+    try:
+        client, model = _client_for(config, timeout_s)
+    except Exception as exc:  # [REH]  # noqa: BLE001
+        logger.warning("tools.answer_from_context.client_failed error=%s", exc)
+        return None
+    messages = _build_messages(prompt, _default_system_prompt(config), context)
+    max_tokens = config.get("MAX_RESPONSE_TOKENS", 1000)
+    extra_body = _reasoning_extra_body(config)
+    for candidate in _model_candidates(config, model) if model else []:
+        answer = await _force_answer(client, candidate, messages, max_tokens, extra_body)
+        if answer and not is_refusal(answer):
+            return answer
+    return None
