@@ -16,6 +16,7 @@ from .history import SPEC as HISTORY_SPEC
 from .image_gen import SPEC as IMAGE_GEN_SPEC
 from .markets import CONVERT_SPEC, PRICE_SPEC
 from .vision import SPEC as VISION_SPEC
+from .voice_note import SPEC as VOICE_NOTE_SPEC
 from .web import NEWS_SPEC, READ_SPEC, WEB_SEARCH_SPEC, WIKI_SPEC
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ BUILTIN_SPECS: tuple[ToolSpec, ...] = (
     CONVERT_SPEC,
     PRICE_SPEC,
     IMAGE_GEN_SPEC,
+    VOICE_NOTE_SPEC,
 )
 
 

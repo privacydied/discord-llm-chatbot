@@ -4,6 +4,7 @@ import logging
 import os
 
 _TRUE = {"1", "true", "yes", "on"}
+MAX_PENDING_VOICE_REPLIES = 256
 
 
 class TTSState:
@@ -18,6 +19,11 @@ class TTSState:
 
         # Per-user one-time TTS flags
         self.one_time_tts: set[int] = set()
+
+        # Messages whose reply the model asked to send as a voice note
+        # (send_voice_note tool). Keyed by message so a failed run can't leak
+        # voice into a later reply; bounded. [REH]
+        self._voice_reply_messages: dict[int, None] = {}
 
         # Admin user IDs (cached for performance)
         self.admin_users: set[int] = set()
@@ -72,6 +78,20 @@ class TTSState:
         """Set a one-time TTS flag for the user."""
         self.one_time_tts.add(user_id)
 
+    def request_voice_reply(self, message_id: int) -> None:
+        """The reply to ``message_id`` should be a voice note."""
+        self._voice_reply_messages[int(message_id)] = None
+        while len(self._voice_reply_messages) > MAX_PENDING_VOICE_REPLIES:
+            self._voice_reply_messages.pop(next(iter(self._voice_reply_messages)))
+
+    def consume_voice_reply(self, message_id: int | None) -> bool:
+        if message_id is None:
+            return False
+        try:
+            return self._voice_reply_messages.pop(int(message_id), False) is None
+        except (TypeError, ValueError):
+            return False
+
     def get_and_clear_one_time_tts(self, user_id: int) -> bool:
         """Check and clear the one-time TTS flag for the user."""
         if user_id in self.one_time_tts:
@@ -124,7 +144,8 @@ def apply_tts_preference(action, message, state: TTSState | None = None) -> bool
             return False
     user_id = getattr(getattr(message, "author", None), "id", None)
     st = state or tts_state
-    if user_id is None or not (st.get_and_clear_one_time_tts(user_id) or st.is_user_tts_enabled(user_id)):
+    asked = st.consume_voice_reply(getattr(message, "id", None))  # send_voice_note tool
+    if not asked and (user_id is None or not (st.get_and_clear_one_time_tts(user_id) or st.is_user_tts_enabled(user_id))):
         return False
     meta["requires_tts"] = True
     meta["include_transcript"] = os.getenv("TTS_INCLUDE_TRANSCRIPT", "true").lower() in _TRUE

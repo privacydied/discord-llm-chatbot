@@ -48,6 +48,8 @@ ALLOWED_TOOL_NAMES: frozenset[str] = frozenset(
         "get_price",
         # Starts a job on the existing vision orchestrator (policy/budget enforced there). [SFT]
         "generate_image",
+        # Marks the reply to the current message as voice; no I/O of its own. [SFT]
+        "send_voice_note",
     }
 )
 
