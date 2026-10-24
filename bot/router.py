@@ -168,6 +168,7 @@ from .threads.x_thread_unroll import unroll_author_thread
 from .tts.state import apply_tts_preference
 from .router_components.ai_check_intent import is_ai_check_question
 from .router_components.say_command import parse_say_command
+from .router_components.voice_request import wants_voice_reply
 from .router_components.say_command import referenced_text as say_referenced_text
 from .voice import transcripts as voice_transcripts
 from .types import Command, ParsedCommand
@@ -4013,6 +4014,14 @@ class Router:
             ai_action = await self._maybe_ai_check(message, content)
             if ai_action is not None:
                 return ai_action
+
+            # 3d. "reply in a voice note" -> this answer is spoken (voice is off by
+            # default); the send_voice_note tool still covers odd phrasings. [CA]
+            if wants_voice_reply(content):
+                from bot.tts.state import tts_state
+
+                tts_state.request_voice_reply(getattr(message, "id", None))
+                self.logger.info(f"voice.requested | msg_id={message.id}")
 
             # --- Start of processing for DMs, Mentions, and Replies ---
             async with self._optional_typing(message.channel):
