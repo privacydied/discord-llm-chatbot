@@ -490,6 +490,9 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "POCKET_TTS_HF_HOME": env_getter("POCKET_TTS_HF_HOME", ""),
         "POCKET_TTS_THREADS": env_getter("POCKET_TTS_THREADS", "2"),
         "POCKET_TTS_QUANTIZE": env_getter("POCKET_TTS_QUANTIZE", "false"),
+        # check_ai_generated tool (free plan: 2,000 ops/month, 5 per image) [CMV]
+        "SIGHTENGINE_API_USER": env_getter("SIGHTENGINE_API_USER", ""),
+        "SIGHTENGINE_API_SECRET": env_getter("SIGHTENGINE_API_SECRET", ""),
         "POCKET_TTS_KEEP_WARM": env_getter("POCKET_TTS_KEEP_WARM", "false"),
         "POCKET_TTS_START_TIMEOUT_S": env_getter("POCKET_TTS_START_TIMEOUT_S", "180"),
         # Timeouts for TTS synthesis [CMV][IV]

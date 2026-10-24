@@ -61,7 +61,8 @@ DESCRIPTION = (
     "Look at an image that was posted earlier in this channel and answer a question about it. "
     "Use this whenever the conversation refers back to a picture, screenshot, meme or photo that is "
     "not attached to the current message -- including when you described it yourself a few messages ago. "
-    "Do not claim you cannot see an image before trying this."
+    "Do not claim you cannot see an image before trying this. "
+    "Not for 'is this AI / fake / real / generated?' questions -- use check_ai_generated for those."
 )
 
 

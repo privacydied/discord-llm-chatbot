@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .ai_check import SPEC as AI_CHECK_SPEC
 from .archive import SPEC as ARCHIVE_SPEC
 from .clock import SPEC as CLOCK_SPEC
 from .history import SPEC as HISTORY_SPEC
@@ -37,6 +38,7 @@ BUILTIN_SPECS: tuple[ToolSpec, ...] = (
     PRICE_SPEC,
     IMAGE_GEN_SPEC,
     VOICE_NOTE_SPEC,
+    AI_CHECK_SPEC,
 )
 
 

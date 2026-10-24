@@ -50,6 +50,8 @@ ALLOWED_TOOL_NAMES: frozenset[str] = frozenset(
         "generate_image",
         # Marks the reply to the current message as voice; no I/O of its own. [SFT]
         "send_voice_note",
+        # Fixed hosts only (api.fxtwitter.com, Sightengine) + the existing instagram fetcher. [SFT]
+        "check_ai_generated",
     }
 )
 
