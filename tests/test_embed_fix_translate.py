@@ -75,6 +75,28 @@ async def test_fetch_lang_reads_fxtwitter_api():
     assert session.get.call_args.args[0] == "https://api.fxtwitter.com/status/123"
 
 
+BJP_TWEET = (  # api.fxtwitter.com/status/2113598812363374958, 2026-10-24: lang missing
+    "⚠️ Ilhan Omar \n⚠️ Donald Lu\n⚠️ Jeremy Corbyn\n⚠️ Sunita Viswanath \n⚠️ Gunther Fehlinger \n⚠️ खालिस्तानी समर्थक... \n\nये महज कुछ नाम नहीं हैं, बल्कि कट्टर भारत-विरोधियों का पूरा नेटवर्क है, जिनके साथ Rahul"
+)
+
+
+@pytest.mark.parametrize(
+    ("tweet", "expected"),
+    [
+        ({"lang": None, "text": BJP_TWEET}, translate.SCRIPT_GUESS),  # no lang, mostly Hindi -> translate
+        ({"lang": "und", "text": "Путин заявил сегодня утром о новых мерах"}, translate.SCRIPT_GUESS),
+        ({"text": "no language field but plain english text here"}, None),
+        ({"lang": None, "text": "ok 👍"}, None),  # too little text to judge
+        ({"lang": "hi", "text": BJP_TWEET}, "hi"),  # a real code always wins
+    ],
+)
+async def test_fetch_lang_guesses_script_when_lang_missing(tweet, expected):
+    session = MagicMock()
+    session.get = MagicMock(return_value=_Resp(200, {"code": 200, "tweet": tweet}))
+    lang = await translate.fetch_lang(session, "123")
+    assert lang == expected or (expected is None and not translate.needs_translation(lang, "en"))
+
+
 @pytest.mark.parametrize(
     "resp",
     [_Resp(404, {}), _Resp(200, {"code": 404}), _Resp(200, ["x"]), _Resp(200, aiohttp.ClientConnectionError("down")), _Resp(200, TimeoutError())],

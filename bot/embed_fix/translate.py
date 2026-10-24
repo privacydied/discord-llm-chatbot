@@ -34,6 +34,11 @@ _PLAIN_TWEET_RE = re.compile(r"^https://[^/]+/[A-Za-z0-9_]+(?:/web)?/status/(?P<
 # Twitter's non-language codes: undetermined, no text, media/hashtag/mention/
 # cashtag/emoji-only tweets. Translating these does nothing useful.
 NON_LANGUAGE_CODES = frozenset({"und", "zxx", "qme", "qht", "qam", "qct", "qst", "art"})
+# FxTwitter sometimes reports no language at all (seen on a mostly-Hindi tweet,
+# 2026-10-24). Then the text decides: enough non-Latin letters = foreign. [REH]
+NON_LATIN_SHARE = 0.3
+MIN_LETTERS = 12
+SCRIPT_GUESS = "xx"  # "some non-target language"; only used for the needs_translation check
 
 
 def parse_target(raw: Any) -> str | None:
@@ -58,8 +63,17 @@ def needs_translation(lang: Any, target: str) -> bool:
     return code not in NON_LANGUAGE_CODES and code.split("-")[0] != target
 
 
+def guess_from_script(text: Any) -> str | None:
+    """SCRIPT_GUESS when a real share of the letters are non-Latin, else None (unknown)."""
+    letters = [ch for ch in str(text or "") if ch.isalpha()]
+    if len(letters) < MIN_LETTERS:
+        return None
+    non_latin = sum(1 for ch in letters if ord(ch) > 0x24F)  # beyond Latin Extended-B
+    return SCRIPT_GUESS if non_latin / len(letters) >= NON_LATIN_SHARE else None
+
+
 async def fetch_lang(session: aiohttp.ClientSession, tid: str) -> str | None:
-    """Return the tweet language code reported by the FxTwitter API."""
+    """Return the tweet language code reported by the FxTwitter API (or a script guess)."""
     try:
         async with session.get(TWEET_API.format(tweet_id=tid)) as resp:
             if resp.status != 200:
@@ -70,7 +84,12 @@ async def fetch_lang(session: aiohttp.ClientSession, tid: str) -> str | None:
         logger.debug(f"embed_fix.translate.api_error | tweet={tid} error={exc}")
         return None
     tweet = payload.get("tweet") if isinstance(payload, Mapping) else None
-    return tweet.get("lang") if isinstance(tweet, Mapping) else None
+    if not isinstance(tweet, Mapping):
+        return None
+    lang = tweet.get("lang")
+    if isinstance(lang, str) and lang.strip() and lang.strip().lower() not in NON_LANGUAGE_CODES:
+        return lang
+    return guess_from_script(tweet.get("text")) or lang
 
 
 async def apply(fixes: list[EmbedFix], target: str | None) -> list[EmbedFix]:
