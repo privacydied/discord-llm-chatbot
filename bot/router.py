@@ -199,6 +199,7 @@ except Exception:  # noqa: BLE001
     _DEFAULT_VIDEO_SPEEDUP = 1.5
 
 X_STT_MIN_TIMEOUT_S = 120.0
+X_TEXT_TIMEOUT_S = 8.0  # tweet text fetch for the video route
 X_STT_PADDING_S = 45.0
 X_STT_MAX_TIMEOUT_S = 900.0
 X_STT_RTF_DEFAULT = 1.6
@@ -630,6 +631,36 @@ class Router:
             tweet_caption=tweet_caption,
             vl_notes=vl_notes,
         )
+
+    async def _x_tweet_data_for(self, url: str) -> dict[str, Any] | None:
+        """Tweet text (+ quoted text) for the video route, bounded. [REH]
+
+        The video route passed no tweet text, so a reaction GIF/clip's (often silent
+        or misheard) transcript was all the model saw (2026-10-25). Syndication
+        first (cached), then FxTwitter; None when both fail.
+        """
+        tweet_id = XApiClient.extract_tweet_id(str(url or ""))
+        if not tweet_id:
+            return None
+        with suppress(Exception):
+            syn = await asyncio.wait_for(self._get_tweet_via_syndication(tweet_id), timeout=X_TEXT_TIMEOUT_S)
+            if isinstance(syn, dict) and (syn.get("text") or syn.get("full_text")):
+                quoted = syn.get("quoted_tweet") if isinstance(syn.get("quoted_tweet"), dict) else None
+                return {**syn, "quoted_status": quoted} if quoted and "quoted_status" not in syn else syn
+        try:
+            import aiohttp
+
+            timeout = aiohttp.ClientTimeout(total=X_TEXT_TIMEOUT_S)
+            async with aiohttp.ClientSession(timeout=timeout) as session, session.get(f"https://api.fxtwitter.com/status/{tweet_id}") as resp:
+                payload = await resp.json(content_type=None) if resp.status == 200 else {}
+        except Exception as exc:  # noqa: BLE001 - optional context
+            self.logger.debug(f"x.tweet_text.failed id={tweet_id} error={exc}")
+            return None
+        tweet = payload.get("tweet") if isinstance(payload, dict) else None
+        if not isinstance(tweet, dict) or not tweet.get("text"):
+            return None
+        quote = tweet.get("quote") if isinstance(tweet.get("quote"), dict) else {}
+        return {"text": tweet["text"], "quoted_status": {"text": quote.get("text") or ""}}
 
     async def _resolve_x_base_text_for_url(self, url: str) -> str | None:
         """Resolve canonical tweet base text via API-first, then syndication fallback."""
@@ -4330,7 +4361,8 @@ class Router:
                                     ),
                                     message,
                                 )
-                                formatted = self._format_x_tweet_with_transcription(base_text=None, url=url_for_stt, stt_res=stt_res)
+                                tweet_data = await self._x_tweet_data_for(base_context_url)
+                                formatted = self._format_x_tweet_with_transcription(base_text=None, url=url_for_stt, stt_res=stt_res, tweet_data=tweet_data)
                                 try:
                                     el_ms = int((time.perf_counter() - stt_t0) * 1000)
                                     chars = len((stt_res or {}).get("transcription", ""))

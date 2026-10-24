@@ -14,6 +14,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+LOW_CONFIDENCE_STATUSES = frozenset({"low", "critical"})
+LOW_CONFIDENCE_MAX_CHARS = 120
+
+
 def format_x_tweet_with_transcription(
     *,
     base_text: str | None,
@@ -103,6 +107,12 @@ def format_x_tweet_with_transcription(
         else:
             transcript = str(raw_transcript or "").strip()
 
+        status = str((stt_res or {}).get("confidence_status") or "").lower()
+        if transcript and status in LOW_CONFIDENCE_STATUSES and len(transcript) <= LOW_CONFIDENCE_MAX_CHARS:
+            # Whisper invents a short line on silent/music clips (2026-10-25: a silent
+            # reaction GIF -> "You're scared to see this thing!", confidence=low). [REH]
+            logger.info(f"stt.low_confidence_dropped status={status} chars={len(transcript)}")
+            transcript = ""
         if transcript:
             bundle.media_transcript = transcript
         else:
