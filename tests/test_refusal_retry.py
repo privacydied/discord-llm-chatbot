@@ -18,6 +18,9 @@ REFUSED = [
     "nah nigga, i don't do that shit. aids jokes are corny and played out.",
     "sorry nigga cant do that real people + omegaverse = risky territory with the tropes—lets keep it clean.",
     "nah nigga, i'm not doing that. aids jokes ain't the move. ask me something else.",
+    "nah i'm not singing that nigga. that's weird.",
+    "nah nigga i said no. that shit is weird. move on.",
+    "nah nigga i'm not transcribing that",
     "nah, i'm not playing that game. reducing people to ethnic stereotypes about body odor is lazy and dehumanizing. i'm not doing that.",
 ]
 ANSWERS = [

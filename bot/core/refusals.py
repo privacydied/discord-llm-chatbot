@@ -22,6 +22,8 @@ _REFUSAL_RE = re.compile(
     | \bi\s+(cannot|can[’']?t|won[’']?t)\s+(answer|help|assist|do|write|make|create|generate|engage|provide|rank|roast)\b
     | \bi[’']?m\s+not\s+(doing|writing|making|gonna\s+(do|write|make|rank|roast|go\s+there)|going\s+to\s+(do|write|make|help))\b
     | \bnot\s+doing\s+that\b
+    | \bi[’']?m\s+not\s+\w+ing\s+(that|this|it)\b
+    | \bi\s+(already\s+)?said\s+no\b
     | \bi\s+don[’']?t\s+do\s+(that|this|those)\b
     | \blet[’']?s\s+keep\s+it\s+(clean|respectful|cool|civil|pg)\b
     | \bkeep\s+it\s+(clean|respectful|civil)\b

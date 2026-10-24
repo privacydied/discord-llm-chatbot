@@ -166,6 +166,8 @@ from .see import see_infer
 from .server_features import is_server_feature_enabled
 from .threads.x_thread_unroll import unroll_author_thread
 from .tts.state import apply_tts_preference
+from .router_components.say_command import parse_say_command
+from .router_components.say_command import referenced_text as say_referenced_text
 from .voice import transcripts as voice_transcripts
 from .types import Command, ParsedCommand
 from .utils.attachment_text import read_attachment_text
@@ -3998,6 +4000,12 @@ class Router:
                             },
                         )
                     return None
+
+            # 3b. "yo say this: ..." -> spoken word for word, like !say (no LLM, which
+            # treats repeating as endorsing and refuses). Only after the gate passed. [CA]
+            say_action = await self._maybe_say_verbatim(message, content)
+            if say_action is not None:
+                return say_action
 
             # --- Start of processing for DMs, Mentions, and Replies ---
             async with self._optional_typing(message.channel):
@@ -9915,6 +9923,30 @@ class Router:
         self.logger.warning(f"vision.route.conversational_edit.no_attach_permission channel={getattr(message.channel, 'id', None)}")
         self._metric_inc("vision.route.conversational_edit", {"outcome": "no_attach_permission"})
         return BotAction(content="i can't post images in this channel. my role needs the **Attach Files** permission here.", error=True)
+
+    async def _maybe_say_verbatim(self, message: Message, content: str) -> BotAction | None:
+        """Natural-language !say: speak the given (or replied-to) text verbatim. [CA]"""
+        text = strip_leading_bot_mention(content or "", getattr(getattr(self.bot, "user", None), "id", None))
+        is_say, spoken = parse_say_command(text)
+        if not is_say:
+            return None
+        guild_id = getattr(getattr(message, "guild", None), "id", None)
+        if guild_id is not None and not is_server_feature_enabled(guild_id, "tts"):
+            return None  # voice off here: let the normal chat flow answer
+        if not spoken and getattr(message, "reference", None) is not None:
+            ref = getattr(message.reference, "resolved", None)
+            if not isinstance(ref, discord.Message):
+                try:
+                    ref = await asyncio.wait_for(self._fetch_referenced_message(message), timeout=8.0)
+                except (TimeoutError, asyncio.TimeoutError, discord.HTTPException) as exc:
+                    self.logger.debug(f"say.reference_unavailable | {exc}")
+                    ref = None
+            if ref is not None:
+                spoken = say_referenced_text(voice_transcripts.message_text(ref))
+        if not spoken:
+            return None  # "say this" with nothing to say: normal chat flow
+        self.logger.info(f"say.verbatim | msg_id={message.id} chars={len(spoken)}")
+        return BotAction(content=spoken, meta={"requires_tts": True, "include_transcript": False, "say_verbatim": True})
 
     def _is_dot_edit(self, text: str | None) -> bool:
         cfg = self.config or {}
