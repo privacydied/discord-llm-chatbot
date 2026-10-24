@@ -2728,7 +2728,11 @@ class UnifiedVisionAdapter:
                     )
 
                 except VisionError as e:
-                    last_error = e
+                    # "came back unchanged" tells the user more than a later provider's
+                    # out-of-credit error, so it is kept over a quota failure. [REH]
+                    unchanged_kept = last_error is not None and "returned the image unchanged" in (last_error.message or "") and e.error_type == VisionErrorType.QUOTA_EXCEEDED
+                    if not unchanged_kept:
+                        last_error = e
                     # Special-case: Novita 400 prompt length error → one clean retry with 2000-char prompt [REH]
                     if provider_name == "novita" and e.error_type == VisionErrorType.VALIDATION_ERROR and "prompt: value length must be between 1 and 2000" in (e.message or "").lower():
                         if not did_prompt_retry:

@@ -57,6 +57,17 @@ _ERROR_SNIPPET_CHARS = 300
 _CF_QUOTA_MARKERS = ("4006", "daily free allocation", "neurons")
 _CF_FILTER_MARKERS = ("nsfw", "flagged", "safety", "moderat")
 _HF_QUOTA_MARKERS = ("quota", "gpu task aborted", "exceeded your")
+# A "successful" edit can come back visibly identical (2026-10-24: Kontext-dev,
+# "make the vial say estrogen": label unchanged). Compared on a blurred 128px
+# greyscale grid: that no-op peaked at 11.1 per 16px cell / 0.31% pixels moved;
+# a real (bandana) edit at 39.3 / 8.4%. Unchanged = both below these. [REH]
+UNCHANGED_GRID = 128
+UNCHANGED_CELL = 16
+UNCHANGED_MAX_CELL = 18.0
+UNCHANGED_MAX_SHARE = 0.01
+UNCHANGED_PIXEL_DELTA = 30
+FIRMER_EDIT_SUFFIX = ". Make this change clearly and visibly; keep everything else the same."
+UNCHANGED_USER_MESSAGE = "The free editor sent the picture back unchanged. Try wording it more directly (e.g. replace the text X with Y)."
 
 
 def _snippet(text: str) -> str:
@@ -91,6 +102,45 @@ def _shrink_to_jpeg(data: bytes, max_side: int) -> tuple[bytes, int, int]:
     out = io.BytesIO()
     img.save(out, "JPEG", quality=INPUT_JPEG_QUALITY)
     return out.getvalue(), orig_w, orig_h
+
+
+def _edit_metrics(before: bytes, after: bytes) -> tuple[float, float]:
+    """(max 16px-cell mean difference, share of pixels moved) on a blurred 128px grid."""
+    from PIL import Image, ImageChops, ImageFilter  # lazy: heavy import
+
+    side, cell = UNCHANGED_GRID, UNCHANGED_CELL
+
+    def _norm(data: bytes) -> Any:
+        with Image.open(io.BytesIO(data)) as img:
+            return img.convert("L").resize((side, side)).filter(ImageFilter.GaussianBlur(1.5))
+
+    diff = ImageChops.difference(_norm(before), _norm(after))
+    hist = diff.histogram()
+    share = sum(hist[UNCHANGED_PIXEL_DELTA + 1 :]) / (side * side)
+    cells = []
+    for y in range(0, side, cell):
+        for x in range(0, side, cell):
+            block = diff.crop((x, y, x + cell, y + cell)).histogram()
+            cells.append(sum(i * n for i, n in enumerate(block)) / (cell * cell))
+    return max(cells), share
+
+
+async def edit_is_unchanged(before: bytes | None, after: bytes) -> bool:
+    """True when ``after`` is visibly the same picture as ``before`` (off the event loop)."""
+    if not before or not after:
+        return False
+    try:
+        max_cell, share = await asyncio.to_thread(_edit_metrics, before, after)
+    except Exception as exc:  # noqa: BLE001 - undecodable output: let the normal path handle it
+        logger.debug(f"edit.unchanged_check_failed error={exc}")
+        return False
+    unchanged = max_cell < UNCHANGED_MAX_CELL and share < UNCHANGED_MAX_SHARE
+    logger.info(f"edit.change_check max_cell={max_cell:.1f} share={share:.2%} unchanged={unchanged}")
+    return unchanged
+
+
+def _unchanged_error(provider: str) -> VisionError:
+    return VisionError(message=f"{provider} returned the image unchanged", error_type=VisionErrorType.PROVIDER_ERROR, user_message=UNCHANGED_USER_MESSAGE)
 
 
 async def prepare_input_image(request: NormalizedRequest, max_side: int) -> tuple[bytes, int, int]:
@@ -236,6 +286,8 @@ class CloudflareWorkersAIPlugin(_InlineResultPlugin):
         for model in models:
             try:
                 image = await self._run_model(model, request, png, orig_w, orig_h)
+                if request.task == VisionTask.IMAGE_TO_IMAGE and await edit_is_unchanged(png, base64.b64decode(image)):
+                    raise _unchanged_error(f"cloudflare {model}")
             except VisionError as exc:
                 if exc.error_type not in _CF_FALLTHROUGH_ERRORS:
                     raise
@@ -351,9 +403,12 @@ class HuggingFaceSpacePlugin(_InlineResultPlugin):
         await self.startup()
         try:
             path = await self._upload(png)
-            event_id = await self._call(path, request)
-            result_url = await self._await_result(event_id)
-            mime, data = await self._download(result_url)
+            mime, data = await self._edit(path, request.prompt, request.seed)
+            if await edit_is_unchanged(png, data):
+                logger.warning(f"hfspace.unchanged space={self.space} retrying_firmer=True")
+                mime, data = await self._edit(path, request.prompt.rstrip(" .") + FIRMER_EDIT_SUFFIX, None)
+                if await edit_is_unchanged(png, data):
+                    raise _unchanged_error(f"hfspace {self.space}")
         except VisionError:
             raise
         except Exception as exc:  # noqa: BLE001 - network/timeout/bad JSON
@@ -374,10 +429,14 @@ class HuggingFaceSpacePlugin(_InlineResultPlugin):
             self._check_http(response.status, text, "upload")
         return json.loads(text)[0]
 
-    async def _call(self, path: str, request: NormalizedRequest) -> str:
+    async def _edit(self, path: str, prompt: str, seed: Any) -> tuple[str, bytes]:
+        event_id = await self._call(path, prompt, seed)
+        return await self._download(await self._await_result(event_id))
+
+    async def _call(self, path: str, prompt: str, seed_value: Any) -> str:
         image = {"path": path, "meta": {"_type": "gradio.FileData"}}
-        seed = int(request.seed) if request.seed is not None else 0
-        payload = {"data": [image, request.prompt, seed, request.seed is None, HF_KONTEXT_GUIDANCE, HF_KONTEXT_STEPS]}
+        seed = int(seed_value) if seed_value is not None else 0
+        payload = {"data": [image, prompt, seed, seed_value is None, HF_KONTEXT_GUIDANCE, HF_KONTEXT_STEPS]}
         async with self.session.post(f"{self.base_url}/gradio_api/call/infer", json=payload, headers=self._headers()) as response:
             text = await response.text()
             self._check_http(response.status, text, "call")

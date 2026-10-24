@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import json
@@ -410,3 +411,85 @@ async def test_adapter_t2i_ladder_cloudflare_then_nvidia(monkeypatch):
     response = await adapter.submit(VisionRequest(task=VisionTask.TEXT_TO_IMAGE, prompt="a cat", user_id="1"))
     assert response.job_id == "nvidia:nim_1"
     assert [p for p, _ in tried] == ["cloudflare", "cloudflare", "nvidia"]
+
+
+# -- unchanged-output detection (2026-10-24: "make the vial say estrogen" came back identical) --
+def _scene(with_hat=False, quality=90) -> bytes:
+    from PIL import ImageDraw
+
+    img = Image.new("RGB", (800, 600), (200, 180, 150))
+    draw = ImageDraw.Draw(img)
+    draw.ellipse((300, 150, 500, 450), fill=(120, 80, 60))
+    if with_hat:
+        draw.rectangle((300, 90, 500, 170), fill=(20, 140, 40))
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=quality)
+    return buf.getvalue()
+
+
+async def test_edit_is_unchanged_detects_reencode_but_not_a_real_edit():
+    from bot.vision.free_edit_providers import edit_is_unchanged
+
+    assert await edit_is_unchanged(_scene(), _scene(quality=60))  # same picture, re-encoded
+    assert not await edit_is_unchanged(_scene(), _scene(with_hat=True))  # an object added
+    assert not await edit_is_unchanged(_scene(), b"not an image")  # undecodable: let it through
+
+
+def _hf_round(body):
+    url = "https://x.hf.space/gradio_api/file=/tmp/out.webp"
+    return [
+        _Resp(200, json.dumps({"event_id": "ev"})),
+        _Resp(200, lines=["event: complete", f'data: [{{"url": "{url}"}}, 1]']),
+        _Resp(200, body=body, headers={"Content-Type": "image/jpeg"}),
+    ]
+
+
+async def test_hfspace_unchanged_retries_firmer_then_succeeds():
+    src = _scene()
+    session = _Session([_Resp(200, json.dumps(["/tmp/in.jpg"])), *_hf_round(src), *_hf_round(_scene(with_hat=True))])
+    plugin = _hf(session)
+    job = await plugin.submit(_request(input_image_data=src, prompt="add a green hat"))
+    prompts = [c[2]["json"]["data"][1] for c in session.calls if c[1].endswith("/call/infer")]
+    assert prompts[0] == "add a green hat" and prompts[1].startswith("add a green hat. Make this change clearly")
+    assert (await plugin.fetch_result(job)).assets
+
+
+async def test_hfspace_unchanged_twice_raises_clear_error():
+    from bot.vision.free_edit_providers import UNCHANGED_USER_MESSAGE
+
+    src = _scene()
+    session = _Session([_Resp(200, json.dumps(["/tmp/in.jpg"])), *_hf_round(src), *_hf_round(src)])
+    with pytest.raises(VisionError) as err:
+        await _hf(session).submit(_request(input_image_data=src))
+    assert err.value.error_type == VisionErrorType.PROVIDER_ERROR and err.value.user_message == UNCHANGED_USER_MESSAGE
+
+
+async def test_cloudflare_unchanged_falls_to_next_model():
+    src = _scene()
+    same = await asyncio.to_thread(fep._shrink_to_jpeg, src, fep.CLOUDFLARE_INPUT_MAX_SIDE)
+    ok = json.dumps({"result": {"image": base64.b64encode(_scene(with_hat=True)).decode()}})
+    noop = json.dumps({"result": {"image": base64.b64encode(same[0]).decode()}})
+    session = _Session([_Resp(200, noop), _Resp(200, ok)])
+    plugin = _cf(session, models="@cf/black-forest-labs/flux-2-klein-9b,@cf/black-forest-labs/flux-2-klein-4b")
+    job = await plugin.submit(_request(input_image_data=src))
+    assert len(session.calls) == 2 and "klein-4b" in session.calls[1][1]
+    assert (await plugin.fetch_result(job)).metadata["model"].endswith("klein-4b")
+
+
+async def test_adapter_keeps_unchanged_message_over_later_quota(monkeypatch):
+    from bot.vision.free_edit_providers import UNCHANGED_USER_MESSAGE, _unchanged_error
+    from bot.vision.types import VisionRequest
+
+    adapter = _adapter(CLOUDFLARE_ACCOUNT_ID="acct123", CLOUDFLARE_API_TOKEN="cf-token-abcdefghij")
+
+    async def unchanged(request, *_):
+        raise _unchanged_error("hfspace x")
+
+    async def quota(request, *_):
+        raise VisionError(message="NOT_ENOUGH_BALANCE", error_type=VisionErrorType.QUOTA_EXCEEDED, user_message="out of credit")
+
+    for name in list(adapter.providers):
+        monkeypatch.setattr(adapter.providers[name], "submit", unchanged if name in ("cloudflare", "hfspace") else quota)
+    with pytest.raises(VisionError) as err:
+        await adapter.submit(VisionRequest(task=VisionTask.IMAGE_TO_IMAGE, prompt="make the vial say estrogen", user_id="1", input_image_data=_png()))
+    assert err.value.user_message == UNCHANGED_USER_MESSAGE
