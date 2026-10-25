@@ -25,6 +25,11 @@ class _StubRouter:
     def _extract_fxtwitter_tweet_node(self, payload):
         return Router._extract_fxtwitter_tweet_node(self, payload)
 
+    def _extract_syndication_text(self, node):
+        from bot.router_components.x_routing import extract_syndication_text
+
+        return extract_syndication_text(node)
+
 
 class _FakeResp:
     def __init__(self, status_code: int, payload: dict) -> None:
@@ -115,3 +120,39 @@ class TestFxMediaHydration:
         sparse = {"text": "t", "user": {}}
         out = await Router._hydrate_media_from_fxtwitter(_StubRouter(), "123", sparse)
         assert out is sparse
+
+
+# -- long ("note") tweets: syndication truncates at ~280 chars (2026-10-25) --
+LONG = "When you call someone a rapist from some ambiguous situation... they check your paperwork. " * 8
+SYN_LONG = {"text": LONG[:273], "note_tweet": {"id": "abc"}, "user": {"screen_name": "Delicious_Tacos"}}
+
+
+async def test_long_tweet_full_text_hydrated(monkeypatch):
+    from bot.router_components.x_routing import extract_syndication_base_text
+
+    client = _patch_client(monkeypatch, _FakeResp(200, {"code": 200, "tweet": {"text": LONG}}))
+    out = await Router._hydrate_long_text_from_fxtwitter(_StubRouter(), "2114137474482294830", dict(SYN_LONG))
+    assert extract_syndication_base_text(out) == LONG.strip()
+    assert client.calls == ["https://api.fxtwitter.com/status/2114137474482294830"]
+
+
+async def test_short_tweet_not_fetched(monkeypatch):
+    client = _patch_client(monkeypatch, _FakeResp(200, {"code": 200, "tweet": {"text": "x"}}))
+    syn = {"text": "short tweet"}
+    assert await Router._hydrate_long_text_from_fxtwitter(_StubRouter(), "1", syn) is syn
+    assert client.calls == []
+
+
+async def test_long_tweet_fx_failure_keeps_syndication(monkeypatch):
+    _patch_client(monkeypatch, _FakeResp(500, {}))
+    syn = dict(SYN_LONG)
+    assert await Router._hydrate_long_text_from_fxtwitter(_StubRouter(), "1", syn) is syn
+
+
+async def test_oembed_truncated_text_hydrated(monkeypatch):
+    from bot.router_components.x_routing import extract_syndication_base_text
+
+    _patch_client(monkeypatch, _FakeResp(200, {"code": 200, "tweet": {"text": LONG}}))
+    oembed = {"text": LONG[:270] + "\u2026\u2014 Delicious Tacos (@Delicious_Tacos) October 24, 2026"}  # live shape
+    out = await Router._hydrate_long_text_from_fxtwitter(_StubRouter(), "2114137474482294830", oembed)
+    assert extract_syndication_base_text(out) == LONG.strip()

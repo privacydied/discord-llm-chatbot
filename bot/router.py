@@ -645,6 +645,9 @@ class Router:
         with suppress(Exception):
             syn = await asyncio.wait_for(self._get_tweet_via_syndication(tweet_id), timeout=X_TEXT_TIMEOUT_S)
             if isinstance(syn, dict) and (syn.get("text") or syn.get("full_text")):
+                full = self._extract_syndication_text(syn)
+                if full:
+                    syn = {**syn, "text": full, "full_text": full}
                 quoted = syn.get("quoted_tweet") if isinstance(syn.get("quoted_tweet"), dict) else None
                 return {**syn, "quoted_status": quoted} if quoted and "quoted_status" not in syn else syn
         try:
@@ -1005,6 +1008,38 @@ class Router:
             logger.debug(f"Failed to hydrate syndication payload: {exc}")
         return fallback_text
 
+    async def _hydrate_long_text_from_fxtwitter(self, tweet_id: str, syn: Any) -> Any:
+        """Fill a long tweet's full text into note_tweet. Never raises. [REH]
+
+        Syndication cuts long ("note") tweets at ~280 chars and sends note_tweet
+        with only an id, so the bot read "...when you get to the yard they check
+        your" and commented on the "cutoff" (2026-10-25). extract_syndication_base_text
+        already prefers note_tweet.text; fxtwitter has the full body.
+        """
+        try:
+            if not isinstance(syn, dict):
+                return syn
+            note = syn.get("note_tweet") if isinstance(syn.get("note_tweet"), dict) else None
+            if note is not None and note.get("text"):
+                return syn
+            # oEmbed fallback has no note_tweet marker; it ends the cut text with "…"
+            truncated = note is not None or "…" in self._extract_syndication_text(syn)[-120:]
+            if not truncated:
+                return syn
+            note = note or {}
+            http_client = await get_http_client()
+            resp = await http_client.get(f"https://api.fxtwitter.com/status/{tweet_id}", config=self._build_x_syn_quick_request_config())
+            if resp.status_code != 200:
+                return syn
+            full = str((self._extract_fxtwitter_tweet_node(resp.json()) or {}).get("text") or "").strip()
+            if len(full) <= len(self._extract_syndication_text(syn).split("\u2014 ")[0].rstrip()):
+                return syn
+            self.logger.info(f"x.syndication.fx_long_text_hydrated | tweet_id={tweet_id} chars={len(full)}")
+            return {**syn, "note_tweet": {**note, "text": full}}
+        except Exception as exc:  # noqa: BLE001
+            self.logger.debug(f"x.syndication.fx_long_text_failed | tweet_id={tweet_id} error={exc}")
+            return syn
+
     async def _hydrate_media_from_fxtwitter(self, tweet_id: str, syn: Any) -> Any:
         """Backfill media into a sparse syndication payload via fxtwitter. [REH]
 
@@ -1298,6 +1333,7 @@ class Router:
                 # silently degrading them to text flow ("photos=0"). Backfill
                 # photos/video from the fxtwitter API before caching. [REH]
                 data = await self._hydrate_media_from_fxtwitter(tweet_id, data)
+                data = await self._hydrate_long_text_from_fxtwitter(tweet_id, data)
 
                 # Cache and return
                 self._syn_cache[tweet_id] = build_syndication_cache_entry(
