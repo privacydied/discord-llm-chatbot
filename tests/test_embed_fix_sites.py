@@ -194,8 +194,18 @@ def test_rewrite_fixes_are_not_cards():
 def test_spotify_track_rewrites_to_fxspotify():
     url = "https://open.spotify.com/track/4FtB48pvBgvaqtM8AtCZ0O"
     assert rewrite_url(url) == "https://open.fxspotify.com/track/4FtB48pvBgvaqtM8AtCZ0O"
-    assert rewrite_url("https://open.spotify.com/intl-de/album/4FtB48pvBgvaqtM8AtCZ0O?si=abc") == "https://open.fxspotify.com/album/4FtB48pvBgvaqtM8AtCZ0O"
-    assert rewrite_url("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M") == "https://open.fxspotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+    fix = find_fixes(url)[0]
+    assert fix.card is False
+
+
+def test_spotify_non_track_is_a_card_on_spotify_page():
+    url = "https://open.spotify.com/intl-de/album/4FtB48pvBgvaqtM8AtCZ0O?si=abc"
+    fix = find_fixes(url)[0]
+    assert fix.rewritten == "https://open.spotify.com/album/4FtB48pvBgvaqtM8AtCZ0O"
+    assert fix.card is True
+    playlist = find_fixes("https://open.spotify.com/playlist/6wuyJaMQZPViOk27wS9GIM?si=36HFTtyfR0eZ7rc_9T8lEQ&utm_source=copy-link&pi=BZJ01ysoRCa8x")[0]
+    assert playlist.rewritten == "https://open.spotify.com/playlist/6wuyJaMQZPViOk27wS9GIM"
+    assert playlist.card is True
 
 
 def test_spotify_proxy_link_is_not_refixed():

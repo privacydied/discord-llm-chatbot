@@ -47,6 +47,8 @@ class EmbedSite:
     # card=True: no proxy domain exists; the bot builds its own embed card for
     # the (canonicalised) original URL instead of posting a rewritten link.
     card: bool = False
+    # card_if(match) -> True makes just that match a bot-built card (e.g. spotify non-track pages).
+    card_if: Callable[[re.Match[str]], bool] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +115,15 @@ def _build_reddit(m: re.Match[str], domain: str) -> str:
 
 
 def _build_spotify(m: re.Match[str], domain: str) -> str:
-    return f"https://{domain}/{m['kind'].lower()}/{m['id']}"
+    kind = m["kind"].lower()
+    if kind == "track":
+        return f"https://{domain}/track/{m['id']}"
+    # FxSpotify 404s every non-track kind; card_if turns these into bot-built embeds of the Spotify page.
+    return f"https://open.spotify.com/{kind}/{m['id']}"
+
+
+def _is_spotify_card(m: re.Match[str]) -> bool:
+    return m["kind"].lower() != "track"
 
 
 # ppv.st and the mirrors the site lists itself (Nuxt config apiDomains).
@@ -216,6 +226,7 @@ SITES: tuple[EmbedSite, ...] = (
         pattern=_compile(r"https?://open\.spotify\.com/(?:intl-[a-z]{2}/)?(?P<kind>track|album|playlist|episode|show|artist)/(?P<id>[A-Za-z0-9]{22})(?![A-Za-z0-9])"),
         default_domain="open.fxspotify.com",
         build=_build_spotify,
+        card_if=_is_spotify_card,
     ),
     EmbedSite(
         identifier="ppv",
@@ -259,7 +270,8 @@ def _site_fixes(site: EmbedSite, content: str, domain: str) -> Iterable[EmbedFix
     for match in site.pattern.finditer(content):
         rewritten = site.build(match, domain)
         if rewritten:
-            yield EmbedFix(site.identifier, match.group(0), rewritten, site.nsfw, match.start(), site.card)
+            card = site.card or bool(site.card_if and site.card_if(match))
+            yield EmbedFix(site.identifier, match.group(0), rewritten, site.nsfw, match.start(), card)
 
 
 def find_fixes(

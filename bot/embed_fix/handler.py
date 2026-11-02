@@ -23,7 +23,7 @@ from bot.core.output import safe_reply
 from bot.server_features import is_server_feature_enabled
 from bot.utils.logging import get_logger
 
-from . import instagram, ppv, translate
+from . import instagram, ppv, spotify, translate
 from .sites import DEFAULT_MAX_LINKS, EmbedFix, find_fixes, is_ignored, parse_domain_overrides, parse_site_list
 
 logger = get_logger(__name__)
@@ -164,13 +164,21 @@ async def _fetch_uploads(fixes: list[EmbedFix], max_bytes: int) -> _Uploads:
     return out
 
 
+async def _build_card_fixes(card_fixes: list[EmbedFix]) -> list[discord.Embed]:
+    """Bot-built embeds per card site: ppv stream pages and spotify non-track pages."""
+    ppv_urls = [fix.rewritten for fix in card_fixes if fix.site == "ppv"]
+    spotify_urls = [fix.rewritten for fix in card_fixes if fix.site == "spotify"]
+    ppv_cards, spotify_cards = await asyncio.gather(ppv.build_cards(ppv_urls), spotify.build_cards(spotify_urls))
+    return ppv_cards + spotify_cards
+
+
 async def _render(fixes: list[EmbedFix], *, upload_budget: int = 0) -> _Rendered:
     """Split fixes into uploaded media (+ cards), reply text (rewritten links) and bot-built cards."""
     uploads = await _fetch_uploads(fixes, upload_budget) if upload_budget > 0 else _Uploads([], [], set())
     links = [fix for fix in fixes if not fix.card and fix.position not in uploads.positions]
     card_fixes = [fix for fix in fixes if fix.card]
     room = _MAX_EMBEDS - len(uploads.cards)
-    cards = await ppv.build_cards([fix.rewritten for fix in card_fixes[:room]]) if card_fixes and room > 0 else []
+    cards = await _build_card_fixes(card_fixes[:room]) if card_fixes and room > 0 else []
     sent = [fix for fix in fixes if fix.position in uploads.positions] + links + (card_fixes if cards else [])
     sent.sort(key=lambda fix: fix.position)
     return _Rendered("\n".join(fix.rewritten for fix in links) or None, uploads.cards + cards, uploads.files, sent)

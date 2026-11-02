@@ -188,11 +188,22 @@ async def _get_text(session: aiohttp.ClientSession, url: str) -> str | None:
         async with session.get(url, headers={"User-Agent": _PROXY_UA}) as resp:
             if resp.status != 200:
                 return None
-            raw = await resp.content.read(_MAX_PAGE_BYTES)
+            raw = await read_capped(resp, _MAX_PAGE_BYTES)
             return raw.decode("utf-8", errors="replace")
     except (aiohttp.ClientError, TimeoutError) as exc:
         logger.debug(f"embed_fix.instagram.page_failed | url={url} error={exc}")
         return None
+
+
+async def read_capped(resp: aiohttp.ClientResponse, limit: int) -> bytes:
+    """Read up to *limit* bytes. ``StreamReader.read(n)`` returns one chunk, not n bytes, so loop."""
+    buf = bytearray()
+    while len(buf) < limit:
+        chunk = await resp.content.read(limit - len(buf))
+        if not chunk:
+            break
+        buf.extend(chunk)
+    return bytes(buf)
 
 
 def _parse_time(value: str | None) -> datetime | None:
