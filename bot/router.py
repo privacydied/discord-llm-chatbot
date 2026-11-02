@@ -5534,7 +5534,10 @@ class Router:
             response_action = await self._invoke_text_flow(original_text, message, context_str)
             response_action = await self._resolve_textual_tool_calls(response_action, original_text, message, context_str)
             if response_action and response_action.has_payload:
-                self.logger.info(f"✅ Text-only response generated successfully (msg_id: {message.id})")
+                if response_action.error:
+                    self.logger.warning(f"⚠️ Text-only flow returned a friendly error reply, not a model answer (msg_id: {message.id})")
+                else:
+                    self.logger.info(f"✅ Text-only response generated successfully (msg_id: {message.id})")
                 return response_action
             self.logger.warning(f"No response generated from text-only flow (msg_id: {message.id})")
             return None

@@ -108,4 +108,4 @@ async def brain_infer(prompt: str, context: str = "", system_prompt: str | None 
             user_message = "🤖 I'm experiencing a temporary issue generating a response. Please try again in a moment."
 
         logger.info(f"📢 Providing user-friendly error message: {user_message}")
-        return BotAction(content=user_message)
+        return BotAction(content=user_message, error=True)

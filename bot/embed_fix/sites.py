@@ -112,6 +112,10 @@ def _build_reddit(m: re.Match[str], domain: str) -> str:
     return f"https://{domain}/{m['path']}"
 
 
+def _build_spotify(m: re.Match[str], domain: str) -> str:
+    return f"https://{domain}/{m['kind'].lower()}/{m['id']}"
+
+
 # ppv.st and the mirrors the site lists itself (Nuxt config apiDomains).
 PPV_DOMAINS: tuple[str, ...] = ("ppv.st", "ppv.tj", "ppvs.pk", "ppv.rw", "ppv.ms", "ppv.bi", "ppv.ug", "ppv.to", "ppv.cx")
 _PPV_HOSTS = "|".join(re.escape(domain) for domain in PPV_DOMAINS)
@@ -205,6 +209,13 @@ SITES: tuple[EmbedSite, ...] = (
         # vxreddit serves full og: tags incl. og:video and resolves /s/ share links.
         default_domain="vxreddit.com",
         build=_build_reddit,
+    ),
+    EmbedSite(
+        identifier="spotify",
+        # Spotify share links: open.spotify.com/[intl-xx/]<kind>/<22-char base62 id>[?si=...]
+        pattern=_compile(r"https?://open\.spotify\.com/(?:intl-[a-z]{2}/)?(?P<kind>track|album|playlist|episode|show|artist)/(?P<id>[A-Za-z0-9]{22})(?![A-Za-z0-9])"),
+        default_domain="open.fxspotify.com",
+        build=_build_spotify,
     ),
     EmbedSite(
         identifier="ppv",

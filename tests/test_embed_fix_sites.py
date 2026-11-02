@@ -138,7 +138,7 @@ def test_ignore_tags(content, ignored):
 def test_parse_site_list():
     assert parse_site_list(" Twitter, reddit ,,") == frozenset({"twitter", "reddit"})
     assert parse_site_list(None) == frozenset()
-    assert {"twitter", "instagram", "bluesky", "furaffinity", "reddit_media", "pixiv", "deviantart", "tiktok", "reddit", "ppv"} == SITE_IDS
+    assert {"twitter", "instagram", "bluesky", "furaffinity", "reddit_media", "pixiv", "deviantart", "tiktok", "reddit", "spotify", "ppv"} == SITE_IDS
 
 
 PPV_SLUG = "misfits-boxing-joey-essex-vs-dapper-laughs-30174"
@@ -189,3 +189,15 @@ def test_page_slug_rejects_untrusted_urls():
 
 def test_rewrite_fixes_are_not_cards():
     assert all(not f.card for f in find_fixes("https://x.com/a/status/1 https://instagram.com/p/A"))
+
+
+def test_spotify_track_rewrites_to_fxspotify():
+    url = "https://open.spotify.com/track/4FtB48pvBgvaqtM8AtCZ0O"
+    assert rewrite_url(url) == "https://open.fxspotify.com/track/4FtB48pvBgvaqtM8AtCZ0O"
+    assert rewrite_url("https://open.spotify.com/intl-de/album/4FtB48pvBgvaqtM8AtCZ0O?si=abc") == "https://open.fxspotify.com/album/4FtB48pvBgvaqtM8AtCZ0O"
+    assert rewrite_url("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M") == "https://open.fxspotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+
+
+def test_spotify_proxy_link_is_not_refixed():
+    assert find_fixes("https://open.fxspotify.com/track/4FtB48pvBgvaqtM8AtCZ0O") == []
+    assert rewrite_url("https://open.spotify.com/user/someone") is None
