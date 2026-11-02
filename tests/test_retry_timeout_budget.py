@@ -58,8 +58,9 @@ class TestTimeoutDoesNotStarveFallbacks:
         assert result.result == "answer"
         # The hung model gets exactly ONE window, not two.
         assert attempts.count("nvidia/nemotron-3-ultra-550b-a55b:free") == 1
-        # The fast 429 still retries in place — it costs nothing.
-        assert attempts.count("poolside/laguna-s-2.1:free") == 2
+        # The 429 also falls through immediately — a saturated model should yield
+        # its budget to untried rungs, not wait for its window to reset.
+        assert attempts.count("poolside/laguna-s-2.1:free") == 1
         assert attempts[-1] == "nvidia/deepseek-v4-pro"
 
     async def test_last_rung_keeps_its_retries(self) -> None:
@@ -105,6 +106,55 @@ class TestTimeoutDoesNotStarveFallbacks:
         await mgr.run_with_fallback("text", factory, per_item_budget=5.0)
 
         assert attempts.count("hung") == 2
+
+    async def test_rate_limit_falls_through_instead_of_retrying_in_place(self) -> None:
+        """A 429 should yield its budget to untried rungs, not wait for the window to reset. [PA][CMV]"""
+        mgr = EnhancedRetryManager()
+        mgr.provider_configs["text"] = [
+            ProviderConfig("openrouter", "saturated", timeout=0.2, max_attempts=2, base_delay=0.0, jitter=False),
+            ProviderConfig("openrouter", "good", timeout=0.2, max_attempts=1, base_delay=0.0, jitter=False),
+        ]
+        attempts: list[str] = []
+
+        def factory(provider_config):
+            async def run():
+                attempts.append(provider_config.model)
+                if provider_config.model == "saturated":
+                    raise APIError("Error code: 429 - Provider returned error")
+                return "ok"
+
+            return run
+
+        result = await mgr.run_with_fallback("text", factory, per_item_budget=5.0)
+
+        assert result.success is True
+        assert result.result == "ok"
+        # The saturated model gets exactly ONE attempt, not two.
+        assert attempts.count("saturated") == 1
+        assert attempts[-1] == "good"
+
+    async def test_rate_limit_opt_out_restores_in_place_retry(self, monkeypatch) -> None:
+        """LADDER_RATELIMIT_SKIPS_RETRY=0 restores old retry-same-model-on-429 behaviour."""
+        monkeypatch.setenv("LADDER_RATELIMIT_SKIPS_RETRY", "0")
+        mgr = EnhancedRetryManager()
+        mgr.provider_configs["text"] = [
+            ProviderConfig("openrouter", "saturated", timeout=0.2, max_attempts=2, base_delay=0.0, jitter=False),
+            ProviderConfig("openrouter", "good", timeout=0.2, max_attempts=1, base_delay=0.0, jitter=False),
+        ]
+        attempts: list[str] = []
+
+        def factory(provider_config):
+            async def run():
+                attempts.append(provider_config.model)
+                if provider_config.model == "saturated":
+                    raise APIError("Error code: 429 - Provider returned error")
+                return "ok"
+
+            return run
+
+        await mgr.run_with_fallback("text", factory, per_item_budget=5.0)
+
+        assert attempts.count("saturated") == 2
 
 
 class TestBudgetErrorAttribution:

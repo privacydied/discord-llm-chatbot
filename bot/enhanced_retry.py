@@ -270,6 +270,17 @@ def _timeout_skips_provider_retry() -> bool:
     return os.getenv("LADDER_TIMEOUT_SKIPS_RETRY", "1").strip().lower() not in ("0", "false", "no")
 
 
+def _rate_limit_skips_provider_retry() -> bool:
+    """Whether a 429 rate limit ends this provider's attempts. Env: LADDER_RATELIMIT_SKIPS_RETRY. [CMV]
+
+    A rate limit means the provider has explicitly said "too many requests" — the
+    model is saturated. Retrying the same saturated model just burns budget waiting
+    for its window to reset, while untried rungs sit idle. Default on; set to 0 to
+    restore the old retry-the-same-model-on-429 behaviour.
+    """
+    return os.getenv("LADDER_RATELIMIT_SKIPS_RETRY", "1").strip().lower() not in ("0", "false", "no")
+
+
 # Provider replies that mean "this model/route is gone", not "try again later". [CMV][REH]
 # A retired model answers in ~50ms, so it never trips the timeout-based breaker:
 # without this list the ladder re-discovers the same corpse on every single
@@ -843,6 +854,15 @@ class EnhancedRetryManager:
             return True
         return "timed out" in str(error).lower()
 
+    def _is_rate_limit_error(self, error: Exception) -> bool:
+        """Did this attempt fail with a 429 rate limit? [CMV]
+
+        Matches explicit 429 status codes, "rate limit" / "too many requests"
+        phrasing, and OpenRouter embedded provider errors that carry a 429.
+        """
+        text = f"{type(error).__name__}: {error}".lower()
+        return "429" in text or "rate limit" in text or "too many requests" in text
+
     def _is_retryable_error(self, error: Exception) -> bool:
         """Check if error is retryable."""
         error_str = str(error).lower()
@@ -1044,7 +1064,7 @@ class EnhancedRetryManager:
                                 "bad api key",
                             )
                         ) and ("401" in msg_lower or "403" in msg_lower) and "502" not in msg_lower:
-                            logger.error(f"❌ Authentication failure for {provider_key}; aborting ladder: {type(e).__name__}: {e}")
+                            logger.error(f"❌ Authentication failure for {provider_key}; aborting ladder: {type(e).__name__}: {e}", exc_info=True)
                             total_time = time.time() - start_time
                             return RetryResult(
                                 success=False,
@@ -1079,6 +1099,15 @@ class EnhancedRetryManager:
                     if has_next_provider and attempt < provider_config.max_attempts - 1 and self._is_timeout_error(e) and _timeout_skips_provider_retry():
                         logger.warning(
                             f"⏭️ Timeout on {provider_key} after {attempt_timeout:.1f}s; skipping its remaining attempts to leave budget for the next provider",
+                        )
+                        break
+
+                    # Same logic for rate limits: the provider said it's saturated,
+                    # so don't wait for its window to reset when other models are
+                    # sitting idle below. [PA][CMV]
+                    if has_next_provider and attempt < provider_config.max_attempts - 1 and self._is_rate_limit_error(e) and _rate_limit_skips_provider_retry():
+                        logger.warning(
+                            f"⏭️ Rate limit (429) on {provider_key}; skipping its remaining attempts to leave budget for the next provider",
                         )
                         break
 
