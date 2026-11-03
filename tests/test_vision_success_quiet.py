@@ -25,3 +25,23 @@ async def test_vision_success_posts_image_and_returns_no_payload(tmp_path, monke
     channel.send.assert_awaited_once()
     assert len(channel.send.await_args.kwargs["files"]) == 1
     assert not action.has_payload  # nothing else posted after the image
+
+
+async def test_vision_success_without_attach_permission_posts_a_note(tmp_path, monkeypatch):
+    png = tmp_path / "out.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+    router = Router.__new__(Router)
+    router.logger = MagicMock()
+    router._build_vision_status_embed = MagicMock(return_value=MagicMock())
+    monkeypatch.setattr("bot.router.safe_edit", AsyncMock())
+    note = AsyncMock()
+    monkeypatch.setattr("bot.router.safe_send", note)
+    channel = SimpleNamespace(send=AsyncMock(), permissions_for=lambda me: SimpleNamespace(attach_files=False, send_messages=True))
+    original = SimpleNamespace(id=2, channel=channel, guild=SimpleNamespace(me=object()), author=SimpleNamespace(id=1))
+    job = SimpleNamespace(job_id="abcdef123456", response=SimpleNamespace(artifacts=[png], actual_cost=None), request=SimpleNamespace(prompt="a cat"))
+
+    await Router._handle_vision_success(router, job, MagicMock(), original)
+
+    channel.send.assert_not_awaited()  # no files attempted
+    note.assert_awaited_once()
+    assert "Attach Files" in note.await_args.kwargs["content"]

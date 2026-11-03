@@ -10707,7 +10707,7 @@ class Router:
                             missing_perms.append("Attach Files")
                         if not perms.send_messages:
                             missing_perms.append("Send Messages")
-                        f"Missing permissions: {', '.join(missing_perms)}"
+                        self.logger.warning(f"🎨 Vision upload blocked: missing {', '.join(missing_perms)} in this channel (msg_id: {original_msg.id})")
                 else:
                     # DM channel - assume we can attach files
                     can_attach_files = True
@@ -10837,6 +10837,18 @@ class Router:
                 except Exception as perm_e:  # noqa: BLE001
                     self.logger.warning(f"Permission check failed, attempting upload anyway: {perm_e}")
                     await original_msg.channel.send(files=files_to_upload)
+
+            if not files_to_upload and response and response.artifacts:
+                # Nothing was attached and no note was posted: the user would only see a COMPLETED card. [REH]
+                reason = "the bot lacks Attach Files permission in this channel" if not can_attach_files else "the generated file was missing"
+                self.logger.warning(f"📤 No files uploaded for job {job.job_id[:8]}: {reason}")
+                try:
+                    await safe_send(
+                        original_msg.channel,
+                        content=f"⚠️ Generated {len(response.artifacts)} image(s) for job `{job.job_id[:8]}` but could not attach them: {reason}.",
+                    )
+                except Exception as note_e:  # noqa: BLE001
+                    self.logger.warning(f"Could not post no-upload note for job {job.job_id[:8]}: {note_e}")
 
             # The image (or the upload-failure note) is already posted above and the
             # progress card shows the result; a follow-up status line was just noise.
