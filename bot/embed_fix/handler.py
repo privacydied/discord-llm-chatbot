@@ -23,7 +23,7 @@ from bot.core.output import safe_reply
 from bot.server_features import is_server_feature_enabled
 from bot.utils.logging import get_logger
 
-from . import instagram, ppv, spotify, translate
+from . import instagram, ppv, rumble, spotify, translate
 from .sites import DEFAULT_MAX_LINKS, EmbedFix, find_fixes, is_ignored, parse_domain_overrides, parse_site_list
 
 logger = get_logger(__name__)
@@ -168,8 +168,13 @@ async def _build_card_fixes(card_fixes: list[EmbedFix]) -> list[discord.Embed]:
     """Bot-built embeds per card site: ppv stream pages and spotify non-track pages."""
     ppv_urls = [fix.rewritten for fix in card_fixes if fix.site == "ppv"]
     spotify_urls = [fix.rewritten for fix in card_fixes if fix.site == "spotify"]
-    ppv_cards, spotify_cards = await asyncio.gather(ppv.build_cards(ppv_urls), spotify.build_cards(spotify_urls))
-    return ppv_cards + spotify_cards
+    rumble_urls = [fix.rewritten for fix in card_fixes if fix.site == "rumble"]
+    ppv_cards, spotify_cards, rumble_cards = await asyncio.gather(
+        ppv.build_cards(ppv_urls),
+        spotify.build_cards(spotify_urls),
+        rumble.build_cards(rumble_urls),
+    )
+    return ppv_cards + spotify_cards + rumble_cards
 
 
 async def _render(fixes: list[EmbedFix], *, upload_budget: int = 0) -> _Rendered:

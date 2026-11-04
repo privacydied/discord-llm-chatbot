@@ -126,6 +126,11 @@ def _is_spotify_card(m: re.Match[str]) -> bool:
     return m["kind"].lower() != "track"
 
 
+def _build_rumble(m: re.Match[str], _domain: str) -> str:
+    # Canonical page URL without tracking params (?e9s=...); the card links back to it.
+    return f"https://rumble.com/{m['path']}"
+
+
 # ppv.st and the mirrors the site lists itself (Nuxt config apiDomains).
 PPV_DOMAINS: tuple[str, ...] = ("ppv.st", "ppv.tj", "ppvs.pk", "ppv.rw", "ppv.ms", "ppv.bi", "ppv.ug", "ppv.to", "ppv.cx")
 _PPV_HOSTS = "|".join(re.escape(domain) for domain in PPV_DOMAINS)
@@ -227,6 +232,14 @@ SITES: tuple[EmbedSite, ...] = (
         default_domain="open.fxspotify.com",
         build=_build_spotify,
         card_if=_is_spotify_card,
+    ),
+    EmbedSite(
+        identifier="rumble",
+        pattern=_compile(r"https?://(?:www\.)?rumble\.com/(?P<path>v[a-z0-9]+(?:-[A-Za-z0-9_%-]*)?\.html)"),
+        # No working proxy (fxrumble.com is "coming soon"); card built from rumble's oEmbed API.
+        default_domain="",
+        build=_build_rumble,
+        card=True,
     ),
     EmbedSite(
         identifier="ppv",

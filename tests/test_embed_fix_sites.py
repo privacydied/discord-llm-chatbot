@@ -138,7 +138,7 @@ def test_ignore_tags(content, ignored):
 def test_parse_site_list():
     assert parse_site_list(" Twitter, reddit ,,") == frozenset({"twitter", "reddit"})
     assert parse_site_list(None) == frozenset()
-    assert {"twitter", "instagram", "bluesky", "furaffinity", "reddit_media", "pixiv", "deviantart", "tiktok", "reddit", "spotify", "ppv"} == SITE_IDS
+    assert {"twitter", "instagram", "bluesky", "furaffinity", "reddit_media", "pixiv", "deviantart", "tiktok", "reddit", "spotify", "rumble", "ppv"} == SITE_IDS
 
 
 PPV_SLUG = "misfits-boxing-joey-essex-vs-dapper-laughs-30174"
