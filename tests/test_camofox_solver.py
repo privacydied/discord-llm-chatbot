@@ -65,7 +65,48 @@ async def test_service_tier_d_recovers_failed_extraction(monkeypatch, recovered)
         assert res is failed
 
 
-async def test_extract_only_tries_tier_d_on_bot_wall(monkeypatch):
+class _Page:
+    tab = "t1"
+
+
+async def test_detect_and_solve_waits_for_widget_then_solves(monkeypatch):
+    verdicts = iter(["NONE", "NONE", "PASS"])
+    monkeypatch.setattr(cs, "_solve_sync", lambda *_a: next(verdicts))
+    monkeypatch.setattr(cs, "_POLL_S", 0.0)
+    assert await cs._detect_and_solve(_Page(), "k", "http://x") == "PASS"
+
+
+async def test_detect_and_solve_gives_up_when_no_widget(monkeypatch):
+    monkeypatch.setattr(cs, "_solve_sync", lambda *_a: "NONE")
+    monkeypatch.setattr(cs, "_POLL_S", 0.0)
+    monkeypatch.setattr(cs, "_WIDGET_WAIT_S", 0.05)
+    assert await cs._detect_and_solve(_Page(), "k", "http://x") == "NONE"
+
+
+async def test_page_without_turnstile_is_not_recovered(monkeypatch):
+    class FakePage:
+        tab = "t1"
+
+        def __init__(self, *_a):
+            pass
+
+        async def open(self, _url):
+            return True
+
+        async def evaluate(self, expr):
+            return "complete" if expr == cs._READY_JS else "paywall teaser " * 40
+
+        async def close(self):
+            pass
+
+    monkeypatch.setattr(cs, "_Camofox", FakePage)
+    monkeypatch.setattr(cs, "_solve_sync", lambda *_a: "NONE")
+    monkeypatch.setattr(cs, "_POLL_S", 0.0)
+    monkeypatch.setattr(cs, "_WIDGET_WAIT_S", 0.0)
+    assert await cs._fetch("https://paywalled.example/", "k", "http://x") is None
+
+
+async def test_extract_tries_tier_d_on_any_failure(monkeypatch):
     calls = []
 
     async def fake_tier_d(self, url, failed):
@@ -79,14 +120,10 @@ async def test_extract_only_tries_tier_d_on_bot_wall(monkeypatch):
     monkeypatch.setattr("bot.url_safety.validate_url_with_dns", no_safety)
     monkeypatch.setattr("bot.web_extraction_service.ENABLE_WAYBACK_FALLBACK", False)
     svc = WebExtractionService()
-    for failed in (
-        ExtractionResult(success=False, tier_used="A", error="http_status:404"),
-        ExtractionResult(success=False, tier_used="C", error="bot_wall:x", bot_wall_marker="just a moment"),
-    ):
 
-        async def fake_via(_url, original_url=None, _failed=failed):
-            return _failed
+    async def fake_via(_url, original_url=None):
+        return ExtractionResult(success=False, tier_used="A", error="thin_content: empty")
 
-        monkeypatch.setattr(svc, "_extract_via", fake_via)
-        await svc.extract("https://example.com/p")
-    assert calls == ["https://example.com/p"]  # only the bot-wall failure
+    monkeypatch.setattr(svc, "_extract_via", fake_via)
+    await svc.extract("https://example.com/p")
+    assert calls == ["https://example.com/p"]

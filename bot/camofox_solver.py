@@ -1,8 +1,9 @@
 """Tier D for web extraction: load a walled page in camofox and clear a Cloudflare Turnstile.
 
 Tiers A-C never see past a bot-wall interstitial. When a camofox access key is
-configured, this opens the URL in the self-hosted stealth browser, and if the
-page is a challenge, runs ``utils/turnstile.py`` (trusted click + wait for the
+configured, this opens the URL in the self-hosted stealth browser, checks the
+page for a Turnstile widget (``utils/turnstile.py present()``) and, only if one
+is there, runs ``utils/turnstile.py`` (trusted click + wait for the
 token) before reading the page text. Everything here degrades to ``None``:
 no key, no ``cfx`` helpers, a failed solve, or a page that is still walled all
 mean "no text", never an exception. [REH]
@@ -36,6 +37,7 @@ OVERALL_TIMEOUT_S = float(os.getenv("WEBEX_TIER_D_TIMEOUT_S", "90"))
 MIN_TEXT_CHARS = 200
 _LOAD_WAIT_S = 15.0
 _AFTER_SOLVE_WAIT_S = 15.0
+_WIDGET_WAIT_S = 6.0  # Turnstile renders async; give it a moment to appear
 _POLL_S = 1.5
 _TEXT_JS = "(document.body && document.body.innerText) || ''"
 _READY_JS = "document.readyState"
@@ -139,6 +141,17 @@ async def _read_text(page: _Camofox, wait_s: float, *, until_clear: bool) -> str
         await asyncio.sleep(_POLL_S)
 
 
+async def _detect_and_solve(page: _Camofox, key: str, base: str) -> str:
+    """Wait briefly for a Turnstile widget to render, then solve it. 'NONE' when there isn't one."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _WIDGET_WAIT_S
+    while True:
+        verdict = await asyncio.to_thread(_solve_sync, key, str(page.tab), base)
+        if verdict != "NONE" or loop.time() >= deadline:
+            return verdict
+        await asyncio.sleep(_POLL_S)
+
+
 async def _fetch(url: str, key: str, base: str) -> str | None:
     from .web_extraction_service import is_bot_wall
 
@@ -149,11 +162,13 @@ async def _fetch(url: str, key: str, base: str) -> str | None:
             if not await page.open(url):
                 return None
             text = await _read_text(page, _LOAD_WAIT_S, until_clear=False)
-            if is_bot_wall(text) or not text.strip():
-                verdict = await asyncio.to_thread(_solve_sync, key, str(page.tab), base)
-                logger.info(f"webex.tier_d.turnstile | url={url} result={verdict}")
-                if verdict.startswith("PASS"):
-                    text = await _read_text(page, _AFTER_SOLVE_WAIT_S, until_clear=True)
+            # Only a Turnstile that is actually on the page counts: a paywall teaser or a
+            # plain 404 loaded fine in camofox and must not be reported as "recovered".
+            verdict = await _detect_and_solve(page, key, base)
+            logger.info(f"webex.tier_d.turnstile | url={url} result={verdict}")
+            if not verdict.startswith("PASS"):
+                return None
+            text = await _read_text(page, _AFTER_SOLVE_WAIT_S, until_clear=True)
             if is_bot_wall(text) or len(text.strip()) < MIN_TEXT_CHARS:
                 return None
             return text.strip()

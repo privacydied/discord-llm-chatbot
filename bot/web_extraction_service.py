@@ -281,9 +281,9 @@ class WebExtractionService:
 
         res = await self._extract_via(url)
 
-        # Tier D: camofox + Turnstile solver, only for pages every other tier hit a bot-wall on
-        # (a paywall teaser or 404 is not a challenge, so it must not be "recovered"). [REH]
-        if not res.success and res.bot_wall_marker:
+        # Tier D: any failed page is checked in camofox for a Turnstile holding the content back;
+        # it only "recovers" when a widget was actually present and solved. [REH]
+        if not res.success:
             res = await self._tier_d_camofox(url, res)
 
         # Optional Wayback fallback: only on a hard failure and only when a public
