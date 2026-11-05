@@ -281,6 +281,11 @@ class WebExtractionService:
 
         res = await self._extract_via(url)
 
+        # Tier D: camofox + Turnstile solver, only for pages every other tier hit a bot-wall on
+        # (a paywall teaser or 404 is not a challenge, so it must not be "recovered"). [REH]
+        if not res.success and res.bot_wall_marker:
+            res = await self._tier_d_camofox(url, res)
+
         # Optional Wayback fallback: only on a hard failure and only when a public
         # snapshot exists. One bounded availability API call + one bounded fetch;
         # if the snapshot extractor also fails we return the ORIGINAL result so the
@@ -298,6 +303,18 @@ class WebExtractionService:
                 logger.info(f"🌐 Wayback fallback also failed for {url}: {snap_res.error}")
 
         return res
+
+    async def _tier_d_camofox(self, url: str, failed: ExtractionResult) -> ExtractionResult:
+        """Retry a failed extraction in camofox (solving Turnstile); return *failed* if that fails too."""
+        from . import camofox_solver
+
+        if not camofox_solver.enabled():
+            return failed
+        text = await camofox_solver.fetch_text(url)
+        if not text:
+            return failed
+        logger.info(f"🌐 Tier D (camofox) recovered {url} after {failed.tier_used}: {failed.error}")
+        return ExtractionResult(success=True, tier_used="D", canonical_url=url, text=text)
 
     async def _extract_via(self, url: str, original_url: str | None = None) -> ExtractionResult:
         """Run the tier cascade (A -> C -> B) for ``url``.

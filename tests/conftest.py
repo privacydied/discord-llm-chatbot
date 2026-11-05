@@ -28,3 +28,12 @@ def _disable_vision_auto_discovery(monkeypatch):
     monkeypatch.setenv("VISION_AUTO_DISCOVERY", "0")
     # Belt and braces: never let a test fire a live OpenRouter liveness probe.
     monkeypatch.setenv("VISION_DISCOVERY_PROBE", "0")
+
+
+@pytest.fixture(autouse=True)
+def _disable_camofox_tier_d(monkeypatch):
+    """Web-extraction tier D drives the real camofox browser; keep it out of unrelated tests.
+
+    tests/test_camofox_solver.py re-enables it explicitly.
+    """
+    monkeypatch.setenv("WEBEX_ENABLE_TIER_D", "0")
