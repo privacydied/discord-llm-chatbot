@@ -9237,6 +9237,17 @@ class Router:
         self.logger.warning(f"Unsupported attachment type: {filename} (msg_id: {message.id})")
         return BotAction(content="I can't process that type of file attachment.")
 
+    @staticmethod
+    def _vl_prompt_with_caption(vl_prompt: str, user_caption: str, intent: str) -> str:
+        """Append the user's text to the VL prompt so the vision step sees it [REH].
+
+        Tweet intent keeps the pure visual-facts prompt, so tweet captions stay separate.
+        """
+        question = (user_caption or "").strip()
+        if not question or (intent or "").lower().startswith("tweet"):
+            return vl_prompt
+        return f"{vl_prompt}\n\nThe user asked about this image: {question}\nAddress that question directly, and transcribe any text the question refers to."
+
     async def _unified_vl_to_text_pipeline(self, image_paths: list[str], user_caption: str = "", intent: str = "Thoughts?") -> BotAction:
         """Unified 1-hop VL → Text pipeline that enforces "1 in ➜ 1 out" rule.
 
@@ -9275,7 +9286,7 @@ class Router:
                 try:
                     from .see import see_infer
 
-                    vision_result = await see_infer(image_path=image_path, prompt=vl_prompt)
+                    vision_result = await see_infer(image_path=image_path, prompt=self._vl_prompt_with_caption(vl_prompt, user_caption, intent))
                     if vision_result and getattr(vision_result, "content", None):
                         raw_content = str(vision_result.content).strip()
                         # Sanitize VL output immediately
