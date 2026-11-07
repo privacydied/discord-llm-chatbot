@@ -40,6 +40,14 @@ Always use `uv run` for reproducible interpreter/environment behavior.
 - Common tags: `[CA] [REH] [CSD] [IV] [RM] [CMV] [SFT] [PA]`.
 - PRs should include: problem statement, root cause, patch summary, test evidence, and env/config changes.
 
+## Deploy After Every Change
+Intended behaviour: after every addition or fix, once targeted tests and lint pass, ship it without being asked:
+1. Commit (imperative subject, tags as above) and `git push` to `origin/main`.
+2. Restart the live bot on the NAS: `ssh nasirjones "cd /volume1/py/discord-llm-chatbot && ./utils/botctl restart"`.
+3. Verify: `./utils/botctl status` shows it running, and `logs/bot.jsonl` shows the new feature loaded with no new tracebacks.
+
+`/mnt/nasirjones/py/discord-llm-chatbot` is an NFS mount of `/volume1/py/discord-llm-chatbot` on the NAS — same tree, so the restart runs the committed code directly.
+
 ## Security & Operations Notes
 - Never commit secrets; keep `.env` local and update `.env.example` when adding settings.
 - Enforce bounded timeouts/retries for external I/O and log retry attempts.
