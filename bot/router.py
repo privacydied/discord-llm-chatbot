@@ -6540,6 +6540,37 @@ class Router:
         )
         return f"{context_str}\n\n{wrapped}" if context_str else wrapped
 
+    async def _maybe_unroll_x_thread(self, url: str) -> str | None:
+        """Whole author thread for an X status URL, or None to handle it as one post. [CA][REH]
+
+        Off unless TWITTER_UNROLL_ENABLED is in config (true by default in
+        bot/config), so bare test configs never touch the network.
+        """
+        cfg = self.config or {}
+        if not cfg.get("TWITTER_UNROLL_ENABLED", False) or not self._is_twitter_status_url(url):
+            return None
+        from bot.threads.x_thread_page import ThreadFetchError, render_thread, unroll_thread
+        from bot.url_safety import wrap_untrusted_content
+
+        timeout_s = float(cfg.get("TWITTER_UNROLL_TIMEOUT_S", 10.0))
+        t0 = time.monotonic()
+        try:
+            thread = await asyncio.wait_for(
+                unroll_thread(url, timeout_s=timeout_s, max_posts=int(cfg.get("TWITTER_UNROLL_MAX_TWEETS", 100))),
+                timeout=timeout_s * 2,
+            )
+        except (ThreadFetchError, TimeoutError) as exc:
+            self.logger.info(f"threads.x: unroll_failed url={url[:120]} err={exc}")
+            return None
+        ms = int((time.monotonic() - t0) * 1000)
+        if thread is None:
+            self.logger.info(f"threads.x: single_post url={url[:120]} ms={ms}")
+            return None
+        self.logger.info(f"threads.x: unroll_ok posts={len(thread.posts)} truncated={thread.truncated} ms={ms} url={url[:120]}")
+        rendered = render_thread(thread, max_chars=int(cfg.get("TWITTER_UNROLL_MAX_CHARS", 20000)))
+        note = "[Full X thread: every post by the author, in order. Cover the whole thread, not only the first post.]"
+        return f"X thread from {thread.url}:\n{note}\n{wrap_untrusted_content(rendered, source=thread.url)}"
+
     async def _finalize_web_content(
         self,
         url: str,
@@ -6906,6 +6937,13 @@ class Router:
                         },
                         exc_info=True,
                     )
+
+            # Multi-post X thread -> the author's whole thread, read from X's own
+            # status page; a single post falls through to the flow below. [CA]
+            if self._is_twitter_url(url):
+                thread_text = await self._maybe_unroll_x_thread(url)
+                if thread_text is not None:
+                    return thread_text
 
             # Syndication-first for Twitter/X posts (API as last resort) [CA][SFT]
             if self._is_twitter_url(url):
