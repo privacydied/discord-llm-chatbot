@@ -2763,6 +2763,7 @@ class LLMBot(commands.Bot):
             ("rag_commands", "RAGCommands"),
             ("search_commands", "SearchCommands"),
             ("news_commands", "NewsCommands"),
+            ("reminder_commands", "ReminderCommands"),
             ("screenshot_commands", "ScreenshotCommands"),
             ("image_upgrade_commands", "ImageUpgradeCommands"),
             ("admin_alert_commands", "AdminAlertCommands"),

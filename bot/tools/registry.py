@@ -52,6 +52,9 @@ ALLOWED_TOOL_NAMES: frozenset[str] = frozenset(
         "send_voice_note",
         # Fixed hosts only (api.fxtwitter.com, Sightengine) + the existing instagram fetcher. [SFT]
         "check_ai_generated",
+        # Saves a reminder for the asker via the reminder service (pings only them,
+        # in the channel they asked in); writes only the reminders JSON file. [SFT]
+        "set_reminder",
     }
 )
 

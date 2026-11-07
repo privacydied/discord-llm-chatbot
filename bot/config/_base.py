@@ -577,6 +577,10 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "RSS_STATE_FILE": (env_getter("RSS_STATE_FILE", "") or "").strip() or "data/rss_state.json",
         "RSS_POLL_INTERVAL_S": _safe_float(env_getter("RSS_POLL_INTERVAL_S", None), "600", "RSS_POLL_INTERVAL_S"),
         "RSS_MAX_POSTS_PER_POLL": _safe_int(env_getter("RSS_MAX_POSTS_PER_POLL", None), "5", "RSS_MAX_POSTS_PER_POLL"),
+        # Reminders (!remindme / "remind me ..."): pending reminders + each user's
+        # timezone live in one JSON file. [CA]
+        "REMINDERS_FILE": (env_getter("REMINDERS_FILE", "") or "").strip() or "data/reminders.json",
+        "REMINDERS_MAX_PER_USER": _safe_int(env_getter("REMINDERS_MAX_PER_USER", None), "25", "REMINDERS_MAX_PER_USER"),
         "NEWS_RSS_ENABLED": _parse_bool_str(_clean_env_value(env_getter("NEWS_RSS_ENABLED", None)), True),
         "NEWS_MIN_ARTICLE_CHARS": _safe_int(env_getter("NEWS_MIN_ARTICLE_CHARS", None), "800", "NEWS_MIN_ARTICLE_CHARS"),
         "NEWS_MAX_BODY_CHARS": _safe_int(env_getter("NEWS_MAX_BODY_CHARS", None), "6000", "NEWS_MAX_BODY_CHARS"),

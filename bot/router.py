@@ -4017,6 +4017,12 @@ class Router:
                     self.logger.info(f"Found command '{matched}', delegating to cog. (msg_id: {message.id})")
                     return BotAction(meta={"delegated_to_cog": True})
 
+            # A cog command missing from COMMAND_MAP (!remindme, !news ...): in a DM
+            # the gate lets it through, and without this the LLM answered it. [CA]
+            if not parsed_command and self._is_cog_command(content):
+                self.logger.info(f"Found cog command '{content.split()[0]}', delegating to cog. (msg_id: {message.id})")
+                return BotAction(meta={"delegated_to_cog": True})
+
             compat_response = await self._compat_dispatch_for_tests(message, clean_content)
             if compat_response is not None:
                 return compat_response
@@ -4081,6 +4087,12 @@ class Router:
             ai_action = await self._maybe_ai_check(message, content)
             if ai_action is not None:
                 return ai_action
+
+            # 3c2. "remind me to X friday" / "my timezone is london" -> reminder
+            # service in code, so the time is parsed exactly, never by the model. [CA]
+            reminder_action = await self._maybe_reminder(message, content)
+            if reminder_action is not None:
+                return reminder_action
 
             # 3d. "reply in a voice note" -> this answer is spoken (voice is off by
             # default); the send_voice_note tool still covers odd phrasings. [CA]
@@ -10045,6 +10057,38 @@ class Router:
             return None  # "say this" with nothing to say: normal chat flow
         self.logger.info(f"say.verbatim | msg_id={message.id} chars={len(spoken)}")
         return BotAction(content=spoken, meta={"requires_tts": True, "include_transcript": False, "say_verbatim": True})
+
+    def _is_cog_command(self, content: str) -> bool:
+        """True when ``content`` is "!<name> ..." and a loaded cog registered <name>."""
+        if not content.startswith("!") or _is_mock(self.bot) or not hasattr(self.bot, "get_command"):
+            return False
+        name = content[1:].split(maxsplit=1)
+        try:
+            return bool(name) and self.bot.get_command(name[0]) is not None
+        except (AttributeError, TypeError):
+            return False
+
+    async def _maybe_reminder(self, message: Message, content: str) -> BotAction | None:
+        """Plain-words reminder or timezone request -> the reminder service. [CA][IV]"""
+        from bot.reminders.chat import handle_chat_message
+        from bot.reminders.service import ReminderService
+
+        service = getattr(self.bot, "reminder_service", None)
+        if not isinstance(service, ReminderService):
+            return None  # cog not loaded (or a test double bot)
+        is_addressed = isinstance(message.channel, DMChannel) or self._is_mentioned(message) or self._is_reply_to_bot(message)
+        if not is_addressed:
+            return None  # ambient chatter about reminders must not create one
+        text = strip_leading_bot_mention(content or "", getattr(getattr(self.bot, "user", None), "id", None))
+        try:
+            reply = await handle_chat_message(service, message, text)
+        except Exception as exc:  # noqa: BLE001 - never lose the message to a reminder bug [REH]
+            self.logger.error(f"reminders.chat_failed | msg_id={message.id} err={exc}", exc_info=True)
+            return None
+        if reply is None:
+            return None
+        self.logger.info(f"reminders.chat_handled | msg_id={message.id}")
+        return BotAction(content=reply)
 
     async def _maybe_ai_check(self, message: Message, content: str) -> BotAction | None:
         """Explicit "is this AI?" -> check_ai_generated, then a persona reply from the scores."""
