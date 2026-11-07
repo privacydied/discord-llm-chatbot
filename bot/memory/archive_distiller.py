@@ -79,8 +79,8 @@ class MemoryArchiveDistiller:
         self.last_run: dict[str, Any] | None = None
         self.refresh_config()
         self.curator = CuratedMemoryCurator(
-            default_ttl_days=int(self.config.get("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS", 180)),
-            temp_ttl_days=int(self.config.get("PERSISTENT_MEMORY_TEMP_TTL_DAYS", 14)),
+            default_ttl_days=int(self.config.get("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS", 0)),
+            temp_ttl_days=int(self.config.get("PERSISTENT_MEMORY_TEMP_TTL_DAYS", 0)),
             min_importance=float(self.config.get("PERSISTENT_MEMORY_MIN_IMPORTANCE", 0.55)),
         )
 

@@ -144,7 +144,7 @@ class ProfileExtractor:
         *,
         every_n: int = 10,
         idle_s: float = 900.0,
-        ttl_days: int = 365,
+        ttl_days: int = 0,  # 0 = facts never expire
         max_facts: int = 40,
         timeout_s: float = 120.0,
         generate: Generate | None = None,
@@ -152,7 +152,7 @@ class ProfileExtractor:
         self.service = service
         self.every_n = max(1, int(every_n))
         self.idle_s = max(1.0, float(idle_s))
-        self.ttl_days = max(1, int(ttl_days))
+        self.ttl_days = max(0, int(ttl_days))
         self.max_facts = max(1, int(max_facts))
         self.timeout_s = float(timeout_s)
         self._generate = generate
@@ -325,7 +325,7 @@ class ProfileExtractor:
             importance=0.8 if kind == INSTRUCTION_TYPE else 0.7,
             confidence=0.8,
             source=PROFILE_SOURCE,
-            expires_at=(_now() + timedelta(days=self.ttl_days)).isoformat(),
+            expires_at=(_now() + timedelta(days=self.ttl_days)).isoformat() if self.ttl_days else None,
             metadata_json=json.dumps({"learned_in_guild": last.guild_id}),
         )
 

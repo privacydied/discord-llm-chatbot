@@ -359,7 +359,7 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "MEMORY_PROFILE_EXTRACT_ENABLED": _parse_bool_str(env_getter("MEMORY_PROFILE_EXTRACT_ENABLED", None), True),
         "MEMORY_PROFILE_EXTRACT_EVERY": _safe_int(env_getter("MEMORY_PROFILE_EXTRACT_EVERY", None), "10", "MEMORY_PROFILE_EXTRACT_EVERY"),
         "MEMORY_PROFILE_IDLE_S": _safe_float(env_getter("MEMORY_PROFILE_IDLE_S", None), "900", "MEMORY_PROFILE_IDLE_S"),
-        "MEMORY_PROFILE_TTL_DAYS": _safe_int(env_getter("MEMORY_PROFILE_TTL_DAYS", None), "365", "MEMORY_PROFILE_TTL_DAYS"),
+        "MEMORY_PROFILE_TTL_DAYS": _safe_int(env_getter("MEMORY_PROFILE_TTL_DAYS", None), "0", "MEMORY_PROFILE_TTL_DAYS"),
         "MEMORY_PROFILE_MAX_FACTS": _safe_int(env_getter("MEMORY_PROFILE_MAX_FACTS", None), "40", "MEMORY_PROFILE_MAX_FACTS"),
         "MEMORY_PROFILE_TIMEOUT_S": _safe_float(env_getter("MEMORY_PROFILE_TIMEOUT_S", None), "120", "MEMORY_PROFILE_TIMEOUT_S"),
         # Memory semantic dedupe & resource caps [Phase 6-9]
@@ -373,12 +373,12 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
         "CHROMADB_MAX_RESULTS": _low_resource_int("CHROMADB_MAX_RESULTS", 5, 3),
         "PERSISTENT_MEMORY_DEFAULT_TTL_DAYS": _safe_int(
             env_getter("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS", None),
-            "180",
+            "0",  # 0 = memories never expire
             "PERSISTENT_MEMORY_DEFAULT_TTL_DAYS",
         ),
         "PERSISTENT_MEMORY_TEMP_TTL_DAYS": _safe_int(
             env_getter("PERSISTENT_MEMORY_TEMP_TTL_DAYS", None),
-            "14",
+            "0",
             "PERSISTENT_MEMORY_TEMP_TTL_DAYS",
         ),
         "PERSISTENT_MEMORY_MIN_IMPORTANCE": _safe_float(

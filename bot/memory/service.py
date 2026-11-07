@@ -80,8 +80,8 @@ class CuratedMemoryService:
         # Minimum cosine similarity between the message and a memory before it
         # may enter a prompt. Unrelated memories score ~0.1-0.22 with MiniLM.
         self.min_relevance = float(cfg.get("PERSISTENT_MEMORY_MIN_RELEVANCE", DEFAULT_MIN_RELEVANCE))
-        self.default_ttl_days = int(cfg.get("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS", 180))
-        self.temp_ttl_days = int(cfg.get("PERSISTENT_MEMORY_TEMP_TTL_DAYS", 14))
+        self.default_ttl_days = int(cfg.get("PERSISTENT_MEMORY_DEFAULT_TTL_DAYS", 0))
+        self.temp_ttl_days = int(cfg.get("PERSISTENT_MEMORY_TEMP_TTL_DAYS", 0))
         self.min_importance = float(cfg.get("PERSISTENT_MEMORY_MIN_IMPORTANCE", 0.55))
         self.queue_max = int(cfg.get("PERSISTENT_MEMORY_QUEUE_MAX", 256))
         self.queue_workers = int(cfg.get("PERSISTENT_MEMORY_WORKERS", 1))
@@ -103,7 +103,7 @@ class CuratedMemoryService:
                 self,
                 every_n=int(cfg.get("MEMORY_PROFILE_EXTRACT_EVERY", 10)),
                 idle_s=float(cfg.get("MEMORY_PROFILE_IDLE_S", 900)),
-                ttl_days=int(cfg.get("MEMORY_PROFILE_TTL_DAYS", 365)),
+                ttl_days=int(cfg.get("MEMORY_PROFILE_TTL_DAYS", 0)),
                 max_facts=int(cfg.get("MEMORY_PROFILE_MAX_FACTS", 40)),
                 timeout_s=float(cfg.get("MEMORY_PROFILE_TIMEOUT_S", 120)),
             )

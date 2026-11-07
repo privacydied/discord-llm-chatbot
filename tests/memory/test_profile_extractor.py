@@ -206,6 +206,12 @@ async def test_instructions_survive_a_tight_char_budget(svc):
     assert "- Wants short answers" in block and len(block) <= 200
 
 
-async def test_explicit_memories_do_not_expire(svc):
+async def test_no_memory_expires_by_default(svc):
     rec = await svc.add_explicit_memory(user_id=USER, text="i support arsenal", guild_id="A")
     assert rec.expires_at is None
+    ex = _extractor(svc, FakeModel({"add": [{"text": "Lives in Leeds"}]}))
+    ex.add_message(user_id=USER, text="i live in leeds", guild_id=None, message_id=None)
+    await ex.flush(USER)
+    assert {r.expires_at for r in await svc.store.list_memories(user_id=USER, limit=10)} == {None}
+    inferred = CuratedMemoryCurator().curate_inferred_candidate(user_id=USER, text="from now on call me tq please")
+    assert inferred is not None and inferred.expires_at is None

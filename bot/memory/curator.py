@@ -117,8 +117,8 @@ class CuratedMemoryCurator:
 
     def __init__(
         self,
-        default_ttl_days: int = 180,
-        temp_ttl_days: int = 14,
+        default_ttl_days: int = 0,  # 0 = never expire
+        temp_ttl_days: int = 0,
         min_importance: float = 0.55,
     ) -> None:
         self.default_ttl_days = int(default_ttl_days)
