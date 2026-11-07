@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+from zoneinfo import ZoneInfo
 
 import discord
 import pytest
@@ -251,3 +253,38 @@ def test_cog_commands_missing_from_command_map_are_delegated():
     assert not Router._is_cog_command(fake, "<@42> !remindme x")  # prefix must lead
     assert not Router._is_cog_command(fake, "remind me in 2 hours")
     assert not Router._is_cog_command(SimpleNamespace(bot=MagicMock()), "!remindme x")  # test doubles
+
+
+async def test_concurrent_timezones_and_reminders_do_not_clash(service, tmp_path):
+    """Many users running !timezone and !remindme at once keep their own zone and reminders."""
+
+    zones = ["Europe/London", "America/New_York", "Asia/Tokyo", "America/Los_Angeles", "Europe/Berlin", "Australia/Sydney"]
+    users = {100 + i: zones[i % len(zones)] for i in range(30)}
+    service.max_per_user = 5
+
+    async def one_user(uid: int, zone: str) -> None:
+        origin = Origin(user_id=uid, channel_id=55)
+        await service.create(origin, f"to post fit pic {uid} on may 2027", now=NOW)  # waits for zone
+        await service.set_timezone(uid, zone, now=NOW)
+        await service.create(origin, f"at 9pm task {uid}", now=NOW)
+
+    await asyncio.gather(*(one_user(uid, zone) for uid, zone in users.items()))
+
+    reloaded = ReminderStore(tmp_path / "reminders.json")
+    reloaded.load()
+    assert reloaded.timezones == {str(uid): zone for uid, zone in users.items()}
+    assert len({r.id for r in reloaded.reminders.values()}) == len(reloaded.reminders) == 2 * len(users)
+    for uid, zone in users.items():
+        owned = reloaded.owned_by(uid)
+        assert len(owned) == 2 and all(r.zone == zone and str(uid) in r.task for r in owned)
+        local = {r.due.astimezone(ZoneInfo(zone)).strftime("%m-%d %H:%M") for r in owned}
+        assert "05-01 09:00" in local and any(t.endswith("21:00") for t in local)
+
+
+async def test_one_users_timezone_change_leaves_others_alone(service):
+    await service.set_timezone(1, "Europe/London", now=NOW)
+    await service.set_timezone(2, "America/New_York", now=NOW)
+    theirs = (await service.create(Origin(user_id=2, channel_id=55), "at 9pm x", now=NOW)).reminder
+    before = theirs.due
+    await service.set_timezone(1, "Asia/Tokyo", now=NOW)
+    assert service.timezone_of(2) == "America/New_York" and theirs.due == before
