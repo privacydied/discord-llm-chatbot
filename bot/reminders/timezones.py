@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 import zoneinfo
+from importlib import resources
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from functools import lru_cache
@@ -203,11 +204,26 @@ def _zone_index() -> dict[str, str]:
     return index
 
 
+@lru_cache(maxsize=512)
+def _iana_zone(name: str) -> zoneinfo.ZoneInfo:
+    """Load ``name`` from the pinned ``tzdata`` package, not the host's zoneinfo.
+
+    The NAS ships tzdata 2026b while the package is 2026f; zones whose rules
+    changed in between (e.g. America/Winnipeg) came out an hour wrong. The
+    host copy is only a fallback for names the package lacks. [IV][CMV]
+    """
+    try:
+        with resources.files("tzdata.zoneinfo").joinpath(*name.split("/")).open("rb") as handle:
+            return zoneinfo.ZoneInfo.from_file(handle, key=name)
+    except (ModuleNotFoundError, FileNotFoundError, IsADirectoryError, NotADirectoryError, ValueError):
+        return zoneinfo.ZoneInfo(name)
+
+
 def _same_clock(zones: list[str]) -> bool:
     """True when every zone shows the same UTC offset all year (one effective zone)."""
     start = datetime(datetime.now(UTC).year, 1, 1, tzinfo=UTC)
     samples = [start + timedelta(days=30 * i) for i in range(13)]
-    offsets = {tuple(s.astimezone(zoneinfo.ZoneInfo(z)).utcoffset() for s in samples) for z in zones}
+    offsets = {tuple(s.astimezone(_iana_zone(z)).utcoffset() for s in samples) for z in zones}
     return len(offsets) == 1
 
 
@@ -275,7 +291,7 @@ def load_zone(name: str) -> tzinfo:
         delta = timedelta(hours=int(offset.group("h")), minutes=int(offset.group("m") or 0))
         return timezone(delta if offset.group("sign") == "+" else -delta, name)
     try:
-        return zoneinfo.ZoneInfo(name)
+        return _iana_zone(name)
     except (zoneinfo.ZoneInfoNotFoundError, ValueError) as exc:
         raise ValueError(f"unknown timezone {name!r}") from exc
 

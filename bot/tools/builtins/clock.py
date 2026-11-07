@@ -15,7 +15,7 @@ from ..types import ToolContext, ToolResult, ToolSpec
 
 PARAMETERS: dict[str, Any] = {"type": "object", "properties": {}, "required": []}
 
-DESCRIPTION = "Get the current date and time in UTC. Use whenever the answer depends on what day or time it is now, such as questions about today, this week, or how recent something is."
+DESCRIPTION = "Get the current date and time in UTC. Use whenever the answer depends on what day or time it is now, such as questions about today, this week, or how recent something is. For the time in a specific place, or the user's own local time, use get_local_time instead."
 
 
 async def get_current_time(ctx: ToolContext, arguments: dict[str, Any]) -> ToolResult:

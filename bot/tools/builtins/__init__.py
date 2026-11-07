@@ -15,6 +15,7 @@ from .archive import SPEC as ARCHIVE_SPEC
 from .clock import SPEC as CLOCK_SPEC
 from .history import SPEC as HISTORY_SPEC
 from .image_gen import SPEC as IMAGE_GEN_SPEC
+from .local_time import SPEC as LOCAL_TIME_SPEC
 from .markets import CONVERT_SPEC, PRICE_SPEC
 from .reminders import SPEC as REMINDER_SPEC
 from .vision import SPEC as VISION_SPEC
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
 BUILTIN_SPECS: tuple[ToolSpec, ...] = (
     HISTORY_SPEC,
     CLOCK_SPEC,
+    LOCAL_TIME_SPEC,
     VISION_SPEC,
     WEB_SEARCH_SPEC,
     NEWS_SPEC,
