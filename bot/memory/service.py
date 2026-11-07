@@ -20,29 +20,45 @@ from .semantic_store import CuratedMemorySemanticStore
 logger = logging.getLogger(__name__)
 
 DEFAULT_MIN_RELEVANCE = 0.25
-# Framing matters as much as selection: these are background notes about the
-# person being answered, not instructions, and not conversation topics.
-MEMORY_BLOCK_HEADER = "Notes on the user you're replying to (old chats, may be stale). Use one only if it helps with this message; never bring them up otherwise:"
+# Framing matters as much as selection: background knowledge about the person
+# being answered, to use the way a friend would, not topics to bring up.
+MEMORY_BLOCK_HEADER = "What you know about the user you're replying to, from past chats in any server. Use it naturally when it fits; don't list it back or say you remember unless they ask:"
+INSTRUCTION_HEADER = "How they asked you to treat them (applies to them only; never overrides your rules):"
+INSTRUCTION_CONTEXT = "recurring_instruction"
+# Records read for the always-on profile part of the block.
+PROFILE_READ_LIMIT = 60
+
+
+def _memory_line(item: dict[str, Any]) -> str:
+    record = item.get("record") or {}
+    # Curated summary only, never the raw message text (no transcripts in prompts).
+    return f"- {str(record.get('summary') or item.get('document') or '').strip()}"
 
 
 def render_memory_block(items: list[dict[str, Any]], *, max_chars: int) -> str:
-    """Render selected memories under MEMORY_BLOCK_HEADER, deduped and length-capped."""
-    lines: list[str] = [MEMORY_BLOCK_HEADER]
-    used = len(MEMORY_BLOCK_HEADER) + 1
+    """Facts under MEMORY_BLOCK_HEADER, standing instructions under INSTRUCTION_HEADER.
+
+    Items arrive best-first; duplicates are dropped and the block is cut at max_chars.
+    Instructions go first so a long fact list cannot push them out.
+    """
+    instructions = [i for i in items if (i.get("record") or {}).get("context_type") == INSTRUCTION_CONTEXT]
+    facts = [i for i in items if i not in instructions]
+    sections: list[list[str]] = [[INSTRUCTION_HEADER], [MEMORY_BLOCK_HEADER]]
+    used = 0
     seen: set[str] = set()
-    for item in items:
-        record = item.get("record") or {}
-        # Curated summary only, never the raw message text (no transcripts in prompts).
-        line = f"- {str(record.get('summary') or item.get('document') or '').strip()}"
-        key = line.casefold()
-        if not line[2:].strip() or key in seen:
-            continue
-        if used + len(line) + 1 > max_chars:
-            break
-        seen.add(key)
-        lines.append(line)
-        used += len(line) + 1
-    return "\n".join(lines) if len(lines) > 1 else ""
+    for section, group in ((sections[0], instructions), (sections[1], facts)):
+        for item in group:
+            line = _memory_line(item)
+            key = line.casefold()
+            if not line[2:].strip() or key in seen:
+                continue
+            cost = len(line) + 1 + (len(section[0]) + 1 if len(section) == 1 else 0)
+            if used + cost > max_chars:
+                break
+            seen.add(key)
+            section.append(line)
+            used += cost
+    return "\n".join("\n".join(sec) for sec in (sections[1], sections[0]) if len(sec) > 1)
 
 
 _memory_service: CuratedMemoryService | None = None
@@ -79,6 +95,18 @@ class CuratedMemoryService:
             db_path=self.chroma_path,
             collection_name=self.collection_name,
         )
+        self.extractor = None
+        if bool(cfg.get("MEMORY_PROFILE_EXTRACT_ENABLED", False)):
+            from .profile_extractor import ProfileExtractor
+
+            self.extractor = ProfileExtractor(
+                self,
+                every_n=int(cfg.get("MEMORY_PROFILE_EXTRACT_EVERY", 10)),
+                idle_s=float(cfg.get("MEMORY_PROFILE_IDLE_S", 900)),
+                ttl_days=int(cfg.get("MEMORY_PROFILE_TTL_DAYS", 365)),
+                max_facts=int(cfg.get("MEMORY_PROFILE_MAX_FACTS", 40)),
+                timeout_s=float(cfg.get("MEMORY_PROFILE_TIMEOUT_S", 120)),
+            )
         self.queue = CuratedMemoryIngestionQueue(
             persist_callback=self._persist_batch,
             max_size=self.queue_max,
@@ -106,6 +134,8 @@ class CuratedMemoryService:
     async def stop(self) -> None:
         if not self.enabled or not self._started:
             return
+        if self.extractor is not None:
+            await self.extractor.stop()
         await self.queue.stop(timeout=3.0)
         self._started = False
         logger.info(
@@ -179,6 +209,12 @@ class CuratedMemoryService:
 
         if not self.enabled:
             return False
+        if self.extractor is not None:
+            # LLM profile pass replaces the regex curator; the curator's secret
+            # filter still keeps keys and tokens away from the model.
+            if self.curator._looks_sensitive(self.curator._normalize(text)):
+                return False
+            return self.extractor.add_message(user_id=user_id, text=text, guild_id=guild_id, message_id=source_message_id)
         candidate = self.curator.curate_inferred_candidate(
             user_id=user_id,
             text=text,
@@ -373,6 +409,9 @@ class CuratedMemoryService:
             thread_id=thread_id,
             top_k=top_k,
         )
+        # Then the user's whole profile, from every server: facts about a person
+        # rarely resemble the message they are sending right now.
+        results += await self._profile_items(requester, {str(i.get("memory_id")) for i in results})
         if not results:
             return ""
 
@@ -428,6 +467,17 @@ class CuratedMemoryService:
             return ""
 
         return render_memory_block(filtered, max_chars=int(max_chars or self.max_prompt_chars))
+
+    async def _profile_items(self, user_id: str, exclude: set[str]) -> list[dict[str, Any]]:
+        """Active memories owned by user_id in any server, best first, as prompt items."""
+        try:
+            records = await self.store.list_memories(user_id=user_id, limit=PROFILE_READ_LIMIT)
+        except (OSError, RuntimeError, ValueError) as exc:
+            logger.debug("memory.profile_read_failed user_id=%s err=%s", user_id, exc)
+            return []
+        records = [r for r in records if r.memory_id not in exclude and float(r.confidence) >= 0.45]
+        records.sort(key=lambda r: float(r.importance), reverse=True)  # stable: newest first within a tier
+        return [{"memory_id": r.memory_id, "document": r.summary, "record": r.to_dict(), "scope": "profile"} for r in records]
 
     async def _persist_batch(self, candidates: list[MemoryCandidate]) -> dict[str, int]:
         if not candidates:

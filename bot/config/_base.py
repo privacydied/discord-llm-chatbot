@@ -354,6 +354,14 @@ def _build_config(env_getter: Callable[[str, str | None], str | None]) -> dict[s
             "0.25",
             "PERSISTENT_MEMORY_MIN_RELEVANCE",
         ),
+        # Per-user profile learned by an LLM pass over the user's own messages
+        # (bot/memory/profile_extractor.py); one profile per user for every server.
+        "MEMORY_PROFILE_EXTRACT_ENABLED": _parse_bool_str(env_getter("MEMORY_PROFILE_EXTRACT_ENABLED", None), True),
+        "MEMORY_PROFILE_EXTRACT_EVERY": _safe_int(env_getter("MEMORY_PROFILE_EXTRACT_EVERY", None), "10", "MEMORY_PROFILE_EXTRACT_EVERY"),
+        "MEMORY_PROFILE_IDLE_S": _safe_float(env_getter("MEMORY_PROFILE_IDLE_S", None), "900", "MEMORY_PROFILE_IDLE_S"),
+        "MEMORY_PROFILE_TTL_DAYS": _safe_int(env_getter("MEMORY_PROFILE_TTL_DAYS", None), "365", "MEMORY_PROFILE_TTL_DAYS"),
+        "MEMORY_PROFILE_MAX_FACTS": _safe_int(env_getter("MEMORY_PROFILE_MAX_FACTS", None), "40", "MEMORY_PROFILE_MAX_FACTS"),
+        "MEMORY_PROFILE_TIMEOUT_S": _safe_float(env_getter("MEMORY_PROFILE_TIMEOUT_S", None), "120", "MEMORY_PROFILE_TIMEOUT_S"),
         # Memory semantic dedupe & resource caps [Phase 6-9]
         "MEMORY_SEMANTIC_DEDUPE_ENABLED": _low_resource_bool("MEMORY_SEMANTIC_DEDUPE_ENABLED", True, True),
         "MEMORY_MAX_TEXT_CHARS": _low_resource_int("MEMORY_MAX_TEXT_CHARS", 500, 300),

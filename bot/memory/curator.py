@@ -153,7 +153,8 @@ class CuratedMemoryCurator:
         summary = self._summarize(text, context_type)
         importance = max(self.min_importance, 0.9 if source == "explicit_memory_command" else 0.75)
         confidence = 0.96 if source == "explicit_memory_command" else 0.9
-        expires_at = self._expiration_for(context_type)
+        # A fact the user saved on purpose stays until they delete it.
+        expires_at = None if source == "explicit_memory_command" and context_type != "temporary_context" else self._expiration_for(context_type)
 
         payload = metadata or {}
         return MemoryCandidate(
