@@ -48,6 +48,8 @@ Intended behaviour: after every addition or fix, once targeted tests and lint pa
 
 `/mnt/nasirjones/py/discord-llm-chatbot` is an NFS mount of `/volume1/py/discord-llm-chatbot` on the NAS — same tree, so the restart runs the committed code directly.
 
+The repo `.venv` belongs to the NAS. When running `uv` from the NFS mount on another machine, first `export UV_PROJECT_ENVIRONMENT=/home/pry/venvs/discord-llm-chatbot`: a bare `uv run` there rebuilds `.venv` with `/mnt/nasirjones/...` shebangs, and every console script (`yt-dlp`, ...) then fails on the NAS with ENOENT. Repair on the NAS with `bash -lc 'uv sync --reinstall'`.
+
 ## Security & Operations Notes
 - Never commit secrets; keep `.env` local and update `.env.example` when adding settings.
 - Enforce bounded timeouts/retries for external I/O and log retry attempts.
