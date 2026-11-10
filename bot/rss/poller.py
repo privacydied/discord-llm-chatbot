@@ -37,6 +37,7 @@ from typing import Any
 from bot.atomic_json import read_json_safe, write_json_atomic
 from bot.utils.logging import get_logger
 
+from . import spotify_show
 from .feeds import DEFAULT_TEMPLATE, TRIGGER_NEW, TRIGGERS, FeedItem, FeedParseError, item_key, parse_feed, render, validate_template
 
 logger = get_logger(__name__)
@@ -274,7 +275,9 @@ class RssPoller:
             headers["If-None-Match"] = state.etag
         if state.last_modified:
             headers["If-Modified-Since"] = state.last_modified
-        async with session.get(feed.url, headers=headers) as response:
+        is_spotify = spotify_show.is_spotify_show(feed.url)
+        url = spotify_show.embed_url(feed.url) if is_spotify else feed.url
+        async with session.get(url, headers=headers) as response:
             if response.status == 304:
                 return None
             if response.status != 200:
@@ -282,7 +285,7 @@ class RssPoller:
             body = await _read_capped(response)
             etag, last_modified = response.headers.get("ETag", ""), response.headers.get("Last-Modified", "")
         try:
-            parsed = await asyncio.to_thread(parse_feed, body)
+            parsed = await asyncio.to_thread(spotify_show.parse_embed if is_spotify else parse_feed, body)
         except FeedParseError as exc:
             raise RuntimeError(str(exc)) from exc
         state.etag, state.last_modified = etag, last_modified
