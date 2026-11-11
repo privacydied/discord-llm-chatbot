@@ -15,6 +15,7 @@ flow; a tool loop must never be the reason a user gets no reply.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from types import SimpleNamespace
@@ -28,7 +29,7 @@ from bot.utils.logging import get_logger
 from .registry import ALLOWED_TOOL_NAMES, execute_tool, get_registry
 from bot.core.refusals import is_refusal
 from bot.public_output import SAFE_FALLBACK_MESSAGE
-
+from bot.time_budget import DISPATCH_RESERVE_S, LADDER_MIN_BUDGET_S, remaining_seconds
 from .textual_calls import TextualCall, find_textual_calls, strip_textual_calls
 from .types import ToolContext
 
@@ -350,18 +351,43 @@ async def _run_tool_calls(tool_calls: list[Any], ctx: ToolContext) -> list[dict[
     return turns
 
 
+def _call_budget(deadline: float, floor: float = 0.0) -> float:
+    """Seconds a single provider call may still take. [REH][PA]
+
+    Bounded by the tool loop's own deadline AND the ambient request deadline
+    (the router's MULTIMODAL_TOTAL_BUDGET_S wait_for), minus a dispatch reserve.
+    The per-read httpx timeout alone does not stop a slow streamed response from
+    outliving the outer wait_for, so every call is wrapped in asyncio.wait_for.
+    """
+    left = deadline - time.monotonic()
+    ambient = remaining_seconds()
+    if ambient is not None:
+        left = min(left, ambient - DISPATCH_RESERVE_S)
+    return max(floor, left)
+
+
+async def _bounded_create(client: Any, kwargs: dict[str, Any], deadline: float, floor: float = 0.0) -> Any:
+    """chat.completions.create, cut off at the remaining budget. Raises TimeoutError. [REH]"""
+    budget = _call_budget(deadline, floor)
+    if budget <= 0:
+        raise TimeoutError("tool loop budget exhausted")
+    return await asyncio.wait_for(client.chat.completions.create(**kwargs), timeout=budget)
+
+
 async def _force_answer(
     client: Any,
     model: str,
     messages: list[dict[str, Any]],
     max_tokens: int,
     extra_body: dict[str, Any],
+    deadline: float,
 ) -> str | None:
     """One tool-free retry to make an indecisive model commit. [REH]
 
     Tools are withheld entirely (not merely tool_choice="none") so the model
     cannot answer with another call, and the nudge caps the length so the reply
-    cannot become another wall of deliberation.
+    cannot become another wall of deliberation. Gets at least a minimal budget
+    even if the loop deadline has passed, so a gathered-tools turn still answers.
     """
     attempt = [*messages, {"role": "system", "content": FORCE_ANSWER_DIRECTIVE}]
     kwargs: dict[str, Any] = {
@@ -373,7 +399,10 @@ async def _force_answer(
     if extra_body:
         kwargs["extra_body"] = extra_body
     try:
-        response = await client.chat.completions.create(**kwargs)
+        response = await _bounded_create(client, kwargs, deadline, floor=LADDER_MIN_BUDGET_S)
+    except TimeoutError:
+        logger.warning("tools.force_answer_timeout")
+        return None
     except Exception as exc:  # [REH]  # noqa: BLE001
         logger.warning("tools.force_answer_failed error=%s", exc)
         return None
@@ -445,7 +474,12 @@ async def run_tool_conversation(
                 }
                 if extra_body:
                     create_kwargs["extra_body"] = extra_body
-                response = await client.chat.completions.create(**create_kwargs)
+                response = await _bounded_create(client, create_kwargs, deadline)
+            except TimeoutError:
+                # Budget spent mid-call (tool deadline or ambient request deadline). Stop here
+                # so the caller falls back to the ordinary flow instead of being cancelled. [REH]
+                logger.warning("tools.completion_timeout iteration=%d model=%s", iteration, model)
+                return None
             except Exception as exc:  # [REH] provider 404/429, or no tool support  # noqa: BLE001
                 logger.warning("tools.completion_failed iteration=%d model=%s error=%s", iteration, model, exc)
                 models.pop(0)
@@ -491,7 +525,7 @@ async def run_tool_conversation(
                 iteration,
                 bool(content),
             )
-            return await _force_answer(client, model, messages, max_tokens, extra_body)
+            return await _force_answer(client, model, messages, max_tokens, extra_body, deadline)
 
         messages.append(_assistant_turn(tool_calls))
         messages.extend(await _run_tool_calls(tool_calls, ctx))
@@ -499,10 +533,10 @@ async def run_tool_conversation(
         if _transcript_size(messages) - base_size > MAX_TOOL_OUTPUT_CHARS:
             # Enough gathered; answer from it rather than dropping the research. [REH]
             logger.info("tools.tool_output_budget_reached iteration=%d", iteration)
-            return await _force_answer(client, model, messages, max_tokens, extra_body)
+            return await _force_answer(client, model, messages, max_tokens, extra_body, deadline)
 
     logger.info("tools.max_iterations_reached max=%d; forcing an answer", max_iterations)
-    return await _force_answer(client, model, messages, max_tokens, extra_body)
+    return await _force_answer(client, model, messages, max_tokens, extra_body, deadline)
 
 
 async def answer_from_context(*, prompt: str, context: str, cfg: dict[str, Any] | None = None) -> str | None:
@@ -517,6 +551,7 @@ async def answer_from_context(*, prompt: str, context: str, cfg: dict[str, Any] 
 
     config = cfg if cfg is not None else load_config()
     timeout_s = float(config.get("TOOLS_TIMEOUT_S", DEFAULT_TIMEOUT_S))
+    deadline = time.monotonic() + timeout_s
     try:
         client, model = _client_for(config, timeout_s)
     except Exception as exc:  # [REH]  # noqa: BLE001
@@ -526,7 +561,7 @@ async def answer_from_context(*, prompt: str, context: str, cfg: dict[str, Any] 
     max_tokens = config.get("MAX_RESPONSE_TOKENS", 1000)
     extra_body = _reasoning_extra_body(config)
     for candidate in _model_candidates(config, model) if model else []:
-        answer = await _force_answer(client, candidate, messages, max_tokens, extra_body)
+        answer = await _force_answer(client, candidate, messages, max_tokens, extra_body, deadline)
         if answer and not is_refusal(answer):
             return answer
     return None

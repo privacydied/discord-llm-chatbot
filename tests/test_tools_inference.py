@@ -4,11 +4,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
 from types import SimpleNamespace
 
 import pytest
 
+from bot.time_budget import clear_deadline, set_deadline
 from bot.tools import ToolContext, inference
 
 
@@ -466,3 +469,39 @@ def test_tools_disabled_when_env_absent_so_rollout_is_opt_in():
     from bot.config._base import _build_config
 
     assert _build_config(_getter({}))["TOOLS_ENABLED"] is False
+
+
+class _HangingCompletions:
+    """Provider call that never returns, like a stalled streamed response. [REH]"""
+
+    def __init__(self):
+        self.calls = 0
+
+    async def create(self, **kwargs):
+        self.calls += 1
+        await asyncio.Event().wait()
+
+
+async def test_hung_provider_call_returns_none_within_tools_budget(monkeypatch):
+    completions = _HangingCompletions()
+    client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    monkeypatch.setattr(inference, "_client_for", lambda cfg, timeout: (client, "test-model"))
+    monkeypatch.setattr(inference, "_default_system_prompt", lambda cfg: "persona")
+    cfg = {**CFG, "TOOLS_TIMEOUT_S": 0.2}
+    started = time.monotonic()
+    assert await inference.run_tool_conversation(prompt="x", ctx=ToolContext(), cfg=cfg) is None
+    assert time.monotonic() - started < 5
+    assert completions.calls == 1
+
+
+async def test_ambient_deadline_inside_reserve_skips_provider_call(monkeypatch):
+    completions = _HangingCompletions()
+    client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    monkeypatch.setattr(inference, "_client_for", lambda cfg, timeout: (client, "test-model"))
+    monkeypatch.setattr(inference, "_default_system_prompt", lambda cfg: "persona")
+    token = set_deadline(1.0)  # tighter than DISPATCH_RESERVE_S, so nothing is left to spend
+    try:
+        assert await inference.run_tool_conversation(prompt="x", ctx=ToolContext(), cfg=CFG) is None
+    finally:
+        clear_deadline(token)
+    assert completions.calls == 0
