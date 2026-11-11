@@ -8,6 +8,7 @@ Usage: uv run python utils/check_reasoning_recovery.py
 
 import asyncio
 import os
+import time
 
 import httpx
 from dotenv import load_dotenv
@@ -83,7 +84,7 @@ async def main() -> None:
         print(content)
         return
 
-    recovered = await inference._force_answer(client, MODEL, MESSAGES, 400, {})
+    recovered = await inference._force_answer(client, MODEL, MESSAGES, 400, {}, time.monotonic() + 60.0)
     print("what the user sees WITH the fix:")
     print(recovered if recovered else "(None — falls back to the normal text flow)")
 
