@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .holidays import HOLIDAY_PATTERNS
+
 Span = tuple[int, int]
 
 NUMBER_WORDS: dict[str, float] = {
@@ -122,6 +124,15 @@ ISO_RE = re.compile(r"\b(?P<y>\d{4})-(?P<mo>\d{1,2})-(?P<d>\d{1,2})(?:[T\s](?P<h
 NUMERIC_DATE_RE = re.compile(r"\b(?:on\s+)?(?P<a>\d{1,2})[/.](?P<b>\d{1,2})(?:[/.](?P<c>\d{2}|\d{4}))?\b(?![/.:]\d)")
 DAY_OF_MONTH_RE = re.compile(r"\b(?:on\s+)?the\s+(?P<d>\d{1,2})(?:st|nd|rd|th)\b", re.IGNORECASE)
 YEAR_ONLY_RE = re.compile(r"\b(?:in|by)\s+(?P<y>20\d{2})\b", re.IGNORECASE)
+# "on black friday", "christmas eve 2027". One named group per holiday key.
+_HOLIDAY = "|".join(f"(?P<h_{key}>{fragment})" for fragment, key in HOLIDAY_PATTERNS)
+HOLIDAY_RE = re.compile(
+    rf"\b(?:(?P<lead>on|by|for|until|till|til|before|at|this|next|coming)\s+)?(?:the\s+)?(?:{_HOLIDAY})(?![a-z'’])(?:,?\s+(?P<y>\d{{4}})\b)?",
+    re.IGNORECASE,
+)
+# A holiday name with no lead word only counts as the date when nothing but
+# a time, "to ...", or the end follows ("christmas presents" is a task).
+HOLIDAY_TAIL_RE = re.compile(r"\s*(?:$|[,.!?;:)]|(?:to|at|@|in|around|morning|afternoon|evening|night|noon)\b|\d)", re.IGNORECASE)
 
 _WD_FULL = _alt([w for w in WEEKDAYS if len(w) >= 4])
 _WD_ANY = _alt(WEEKDAYS)

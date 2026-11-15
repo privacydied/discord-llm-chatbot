@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from . import grammar as g
+from .holidays import WEEKDAY_SHAPED
 from .timezones import ALIASES, AmbiguousTimezoneError, resolve_timezone
 
 
@@ -39,10 +40,14 @@ _DATE_FINDERS = (
     ("numeric", g.NUMERIC_DATE_RE),
     ("day_of_month", g.DAY_OF_MONTH_RE),
     ("year", g.YEAR_ONLY_RE),
+    # "on black friday", "cyber monday": before "weekday" so "friday" is never read alone.
+    ("holiday_strong", g.HOLIDAY_RE),
     ("weekend", g.WEEKEND_RE),
     ("next_period", g.NEXT_PERIOD_RE),
     ("day_word", g.DAY_WORD_RE),
     ("weekday", g.WEEKDAY_RE),
+    # "... xmas" with no lead word: only when no other date was found.
+    ("holiday_weak", g.HOLIDAY_RE),
 )
 _TIME_FINDERS = (("ampm", g.TIME_AMPM_RE), ("h24", g.TIME_24_RE), ("oclock", g.TIME_OCLOCK_RE), ("bare", g.TIME_BARE_AT_RE))
 
@@ -58,10 +63,27 @@ def _find_relative(text: str, pieces: Pieces) -> None:
         pieces.spans.append(match.span())
 
 
+def _holiday_ok(match, text: str, *, strong: bool) -> bool:
+    """Strong = lead word ("on xmas") or weekday-shaped name ("black friday").
+    Weak = bare name followed only by a time, "to ...", or the end."""
+    key = next(k[2:] for k, v in match.groupdict().items() if k.startswith("h_") and v)
+    if bool(match.group("lead")) or key in WEEKDAY_SHAPED:
+        return strong
+    return not strong and bool(g.HOLIDAY_TAIL_RE.match(text, match.end()))
+
+
+def _date_match(kind: str, regex, text: str, pieces: Pieces):
+    if not kind.startswith("holiday"):
+        return _first_free(regex, text, pieces)
+    strong = kind == "holiday_strong"
+    return next((m for m in regex.finditer(text) if pieces.free(m.span()) and _holiday_ok(m, text, strong=strong)), None)
+
+
 def _find_date(text: str, pieces: Pieces) -> None:
     for kind, regex in _DATE_FINDERS:
-        match = _first_free(regex, text, pieces)
+        match = _date_match(kind, regex, text, pieces)
         if match:
+            kind = "holiday" if kind.startswith("holiday") else kind
             pieces.date_kind, pieces.date_groups = kind, {k: v for k, v in match.groupdict().items() if v}
             pieces.spans.append(match.span())
             if kind == "iso" and match.group("h"):

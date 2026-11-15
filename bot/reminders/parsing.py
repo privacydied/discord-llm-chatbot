@@ -24,6 +24,7 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from . import grammar as g
 from .extract import Pieces, add_months, apply_duration, collect
+from .holidays import next_holiday
 from .timezones import country_zones, load_zone
 
 DEFAULT_HOUR = 9
@@ -154,6 +155,13 @@ def _weekday_date(p: Pieces, base: date) -> tuple[date, str | None]:
     return base + timedelta(days=(g.WEEKDAYS[name] - base.weekday()) % 7), "week"
 
 
+def _holiday_date(groups: dict, today: date, order: str) -> date:
+    """This year's date for the holiday, or next year's once it has passed."""
+    key = next(k[2:] for k in groups if k.startswith("h_"))
+    year = int(groups["y"]) if "y" in groups else None
+    return next_holiday(key, today, order, year)
+
+
 def _resolve_date(p: Pieces, base: datetime, order: str) -> tuple[date | None, str | None]:
     """(local date, roll unit if that date turns out to be past)."""
     kind, groups, today = p.date_kind, p.date_groups, base.date()
@@ -171,6 +179,8 @@ def _resolve_date(p: Pieces, base: datetime, order: str) -> tuple[date | None, s
         return date(int(groups["y"]), 1, 1), None
     if kind in ("weekend", "weekday"):
         return _weekday_date(p, today)
+    if kind == "holiday":
+        return _holiday_date(groups, today, order), None
     return _period_shift(base, p).date(), None
 
 

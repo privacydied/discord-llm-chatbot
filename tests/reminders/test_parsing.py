@@ -116,3 +116,56 @@ def test_no_time_returns_none(text):
 def test_unusable_times_raise(text):
     with pytest.raises(WhenError):
         parse_reminder(text, zone_name=LONDON, now=NOW)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected", "task"),
+    [
+        # The live bug: "black friday" was read as plain "friday" (13 Nov) with "black" left in the task.
+        ("to buy a nvme drive on black friday", "2026-11-27 09:00", "buy a nvme drive"),
+        ("black friday buy nvme", "2026-11-27 09:00", "buy nvme"),
+        ("on black friday at 7am check deals", "2026-11-27 07:00", "check deals"),
+        ("on cyber monday to check deals", "2026-11-30 09:00", "check deals"),
+        ("on thanksgiving call family", "2026-11-26 09:00", "call family"),
+        ("to wrap gifts on christmas eve", "2026-12-24 09:00", "wrap gifts"),
+        ("on christmas day at 8am open presents", "2026-12-25 08:00", "open presents"),
+        ("to text everyone on new year's eve at 11pm", "2026-12-31 23:00", "text everyone"),
+        ("on bonfire night 2027 buy fireworks", "2027-11-05 09:00", "buy fireworks"),
+        ("on good friday to book flights", "2027-03-26 09:00", "book flights"),
+        ("on easter to call nan", "2027-03-28 09:00", "call nan"),
+        ("on valentine's day buy flowers", "2027-02-14 09:00", "buy flowers"),
+        ("on mother's day call mum", "2027-03-07 09:00", "call mum"),
+    ],
+)
+def test_named_holidays(text, expected, task):
+    assert _local(text) == (expected, task)
+
+
+def test_holiday_dates_follow_the_users_country():
+    assert _local("on mother's day call mum", NEW_YORK)[0] == "2027-05-09 09:00"
+
+
+def test_passed_holiday_rolls_to_next_year():
+    assert _local("on halloween carve pumpkin")[0] == "2027-10-31 09:00"
+    assert _local("on black friday buy tv")[0] == "2026-11-27 09:00"
+
+
+def test_black_friday_next_year_uses_next_years_thanksgiving():
+    later = datetime(2026, 11, 28, 12, 0, tzinfo=UTC)
+    parsed = parse_reminder("on black friday buy tv", zone_name=LONDON, now=later)
+    assert parsed.due_utc == datetime(2027, 11, 26, 9, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected", "task"),
+    [
+        ("tomorrow buy christmas presents", "2026-11-08 18:30", "buy christmas presents"),
+        ("friday get the christmas tree", "2026-11-13 09:00", "get the christmas tree"),
+        ("tomorrow at 6pm think about xmas", "2026-11-08 18:00", "think about xmas"),
+        ("on 20/11 shop before black friday", "2026-11-20 09:00", "shop before black friday"),
+    ],
+)
+def test_holiday_word_in_task_is_not_the_date(text, expected, task):
+    parsed = parse_reminder(text, zone_name=LONDON, now=NOW)
+    assert parsed.due_utc.astimezone(ZoneInfo(LONDON)).strftime("%Y-%m-%d %H:%M") == expected
+    assert parsed.task == task
