@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any
@@ -39,6 +40,12 @@ UPLOAD_SITES = frozenset({"instagram"})
 _MAX_UPLOAD_POSTS = 4
 # Re-check points (seconds between checks) for the late-unfurl race; total ~15s.
 SUPPRESS_RECHECK_DELAYS_S: tuple[float, ...] = (2.0, 4.0, 9.0)
+# Gateway watch for the late-unfurl race: how long a suppressed original is
+# watched for MESSAGE_UPDATE events that carry its embed again.
+SUPPRESS_WATCH_S = 120.0
+_MAX_WATCH_RESUPPRESS = 3
+_MAX_WATCHED = 512
+_SUPPRESS_EMBEDS_FLAG = 1 << 2  # Discord MessageFlags.SUPPRESS_EMBEDS
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,20 +251,74 @@ def _embeds_visible(current: discord.Message) -> bool:
     return bool(current.embeds) or not current.flags.suppress_embeds
 
 
+@dataclass(slots=True)
+class _Watch:
+    message: discord.Message
+    deadline: float
+    resuppressed: int = 0
+
+
+# msg_id -> watch, insertion-ordered so the oldest entry is evicted first.
+_watched: dict[int, _Watch] = {}
+
+
+def _watch(message: discord.Message) -> None:
+    now = time.monotonic()
+    for msg_id in [k for k, w in _watched.items() if w.deadline <= now]:
+        del _watched[msg_id]
+    while len(_watched) >= _MAX_WATCHED:
+        del _watched[next(iter(_watched))]
+    _watched[message.id] = _Watch(message, now + SUPPRESS_WATCH_S)
+
+
+def _update_shows_embeds(data: Mapping[str, Any]) -> bool:
+    """True when a MESSAGE_UPDATE payload puts a link preview back on screen."""
+    if data.get("embeds"):
+        return True
+    flags = data.get("flags")
+    return flags is not None and not int(flags) & _SUPPRESS_EMBEDS_FLAG
+
+
+async def on_message_update(payload: discord.RawMessageUpdateEvent) -> None:
+    """Re-suppress a fixed original when the gateway shows its embed again.
+
+    Discord's unfurler can broadcast the embed after our suppress PATCH. The
+    REST copy then reads as suppressed (so the timed re-check sees nothing),
+    but every client already rendered the late embed from the gateway event.
+    The bot gets the same event, so it re-suppresses on that event.
+    """
+    watch = _watched.get(payload.message_id)
+    if watch is None:
+        return
+    if time.monotonic() > watch.deadline:
+        _watched.pop(payload.message_id, None)
+        return
+    if not _update_shows_embeds(payload.data) or watch.resuppressed >= _MAX_WATCH_RESUPPRESS:
+        return
+    watch.resuppressed += 1
+    logger.info(f"embed_fix.unfurl_after_suppress | msg_id={payload.message_id} n={watch.resuppressed}")
+    if not await _suppress_once(watch.message):
+        _watched.pop(payload.message_id, None)
+
+
 async def _suppress_original(message: discord.Message) -> None:
     """Hide the original link preview, and keep it hidden.
 
     Discord unfurls links asynchronously after the message is created. When
     the suppress PATCH lands before the unfurl finishes, the unfurl can attach
     the embed afterwards, so a single immediate suppress works only sometimes.
-    Re-check on a short schedule and re-suppress when the embed came back.
+    Two guards: a gateway watch (on_message_update) and a timed REST re-check.
     """
+    # Watch before the first PATCH: the late unfurl event can arrive mid-PATCH.
+    _watch(message)
     if not await _suppress_once(message):
+        _watched.pop(message.id, None)
         return
     for delay in SUPPRESS_RECHECK_DELAYS_S:
         await asyncio.sleep(delay)
         current = await _refetch(message)
         if current is None:
+            _watched.pop(message.id, None)
             return
         if _embeds_visible(current):
             logger.info(f"embed_fix.suppress_reapplied | msg_id={message.id} after_s={delay}")

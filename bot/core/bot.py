@@ -44,6 +44,7 @@ from bot.public_output import (
     sanitize_public_text,
 )
 from bot.embed_fix import maybe_fix_embeds, might_have_fixable_link
+from bot.embed_fix import on_message_update as embed_fix_on_message_update
 from bot.server_archive import start_server_archive_service, stop_server_archive_service
 from bot.tts.errors import SynthesisError
 from bot.tts.state import apply_tts_preference
@@ -968,6 +969,10 @@ class LLMBot(commands.Bot):
         """Hand reaction events to the router for ambient pile-on reactions."""
         if self.router is not None:
             self.router.handle_reaction_add(payload)
+
+    async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent) -> None:
+        """Keep embed-fix originals suppressed when Discord's unfurl lands late."""
+        await embed_fix_on_message_update(payload)
 
     async def on_resumed(self) -> None:
         """Gateway session resumed after a drop. Feeds the reconnect watchdog."""

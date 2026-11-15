@@ -44,6 +44,9 @@ def _no_tweet_lang_lookup(monkeypatch):
     # ...and no Instagram downloads: every post falls back to the proxy link.
     monkeypatch.setattr(h.instagram, "fetch_post", AsyncMock(return_value=None))
     monkeypatch.setattr(h.instagram, "has_link_video", AsyncMock(return_value=False))
+    h._watched.clear()
+    yield
+    h._watched.clear()
 
 
 @pytest.fixture
@@ -216,6 +219,83 @@ async def test_no_recheck_when_first_suppress_forbidden(reply, monkeypatch):
     msg.channel.fetch_message = AsyncMock()
     assert await h.maybe_fix_embeds(msg, {})
     msg.channel.fetch_message.assert_not_awaited()
+
+
+# --- gateway watch: late unfurl event after the REST copy reads suppressed ---
+
+
+def _update(msg_id=1, **data):
+    return SimpleNamespace(message_id=msg_id, data=data)
+
+
+async def test_gateway_unfurl_after_suppress_resuppresses(reply):
+    msg = _message("https://x.com/a/status/1")
+    assert await h.maybe_fix_embeds(msg, {})
+    assert msg.edit.await_count == 1
+    await h.on_message_update(_update(embeds=[{"type": "rich"}], flags=4))
+    assert msg.edit.await_count == 2
+    assert all(call.kwargs == {"suppress": True} for call in msg.edit.await_args_list)
+
+
+async def test_gateway_update_without_suppress_flag_resuppresses(reply):
+    msg = _message("https://x.com/a/status/1")
+    await h.maybe_fix_embeds(msg, {})
+    await h.on_message_update(_update(embeds=[], flags=0))
+    assert msg.edit.await_count == 2
+
+
+async def test_own_suppress_echo_is_ignored(reply):
+    msg = _message("https://x.com/a/status/1")
+    await h.maybe_fix_embeds(msg, {})
+    await h.on_message_update(_update(embeds=[], flags=4))
+    await h.on_message_update(_update(content="edited text"))  # no embeds/flags keys
+    msg.edit.assert_awaited_once()
+
+
+async def test_unwatched_message_is_ignored(reply):
+    msg = _message("https://x.com/a/status/1")
+    await h.maybe_fix_embeds(msg, {})
+    await h.on_message_update(_update(msg_id=999, embeds=[{"type": "rich"}]))
+    msg.edit.assert_awaited_once()
+
+
+async def test_watch_resuppress_is_capped(reply):
+    msg = _message("https://x.com/a/status/1")
+    await h.maybe_fix_embeds(msg, {})
+    for _ in range(h._MAX_WATCH_RESUPPRESS + 3):
+        await h.on_message_update(_update(embeds=[{"type": "rich"}]))
+    assert msg.edit.await_count == 1 + h._MAX_WATCH_RESUPPRESS
+
+
+async def test_watch_expires(reply, monkeypatch):
+    msg = _message("https://x.com/a/status/1")
+    await h.maybe_fix_embeds(msg, {})
+    monkeypatch.setattr(h.time, "monotonic", lambda: 10**12)
+    await h.on_message_update(_update(embeds=[{"type": "rich"}]))
+    msg.edit.assert_awaited_once()
+    assert 1 not in h._watched
+
+
+async def test_no_watch_when_first_suppress_fails(reply):
+    msg = _message("https://x.com/a/status/1")
+    msg.edit = AsyncMock(side_effect=discord.Forbidden(SimpleNamespace(status=403, reason="x"), "no"))
+    await h.maybe_fix_embeds(msg, {})
+    assert 1 not in h._watched
+
+
+async def test_watch_size_is_bounded(monkeypatch):
+    monkeypatch.setattr(h, "_MAX_WATCHED", 3)
+    for i in range(10):
+        h._watch(SimpleNamespace(id=i))
+    assert list(h._watched) == [7, 8, 9]
+
+
+def test_llmbot_forwards_raw_edits_to_embed_fix():
+    import inspect
+
+    from bot.core.bot import LLMBot
+
+    assert "embed_fix_on_message_update(payload)" in inspect.getsource(LLMBot.on_raw_message_edit)
 
 
 async def test_missing_manage_messages_is_logged(reply, caplog):
