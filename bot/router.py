@@ -202,6 +202,9 @@ X_STT_MIN_TIMEOUT_S = 120.0
 X_TEXT_TIMEOUT_S = 8.0  # tweet text fetch for the video route
 X_STT_PADDING_S = 45.0
 X_STT_MAX_TIMEOUT_S = 900.0
+# Backstop allowance for the download stages, which bound themselves (yt-dlp
+# stage budget ~170 s). [CMV]
+X_STT_DOWNLOAD_ALLOWANCE_S = 180.0
 X_STT_RTF_DEFAULT = 1.6
 
 # Multimodal parallelization: bound concurrent per-item processing to avoid
@@ -4353,38 +4356,9 @@ class Router:
                                     },
                                 )
                             try:
-                                timeout_override_raw = None
-                                try:
-                                    timeout_override_raw = self.config.get("X_STT_TIMEOUT_S")
-                                except Exception:  # noqa: BLE001
-                                    timeout_override_raw = None
-                                stt_timeout: float | None
-                                stt_timeout = None
-                                if timeout_override_raw not in (None, ""):
-                                    try:
-                                        stt_timeout = float(timeout_override_raw)
-                                    except Exception:  # noqa: BLE001
-                                        stt_timeout = None
-                                if stt_timeout is None or stt_timeout <= 0:
-                                    try:
-                                        stt_rtf = float(self.config.get("X_STT_TIMEOUT_RTF", X_STT_RTF_DEFAULT))
-                                    except Exception:  # noqa: BLE001
-                                        stt_rtf = X_STT_RTF_DEFAULT
-                                    try:
-                                        speedup_cfg = float(self.config.get("VIDEO_SPEEDUP", _DEFAULT_VIDEO_SPEEDUP))
-                                    except Exception:  # noqa: BLE001
-                                        speedup_cfg = _DEFAULT_VIDEO_SPEEDUP
-                                    safe_speedup = speedup_cfg if speedup_cfg > 0 else _DEFAULT_VIDEO_SPEEDUP
-                                    effective_duration = 0.0
-                                    if isinstance(dur, (int, float)):
-                                        effective_duration = max(float(dur), 0.0) / max(safe_speedup, 0.1)
-                                    computed = max(
-                                        X_STT_MIN_TIMEOUT_S,
-                                        effective_duration * stt_rtf + X_STT_PADDING_S,
-                                    )
-                                    stt_timeout = min(computed, X_STT_MAX_TIMEOUT_S)
-                                if stt_timeout is None or stt_timeout <= 0:
-                                    stt_timeout = X_STT_MIN_TIMEOUT_S
+                                stt_timeout = self._x_stt_timeout_for(dur)
+                                dur_known = isinstance(dur, (int, float)) and dur > 0
+
                                 try:
                                     mm = int((dur or 0) // 60) if isinstance(dur, (int, float)) else 0
                                     ss = int((dur or 0) % 60) if isinstance(dur, (int, float)) else 0
@@ -4402,10 +4376,17 @@ class Router:
                                 except Exception as exc:  # noqa: BLE001
                                     self.logger.debug(f"stt.start logging failed: {exc}")
                                 stt_t0 = time.perf_counter()
+                                # The accurate budget is applied inside hear, from the
+                                # downloaded media's duration, starting when transcription
+                                # starts. This outer one is only a backstop: download
+                                # stages are bounded on their own, and with no duration
+                                # here (yt-dlp/router often have none) the real budget
+                                # can exceed stt_timeout. [REH]
+                                backstop_s = (stt_timeout if dur_known else X_STT_MAX_TIMEOUT_S) + X_STT_DOWNLOAD_ALLOWANCE_S
                                 stt_res = await self._run_stt_job(
                                     asyncio.wait_for(
-                                        hear_infer_from_url(url_for_stt),
-                                        timeout=stt_timeout,
+                                        hear_infer_from_url(url_for_stt, transcribe_timeout=self._x_stt_timeout_for),
+                                        timeout=backstop_s,
                                     ),
                                     message,
                                 )
@@ -8458,6 +8439,32 @@ class Router:
             # Fallback hard cut
             return (text or "")[:max_chars].rstrip() + ("…" if len(text or "") > max_chars else "")
 
+    def _x_stt_timeout_for(self, dur: Any) -> float:
+        """X video transcribe budget for a media duration (seconds; 0/None = unknown). [REH]
+
+        X_STT_TIMEOUT_S overrides; else duration / VIDEO_SPEEDUP x X_STT_TIMEOUT_RTF
+        + padding, clamped to [X_STT_MIN_TIMEOUT_S, X_STT_MAX_TIMEOUT_S].
+        """
+        override = None
+        with suppress(Exception):
+            raw = self.config.get("X_STT_TIMEOUT_S")
+            if raw not in (None, ""):
+                override = float(raw)
+        if override is not None and override > 0:
+            return override
+        try:
+            stt_rtf = float(self.config.get("X_STT_TIMEOUT_RTF", X_STT_RTF_DEFAULT))
+        except Exception:  # noqa: BLE001
+            stt_rtf = X_STT_RTF_DEFAULT
+        try:
+            speedup_cfg = float(self.config.get("VIDEO_SPEEDUP", _DEFAULT_VIDEO_SPEEDUP))
+        except Exception:  # noqa: BLE001
+            speedup_cfg = _DEFAULT_VIDEO_SPEEDUP
+        safe_speedup = speedup_cfg if speedup_cfg > 0 else _DEFAULT_VIDEO_SPEEDUP
+        effective_duration = max(float(dur), 0.0) / max(safe_speedup, 0.1) if isinstance(dur, (int, float)) else 0.0
+        computed = max(X_STT_MIN_TIMEOUT_S, effective_duration * stt_rtf + X_STT_PADDING_S)
+        return min(computed, X_STT_MAX_TIMEOUT_S)
+
     async def _maybe_video_still_notes(self, stt_res: Any, message: Message) -> str | None:
         """VL-describe a still from a just-transcribed video for stitched context. [PA][REH]
 
@@ -8470,12 +8477,15 @@ class Router:
                 return None
             meta = (stt_res or {}).get("metadata") or {}
             media_path = meta.get("media_path")
-            if not media_path or not Path(media_path).exists():
+            # Direct-demux STT keeps only the audio; the still comes from the
+            # remote video URL instead. [PA]
+            source: Path | str | None = Path(media_path) if media_path and Path(media_path).exists() else meta.get("media_url")
+            if not source:
                 return None
             from bot.video_frame import describe_video_still
 
             duration = float(meta.get("original_duration_s") or 0.0) or None
-            notes = await describe_video_still(Path(media_path), duration_s=duration)
+            notes = await describe_video_still(source, duration_s=duration)
             if not notes:
                 return None
             self.logger.info(

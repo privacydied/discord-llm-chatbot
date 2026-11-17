@@ -12,6 +12,8 @@ import re
 import shutil
 import tempfile
 import urllib.request
+from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +23,7 @@ from urllib.parse import ParseResult, urlparse, urlunparse
 from . import ytdlp_probe_cache
 from .config import load_config
 from .exceptions import InferenceError
+from .stt_pipeline.direct_demux import DemuxError, MediaTooLongError, NoAudioTrackError, demux_audio, demux_target
 from .time_budget import remaining_seconds
 from .utils.external_api import _is_private_hostname
 from .utils.logging import get_logger
@@ -38,6 +41,23 @@ MAX_DURATION_SECONDS_YOUTUBE = int(os.getenv("VIDEO_MAX_DURATION_YOUTUBE", "3600
 MAX_CONCURRENT_DOWNLOADS = int(os.getenv("VIDEO_MAX_CONCURRENT", "3"))
 CACHE_DIR = Path(os.getenv("VIDEO_CACHE_DIR", "cache/video_audio"))
 CACHE_EXPIRY_DAYS = int(os.getenv("VIDEO_CACHE_EXPIRY_DAYS", "7"))
+# Direct video URLs (video.twimg.com/...mp4): copy only the audio track with
+# ffmpeg instead of downloading the whole video. [PA]
+DIRECT_DEMUX_ENABLED = os.getenv("STT_DIRECT_DEMUX_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off")
+
+# Set by the STT entrypoint for the length of one job: called with the media
+# duration as soon as ingest knows it, so the whisper model can load while the
+# audio is still downloading. [PA]
+DURATION_HINT: ContextVar[Callable[[float], None] | None] = ContextVar("stt_duration_hint", default=None)
+
+
+def _emit_duration_hint(duration_s: float | None) -> None:
+    callback = DURATION_HINT.get()
+    if callback is None or not duration_s or duration_s <= 0:
+        return
+    with contextlib.suppress(Exception):
+        callback(float(duration_s))
+
 
 # Optional cookies support for yt-dlp to access age/region gated content (e.g., TikTok)
 # Provide one of:
@@ -336,6 +356,9 @@ class DownloadedAudio:
     ext: str
     timestamp: datetime
     demux_fallback: bool = False
+    # Remote video URL for the VL still frame when raw_path is audio only
+    # (direct demux). None when raw_path itself is the video. [PA]
+    still_source: str | None = None
 
 
 @dataclass
@@ -874,13 +897,9 @@ class VideoIngestionManager:
         suffix = Path(parsed.path).suffix.lower()
         return suffix in {".mp4", ".m4a", ".aac", ".opus", ".ogg", ".mp3", ".webm"}
 
-    async def _download_direct_media(
-        self,
-        url: str,
-        ext: str,
-        timeout_s: float,
-    ) -> tuple[Path, int | None]:
-        # Validate URL scheme and block private/internal IPs (SSRF protection)
+    @staticmethod
+    def _validate_direct_url(url: str) -> None:
+        """Validate URL scheme and block private/internal IPs (SSRF protection). [SFT]"""
         _ssrf_parsed = urlparse(url)
         if _ssrf_parsed.scheme not in ("http", "https"):
             msg = f"Unsupported URL scheme: {_ssrf_parsed.scheme}"
@@ -889,6 +908,14 @@ class VideoIngestionManager:
         if _is_private_hostname(_ssrf_hostname):
             msg = f"SSRF blocked: {_ssrf_hostname}"
             raise VideoIngestError(msg)
+
+    async def _download_direct_media(
+        self,
+        url: str,
+        ext: str,
+        timeout_s: float,
+    ) -> tuple[Path, int | None]:
+        self._validate_direct_url(url)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as tmp:
             temp_path = Path(tmp.name)
@@ -1064,6 +1091,16 @@ class VideoIngestionManager:
                 )
             parsed_url = urlparse(url_no_fragment)
             direct_candidate = self._is_direct_media_url(url_no_fragment)
+            if direct_candidate and self._direct_demux_applies(parsed_url):
+                # A direct video file: yt-dlp's generic extractor only finds the
+                # one muxed format, so its probe (20 s measured) buys nothing.
+                return await self._direct_media_fallback(
+                    original_url=url,
+                    media_url=url_no_fragment,
+                    parsed=parsed_url,
+                    force_refresh=force_refresh,
+                    timeout_s=download_timeout,
+                )
 
             demux_required = False
             try:
@@ -1156,6 +1193,7 @@ class VideoIngestionManager:
             if duration and duration_ceiling and duration > duration_ceiling:
                 msg = f"Video too long: {duration:.1f}s (max {duration_ceiling}s)"
                 raise VideoIngestError(msg)
+            _emit_duration_hint(duration)
             title = metadata.get("title", "Unknown Title")
             uploader = metadata.get("uploader", "Unknown")
             upload_date = metadata.get("upload_date", "")
@@ -1334,6 +1372,10 @@ class VideoIngestionManager:
         timeout_s: float,
     ) -> DownloadedAudio:
         ext = Path(parsed.path).suffix.lstrip(".") or "mp4"
+        if self._direct_demux_applies(parsed):
+            demuxed = await self._direct_demux(original_url, media_url, parsed, force_refresh, timeout_s)
+            if demuxed is not None:
+                return demuxed
         audio_exts = {"aac", "m4a", "mp3", "opus", "ogg", "flac", "wav"}
         demux_flag = ext.lower() not in audio_exts
         download_key = f"{self._hash_resolved_url(media_url)}-direct"
@@ -1342,6 +1384,7 @@ class VideoIngestionManager:
             if cache_entry:
                 entry, raw_path = cache_entry
                 stat_size = raw_path.stat().st_size
+                _emit_duration_hint(entry.get("duration_seconds"))
                 logger.info(
                     "cache.hit stage=download key=%s ext=%s size=%s",
                     download_key[:12],
@@ -1418,6 +1461,82 @@ class VideoIngestionManager:
             timestamp=datetime.now(UTC),
             demux_fallback=demux_flag,
         )
+
+    @staticmethod
+    def _direct_demux_applies(parsed: ParseResult) -> bool:
+        return DIRECT_DEMUX_ENABLED and demux_target(Path(parsed.path).suffix) is not None
+
+    def _demuxed_audio(self, *, original_url: str, media_url: str, parsed: ParseResult, entry: dict[str, Any], raw_path: Path, cache_hit: bool) -> DownloadedAudio:
+        return DownloadedAudio(
+            raw_path=raw_path,
+            metadata=VideoMetadata(
+                url=original_url,
+                title=Path(parsed.path).name or "direct-media",
+                duration_seconds=float(entry.get("duration_seconds") or 0.0),
+                uploader="",
+                upload_date="",
+                source_type=self._get_source_type(original_url),
+            ),
+            download_key=entry["download_key"],
+            format_id="demux",
+            resolved_url=media_url,
+            content_length=entry.get("content_length"),
+            cache_hit=cache_hit,
+            ext=entry["ext"],
+            timestamp=datetime.now(UTC),
+            demux_fallback=False,
+            still_source=media_url,
+        )
+
+    async def _direct_demux(self, original_url: str, media_url: str, parsed: ParseResult, force_refresh: bool, timeout_s: float) -> DownloadedAudio | None:
+        """Audio track of a direct video URL, or None to fall back to a full download.
+
+        Falls back on any ffmpeg failure, and on a video with no audio track:
+        the full file is what the silent-video still frame needs. [REH]
+        """
+        self._validate_direct_url(media_url)
+        out_ext = demux_target(Path(parsed.path).suffix)[0]
+        download_key = f"{self._hash_resolved_url(media_url)}-demux"
+        cached = None if force_refresh else self._get_cache_entry(download_key)
+        if cached:
+            entry, raw_path = cached
+            _emit_duration_hint(entry.get("duration_seconds"))
+            logger.info("cache.hit stage=download key=%s ext=%s size=%s", download_key[:12], out_ext, raw_path.stat().st_size)
+            return self._demuxed_audio(original_url=original_url, media_url=media_url, parsed=parsed, entry={**entry, "download_key": download_key}, raw_path=raw_path, cache_hit=True)
+        raw_path = self.cache_dir / f"{download_key}.{out_ext}"
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        started = asyncio.get_running_loop().time()
+        try:
+            result = await demux_audio(media_url, raw_path, ext=Path(parsed.path).suffix, timeout_s=timeout_s, on_duration=_emit_duration_hint, max_duration_s=MAX_DURATION_SECONDS or None)
+        except MediaTooLongError as exc:
+            raw_path.unlink(missing_ok=True)
+            msg = f"Video too long: {exc.duration_s:.1f}s (max {MAX_DURATION_SECONDS}s)"
+            raise VideoIngestError(msg) from exc
+        except DemuxError as exc:
+            raw_path.unlink(missing_ok=True)
+            reason = "no_audio" if isinstance(exc, NoAudioTrackError) else "error"
+            logger.info("stt.demux.fallback reason=%s detail=%s", reason, str(exc)[:200])
+            return None
+        entry = {
+            "raw_path": str(raw_path),
+            "content_length": result.size,
+            "format_id": "demux",
+            "ext": out_ext,
+            "source_url": original_url,
+            "cached_at": datetime.now(UTC).isoformat(),
+            "duration_seconds": result.duration_s,
+            "demux_fallback": False,
+        }
+        self._index[download_key] = entry
+        self._save_cache_index()
+        logger.info(
+            "stt.demux.ok key=%s size=%s dur=%.1f ms=%d",
+            download_key[:12],
+            result.size,
+            result.duration_s,
+            int((asyncio.get_running_loop().time() - started) * 1000),
+        )
+        return self._demuxed_audio(original_url=original_url, media_url=media_url, parsed=parsed, entry={**entry, "download_key": download_key}, raw_path=raw_path, cache_hit=False)
 
 
 # Global instance

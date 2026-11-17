@@ -435,6 +435,9 @@ async def test_vxinstagram_offload_mp4_uses_direct_media_fallback(manager: Video
 
     monkeypatch.setattr(manager, "_probe_metadata", fake_probe)
     monkeypatch.setattr(manager, "_download_direct_media", fake_download_direct)
+    # Legacy full-download path; the audio-only demux path is covered in
+    # tests/test_stt_speed_path.py.
+    monkeypatch.setattr("bot.video_ingest.DIRECT_DEMUX_ENABLED", False)
 
     result = await manager.fetch_and_prepare_url_audio(url, force_refresh=True)
 

@@ -46,7 +46,7 @@ from .video_ingest import (
 from .youtube_transcript import is_youtube_shorts, resolve_youtube_transcript
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Callable
 
     import discord
     import numpy as np
@@ -182,6 +182,27 @@ SLOW_DECODE_THRESHOLD_S = 8.0
 NO_SPEECH_PROB_THRESHOLD = 0.65
 STREAM_FRAME_S = 0.25
 _JOB_SEMAPHORE = asyncio.Semaphore(1)
+# Long audio downgrades base -> tiny (stt_pipeline.spec_select); the model
+# prefetch predicts the same choice from the ingest duration hint. [CMV]
+LONG_AUDIO_DOWNGRADE_S = 120.0
+
+
+def _env_seconds(name: str, default: float) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+# ffprobe reads only the container header. 11 s was measured for a 95 MB mp4
+# under NAS I/O load, so 20 s means a real hang, not a slow disk. [CMV][REH]
+FFPROBE_TIMEOUT_S = _env_seconds("STT_FFPROBE_TIMEOUT_S", 20.0)
+# ffmpeg stall: waiting this long for the next PCM bytes while the reader is
+# idle-waiting on ffmpeg (not on a slow consumer) means ffmpeg is stuck. [REH]
+FFMPEG_STALL_TIMEOUT_S = _env_seconds("STT_FFMPEG_STALL_S", 30.0)
+FFMPEG_MONITOR_POLL_S = 0.5
+FFMPEG_ABORT_REAP_S = 5.0
 MAX_CHUNK_MULTIPLIER = 1.25
 MAX_CHUNK_ABS_LIMIT = 512
 try:
@@ -691,14 +712,18 @@ class FFMpegPCMStream(BasePCMStream):
         sample_rate: int,
         frame_samples: int,
         spans: SpanRecorder,
-        pre_timeout: float,
+        stall_timeout_s: float = FFMPEG_STALL_TIMEOUT_S,
     ) -> None:
         super().__init__(sample_rate=sample_rate, frame_samples=frame_samples)
         self._proc = process
         self._temp_path = temp_path
         self._cache_key = cache_key
         self._spans = spans
-        self._pre_timeout = max(pre_timeout, 1.0)
+        self._stall_timeout = max(stall_timeout_s, 1.0)
+        # Stall clock: set only while the producer waits on ffmpeg's stdout.
+        # Time blocked in queue.put() is consumer backpressure (whisper is
+        # slower than ffmpeg), not an ffmpeg hang, so it never counts. [REH]
+        self._read_started: float | None = None
         self._stderr_task: asyncio.Task | None = None
         # Tracks whether ffmpeg's stdout was consumed to natural EOF. Only a
         # complete capture may be promoted to the PCM retry cache; a producer
@@ -722,30 +747,54 @@ class FFMpegPCMStream(BasePCMStream):
             except (OSError, PermissionError):
                 logger.debug("⚠️ Failed to kill ffmpeg during abort", exc_info=True)
 
-    async def _monitor(self) -> None:
+    def _stalled_for(self) -> float:
+        """Seconds the producer has waited on ffmpeg for the next bytes (0 = not waiting)."""
+        if self._read_started is None:
+            return 0.0
+        return time.monotonic() - self._read_started
+
+    async def _watch_process(self, exited: asyncio.Future) -> None:
+        """Wait for ffmpeg to exit; kill it on a stall or once the stream is aborted.
+
+        The old wall-clock cap (min(45, 0.6 x duration + 3)) waited for ffmpeg to
+        EXIT, but ffmpeg sits blocked writing into the 2-frame queue while
+        whisper decodes, so the cap measured backpressure and failed healthy
+        jobs with "Audio preprocessing timed out". [REH]
+        """
         started = time.monotonic()
+        while not exited.done():
+            await asyncio.wait({exited}, timeout=FFMPEG_MONITOR_POLL_S)
+            if exited.done():
+                return
+            if self._aborted:
+                # abort() killed ffmpeg; reap it, but never hang a cancelled job.
+                await asyncio.wait({exited}, timeout=FFMPEG_ABORT_REAP_S)
+                return
+            stalled = self._stalled_for()
+            if stalled > self._stall_timeout:
+                logger.warning(
+                    "stt.pre.ffmpeg_stall stall_s=%.1f limit_s=%.1f elapsed_s=%.1f samples=%s",
+                    stalled,
+                    self._stall_timeout,
+                    time.monotonic() - started,
+                    self._total_samples,
+                )
+                self._error = InferenceError("Audio preprocessing timed out (ffmpeg stalled)")
+                await self.abort()
+                await asyncio.wait({exited}, timeout=FFMPEG_ABORT_REAP_S)
+                return
+
+    async def _monitor(self) -> None:
+        exited = asyncio.ensure_future(self._proc.wait())
         try:
-            await asyncio.wait_for(self._proc.wait(), timeout=self._pre_timeout)
-        except TimeoutError:
-            # Previously silent: a hang here surfaced only via the stale
-            # "Audio preprocessing timed out" error raised much later (whenever
-            # the consumer next calls wait_finished()), with zero indication of
-            # WHEN the timeout actually fired relative to the rest of the STT
-            # pipeline -- making a downstream stall (e.g. model load queued
-            # behind other thread-pool work) indistinguishable from ffmpeg
-            # itself genuinely hanging. [REH][PA]
-            logger.warning(
-                "stt.pre.ffmpeg_timeout budget_s=%.1f elapsed_s=%.1f",
-                self._pre_timeout,
-                time.monotonic() - started,
-            )
-            self._error = InferenceError("Audio preprocessing timed out")
-            await self.abort()
+            await self._watch_process(exited)
         except asyncio.CancelledError:
             raise
-        except (asyncio.TimeoutError, OSError, RuntimeError, ValueError) as exc:
+        except (OSError, RuntimeError, ValueError) as exc:
             self._error = exc
         finally:
+            if not exited.done():
+                exited.cancel()
             if self._stderr_task is not None:
                 try:
                     stderr = await self._stderr_task
@@ -765,7 +814,11 @@ class FFMpegPCMStream(BasePCMStream):
         self._temp_path.parent.mkdir(parents=True, exist_ok=True)
         with self._temp_path.open("wb") as fh:
             while True:
-                chunk = await stdout.read(self.frame_bytes)
+                self._read_started = time.monotonic()
+                try:
+                    chunk = await stdout.read(self.frame_bytes)
+                finally:
+                    self._read_started = None
                 if not chunk:
                     break
                 self._total_samples += len(chunk) // self.bytes_per_sample
@@ -1047,9 +1100,39 @@ def _store_transcript_cache(cache_key: str, result: TranscriptResult) -> None:
         logger.warning("⚠️ Failed to store transcript cache %s: %s", path, exc)
 
 
+class ProbeTimeoutError(InferenceError):
+    """ffprobe (or the ffmpeg header probe) did not finish inside FFPROBE_TIMEOUT_S."""
+
+
+async def _bounded_communicate(proc: asyncio.subprocess.Process, label: str) -> tuple[bytes, bytes]:
+    try:
+        return await asyncio.wait_for(proc.communicate(), timeout=FFPROBE_TIMEOUT_S)
+    except TimeoutError as exc:
+        with contextlib.suppress(ProcessLookupError, OSError):
+            proc.kill()
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(proc.wait(), timeout=FFMPEG_ABORT_REAP_S)
+        msg = f"{label} timed out after {FFPROBE_TIMEOUT_S:.0f}s"
+        raise ProbeTimeoutError(msg) from exc
+
+
+def _resolve_ffprobe_bin() -> str | None:
+    """ffprobe7 on Synology (the base system has no ffprobe), else ffprobe on PATH."""
+    from .stt_pipeline.ffmpeg_runtime import resolve_ffprobe_bin
+
+    return resolve_ffprobe_bin()
+
+
 async def _ffprobe(path: Path) -> tuple[float, int, int]:
-    """Probe audio file for duration, sample rate, channels. Falls back to ffmpeg if ffprobe unavailable. [REH]."""
-    ffprobe_bin = shutil.which("ffprobe")
+    """Probe audio file for duration, sample rate, channels. Falls back to ffmpeg if ffprobe unavailable. [REH].
+
+    Previously looked up only a bare ``ffprobe``, which the NAS does not have,
+    so every job took the ffmpeg fallback -- and that ran ``-f null -``, a full
+    decode of the whole file, video included: 78 s for a 223 s 2560x1408 mp4.
+    Both probes now read only the container header, bounded by
+    FFPROBE_TIMEOUT_S. [PA][REH]
+    """
+    ffprobe_bin = _resolve_ffprobe_bin()
     if ffprobe_bin:
         cmd = [
             ffprobe_bin,
@@ -1066,7 +1149,7 @@ async def _ffprobe(path: Path) -> tuple[float, int, int]:
             str(path),
         ]
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        stdout, stderr = await proc.communicate()
+        stdout, stderr = await _bounded_communicate(proc, "ffprobe")
         if proc.returncode != 0:
             msg = f"ffprobe failed ({proc.returncode}): {stderr.decode(errors='ignore')}"
             raise InferenceError(msg)
@@ -1092,12 +1175,14 @@ async def _ffprobe(path: Path) -> tuple[float, int, int]:
         channels = int(stream.get("channels") or 1)
         return duration, sample_rate, channels
 
-    # Fallback: use ffmpeg -i to probe (parses stderr output) [REH]
-    ffmpeg_bin = _resolve_ffmpeg_bin()
+    # Fallback: ffmpeg -i with no output prints the stream info and exits
+    # (non-zero: "At least one output file must be specified"). Never add an
+    # output here: "-f null -" decodes the whole file. [REH][PA]
+    ffmpeg_bin = await asyncio.to_thread(_resolve_ffmpeg_bin)
 
-    cmd = [ffmpeg_bin, "-i", str(path), "-hide_banner", "-f", "null", "-"]
+    cmd = [ffmpeg_bin, "-hide_banner", "-nostdin", "-i", str(path)]
     proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-    _, stderr = await proc.communicate()
+    _, stderr = await _bounded_communicate(proc, "ffmpeg header probe")
     stderr_text = stderr.decode(errors="ignore")
 
     # No "Audio:" stream line in the probe output → silent media. [IV][REH]
@@ -1133,6 +1218,26 @@ async def _ffprobe(path: Path) -> tuple[float, int, int]:
 # ---------------------------------------------------------------------------
 # Preprocess stage
 # ---------------------------------------------------------------------------
+
+
+async def _probe_source(source_path: Path, spans: SpanRecorder, download: DownloadedAudio | None) -> tuple[float, int, int]:
+    """Instrumented, bounded probe. On a probe timeout, use the ingest duration
+    (yt-dlp metadata or the demux header) when there is one. [REH][PA]"""
+    spans.start("probe")
+    try:
+        result = await _ffprobe(source_path)
+    except ProbeTimeoutError as exc:
+        meta_duration = float(getattr(getattr(download, "metadata", None), "duration_seconds", 0.0) or 0.0)
+        spans.end("probe", ok=meta_duration > 0, reason="timeout")
+        if meta_duration <= 0:
+            raise
+        logger.warning("pre.probe_fallback reason=timeout dur_meta=%.2f error=%s", meta_duration, exc)
+        return meta_duration, SAMPLE_RATE, 1
+    except Exception:
+        spans.end("probe", ok=False, reason="error")
+        raise
+    spans.end("probe", ok=True)
+    return result
 
 
 def _is_codec_error(error: Exception) -> bool:
@@ -1319,7 +1424,11 @@ async def _preprocess_audio(
     ram_guard: STTRAMGuard,
 ) -> PreprocessResult:
     spans.start("pre")
-    duration_in, sr, channels = await _ffprobe(source_path)
+    if _FFMPEG_BIN_CACHE is None:
+        # First resolution runs a synchronous `ffmpeg -decoders` probe (12 s
+        # measured under load); keep it off the event loop. [PA]
+        await asyncio.to_thread(_resolve_ffmpeg_bin)
+    duration_in, sr, channels = await _probe_source(source_path, spans, download)
     logger.info("pre.probe dur_in=%.2f sr=%s ch=%s", duration_in, sr, channels)
     ram_guard.check("ffprobe")
 
@@ -1415,7 +1524,6 @@ async def _preprocess_audio(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    pre_budget = min(45.0, max(6.0, duration_in * 0.6 + 3.0))
     temp_handle = tempfile.NamedTemporaryFile(delete=False, suffix=".pcm", dir=str(PCM_CACHE_DIR))
     temp_path = Path(temp_handle.name)
     temp_handle.close()
@@ -1427,7 +1535,7 @@ async def _preprocess_audio(
         sample_rate=SAMPLE_RATE,
         frame_samples=frame_samples,
         spans=spans,
-        pre_timeout=pre_budget,
+        stall_timeout_s=FFMPEG_STALL_TIMEOUT_S,
     )
     # Start draining ffmpeg's stdout NOW, not whenever the caller first calls
     # iter_frames() (which BasePCMStream.start() previously deferred to). ffmpeg
@@ -2465,7 +2573,48 @@ async def _resolve_via_summarize(url: str) -> dict[str, Any] | None:
     }
 
 
-async def hear_infer_from_url(url: str, force_refresh: bool = False, language: str | None = None) -> dict[str, Any]:
+async def _download_with_model_prefetch(url: str, force_refresh: bool, spans: SpanRecorder, ram_guard: STTRAMGuard, job: STTJob) -> DownloadedAudio:
+    """Download, and load the whisper model as soon as ingest reports the duration. [PA]"""
+    from .stt_pipeline.prefetch import ModelPrefetcher
+    from .video_ingest import DURATION_HINT
+
+    prefetcher = ModelPrefetcher(manager=_stt_manager(), downgrade_threshold_s=LONG_AUDIO_DOWNGRADE_S, logger=logger)
+    token = DURATION_HINT.set(prefetcher.on_duration)
+    try:
+        download = await _stt_pipeline()["prepare_url_download_for_stt"](
+            url=url,
+            force_refresh=force_refresh,
+            manager=_stt_manager(),
+            job=job,
+            spans=spans,
+            ram_guard=ram_guard,
+            fetcher=fetch_and_prepare_url_audio,
+            ingest_error_type=VideoIngestError,
+        )
+    finally:
+        DURATION_HINT.reset(token)
+    # Covers ingest paths that know the duration but never reported it.
+    prefetcher.on_duration(float(getattr(download.metadata, "duration_seconds", 0.0) or 0.0))
+    return download
+
+
+def _transcribe_budget_s(transcribe_timeout: Callable[[float], float] | None, download: DownloadedAudio) -> float | None:
+    """Transcribe-stage budget from the downloaded media's real duration. [REH]"""
+    if transcribe_timeout is None:
+        return None
+    duration = float(getattr(download.metadata, "duration_seconds", 0.0) or 0.0)
+    budget = float(transcribe_timeout(duration))
+    logger.info("stt.transcribe_budget s=%.0f dur=%.1f", budget, duration)
+    return budget if budget > 0 else None
+
+
+async def hear_infer_from_url(
+    url: str,
+    force_refresh: bool = False,
+    language: str | None = None,
+    *,
+    transcribe_timeout: Callable[[float], float] | None = None,
+) -> dict[str, Any]:
     """Transcribe audio fetched via yt-dlp for the given URL.
 
     Args:
@@ -2473,6 +2622,13 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False, language: s
         force_refresh: Bypass cache and re-process
         language: Optional language hint (e.g., 'ar', 'en'). If provided,
                   this language is used for all chunks instead of auto-detection.
+        transcribe_timeout: Optional ``duration_s -> seconds`` policy. When set,
+                  the preprocess + whisper stage gets that budget, sized from
+                  the downloaded media's duration and started after the
+                  download, so download time and a missing pre-download
+                  duration no longer eat the transcription budget. Raises
+                  TimeoutError when exceeded. Download stages keep their own
+                  bounded timeouts.
 
     """
     # Log the exact URL being processed for STT job identity tracking [REH]
@@ -2510,29 +2666,24 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False, language: s
                 if result:
                     return await job.finish_success(result)
 
-            download = await _stt_pipeline()["prepare_url_download_for_stt"](
-                url=url,
-                force_refresh=force_refresh,
-                manager=_stt_manager(),
-                job=job,
-                spans=spans,
-                ram_guard=ram_guard,
-                fetcher=fetch_and_prepare_url_audio,
-                ingest_error_type=VideoIngestError,
-            )
+            download = await _download_with_model_prefetch(url, force_refresh, spans, ram_guard, job)
 
-            pre, transcript = await _stt_pipeline()["preprocess_and_transcribe"](
-                source_path=download.raw_path,
-                spans=spans,
-                download=download,
-                voice_note=False,
-                ram_guard=ram_guard,
-                job=job,
-                manager=_stt_manager(),
-                logger=logger,
-                preprocess_audio_with_retry=_preprocess_audio_with_retry,
-                run_whisper_with_fallback=_run_whisper_with_fallback,
-                language=language,
+            pre, transcript = await asyncio.wait_for(
+                _stt_pipeline()["preprocess_and_transcribe"](
+                    source_path=download.raw_path,
+                    spans=spans,
+                    download=download,
+                    voice_note=False,
+                    ram_guard=ram_guard,
+                    job=job,
+                    manager=_stt_manager(),
+                    logger=logger,
+                    downgrade_threshold_s=LONG_AUDIO_DOWNGRADE_S,
+                    preprocess_audio_with_retry=_preprocess_audio_with_retry,
+                    run_whisper_with_fallback=_run_whisper_with_fallback,
+                    language=language,
+                ),
+                timeout=_transcribe_budget_s(transcribe_timeout, download),
             )
 
             result = _stt_pipeline()["run_stitch_stage"](
@@ -2557,9 +2708,15 @@ async def hear_infer_from_url(url: str, force_refresh: bool = False, language: s
 
             # Expose the cached media file so the router can extract a still
             # frame for VL-enhanced (audio + visual) context. Best-effort. [PA]
+            # A demuxed download is audio only: hand over the remote video URL
+            # instead, so the still is a ~1 s ranged fetch. [PA]
             with contextlib.suppress(Exception):
-                if isinstance(result, dict) and download.raw_path:
-                    result.setdefault("metadata", {})["media_path"] = str(download.raw_path)
+                if isinstance(result, dict):
+                    meta = result.setdefault("metadata", {})
+                    if getattr(download, "still_source", None):
+                        meta["media_url"] = download.still_source
+                    elif download.raw_path:
+                        meta["media_path"] = str(download.raw_path)
 
             return await job.finish_success(result)
     except asyncio.CancelledError:

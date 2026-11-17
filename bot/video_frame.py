@@ -26,6 +26,11 @@ STILL_SEEK_FRACTION = 0.33  # one-third in: usually past intros/title cards
 STILL_FALLBACK_SEEK_S = 1.0
 STILL_JPEG_QUALITY = "3"  # ffmpeg -q:v (2-5 = high quality)
 
+# A remote source (direct-demux STT keeps only audio locally) is read with
+# HTTP range requests; ~1 s measured for a 2560x1408 twimg mp4. [SFT]
+REMOTE_PROTOCOLS = "https,http,tcp,tls"
+REMOTE_RW_TIMEOUT_US = "10000000"
+
 STILL_VL_PROMPT = "This is a single still frame captured from a video. Describe what is visibly happening: people, objects, text on screen, setting, and any notable action. Be concise and factual."
 
 
@@ -36,16 +41,33 @@ def _ffmpeg_bin() -> str:
     return _resolve_ffmpeg_bin()
 
 
-async def _run_extract(video_path: Path, seek_s: float, out_path: Path) -> bool:
+VideoSource = Path | str
+
+
+def _is_remote(source: VideoSource) -> bool:
+    return isinstance(source, str) and source.lower().startswith(("http://", "https://"))
+
+
+def _label(source: VideoSource) -> str:
+    return source.rsplit("/", 1)[-1][:60] if isinstance(source, str) else source.name
+
+
+def _input_args(source: VideoSource) -> list[str]:
+    if _is_remote(source):
+        return ["-protocol_whitelist", REMOTE_PROTOCOLS, "-rw_timeout", REMOTE_RW_TIMEOUT_US, "-i", str(source)]
+    return ["-i", str(source)]
+
+
+async def _run_extract(video_path: VideoSource, seek_s: float, out_path: Path) -> bool:
     cmd = [
         _ffmpeg_bin(),
         "-hide_banner",
+        "-nostdin",
         "-loglevel",
         "error",
         "-ss",
         f"{max(0.0, seek_s):.2f}",
-        "-i",
-        str(video_path),
+        *_input_args(video_path),
         "-frames:v",
         "1",
         "-q:v",
@@ -61,7 +83,7 @@ async def _run_extract(video_path: Path, seek_s: float, out_path: Path) -> bool:
     except TimeoutError:
         with contextlib.suppress(ProcessLookupError, OSError):
             proc.kill()
-        logger.warning("video.still.extract_timeout | path=%s", video_path.name)
+        logger.warning("video.still.extract_timeout | path=%s", _label(video_path))
         return False
     if proc.returncode != 0 or not out_path.exists() or out_path.stat().st_size == 0:
         logger.debug("video.still.extract_fail rc=%s err=%s", proc.returncode, (stderr or b"").decode(errors="ignore")[:200])
@@ -69,13 +91,14 @@ async def _run_extract(video_path: Path, seek_s: float, out_path: Path) -> bool:
     return True
 
 
-async def extract_video_still(video_path: Path, duration_s: float | None = None) -> Path | None:
+async def extract_video_still(video_path: VideoSource, duration_s: float | None = None) -> Path | None:
     """Grab one frame as a JPEG; returns the temp file path or None. [REH]
 
-    Seeks a third of the way in when duration is known; falls back to t=1.0s,
-    then t=0 (for clips shorter than a second). Caller owns cleanup.
+    ``video_path`` is a local file or an http(s) URL. Seeks a third of the way
+    in when duration is known; falls back to t=1.0s, then t=0 (for clips
+    shorter than a second). Caller owns cleanup.
     """
-    if not video_path.exists():
+    if not _is_remote(video_path) and not Path(video_path).exists():
         return None
     fd, tmp_name = tempfile.mkstemp(prefix="vstill_", suffix=".jpg")
     os.close(fd)
@@ -92,7 +115,7 @@ async def extract_video_still(video_path: Path, duration_s: float | None = None)
     return None
 
 
-async def describe_video_still(video_path: Path, duration_s: float | None = None, prompt: str | None = None) -> str | None:
+async def describe_video_still(video_path: VideoSource, duration_s: float | None = None, prompt: str | None = None) -> str | None:
     """Extract a still and describe it through the VL flow. Never raises. [REH]
 
     Returns the visual description text, or None on any failure (no frame,
@@ -115,7 +138,7 @@ async def describe_video_still(video_path: Path, duration_s: float | None = None
         text = (getattr(action, "content", "") or "").strip()
         return text or None
     except TimeoutError:
-        logger.warning("video.still.vl_timeout | path=%s", video_path.name)
+        logger.warning("video.still.vl_timeout | path=%s", _label(video_path))
         return None
     except Exception as exc:  # noqa: BLE001 - VL backend unbounded; TimeoutError handled above, logged, None fallback
         logger.debug(f"video.still.vl_fail: {exc}")
