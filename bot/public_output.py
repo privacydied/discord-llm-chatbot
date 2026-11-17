@@ -502,6 +502,13 @@ def sanitize_public_text(text: str) -> str:
     cleaned = _ANALYSIS_TAG_RE.sub("", cleaned)
     cleaned = _ANALYSIS_LEFTOVER_RE.sub("", cleaned)
 
+    # i) Strip tool calls the model wrote as text (<function=...>,
+    # <tool_call>{...}). The route-level guard covers only the plain-text
+    # path; this is the one outbound boundary shared by every route. [REH][IV]
+    from bot.tools.textual_calls import strip_textual_calls
+
+    cleaned = strip_textual_calls(cleaned)
+
     # Collapse whitespace: multiple blank lines → double newline
     cleaned = _MULTI_BLANK_LINE_RE.sub("\n\n", cleaned)
     cleaned = _TRAILING_LINE_WS_RE.sub("", cleaned)
