@@ -1965,7 +1965,7 @@ async def _run_whisper(
 
         pre.update_from_stream()
 
-        if not attempted_slow_downgrade and transcript.first_chunk_runtime > SLOW_DECODE_THRESHOLD_S:
+        if not attempted_slow_downgrade and _should_retry_slow_decode(transcript):
             next_spec = _stt_manager().downgrade_spec(spec)
             if next_spec and next_spec != spec:
                 logger.info(
@@ -1992,6 +1992,30 @@ async def _run_whisper(
         if job:
             job.register_transcript(transcript)
         return transcript
+
+
+def _max_chunks_for(pre: PreprocessResult) -> int:
+    """Chunk cap for one whisper pass.
+
+    A fresh ffmpeg stream has no duration_out yet (0.0). Estimating 1 chunk
+    capped a cold job at 3 chunks (~120 s of audio) and silently cut long
+    clips with "chunk_limit". Use the probed input duration instead. [REH]
+    """
+    expected_out = pre.duration_out
+    if expected_out <= 0:
+        expected_out = pre.duration_in / ATEMPO_FACTOR if pre.atempo_applied else pre.duration_in
+    estimated_chunks = expected_out / max(CHUNK_WINDOW_S - CHUNK_OVERLAP_S, 1e-3) if expected_out > 0 else 1.0
+    dynamic_limit = int(math.ceil(estimated_chunks * MAX_CHUNK_MULTIPLIER) + 1)
+    return max(1, min(dynamic_limit, MAX_CHUNK_ABS_LIMIT))
+
+
+def _should_retry_slow_decode(transcript: TranscriptResult) -> bool:
+    """Re-run on a smaller model only when a slow pass did not finish.
+
+    A complete transcript re-run on a smaller model costs a second full
+    decode (46 s measured) and loses accuracy. [PA]
+    """
+    return bool(transcript.aborted) and transcript.first_chunk_runtime > SLOW_DECODE_THRESHOLD_S
 
 
 async def _transcribe_with_model(
@@ -2031,9 +2055,7 @@ async def _transcribe_with_model(
     start_sample = 0
     whisper_budget = min(180.0, max(20.0, pre.duration_in * 2.5 + 10.0))
     start_time = time.perf_counter()
-    estimated_chunks = pre.duration_out / max(CHUNK_WINDOW_S - CHUNK_OVERLAP_S, 1e-3) if pre.duration_out > 0 else 1.0
-    dynamic_limit = int(math.ceil(estimated_chunks * MAX_CHUNK_MULTIPLIER) + 1)
-    max_chunks = max(1, min(dynamic_limit, MAX_CHUNK_ABS_LIMIT))
+    max_chunks = _max_chunks_for(pre)
     process = psutil.Process()
     confirm_memory_abort = pre.duration_in <= 90.0
     # Baseline process RSS at job start: the guard aborts only on

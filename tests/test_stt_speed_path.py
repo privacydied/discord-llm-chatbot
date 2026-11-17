@@ -283,3 +283,21 @@ def test_x_stt_timeout_scales_with_real_duration() -> None:
     assert router._x_stt_timeout_for(223.4) > 250
     router.config = {"X_STT_TIMEOUT_S": "75"}
     assert router._x_stt_timeout_for(223.4) == 75
+
+
+# ------------------------------------------------------- whisper chunk cap
+
+
+def test_cold_stream_chunk_cap_covers_whole_clip() -> None:
+    """Regression: duration_out=0 on a fresh stream capped the job at 3 chunks."""
+    pre = SimpleNamespace(duration_out=0.0, duration_in=222.9, atempo_applied=True)
+    needed = (222.9 / hear.ATEMPO_FACTOR) / (hear.CHUNK_WINDOW_S - hear.CHUNK_OVERLAP_S)
+    assert hear._max_chunks_for(pre) > needed
+    assert hear._max_chunks_for(SimpleNamespace(duration_out=0.0, duration_in=0.0, atempo_applied=False)) == 3
+
+
+def test_slow_decode_retry_only_for_unfinished_pass() -> None:
+    slow = hear.SLOW_DECODE_THRESHOLD_S + 5
+    assert not hear._should_retry_slow_decode(SimpleNamespace(aborted=False, first_chunk_runtime=slow))
+    assert hear._should_retry_slow_decode(SimpleNamespace(aborted=True, first_chunk_runtime=slow))
+    assert not hear._should_retry_slow_decode(SimpleNamespace(aborted=True, first_chunk_runtime=1.0))
