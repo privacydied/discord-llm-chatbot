@@ -198,6 +198,14 @@ FORCE_ANSWER_DIRECTIVE = (
     "Reply with the final answer only. Say you don't know only if you genuinely don't."
 )
 
+# Second forced turn, after a tool call the model wrote as text was run. It
+# must not ask for yet another search. [REH]
+FINAL_ANSWER_DIRECTIVE = (
+    "You have no tools now and no more searches will run: any tool call you write is discarded and the user sees "
+    "nothing. Write the answer itself in plain prose, from the results above plus your own knowledge, "
+    "estimating where exact figures are missing."
+)
+
 
 def _build_messages(prompt: str, system_prompt: str | None, context: str | None) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
@@ -381,6 +389,7 @@ async def _force_answer(
     max_tokens: int,
     extra_body: dict[str, Any],
     deadline: float,
+    ctx: ToolContext | None = None,
 ) -> str | None:
     """One tool-free retry to make an indecisive model commit. [REH]
 
@@ -388,6 +397,10 @@ async def _force_answer(
     cannot answer with another call, and the nudge caps the length so the reply
     cannot become another wall of deliberation. Gets at least a minimal budget
     even if the loop deadline has passed, so a gathered-tools turn still answers.
+
+    With tools withheld, nemotron often writes the next call as text anyway.
+    Given ``ctx``, that call is run once and the answer retried with its result,
+    rather than discarding every result gathered so far. [REH]
     """
     attempt = [*messages, {"role": "system", "content": FORCE_ANSWER_DIRECTIVE}]
     kwargs: dict[str, Any] = {
@@ -408,10 +421,16 @@ async def _force_answer(
         return None
 
     content, reasoning = _extract(response)
+    written = find_textual_calls(content, ALLOWED_TOOL_NAMES) if ctx is not None else []
     content = strip_textual_calls(content)
     if content and not _is_unusable(content) and not _is_reasoning_leak(content, reasoning):
         logger.info("tools.force_answer_ok chars=%d", len(content))
         return content
+    if written:
+        logger.info("tools.force_answer_textual_calls names=%s", [c.name for c in written])
+        results = await run_textual_calls(written, ctx)
+        gathered = [*messages, {"role": "system", "content": f"MORE TOOL RESULTS:\n{results}"}, {"role": "system", "content": FINAL_ANSWER_DIRECTIVE}]
+        return await _force_answer(client, model, gathered, max_tokens, extra_body, deadline)
     logger.warning("tools.force_answer_still_deliberating")
     return None
 
@@ -525,7 +544,7 @@ async def run_tool_conversation(
                 iteration,
                 bool(content),
             )
-            return await _force_answer(client, model, messages, max_tokens, extra_body, deadline)
+            return await _force_answer(client, model, messages, max_tokens, extra_body, deadline, ctx)
 
         messages.append(_assistant_turn(tool_calls))
         messages.extend(await _run_tool_calls(tool_calls, ctx))
@@ -533,10 +552,10 @@ async def run_tool_conversation(
         if _transcript_size(messages) - base_size > MAX_TOOL_OUTPUT_CHARS:
             # Enough gathered; answer from it rather than dropping the research. [REH]
             logger.info("tools.tool_output_budget_reached iteration=%d", iteration)
-            return await _force_answer(client, model, messages, max_tokens, extra_body, deadline)
+            return await _force_answer(client, model, messages, max_tokens, extra_body, deadline, ctx)
 
     logger.info("tools.max_iterations_reached max=%d; forcing an answer", max_iterations)
-    return await _force_answer(client, model, messages, max_tokens, extra_body, deadline)
+    return await _force_answer(client, model, messages, max_tokens, extra_body, deadline, ctx)
 
 
 async def answer_from_context(*, prompt: str, context: str, cfg: dict[str, Any] | None = None) -> str | None:

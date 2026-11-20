@@ -37,6 +37,43 @@ def test_strip_keeps_surrounding_answer():
     assert strip_textual_calls("lemme check <function=web_search><parameter=query>q</parameter></function>") == "lemme check"
 
 
+# Captured live from nemotron-3-ultra on the plain text path (2026-11-20).
+LIVE_BARE_PARAMS = "<function=web_search>\n<query>Lucia GTA 6 height weight BMI</query>\n</function>\n<function=web_search>\n<query>UK women BMI distribution percentage statistics 2024 2025</query>\n</function>\n</parameter=invoke>\n</functions>"
+LIVE_INVOKE_WRAP = '<function=web_search>\n<query>Lucia GTA 6 height weight BMI estimate</query>\n</function>\n</invoke>\n<invoke name="web_search">\n<function=web_search>\n<query>UK women BMI distribution percentage under 22</query>\n</function>\n</invoke>'
+LIVE_JSON_LINES = '{"tool": "search", "query": "Lucia GTA 6 BMI height weight estimate"}\n{"tool": "search", "query": "UK women BMI distribution percentage underweight normal weight 2024 2025"}'
+
+
+def test_bare_param_tags_parse_and_leave_no_closing_debris():
+    calls = find_textual_calls(LIVE_BARE_PARAMS, ALLOWED)
+    assert [c.arguments for c in calls] == [{"query": "Lucia GTA 6 height weight BMI"}, {"query": "UK women BMI distribution percentage statistics 2024 2025"}]
+    assert strip_textual_calls(LIVE_BARE_PARAMS) == ""  # was "</functions>" in Discord
+
+
+def test_invoke_wrapper_does_not_duplicate_calls():
+    calls = find_textual_calls(LIVE_INVOKE_WRAP, ALLOWED)
+    assert [c.arguments["query"] for c in calls] == ["Lucia GTA 6 height weight BMI estimate", "UK women BMI distribution percentage under 22"]
+    assert strip_textual_calls(LIVE_INVOKE_WRAP) == ""
+
+
+def test_anthropic_style_invoke_parses():
+    text = '<function_calls><invoke name="web_search"><parameter name="query">uk bmi</parameter></invoke></function_calls>'
+    assert [(c.name, c.arguments) for c in find_textual_calls(text, ALLOWED)] == [("web_search", {"query": "uk bmi"})]
+    assert strip_textual_calls(text) == ""
+
+
+def test_json_lines_with_invented_tool_name_map_to_web_search():
+    calls = find_textual_calls(LIVE_JSON_LINES, ALLOWED)
+    assert [(c.name, c.arguments["query"]) for c in calls] == [("web_search", "Lucia GTA 6 BMI height weight estimate"), ("web_search", "UK women BMI distribution percentage underweight normal weight 2024 2025")]
+    assert has_textual_call_markup(LIVE_JSON_LINES)
+    assert strip_textual_calls(LIVE_JSON_LINES) == ""
+
+
+def test_json_answer_not_naming_a_tool_is_kept():
+    answer = 'here you go:\n{"name": "Lucia", "height_cm": 163}'
+    assert not has_textual_call_markup(answer)
+    assert strip_textual_calls(answer) == answer
+
+
 # -- tool loop -------------------------------------------------------------
 
 
@@ -99,6 +136,33 @@ async def test_textual_call_in_loop_is_executed(monkeypatch):
     assert run.await_args.args[:2] == ("web_search", {"query": "poland vs england crime rate statistics 2024 2025 comparison"})
     tool_turn = completions.calls[1]["messages"][-1]
     assert tool_turn["role"] == "tool" and tool_turn["content"] == "stats..."
+
+
+async def test_force_answer_runs_a_call_written_after_max_iterations(monkeypatch):
+    """Live failure: iterations exhausted, the tool-free forced answer was a
+    written web_search call, so every gathered result was dropped. [REH]"""
+    api_call = SimpleNamespace(id="c1", function=SimpleNamespace(name="web_search", arguments='{"query": "lucia height"}'))
+    written = "<tool_call>\n<function=web_search>\n<parameter=query>\nUK women BMI distribution\n</parameter>\n</function>\n</tool_call>\n"
+    responses = [_response(tool_calls=[api_call]) for _ in range(3)] + [_response(written), _response("about 15% of uk women")]
+    completions = _install(monkeypatch, responses)
+    run = AsyncMock(return_value=SimpleNamespace(to_message_content=lambda: "stats..."))
+    monkeypatch.setattr(inference, "execute_tool", run)
+    out = await inference.run_tool_conversation(prompt="q", ctx=ToolContext(), cfg=CFG)
+    assert out == "about 15% of uk women"
+    assert run.await_args.args[:2] == ("web_search", {"query": "UK women BMI distribution"})
+    assert "tools" not in completions.calls[-1]
+    assert "MORE TOOL RESULTS" in completions.calls[-1]["messages"][-3]["content"]
+    assert completions.calls[-1]["messages"][-2]["content"] == inference.FINAL_ANSWER_DIRECTIVE
+
+
+async def test_force_answer_runs_written_calls_only_once(monkeypatch):
+    written = "<function=web_search><parameter=query>q</parameter></function>"
+    run = AsyncMock(return_value=SimpleNamespace(to_message_content=lambda: "stats..."))
+    monkeypatch.setattr(inference, "execute_tool", run)
+    client = SimpleNamespace(chat=SimpleNamespace(completions=_Completions([_response(written), _response(written)])))
+    out = await inference._force_answer(client, "m", [], 100, {}, 10**12, ToolContext())
+    assert out is None
+    assert run.await_count == 1
 
 
 # -- router plain-text path ---------------------------------------------------
