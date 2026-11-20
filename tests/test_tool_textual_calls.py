@@ -203,3 +203,17 @@ async def test_router_leaves_normal_replies_alone():
     router = _router({"TOOLS_ENABLED": True}, "unused")
     action = BotAction(content="poland is safer")
     assert await router._resolve_textual_tool_calls(action, "q", None, "ctx") is action
+
+
+async def test_conclude_moves_to_next_model_when_one_keeps_deliberating(monkeypatch):
+    """Live residual: one model kept asking for another search after the
+    forced turn. The next model must answer from the same gathered results. [REH]"""
+    written = "<function=web_search><parameter=query>q</parameter></function>"
+    run = AsyncMock(return_value=SimpleNamespace(to_message_content=lambda: "stats..."))
+    monkeypatch.setattr(inference, "execute_tool", run)
+    completions = _Completions([_response(written), _response(written), _response("final answer")])
+    client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    out = await inference._conclude(client, ["a", "b"], [{"role": "user", "content": "q"}], 100, {}, 10**12, ToolContext())
+    assert out == "final answer"
+    assert [c["model"] for c in completions.calls] == ["a", "a", "b"]
+    assert run.await_count == 1

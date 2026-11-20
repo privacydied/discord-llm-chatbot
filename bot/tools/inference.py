@@ -435,6 +435,32 @@ async def _force_answer(
     return None
 
 
+async def _conclude(
+    client: Any,
+    models: list[str],
+    messages: list[dict[str, Any]],
+    max_tokens: int,
+    extra_body: dict[str, Any],
+    deadline: float,
+    ctx: ToolContext,
+) -> str | None:
+    """Force an answer, moving to the next model when one keeps deliberating. [REH]
+
+    The gathered tool results stay in ``messages``, so a model that insists on
+    another search does not cost the research already done.
+    """
+    for index, candidate in enumerate(models):
+        if index:
+            ambient = remaining_seconds()
+            if ambient is not None and ambient - DISPATCH_RESERVE_S < LADDER_MIN_BUDGET_S:
+                break
+            logger.info("tools.force_answer_next_model model=%s", candidate)
+        answer = await _force_answer(client, candidate, messages, max_tokens, extra_body, deadline, ctx)
+        if answer:
+            return answer
+    return None
+
+
 async def run_tool_conversation(
     *,
     prompt: str,
@@ -544,7 +570,7 @@ async def run_tool_conversation(
                 iteration,
                 bool(content),
             )
-            return await _force_answer(client, model, messages, max_tokens, extra_body, deadline, ctx)
+            return await _conclude(client, [model, *(m for m in models if m != model)], messages, max_tokens, extra_body, deadline, ctx)
 
         messages.append(_assistant_turn(tool_calls))
         messages.extend(await _run_tool_calls(tool_calls, ctx))
@@ -552,10 +578,10 @@ async def run_tool_conversation(
         if _transcript_size(messages) - base_size > MAX_TOOL_OUTPUT_CHARS:
             # Enough gathered; answer from it rather than dropping the research. [REH]
             logger.info("tools.tool_output_budget_reached iteration=%d", iteration)
-            return await _force_answer(client, model, messages, max_tokens, extra_body, deadline, ctx)
+            return await _conclude(client, [model, *(m for m in models if m != model)], messages, max_tokens, extra_body, deadline, ctx)
 
     logger.info("tools.max_iterations_reached max=%d; forcing an answer", max_iterations)
-    return await _force_answer(client, model, messages, max_tokens, extra_body, deadline, ctx)
+    return await _conclude(client, [model, *(m for m in models if m != model)], messages, max_tokens, extra_body, deadline, ctx)
 
 
 async def answer_from_context(*, prompt: str, context: str, cfg: dict[str, Any] | None = None) -> str | None:
